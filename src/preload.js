@@ -32,6 +32,10 @@ contextBridge.exposeInMainWorld('db', {
     update: (data)    => invoke('db:user_stories:update', data),
     delete: (id)      => invoke('db:user_stories:delete', id),
   },
+  promptHistory: {
+    list:   (user_story_id) => invoke('db:prompt_history:list', user_story_id),
+    create: (data)          => invoke('db:prompt_history:create', data),
+  },
   dialog: {
     openFolder: () => invoke('dialog:openFolder'),
   },

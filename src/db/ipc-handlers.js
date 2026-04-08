@@ -179,6 +179,22 @@ function registerHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // prompt_history
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:prompt_history:list', (_e, user_story_id) => {
+    return db
+      .prepare('SELECT * FROM prompt_history WHERE user_story_id = ? ORDER BY executed_at DESC LIMIT 20')
+      .all(user_story_id);
+  });
+
+  ipcMain.handle('db:prompt_history:create', (_e, { user_story_id, prompt }) => {
+    const result = db
+      .prepare('INSERT INTO prompt_history (user_story_id, prompt) VALUES (?, ?)')
+      .run(user_story_id, prompt);
+    return db.prepare('SELECT * FROM prompt_history WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  // ----------------------------------------------------------------
   // dialog
   // ----------------------------------------------------------------
   ipcMain.handle('dialog:openFolder', async (event) => {

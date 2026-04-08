@@ -334,6 +334,7 @@ export class UserStoryList {
               </div>
             </div>
             <textarea class="usl-add-form__textarea" id="uslEditPrompt" placeholder="AI prompt for this story…" rows="6">${escHtml(story.prompt || '')}</textarea>
+            <div class="usl-prompt-history" id="uslPromptHistory"></div>
           </div>
 
           <div class="usl-add-form__field">
@@ -392,7 +393,8 @@ export class UserStoryList {
 
     saveBtn.addEventListener('click', save);
     this._bindExpandBtns(this._detailEl, save);
-    this._bindRunBtns(this._detailEl);
+    this._bindRunBtns(this._detailEl, story.id);
+    this._loadPromptHistory(story.id);
 
     this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
       this._activeId = null;
@@ -420,15 +422,74 @@ export class UserStoryList {
   // ----------------------------------------------------------------
   // Run button helper — wires run buttons in a container
   // ----------------------------------------------------------------
-  _bindRunBtns(container) {
+  _bindRunBtns(container, userStoryId = null) {
     container.querySelectorAll('.usl-add-form__run').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const textarea = container.querySelector('#' + btn.dataset.prompt);
         const prompt   = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
+        if (userStoryId) {
+          await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
+          this._loadPromptHistory(userStoryId);
+        }
         this._onRunCommand(`claude "${prompt.replace(/"/g, '\\"')}" --dangerously-skip-permissions`);
       });
     });
+  }
+
+  // ----------------------------------------------------------------
+  // Prompt history
+  // ----------------------------------------------------------------
+  async _loadPromptHistory(userStoryId) {
+    const container = this._detailEl.querySelector('#uslPromptHistory');
+    if (!container) return;
+    const items = await window.db.promptHistory.list(userStoryId);
+    if (items.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+    const promptEl = this._detailEl.querySelector('#uslEditPrompt');
+    container.innerHTML = `
+      <div class="usl-ph-header">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Recent runs
+      </div>
+      <div class="usl-ph-list">
+        ${items.map(h => `
+          <div class="usl-ph-item" data-id="${h.id}" title="${escHtml(h.prompt)}">
+            <svg class="usl-ph-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M4 3l9 5-9 5V3z" fill="currentColor" opacity="0.6"/>
+            </svg>
+            <span class="usl-ph-item__text">${escHtml(h.prompt.length > 80 ? h.prompt.slice(0, 80) + '…' : h.prompt)}</span>
+            <span class="usl-ph-item__time">${this._relativeTime(h.executed_at)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    container.querySelectorAll('.usl-ph-item').forEach((el, i) => {
+      el.addEventListener('click', () => {
+        if (promptEl) {
+          promptEl.value = items[i].prompt;
+          promptEl.dispatchEvent(new Event('input'));
+          promptEl.focus();
+        }
+      });
+    });
+  }
+
+  _relativeTime(isoStr) {
+    const diff = Date.now() - new Date(isoStr + (isoStr.endsWith('Z') ? '' : 'Z')).getTime();
+    const s = Math.floor(diff / 1000);
+    if (s < 60)  return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60)  return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24)  return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
   }
 
   // ----------------------------------------------------------------

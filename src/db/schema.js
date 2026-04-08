@@ -58,6 +58,16 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- PROMPT HISTORY
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS prompt_history (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
+      prompt        TEXT    NOT NULL,
+      executed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- AUDIT / LOG TABLES
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS projects_log (
@@ -280,6 +290,19 @@ function runMigrations(db) {
   const cols = db.prepare('PRAGMA table_info(projects)').all().map((c) => c.name);
   if (!cols.includes('last_opened_at')) {
     db.exec('ALTER TABLE projects ADD COLUMN last_opened_at TEXT');
+  }
+
+  // Add prompt_history table for existing databases
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t) => t.name);
+  if (!tables.includes('prompt_history')) {
+    db.exec(`
+      CREATE TABLE prompt_history (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
+        prompt        TEXT    NOT NULL,
+        executed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
   }
 }
 
