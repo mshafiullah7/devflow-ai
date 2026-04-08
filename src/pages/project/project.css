@@ -128,10 +128,10 @@
 }
 
 /* Features column */
-#panelFeatures  { width: 220px; flex-shrink: 0; }
+#panelFeatures  { flex: 0 0 18%; min-width: 120px; }
 
 /* Stories column */
-#panelStories   { width: 240px; flex-shrink: 0; }
+#panelStories   { flex: 0 0 20%; min-width: 120px; }
 
 /* Detail column — fills remaining space */
 .project-panel--detail {
@@ -213,8 +213,8 @@
 /* Console                                                              */
 /* ------------------------------------------------------------------ */
 .project-console {
-  flex-shrink: 0;
-  width: 320px;
+  flex: 0 0 22%;
+  min-width: 180px;
   display: flex;
   flex-direction: column;
   background: #0d0f14;

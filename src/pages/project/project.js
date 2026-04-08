@@ -194,9 +194,9 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   _initResizable() {
     const PANEL_MAP = {
-      features: { el: document.getElementById('panelFeatures'), min: 140, dir: 1 },
-      stories:  { el: document.getElementById('panelStories'),  min: 140, dir: 1 },
-      console:  { el: document.getElementById('projectConsole'), min: 200, dir: -1 },
+      features: { el: document.getElementById('panelFeatures'),  min: 120, dir:  1 },
+      stories:  { el: document.getElementById('panelStories'),   min: 120, dir:  1 },
+      console:  { el: document.getElementById('projectConsole'), min: 180, dir: -1 },
     };
 
     document.querySelectorAll('.project-panel__resize').forEach(handle => {
@@ -205,16 +205,19 @@ export class ProjectPage {
         if (!entry) return;
 
         e.preventDefault();
-        const startX     = e.clientX;
-        const startWidth = entry.el.getBoundingClientRect().width;
+        const startX      = e.clientX;
+        const startWidth  = entry.el.getBoundingClientRect().width;
+        // Capture parent width once at drag-start so the % reference is stable
+        const parentWidth = entry.el.parentElement.getBoundingClientRect().width;
 
         document.body.style.userSelect = 'none';
         document.body.style.cursor     = 'col-resize';
 
         const onMove = (ev) => {
           const delta    = (ev.clientX - startX) * entry.dir;
-          const newWidth = Math.max(entry.min, startWidth + delta);
-          entry.el.style.width = newWidth + 'px';
+          const newPx    = Math.max(entry.min, startWidth + delta);
+          // Store as % of parent so the ratio is maintained on window resize
+          entry.el.style.flex = `0 0 ${(newPx / parentWidth) * 100}%`;
         };
 
         const onUp = () => {
