@@ -198,11 +198,11 @@
 /* Resize handle between panels                                         */
 /* ------------------------------------------------------------------ */
 .project-panel__resize {
-  width: 4px;
+  width: 5px;
   flex-shrink: 0;
-  background: transparent;
+  background: var(--border);
   cursor: col-resize;
-  transition: background 0.15s;
+  transition: background 0.1s;
 }
 .project-panel__resize:hover,
 .project-panel__resize:active {

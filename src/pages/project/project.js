@@ -139,6 +139,9 @@ export class ProjectPage {
 
           </div><!-- /.project-page__workspace -->
 
+          <!-- resize handle for console -->
+          <div class="project-panel__resize" data-resize="console"></div>
+
           <!-- 4. Console (collapsible) -->
           <div class="project-console" id="projectConsole" hidden>
             <div class="project-console__titlebar">
@@ -182,5 +185,48 @@ export class ProjectPage {
         const out = document.getElementById('consoleOutput');
         out.innerHTML = '<span class="project-console__hint">Console output will appear here…</span>';
       });
+
+    this._initResizable();
+  }
+
+  // ----------------------------------------------------------------
+  // Resizable panels
+  // ----------------------------------------------------------------
+  _initResizable() {
+    const PANEL_MAP = {
+      features: { el: document.getElementById('panelFeatures'), min: 140, dir: 1 },
+      stories:  { el: document.getElementById('panelStories'),  min: 140, dir: 1 },
+      console:  { el: document.getElementById('projectConsole'), min: 200, dir: -1 },
+    };
+
+    document.querySelectorAll('.project-panel__resize').forEach(handle => {
+      handle.addEventListener('mousedown', (e) => {
+        const entry = PANEL_MAP[handle.dataset.resize];
+        if (!entry) return;
+
+        e.preventDefault();
+        const startX     = e.clientX;
+        const startWidth = entry.el.getBoundingClientRect().width;
+
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor     = 'col-resize';
+
+        const onMove = (ev) => {
+          const delta    = (ev.clientX - startX) * entry.dir;
+          const newWidth = Math.max(entry.min, startWidth + delta);
+          entry.el.style.width = newWidth + 'px';
+        };
+
+        const onUp = () => {
+          document.body.style.userSelect = '';
+          document.body.style.cursor     = '';
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup',   onUp);
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup',   onUp);
+      });
+    });
   }
 }
