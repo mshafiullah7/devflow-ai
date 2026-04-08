@@ -283,6 +283,11 @@
   padding: 14px 16px;
   resize: none;
   outline: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.usl-expand-textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .usl-expand-footer {
@@ -348,6 +353,11 @@
 .usl-add-form__textarea {
   resize: vertical;
   min-height: 72px;
+  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;  /* IE/Edge */
+}
+.usl-add-form__textarea::-webkit-scrollbar {
+  display: none;             /* Chrome/Safari/Electron */
 }
 
 .usl-add-form__select {
