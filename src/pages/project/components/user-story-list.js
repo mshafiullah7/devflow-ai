@@ -19,7 +19,6 @@ export class UserStoryList {
     this._onSelect     = onSelect || (() => {});
     this._activeId     = null;
     this._statuses     = [];
-    this._modal        = null;
     this._confirmModal = null;
   }
 
@@ -92,12 +91,6 @@ export class UserStoryList {
         <div class="usl-card__header">
           <span class="usl-card__title">${escHtml(s.title)}</span>
           <div class="usl-card__actions">
-            <button class="usl-card__action usl-card__action--edit" title="Edit story" aria-label="Edit story">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13l-3 1 1-3 8.5-8.5z"
-                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
             <button class="usl-card__action usl-card__action--delete" title="Delete story" aria-label="Delete story">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M3 4h10M6 4V3h4v1M4 4l1 9h6l1-9M6 7v4M10 7v4"
@@ -119,12 +112,7 @@ export class UserStoryList {
         this._listEl.querySelectorAll('.usl-card')
           .forEach(el => el.classList.remove('usl-card--active'));
         card.classList.add('usl-card--active');
-        this._onSelect(s);
-      });
-
-      card.querySelector('.usl-card__action--edit').addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._openModal(s);
+        this._showEditForm(s);
       });
 
       card.querySelector('.usl-card__action--delete').addEventListener('click', (e) => {
@@ -276,30 +264,27 @@ export class UserStoryList {
   }
 
   // ----------------------------------------------------------------
-  // Modal — Edit only
+  // Inline edit form — rendered inside the detail panel on card click
   // ----------------------------------------------------------------
-  _openModal(story) {
-    this._closeModal();
+  _showEditForm(story) {
+    if (!this._detailEl) return;
 
     const defaultStatus = story.status_id ?? '';
 
-    const overlay = document.createElement('div');
-    overlay.className = 'usl-modal-overlay';
-    overlay.innerHTML = `
-      <div class="usl-modal" role="dialog" aria-modal="true">
-        <div class="usl-modal__header">
-          <h2 class="usl-modal__title">Edit User Story</h2>
-          <button class="usl-modal__close" aria-label="Close">&times;</button>
+    this._detailEl.innerHTML = `
+      <div class="usl-add-form">
+        <div class="usl-add-form__header">
+          <h2 class="usl-add-form__title">User Story</h2>
         </div>
-        <div class="usl-modal__body">
+        <div class="usl-add-form__body">
 
-          <div class="usl-modal__field">
-            <label class="usl-modal__label" for="uslModalTitle">
-              Title <span class="usl-modal__required">*</span>
+          <div class="usl-add-form__field">
+            <label class="usl-add-form__label" for="uslEditTitle">
+              Title <span class="usl-add-form__required">*</span>
             </label>
             <input
-              class="usl-modal__input"
-              id="uslModalTitle"
+              class="usl-add-form__input"
+              id="uslEditTitle"
               type="text"
               placeholder="As a user, I want to…"
               maxlength="200"
@@ -308,39 +293,39 @@ export class UserStoryList {
             />
           </div>
 
-          <div class="usl-modal__field">
-            <label class="usl-modal__label" for="uslModalDesc">Description</label>
+          <div class="usl-add-form__field">
+            <label class="usl-add-form__label" for="uslEditDesc">Description</label>
             <textarea
-              class="usl-modal__textarea"
-              id="uslModalDesc"
+              class="usl-add-form__textarea"
+              id="uslEditDesc"
               placeholder="Describe the story…"
               rows="3"
             >${escHtml(story.description || '')}</textarea>
           </div>
 
-          <div class="usl-modal__field">
-            <label class="usl-modal__label" for="uslModalAC">Acceptance Criteria</label>
+          <div class="usl-add-form__field">
+            <label class="usl-add-form__label" for="uslEditAC">Acceptance Criteria</label>
             <textarea
-              class="usl-modal__textarea"
-              id="uslModalAC"
+              class="usl-add-form__textarea"
+              id="uslEditAC"
               placeholder="Given… When… Then…"
               rows="3"
             >${escHtml(story.acceptance_criteria || '')}</textarea>
           </div>
 
-          <div class="usl-modal__field">
-            <label class="usl-modal__label" for="uslModalPrompt">Prompt</label>
+          <div class="usl-add-form__field">
+            <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
             <textarea
-              class="usl-modal__textarea"
-              id="uslModalPrompt"
+              class="usl-add-form__textarea"
+              id="uslEditPrompt"
               placeholder="AI prompt for this story…"
               rows="3"
             >${escHtml(story.prompt || '')}</textarea>
           </div>
 
-          <div class="usl-modal__field">
-            <label class="usl-modal__label" for="uslModalStatus">Status</label>
-            <select class="usl-modal__select" id="uslModalStatus">
+          <div class="usl-add-form__field">
+            <label class="usl-add-form__label" for="uslEditStatus">Status</label>
+            <select class="usl-add-form__select" id="uslEditStatus">
               <option value="">— none —</option>
               ${this._statuses.map(st =>
                 `<option value="${st.id}"${st.id === defaultStatus ? ' selected' : ''}>${escHtml(st.name)}</option>`
@@ -349,42 +334,34 @@ export class UserStoryList {
           </div>
 
         </div>
-        <div class="usl-modal__footer">
-          <button class="usl-modal__btn usl-modal__btn--cancel">Cancel</button>
-          <button class="usl-modal__btn usl-modal__btn--save">Save Changes</button>
+        <div class="usl-add-form__footer">
+          <button class="usl-add-form__btn usl-add-form__btn--cancel">Cancel</button>
+          <button class="usl-add-form__btn usl-add-form__btn--save">Save Changes</button>
         </div>
       </div>
     `;
 
-    document.body.appendChild(overlay);
-    this._modal = overlay;
+    const titleEl  = this._detailEl.querySelector('#uslEditTitle');
+    const descEl   = this._detailEl.querySelector('#uslEditDesc');
+    const acEl     = this._detailEl.querySelector('#uslEditAC');
+    const promptEl = this._detailEl.querySelector('#uslEditPrompt');
+    const statusEl = this._detailEl.querySelector('#uslEditStatus');
+    const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
 
-    const titleEl  = overlay.querySelector('#uslModalTitle');
-    const descEl   = overlay.querySelector('#uslModalDesc');
-    const acEl     = overlay.querySelector('#uslModalAC');
-    const promptEl = overlay.querySelector('#uslModalPrompt');
-    const statusEl = overlay.querySelector('#uslModalStatus');
-    const saveBtn  = overlay.querySelector('.usl-modal__btn--save');
-
-    titleEl.focus();
-
-    const close = () => this._closeModal();
-    overlay.querySelector('.usl-modal__close').addEventListener('click', close);
-    overlay.querySelector('.usl-modal__btn--cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-
-    const escHandler = (e) => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', escHandler);
-    overlay._removeEsc = () => document.removeEventListener('keydown', escHandler);
+    this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
+      this._activeId = null;
+      this._listEl.querySelectorAll('.usl-card').forEach(el => el.classList.remove('usl-card--active'));
+      this._renderDetailEmpty();
+    });
 
     const save = async () => {
       const title = titleEl.value.trim();
       if (!title) {
-        titleEl.classList.add('usl-modal__input--error');
+        titleEl.classList.add('usl-add-form__input--error');
         titleEl.focus();
         return;
       }
-      titleEl.classList.remove('usl-modal__input--error');
+      titleEl.classList.remove('usl-add-form__input--error');
       saveBtn.disabled    = true;
       saveBtn.textContent = 'Saving…';
 
@@ -397,8 +374,7 @@ export class UserStoryList {
           prompt:              promptEl.value.trim() || null,
           status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
         });
-        this._closeModal();
-        await this._load();
+        await this._load();  // refresh card list (title/status badge may change)
       } catch {
         saveBtn.disabled    = false;
         saveBtn.textContent = 'Save Changes';
@@ -406,14 +382,6 @@ export class UserStoryList {
     };
 
     saveBtn.addEventListener('click', save);
-  }
-
-  _closeModal() {
-    if (this._modal) {
-      if (this._modal._removeEsc) this._modal._removeEsc();
-      this._modal.remove();
-      this._modal = null;
-    }
   }
 
   // ----------------------------------------------------------------
