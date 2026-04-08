@@ -231,11 +231,15 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   async _mountComponents() {
     this._storyList = new UserStoryList({
-      listEl:    document.getElementById('storyList'),
-      addBtn:    document.getElementById('btnAddStory'),
-      detailEl:  document.getElementById('storyDetail'),
-      projectId: this.projectId,
-      onSelect:  (_story) => {},
+      listEl:         document.getElementById('storyList'),
+      addBtn:         document.getElementById('btnAddStory'),
+      detailEl:       document.getElementById('storyDetail'),
+      projectId:      this.projectId,
+      onSelect:       (_story) => {},
+      onRunCommand:   (cmd) => {
+        document.getElementById('projectConsole').hidden = false;
+        this._runCommand(cmd);
+      },
     });
     await this._storyList.mount();
 

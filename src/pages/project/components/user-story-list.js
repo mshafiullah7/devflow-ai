@@ -10,16 +10,17 @@ import { escHtml } from '../../../shared/helpers.js';
  *   await usl.load(featureId);
  */
 export class UserStoryList {
-  constructor({ listEl, addBtn, detailEl, projectId, onSelect }) {
-    this._listEl       = listEl;
-    this._addBtn       = addBtn;
-    this._detailEl     = detailEl;
-    this._projectId    = projectId;
-    this._featureId    = null;
-    this._onSelect     = onSelect || (() => {});
-    this._activeId     = null;
-    this._statuses     = [];
-    this._confirmModal = null;
+  constructor({ listEl, addBtn, detailEl, projectId, onSelect, onRunCommand }) {
+    this._listEl         = listEl;
+    this._addBtn         = addBtn;
+    this._detailEl       = detailEl;
+    this._projectId      = projectId;
+    this._featureId      = null;
+    this._onSelect       = onSelect || (() => {});
+    this._onRunCommand   = onRunCommand || (() => {});
+    this._activeId       = null;
+    this._statuses       = [];
+    this._confirmModal   = null;
   }
 
   // ----------------------------------------------------------------
@@ -193,9 +194,14 @@ export class UserStoryList {
           <div class="usl-add-form__field usl-add-form__field--prompt">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddPrompt">Prompt</label>
-              <button class="usl-add-form__expand" type="button" data-expand="uslAddPrompt" title="Expand" aria-label="Expand Prompt">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
+              <div class="usl-add-form__label-actions">
+                <button class="usl-add-form__run" type="button" data-prompt="uslAddPrompt" title="Run prompt in console" aria-label="Run prompt">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
+                </button>
+                <button class="usl-add-form__expand" type="button" data-expand="uslAddPrompt" title="Expand" aria-label="Expand Prompt">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
             </div>
             <textarea class="usl-add-form__textarea" id="uslAddPrompt" placeholder="AI prompt for this story…" rows="6"></textarea>
           </div>
@@ -227,6 +233,7 @@ export class UserStoryList {
 
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
+    this._bindRunBtns(this._detailEl);
 
     this._detailEl.querySelector('.usl-add-form__btn--cancel')
       .addEventListener('click', () => this._renderDetailEmpty());
@@ -317,9 +324,14 @@ export class UserStoryList {
           <div class="usl-add-form__field usl-add-form__field--prompt">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
-              <button class="usl-add-form__expand" type="button" data-expand="uslEditPrompt" title="Expand" aria-label="Expand Prompt">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
+              <div class="usl-add-form__label-actions">
+                <button class="usl-add-form__run" type="button" data-prompt="uslEditPrompt" title="Run prompt in console" aria-label="Run prompt">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
+                </button>
+                <button class="usl-add-form__expand" type="button" data-expand="uslEditPrompt" title="Expand" aria-label="Expand Prompt">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
             </div>
             <textarea class="usl-add-form__textarea" id="uslEditPrompt" placeholder="AI prompt for this story…" rows="6">${escHtml(story.prompt || '')}</textarea>
           </div>
@@ -380,6 +392,7 @@ export class UserStoryList {
 
     saveBtn.addEventListener('click', save);
     this._bindExpandBtns(this._detailEl, save);
+    this._bindRunBtns(this._detailEl);
 
     this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
       this._activeId = null;
@@ -395,9 +408,25 @@ export class UserStoryList {
     container.querySelectorAll('.usl-add-form__expand').forEach(btn => {
       btn.addEventListener('click', () => {
         const textarea  = container.querySelector('#' + btn.dataset.expand);
-        const labelText = btn.previousElementSibling.textContent.trim();
+        const row       = btn.closest('.usl-add-form__label-row');
+        const labelEl   = row ? row.querySelector('.usl-add-form__label') : null;
+        const labelText = labelEl ? labelEl.textContent.trim() : '';
         const isPrompt  = btn.dataset.expand.toLowerCase().includes('prompt');
         this._openExpandOverlay(textarea, labelText, onDone, isPrompt);
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Run button helper — wires run buttons in a container
+  // ----------------------------------------------------------------
+  _bindRunBtns(container) {
+    container.querySelectorAll('.usl-add-form__run').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const textarea = container.querySelector('#' + btn.dataset.prompt);
+        const prompt   = textarea ? textarea.value.trim() : '';
+        if (!prompt) return;
+        this._onRunCommand(`claude "${prompt.replace(/"/g, '\\"')}" --dangerously-skip-permissions`);
       });
     });
   }
