@@ -190,6 +190,75 @@ function registerHandlers() {
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
   });
+
+  // ----------------------------------------------------------------
+  // terminal
+  // ----------------------------------------------------------------
+  ipcMain.handle('terminal:homedir', () => require('os').homedir());
+
+  // Quick exec used only for `cd` path resolution (short-lived, 10s max)
+  ipcMain.handle('terminal:exec', (_e, { command, cwd }) => {
+    return new Promise((resolve) => {
+      const { spawn } = require('child_process');
+      const proc = spawn('powershell.exe', ['-NoLogo', '-NonInteractive', '-Command', command], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: cwd || require('os').homedir(),
+        env: process.env,
+        windowsHide: true,
+      });
+      let stdout = '', stderr = '';
+      proc.stdout.on('data', d => { stdout += d.toString(); });
+      proc.stderr.on('data', d => { stderr += d.toString(); });
+      proc.on('close', code => resolve({ stdout, stderr, exitCode: code }));
+      proc.on('error', err => resolve({ stdout: '', stderr: err.message, exitCode: 1 }));
+      const timer = setTimeout(() => { proc.kill(); }, 10000);
+      proc.on('close', () => clearTimeout(timer));
+    });
+  });
+
+  // Streaming exec — no timeout, pushes chunks back via webContents.send
+  let _activeProc = null;
+
+  const killTree = (proc) => {
+    if (!proc) return;
+    if (process.platform === 'win32') {
+      const { execSync } = require('child_process');
+      try { execSync(`taskkill /F /T /PID ${proc.pid}`, { windowsHide: true }); } catch (_) {}
+    } else {
+      try { proc.kill('SIGTERM'); } catch (_) {}
+    }
+  };
+
+  ipcMain.handle('terminal:exec-start', (event, { command, cwd }) => {
+    if (_activeProc) { killTree(_activeProc); _activeProc = null; }
+
+    const { spawn } = require('child_process');
+    const wc = event.sender;
+
+    _activeProc = spawn('powershell.exe', ['-NoLogo', '-NonInteractive', '-Command', command], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: cwd || require('os').homedir(),
+      env: process.env,
+      windowsHide: true,
+    });
+
+    const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
+
+    _activeProc.stdout.on('data', d => send('terminal:data', { text: d.toString(), stream: 'stdout' }));
+    _activeProc.stderr.on('data', d => send('terminal:data', { text: d.toString(), stream: 'stderr' }));
+    _activeProc.on('close',  code => { _activeProc = null; send('terminal:done', { exitCode: code }); });
+    _activeProc.on('error',  err  => {
+      _activeProc = null;
+      send('terminal:data', { text: err.message, stream: 'stderr' });
+      send('terminal:done', { exitCode: 1 });
+    });
+
+    return { pid: _activeProc.pid };
+  });
+
+  ipcMain.handle('terminal:kill-active', () => {
+    if (_activeProc) { killTree(_activeProc); _activeProc = null; }
+  });
 }
 
 module.exports = { registerHandlers };

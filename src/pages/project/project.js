@@ -15,14 +15,18 @@ export class ProjectPage {
   async mount() {
     this._injectCss();
     this._project = await window.db.projects.get(this.projectId);
+    this._termCwd = await window.db.terminal.homedir();
+    this._currentStreamDiv = null;
     this.container.innerHTML = this._template();
     this._bindEvents();
+    this._initTerminal();
     await this._mountComponents();
   }
 
   unmount() {
     const link = document.getElementById('project-css');
     if (link) link.remove();
+    window.db.terminal.removeListeners();
   }
 
   // ----------------------------------------------------------------
@@ -152,7 +156,14 @@ export class ProjectPage {
               </div>
             </div>
             <div class="project-console__output" id="consoleOutput">
-              <span class="project-console__hint">Console output will appear here…</span>
+              <span class="project-console__hint">Select a folder or type a command to start…</span>
+            </div>
+            <div class="project-console__input-row">
+              <span class="project-console__ps-label" id="consolePromptLabel">PS ~&gt;</span>
+              <textarea class="project-console__input" id="consoleInput" rows="1"
+                spellcheck="false" autocomplete="off" autocorrect="off"
+                placeholder="Enter command… (Shift+Enter for new line)"></textarea>
+              <button class="project-console__stop" id="btnConsoleStop" title="Stop running command" hidden>&#9632; Stop</button>
             </div>
           </div><!-- /.project-console -->
 
@@ -176,23 +187,40 @@ export class ProjectPage {
     document.getElementById('btnConsoleClear')
       .addEventListener('click', () => {
         const out = document.getElementById('consoleOutput');
-        out.innerHTML = '<span class="project-console__hint">Console output will appear here…</span>';
+        out.innerHTML = '<span class="project-console__hint">Select a folder or type a command to start…</span>';
       });
 
     document.getElementById('btnConsoleFolder')
       .addEventListener('click', async () => {
         const folderPath = await window.db.dialog.openFolder();
         if (!folderPath) return;
-        const out = document.getElementById('consoleOutput');
-        // Remove placeholder hint if present
-        const hint = out.querySelector('.project-console__hint');
-        if (hint) hint.remove();
-        // Append cd command line
-        const line = document.createElement('div');
-        line.className = 'project-console__line';
-        line.innerHTML = `<span class="project-console__prompt">$</span> <span class="project-console__cmd">cd ${folderPath}</span>`;
-        out.appendChild(line);
-        out.scrollTop = out.scrollHeight;
+        // Show console if hidden
+        document.getElementById('projectConsole').hidden = false;
+        await this._runCommand(`cd "${folderPath}"`);
+        document.getElementById('consoleInput').focus();
+      });
+
+    const consoleInput = document.getElementById('consoleInput');
+
+    const autoResize = (el) => {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+    };
+    consoleInput.addEventListener('input', () => autoResize(consoleInput));
+
+    consoleInput.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter' || e.shiftKey) return; // Shift+Enter → newline
+      e.preventDefault();
+      const cmd = consoleInput.value.trim();
+      if (!cmd) return;
+      consoleInput.value = '';
+      consoleInput.style.height = 'auto';
+      await this._runCommand(cmd);
+    });
+
+    document.getElementById('btnConsoleStop')
+      .addEventListener('click', async () => {
+        await window.db.terminal.killActive();
       });
 
     this._initResizable();
@@ -220,6 +248,115 @@ export class ProjectPage {
       },
     });
     await this._featureList.mount();
+  }
+
+  // ----------------------------------------------------------------
+  // Terminal helpers
+  // ----------------------------------------------------------------
+  _stripAnsi(text) {
+    return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+  }
+
+  _updatePromptLabel() {
+    const label = document.getElementById('consolePromptLabel');
+    if (label) label.textContent = `PS ${this._termCwd}>`;
+  }
+
+  _setRunning(running) {
+    const input   = document.getElementById('consoleInput');
+    const stopBtn = document.getElementById('btnConsoleStop');
+    const label   = document.getElementById('consolePromptLabel');
+    if (running) {
+      input.disabled = true;
+      input.placeholder = 'Running…';
+      if (stopBtn) stopBtn.hidden = false;
+      if (label)   label.textContent = '…';
+    } else {
+      input.disabled = false;
+      input.style.height = 'auto';
+      input.placeholder = 'Enter command… (Shift+Enter for new line)';
+      if (stopBtn) stopBtn.hidden = true;
+      this._updatePromptLabel();
+      input.focus();
+    }
+  }
+
+  _appendPromptLine(cmd) {
+    const out = document.getElementById('consoleOutput');
+    const hint = out.querySelector('.project-console__hint');
+    if (hint) hint.remove();
+    const div = document.createElement('div');
+    div.className = 'project-console__line project-console__line--prompt';
+    div.innerHTML =
+      `<span class="project-console__ps-prompt">PS ${this._termCwd}&gt;</span>` +
+      `<span class="project-console__ps-cmd"> ${cmd}</span>`;
+    out.appendChild(div);
+    out.scrollTop = out.scrollHeight;
+    return out;
+  }
+
+  _initTerminal() {
+    window.db.terminal.onData(({ text, stream }) => {
+      if (!this._currentStreamDiv) return;
+      // Remove spinner on first data chunk
+      if (this._spinnerEl) { this._spinnerEl.remove(); this._spinnerEl = null; }
+      const clean = this._stripAnsi(text);
+      if (!clean) return;
+      const span = document.createElement('span');
+      span.className = stream === 'stderr' ? 'project-console__stderr' : '';
+      span.textContent = clean;
+      this._currentStreamDiv.appendChild(span);
+      const out = document.getElementById('consoleOutput');
+      if (out) out.scrollTop = out.scrollHeight;
+    });
+
+    window.db.terminal.onDone(() => {
+      if (this._spinnerEl) { this._spinnerEl.remove(); this._spinnerEl = null; }
+      this._currentStreamDiv = null;
+      this._setRunning(false);
+    });
+  }
+
+  async _runCommand(cmd) {
+    const out = this._appendPromptLine(cmd);
+
+    // Handle `cd` locally — quick path resolution, no streaming needed
+    if (/^cd(\s|$)/i.test(cmd.trim())) {
+      const target = cmd.trim().replace(/^cd\s*/i, '').replace(/^["']|["']$/g, '');
+      if (!target) return;
+      const result = await window.db.terminal.exec({
+        command: `Set-Location "${target}"; (Get-Location).Path`,
+        cwd: this._termCwd,
+      });
+      if (result.exitCode === 0 && result.stdout.trim()) {
+        this._termCwd = result.stdout.trim();
+        this._updatePromptLabel();
+      } else {
+        const errDiv = document.createElement('div');
+        errDiv.className = 'project-console__line project-console__line--error';
+        errDiv.textContent = this._stripAnsi(result.stderr || `cd: cannot find path '${target}'`);
+        out.appendChild(errDiv);
+        out.scrollTop = out.scrollHeight;
+      }
+      return;
+    }
+
+    // All other commands — streaming, no timeout
+    const streamDiv = document.createElement('div');
+    streamDiv.className = 'project-console__stream-block';
+    out.appendChild(streamDiv);
+
+    // Spinner shown until first output chunk arrives
+    const spinner = document.createElement('span');
+    spinner.className = 'project-console__spinner';
+    streamDiv.appendChild(spinner);
+    this._spinnerEl = spinner;
+    this._currentStreamDiv = streamDiv;
+
+    out.scrollTop = out.scrollHeight;
+    this._setRunning(true);
+    await window.db.terminal.execStart({ command: cmd, cwd: this._termCwd });
+    // output arrives via onData / onDone listeners set up in _initTerminal
   }
 
   // ----------------------------------------------------------------

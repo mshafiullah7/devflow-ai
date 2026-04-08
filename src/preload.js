@@ -35,4 +35,16 @@ contextBridge.exposeInMainWorld('db', {
   dialog: {
     openFolder: () => invoke('dialog:openFolder'),
   },
+  terminal: {
+    homedir:     ()     => invoke('terminal:homedir'),
+    exec:        (data) => invoke('terminal:exec', data),
+    execStart:   (data) => invoke('terminal:exec-start', data),
+    killActive:  ()     => invoke('terminal:kill-active'),
+    onData: (cb) => ipcRenderer.on('terminal:data', (_e, p) => cb(p)),
+    onDone: (cb) => ipcRenderer.on('terminal:done', (_e, p) => cb(p)),
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('terminal:data');
+      ipcRenderer.removeAllListeners('terminal:done');
+    },
+  },
 });

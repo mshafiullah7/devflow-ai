@@ -112,6 +112,7 @@
 /* ------------------------------------------------------------------ */
 .project-page__workspace {
   flex: 1;
+  min-width: 0;
   display: flex;
   overflow: hidden;
 }
@@ -215,8 +216,11 @@
 .project-console {
   flex: 0 0 22%;
   min-width: 180px;
+  max-width: 100%;          /* never push past viewport */
+  min-width: 0;             /* let flex shrink below content width */
   display: flex;
   flex-direction: column;
+  overflow: hidden;         /* clip any overflowing content */
   background: #0d0f14;
   border-left: 1px solid var(--border);
 }
@@ -280,18 +284,23 @@
 .project-console__output {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;   /* reserve scrollbar space so it never causes a layout shift */
   padding: 10px 14px;
   font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
   font-size: 12px;
   line-height: 1.6;
   color: #94a3b8;
-  white-space: pre-wrap;
   word-break: break-all;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 
 .project-console__hint {
   color: var(--text-muted);
   font-style: italic;
+  flex-shrink: 0;
 }
 
 .project-console__folder {
@@ -313,18 +322,136 @@
   background: var(--surface-hover);
 }
 
+/* Terminal output lines */
 .project-console__line {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+  flex-shrink: 0;
 }
-.project-console__prompt {
+.project-console__line--prompt {
+  margin-top: 6px;
+}
+.project-console__line--output {
+  color: #cbd5e1;
+}
+.project-console__line--error {
+  color: #f87171;
+}
+.project-console__ps-prompt {
   color: #6ee7b7;
   user-select: none;
+  margin-right: 4px;
 }
-.project-console__cmd {
+.project-console__ps-cmd {
   color: #e2e8f0;
+}
+
+/* Terminal input row */
+.project-console__input-row {
+  display: flex;
+  align-items: flex-end;   /* align to bottom so label stays at baseline when textarea grows */
+  gap: 6px;
+  padding: 6px 14px 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.project-console__ps-label {
+  font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
+  font-size: 12px;
+  color: #6ee7b7;
+  white-space: nowrap;
+  user-select: none;
+  padding-bottom: 2px; /* align with textarea text baseline */
+}
+.project-console__input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: hidden;   /* grows via JS; no inner scrollbar */
+  min-height: 20px;
+  max-height: 100px;    /* ~5 lines */
+  line-height: 1.5;
+  font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
+  font-size: 12px;
+  color: #e2e8f0;
+  caret-color: #6ee7b7;
+  padding: 0;
+}
+.project-console__input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.project-console__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-console__stop {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid #f87171;
+  border-radius: 4px;
+  color: #f87171;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.project-console__stop:hover {
+  background: #f87171;
+  color: #0d0f14;
+}
+
+/* Running spinner */
+@keyframes terminal-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes terminal-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.project-console__spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6ee7b7;
+  font-size: 11px;
+}
+.project-console__spinner::before {
+  content: '';
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid #1e293b;
+  border-top-color: #6ee7b7;
+  border-radius: 50%;
+  animation: terminal-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.project-console__spinner::after {
+  content: 'running…';
+  animation: terminal-pulse 1.4s ease-in-out infinite;
+}
+
+/* Streaming output block */
+.project-console__stream-block {
+  white-space: pre-wrap;
   word-break: break-all;
+  overflow-wrap: break-word;
+  overflow-x: hidden;
+  max-width: 100%;
+  line-height: 1.5;
+  color: #cbd5e1;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+.project-console__stderr {
+  color: #f87171;
 }
 
 
