@@ -1,0 +1,286 @@
+'use strict';
+
+/**
+ * Applies the full DB schema (idempotent — safe to run on every launch).
+ * @param {import('better-sqlite3').Database} db
+ */
+function applySchema(db) {
+  db.exec(`
+    PRAGMA foreign_keys = ON;
+
+    -- ----------------------------------------------------------------
+    -- MASTER / LOOKUP
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS status_master (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT    NOT NULL UNIQUE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_active  INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
+    -- CORE TABLES
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS projects (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL,
+      description TEXT,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+      last_opened_at  TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS features (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name        TEXT    NOT NULL,
+      description TEXT,
+      status_id   INTEGER REFERENCES status_master(id),
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_stories (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      feature_id          INTEGER NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+      project_id          INTEGER NOT NULL REFERENCES projects(id),
+      title               TEXT    NOT NULL,
+      description         TEXT,
+      acceptance_criteria TEXT,
+      prompt              TEXT,
+      status_id           INTEGER REFERENCES status_master(id),
+      is_active           INTEGER NOT NULL DEFAULT 1,
+      created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
+    -- AUDIT / LOG TABLES
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS projects_log (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER,
+      action     TEXT NOT NULL,   -- 'INSERT' | 'UPDATE' | 'DELETE'
+      old_data   TEXT,            -- JSON
+      new_data   TEXT,            -- JSON
+      changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS features_log (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      feature_id INTEGER,
+      action     TEXT NOT NULL,
+      old_data   TEXT,
+      new_data   TEXT,
+      changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_stories_log (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_story_id INTEGER,
+      action        TEXT NOT NULL,
+      old_data      TEXT,
+      new_data      TEXT,
+      changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
+    -- TRIGGERS — projects
+    -- ----------------------------------------------------------------
+    CREATE TRIGGER IF NOT EXISTS trg_projects_insert
+    AFTER INSERT ON projects
+    BEGIN
+      INSERT INTO projects_log (project_id, action, old_data, new_data)
+      VALUES (
+        NEW.id, 'INSERT', NULL,
+        json_object(
+          'id', NEW.id, 'name', NEW.name, 'description', NEW.description,
+          'is_active', NEW.is_active, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at
+        )
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_projects_update
+    AFTER UPDATE ON projects
+    BEGIN
+      INSERT INTO projects_log (project_id, action, old_data, new_data)
+      VALUES (
+        NEW.id, 'UPDATE',
+        json_object(
+          'id', OLD.id, 'name', OLD.name, 'description', OLD.description,
+          'is_active', OLD.is_active, 'created_at', OLD.created_at, 'updated_at', OLD.updated_at
+        ),
+        json_object(
+          'id', NEW.id, 'name', NEW.name, 'description', NEW.description,
+          'is_active', NEW.is_active, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at
+        )
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_projects_delete
+    AFTER DELETE ON projects
+    BEGIN
+      INSERT INTO projects_log (project_id, action, old_data, new_data)
+      VALUES (
+        OLD.id, 'DELETE',
+        json_object(
+          'id', OLD.id, 'name', OLD.name, 'description', OLD.description,
+          'is_active', OLD.is_active, 'created_at', OLD.created_at, 'updated_at', OLD.updated_at
+        ),
+        NULL
+      );
+    END;
+
+    -- ----------------------------------------------------------------
+    -- TRIGGERS — features
+    -- ----------------------------------------------------------------
+    CREATE TRIGGER IF NOT EXISTS trg_features_insert
+    AFTER INSERT ON features
+    BEGIN
+      INSERT INTO features_log (feature_id, action, old_data, new_data)
+      VALUES (
+        NEW.id, 'INSERT', NULL,
+        json_object(
+          'id', NEW.id, 'project_id', NEW.project_id, 'name', NEW.name,
+          'description', NEW.description, 'status_id', NEW.status_id,
+          'is_active', NEW.is_active, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at
+        )
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_features_update
+    AFTER UPDATE ON features
+    BEGIN
+      INSERT INTO features_log (feature_id, action, old_data, new_data)
+      VALUES (
+        NEW.id, 'UPDATE',
+        json_object(
+          'id', OLD.id, 'project_id', OLD.project_id, 'name', OLD.name,
+          'description', OLD.description, 'status_id', OLD.status_id,
+          'is_active', OLD.is_active, 'created_at', OLD.created_at, 'updated_at', OLD.updated_at
+        ),
+        json_object(
+          'id', NEW.id, 'project_id', NEW.project_id, 'name', NEW.name,
+          'description', NEW.description, 'status_id', NEW.status_id,
+          'is_active', NEW.is_active, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at
+        )
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_features_delete
+    AFTER DELETE ON features
+    BEGIN
+      INSERT INTO features_log (feature_id, action, old_data, new_data)
+      VALUES (
+        OLD.id, 'DELETE',
+        json_object(
+          'id', OLD.id, 'project_id', OLD.project_id, 'name', OLD.name,
+          'description', OLD.description, 'status_id', OLD.status_id,
+          'is_active', OLD.is_active, 'created_at', OLD.created_at, 'updated_at', OLD.updated_at
+        ),
+        NULL
+      );
+    END;
+
+    -- ----------------------------------------------------------------
+    -- TRIGGERS — user_stories
+    -- ----------------------------------------------------------------
+    CREATE TRIGGER IF NOT EXISTS trg_user_stories_insert
+    AFTER INSERT ON user_stories
+    BEGIN
+      INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
+      VALUES (
+        NEW.id, 'INSERT', NULL,
+        json_object(
+          'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
+          'title', NEW.title, 'description', NEW.description,
+          'acceptance_criteria', NEW.acceptance_criteria, 'prompt', NEW.prompt,
+          'status_id', NEW.status_id, 'is_active', NEW.is_active,
+          'created_at', NEW.created_at, 'updated_at', NEW.updated_at
+        )
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_user_stories_update
+    AFTER UPDATE ON user_stories
+    BEGIN
+      INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
+      VALUES (
+        NEW.id, 'UPDATE',
+        json_object(
+          'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
+          'title', OLD.title, 'description', OLD.description,
+          'acceptance_criteria', OLD.acceptance_criteria, 'prompt', OLD.prompt,
+          'status_id', OLD.status_id, 'is_active', OLD.is_active,
+          'created_at', OLD.created_at, 'updated_at', OLD.updated_at
+        ),
+        json_object(
+          'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
+          'title', NEW.title, 'description', NEW.description,
+          'acceptance_criteria', NEW.acceptance_criteria, 'prompt', NEW.prompt,
+          'status_id', NEW.status_id, 'is_active', NEW.is_active,
+          'created_at', NEW.created_at, 'updated_at', NEW.updated_at
+        )
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_user_stories_delete
+    AFTER DELETE ON user_stories
+    BEGIN
+      INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
+      VALUES (
+        OLD.id, 'DELETE',
+        json_object(
+          'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
+          'title', OLD.title, 'description', OLD.description,
+          'acceptance_criteria', OLD.acceptance_criteria, 'prompt', OLD.prompt,
+          'status_id', OLD.status_id, 'is_active', OLD.is_active,
+          'created_at', OLD.created_at, 'updated_at', OLD.updated_at
+        ),
+        NULL
+      );
+    END;
+  `);
+}
+
+/**
+ * Seeds the status_master table with default values (only if empty).
+ * @param {import('better-sqlite3').Database} db
+ */
+function seedStatuses(db) {
+  const count = db.prepare('SELECT COUNT(*) as c FROM status_master').get().c;
+  if (count > 0) return;
+
+  const insert = db.prepare(
+    'INSERT INTO status_master (name, sort_order) VALUES (?, ?)'
+  );
+  const statuses = [
+    ['Backlog', 1],
+    ['In Progress', 2],
+    ['Implemented', 3],
+    ['In Review', 4],
+    ['Tested', 5],
+    ['Done', 6],
+  ];
+  const insertMany = db.transaction((rows) => {
+    for (const [name, sort_order] of rows) insert.run(name, sort_order);
+  });
+  insertMany(statuses);
+}
+
+/**
+ * Runs incremental migrations for existing databases.
+ * @param {import('better-sqlite3').Database} db
+ */
+function runMigrations(db) {
+  // Add last_opened_at to projects if it doesn't exist yet
+  const cols = db.prepare('PRAGMA table_info(projects)').all().map((c) => c.name);
+  if (!cols.includes('last_opened_at')) {
+    db.exec('ALTER TABLE projects ADD COLUMN last_opened_at TEXT');
+  }
+}
+
+module.exports = { applySchema, seedStatuses, runMigrations };

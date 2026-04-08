@@ -90,3 +90,11 @@ typings/
 
 # Electron-Forge
 out/
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Claude local settings
+.claude/settings.local.json

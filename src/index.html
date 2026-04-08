@@ -1,12 +1,81 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Hello World!</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'" />
+    <title>AI SDLC</title>
     <link rel="stylesheet" href="index.css" />
   </head>
   <body>
-    <h1>💖 Hello World!</h1>
-    <p>Welcome to your Electron application.</p>
+    <div class="launcher">
+
+      <!-- Header -->
+      <header class="launcher__header">
+        <div class="launcher__logo">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="36" height="36" rx="10" fill="#6366f1"/>
+            <path d="M10 18h16M18 10v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="18" cy="18" r="4" fill="#fff" fill-opacity="0.25"/>
+          </svg>
+          <span class="launcher__app-name">AI SDLC</span>
+        </div>
+      </header>
+
+      <!-- Main content -->
+      <main class="launcher__main">
+        <h1 class="launcher__title">Welcome back</h1>
+        <p class="launcher__subtitle">Select a recent project or start a new one</p>
+
+        <!-- New project button -->
+        <button class="btn-new-project" id="btnNewProject">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          New Project
+        </button>
+
+        <!-- Recent projects -->
+        <section class="recent-section">
+          <h2 class="recent-section__heading">Recent Projects</h2>
+          <div class="project-list" id="projectList">
+            <div class="project-list__empty" id="emptyState">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <rect x="6" y="8" width="28" height="24" rx="4" stroke="#94a3b8" stroke-width="1.5"/>
+                <path d="M13 16h14M13 22h8" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              <p>No recent projects yet</p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+    </div>
+
+    <!-- New Project Modal -->
+    <div class="modal-overlay" id="modalOverlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal__header">
+          <h2 class="modal__title" id="modalTitle">New Project</h2>
+          <button class="modal__close" id="btnModalClose" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal__body">
+          <div class="form-group">
+            <label class="form-label" for="inputName">Project Name <span class="required">*</span></label>
+            <input class="form-input" id="inputName" type="text" placeholder="e.g. Customer Portal" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inputDesc">Description</label>
+            <textarea class="form-textarea" id="inputDesc" rows="3" placeholder="Brief description of this project…"></textarea>
+          </div>
+          <p class="form-error" id="formError" hidden></p>
+        </div>
+        <div class="modal__footer">
+          <button class="btn-secondary" id="btnCancel">Cancel</button>
+          <button class="btn-primary" id="btnCreate">Create Project</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
   </body>
 </html>
