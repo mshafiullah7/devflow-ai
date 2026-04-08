@@ -70,12 +70,15 @@ function registerHandlers() {
   // features
   // ----------------------------------------------------------------
   ipcMain.handle('db:features:list', (_e, project_id) => {
-    const sql = project_id
-      ? 'SELECT * FROM features WHERE project_id = ? ORDER BY created_at DESC'
-      : 'SELECT * FROM features ORDER BY created_at DESC';
-    return project_id
-      ? db.prepare(sql).all(project_id)
-      : db.prepare(sql).all();
+    const base = `
+      SELECT f.*, sm.name AS status_name
+      FROM features f
+      LEFT JOIN status_master sm ON f.status_id = sm.id
+      WHERE f.is_active = 1`;
+    if (project_id) {
+      return db.prepare(base + ' AND f.project_id = ? ORDER BY f.created_at DESC').all(project_id);
+    }
+    return db.prepare(base + ' ORDER BY f.created_at DESC').all();
   });
 
   ipcMain.handle('db:features:get', (_e, id) => {
