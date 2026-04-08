@@ -1,4 +1,5 @@
 import { FeatureList } from './components/feature-list.js';
+import { UserStoryList } from './components/user-story-list.js';
 
 export class ProjectPage {
   constructor(container, params, router) {
@@ -96,21 +97,13 @@ export class ProjectPage {
             <aside class="project-panel" id="panelStories">
               <div class="project-panel__header">
                 <span class="project-panel__title">User Stories</span>
-                <button class="project-panel__add" aria-label="Add user story" title="Add user story">
+                <button class="project-panel__add" id="btnAddStory" aria-label="Add user story" title="Add user story">
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                     <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                   </svg>
                 </button>
               </div>
-              <div class="project-panel__list" id="storyList">
-                <div class="project-panel__empty">
-                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                    <rect x="4" y="6" width="24" height="20" rx="4" stroke="#4b5563" stroke-width="1.4"/>
-                    <path d="M9 13h14M9 18h10M9 23h6" stroke="#4b5563" stroke-width="1.4" stroke-linecap="round"/>
-                  </svg>
-                  <p>No user stories yet</p>
-                </div>
-              </div>
+              <div class="project-panel__list" id="storyList"></div>
             </aside>
 
             <!-- resize handle -->
@@ -188,13 +181,21 @@ export class ProjectPage {
   // Components
   // ----------------------------------------------------------------
   async _mountComponents() {
+    this._storyList = new UserStoryList({
+      listEl:    document.getElementById('storyList'),
+      addBtn:    document.getElementById('btnAddStory'),
+      detailEl:  document.getElementById('storyDetail'),
+      projectId: this.projectId,
+      onSelect:  (_story) => {},
+    });
+    await this._storyList.mount();
+
     this._featureList = new FeatureList({
       listEl:    document.getElementById('featureList'),
       addBtn:    document.getElementById('btnAddFeature'),
       projectId: this.projectId,
       onSelect:  (feature) => {
-        // TODO: load user stories for selected feature
-        console.log('Feature selected:', feature);
+        this._storyList.load(feature.id);
       },
     });
     await this._featureList.mount();

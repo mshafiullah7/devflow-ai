@@ -116,17 +116,18 @@ function registerHandlers() {
   // user_stories
   // ----------------------------------------------------------------
   ipcMain.handle('db:user_stories:list', (_e, { feature_id, project_id } = {}) => {
+    const base = `
+      SELECT us.*, sm.name AS status_name
+      FROM user_stories us
+      LEFT JOIN status_master sm ON us.status_id = sm.id
+      WHERE us.is_active = 1`;
     if (feature_id) {
-      return db
-        .prepare('SELECT * FROM user_stories WHERE feature_id = ? ORDER BY created_at DESC')
-        .all(feature_id);
+      return db.prepare(base + ' AND us.feature_id = ? ORDER BY us.created_at DESC').all(feature_id);
     }
     if (project_id) {
-      return db
-        .prepare('SELECT * FROM user_stories WHERE project_id = ? ORDER BY created_at DESC')
-        .all(project_id);
+      return db.prepare(base + ' AND us.project_id = ? ORDER BY us.created_at DESC').all(project_id);
     }
-    return db.prepare('SELECT * FROM user_stories ORDER BY created_at DESC').all();
+    return db.prepare(base + ' ORDER BY us.created_at DESC').all();
   });
 
   ipcMain.handle('db:user_stories:get', (_e, id) => {
