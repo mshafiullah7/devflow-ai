@@ -294,6 +294,39 @@
   font-style: italic;
 }
 
+.project-console__folder {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.project-console__folder:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.project-console__line {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.project-console__prompt {
+  color: #6ee7b7;
+  user-select: none;
+}
+.project-console__cmd {
+  color: #e2e8f0;
+  word-break: break-all;
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Header                                                               */

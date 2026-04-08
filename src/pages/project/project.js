@@ -142,6 +142,11 @@ export class ProjectPage {
                 Console
               </div>
               <div class="project-console__actions">
+                <button class="project-console__folder" id="btnConsoleFolder" title="Select folder">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                    <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                  </svg>
+                </button>
                 <button class="project-console__clear" id="btnConsoleClear" title="Clear console">Clear</button>
                 <button class="project-console__close" id="btnConsoleClose" aria-label="Close console">&times;</button>
               </div>
@@ -172,6 +177,22 @@ export class ProjectPage {
       .addEventListener('click', () => {
         const out = document.getElementById('consoleOutput');
         out.innerHTML = '<span class="project-console__hint">Console output will appear here…</span>';
+      });
+
+    document.getElementById('btnConsoleFolder')
+      .addEventListener('click', async () => {
+        const folderPath = await window.db.dialog.openFolder();
+        if (!folderPath) return;
+        const out = document.getElementById('consoleOutput');
+        // Remove placeholder hint if present
+        const hint = out.querySelector('.project-console__hint');
+        if (hint) hint.remove();
+        // Append cd command line
+        const line = document.createElement('div');
+        line.className = 'project-console__line';
+        line.innerHTML = `<span class="project-console__prompt">$</span> <span class="project-console__cmd">cd ${folderPath}</span>`;
+        out.appendChild(line);
+        out.scrollTop = out.scrollHeight;
       });
 
     this._initResizable();

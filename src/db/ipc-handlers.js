@@ -1,6 +1,6 @@
 'use strict';
 
-const { ipcMain } = require('electron');
+const { ipcMain, dialog } = require('electron');
 const { getDb } = require('./database');
 
 function registerHandlers() {
@@ -176,6 +176,19 @@ function registerHandlers() {
   ipcMain.handle('db:user_stories:delete', (_e, id) => {
     db.prepare('DELETE FROM user_stories WHERE id = ?').run(id);
     return { success: true };
+  });
+
+  // ----------------------------------------------------------------
+  // dialog
+  // ----------------------------------------------------------------
+  ipcMain.handle('dialog:openFolder', async (event) => {
+    const win = require('electron').BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory'],
+      title: 'Select Folder',
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
   });
 }
 

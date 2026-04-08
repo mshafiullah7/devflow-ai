@@ -32,4 +32,7 @@ contextBridge.exposeInMainWorld('db', {
     update: (data)    => invoke('db:user_stories:update', data),
     delete: (id)      => invoke('db:user_stories:delete', id),
   },
+  dialog: {
+    openFolder: () => invoke('dialog:openFolder'),
+  },
 });
