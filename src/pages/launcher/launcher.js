@@ -78,6 +78,22 @@ export class LauncherPage {
         </main>
       </div>
 
+      <div class="modal-overlay" id="confirmOverlay" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+          <div class="modal__header">
+            <h2 class="modal__title" id="confirmTitle">Remove Project</h2>
+            <button class="modal__close" id="btnConfirmClose" aria-label="Close">&times;</button>
+          </div>
+          <div class="modal__body">
+            <p style="font-size:14px;color:var(--text-secondary);margin:0">Are you sure you want to remove <strong id="confirmProjectName"></strong> from the list? You can restore it later.</p>
+          </div>
+          <div class="modal__footer">
+            <button class="btn-secondary" id="btnConfirmCancel">Cancel</button>
+            <button class="btn-danger" id="btnConfirmRemove">Remove</button>
+          </div>
+        </div>
+      </div>
+
       <div class="modal-overlay" id="modalOverlay" hidden>
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
           <div class="modal__header">
@@ -108,9 +124,12 @@ export class LauncherPage {
   // DOM references
   // ----------------------------------------------------------------
   _bindRefs() {
-    this._projectList  = document.getElementById('projectList');
-    this._emptyState   = document.getElementById('emptyState');
-    this._modalOverlay = document.getElementById('modalOverlay');
+    this._projectList    = document.getElementById('projectList');
+    this._emptyState     = document.getElementById('emptyState');
+    this._modalOverlay   = document.getElementById('modalOverlay');
+    this._confirmOverlay = document.getElementById('confirmOverlay');
+    this._confirmName    = document.getElementById('confirmProjectName');
+    this._btnConfirmRemove = document.getElementById('btnConfirmRemove');
     this._inputName    = document.getElementById('inputName');
     this._inputDesc    = document.getElementById('inputDesc');
     this._formError    = document.getElementById('formError');
@@ -129,6 +148,14 @@ export class LauncherPage {
       .addEventListener('click', () => this._closeModal());
     document.getElementById('btnCreate')
       .addEventListener('click', () => this._createProject());
+
+    document.getElementById('btnConfirmClose')
+      .addEventListener('click', () => this._closeConfirm());
+    document.getElementById('btnConfirmCancel')
+      .addEventListener('click', () => this._closeConfirm());
+    this._confirmOverlay.addEventListener('click', (e) => {
+      if (e.target === this._confirmOverlay) this._closeConfirm();
+    });
 
     this._inputName.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this._createProject();
@@ -153,7 +180,7 @@ export class LauncherPage {
 
     this._emptyState.hidden = true;
     projects.forEach(p => {
-      const card = document.createElement('button');
+      const card = document.createElement('div');
       card.className = 'project-card';
       card.innerHTML = `
         <div class="project-card__icon">${escHtml(initial(p.name))}</div>
@@ -161,8 +188,17 @@ export class LauncherPage {
           <div class="project-card__name">${escHtml(p.name)}</div>
           ${p.description ? `<div class="project-card__desc">${escHtml(p.description)}</div>` : ''}
         </div>
-        <div class="project-card__meta">${timeAgo(p.last_opened_at)}</div>
+        <div class="project-card__meta">${timeAgo(p.created_at)}</div>
+        <button class="project-card__delete" aria-label="Remove project" title="Remove from list">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+            <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
       `;
+      card.querySelector('.project-card__delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._confirmDisable(p.id, p.name, card);
+      });
       card.addEventListener('click', () => this._openProject(p.id));
       this._projectList.appendChild(card);
     });
@@ -170,8 +206,39 @@ export class LauncherPage {
 
   async _openProject(id) {
     await window.db.projects.open(id);
-    // TODO: this.router.navigate('dashboard', { projectId: id });
-    await this._loadRecent();
+    this.router.navigate('project', { projectId: id });
+  }
+
+  _confirmDisable(id, name, cardEl) {
+    this._confirmName.textContent = name;
+    this._confirmOverlay.hidden = false;
+
+    // Replace listener to avoid stacking handlers
+    const btn = this._btnConfirmRemove;
+    const fresh = btn.cloneNode(true);
+    btn.replaceWith(fresh);
+    this._btnConfirmRemove = fresh;
+
+    fresh.addEventListener('click', async () => {
+      this._closeConfirm();
+      await this._disableProject(id, cardEl);
+    });
+  }
+
+  _closeConfirm() {
+    this._confirmOverlay.hidden = true;
+  }
+
+  async _disableProject(id, cardEl) {
+    cardEl.style.pointerEvents = 'none';
+    cardEl.style.opacity = '0.5';
+    try {
+      await window.db.projects.update({ id, is_active: 0 });
+      await this._loadRecent();
+    } catch (err) {
+      cardEl.style.pointerEvents = '';
+      cardEl.style.opacity = '';
+    }
   }
 
   // ----------------------------------------------------------------

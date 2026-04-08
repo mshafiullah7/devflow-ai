@@ -8,7 +8,11 @@ export function escHtml(str) {
 
 export function timeAgo(dateStr) {
   if (!dateStr) return '';
-  const diff  = Date.now() - new Date(dateStr).getTime();
+  // SQLite datetime('now') returns "YYYY-MM-DD HH:MM:SS" in UTC.
+  // Replacing the space with 'T' and appending 'Z' ensures correct UTC parsing
+  // regardless of the host machine's local timezone.
+  const normalized = dateStr.toString().replace(' ', 'T').replace(/Z?$/, 'Z');
+  const diff  = Date.now() - new Date(normalized).getTime();
   const mins  = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days  = Math.floor(diff / 86400000);
