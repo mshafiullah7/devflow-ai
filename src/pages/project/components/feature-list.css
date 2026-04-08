@@ -1,0 +1,125 @@
+/* ------------------------------------------------------------------ */
+/* Feature list items                                                   */
+/* ------------------------------------------------------------------ */
+.fl-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.fl-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+.fl-item--active {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--accent);
+}
+
+.fl-item__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-item--active .fl-item__name {
+  color: var(--accent);
+}
+
+.fl-item__desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty state                                                          */
+/* ------------------------------------------------------------------ */
+.fl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ */
+/* Inline add form                                                      */
+/* ------------------------------------------------------------------ */
+.fl-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  margin-bottom: 4px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.fl-add-form__input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 5px 8px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.fl-add-form__input:focus {
+  border-color: var(--accent);
+}
+
+.fl-add-form__actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.fl-add-form__save {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 12px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.fl-add-form__save:hover    { background: var(--accent-hover); }
+.fl-add-form__save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.fl-add-form__cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.fl-add-form__cancel:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
