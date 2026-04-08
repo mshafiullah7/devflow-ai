@@ -197,7 +197,7 @@ export class UserStoryList {
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
             </div>
-            <textarea class="usl-add-form__textarea" id="uslAddPrompt" placeholder="AI prompt for this story…" rows="3"></textarea>
+            <textarea class="usl-add-form__textarea" id="uslAddPrompt" placeholder="AI prompt for this story…" rows="6"></textarea>
           </div>
 
           <div class="usl-add-form__field">
@@ -321,7 +321,7 @@ export class UserStoryList {
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
             </div>
-            <textarea class="usl-add-form__textarea" id="uslEditPrompt" placeholder="AI prompt for this story…" rows="3">${escHtml(story.prompt || '')}</textarea>
+            <textarea class="usl-add-form__textarea" id="uslEditPrompt" placeholder="AI prompt for this story…" rows="6">${escHtml(story.prompt || '')}</textarea>
           </div>
 
           <div class="usl-add-form__field">
@@ -349,14 +349,6 @@ export class UserStoryList {
     const statusEl = this._detailEl.querySelector('#uslEditStatus');
     const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
 
-    this._bindExpandBtns(this._detailEl);
-
-    this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
-      this._activeId = null;
-      this._listEl.querySelectorAll('.usl-card').forEach(el => el.classList.remove('usl-card--active'));
-      this._renderDetailEmpty();
-    });
-
     const save = async () => {
       const title = titleEl.value.trim();
       if (!title) {
@@ -377,6 +369,8 @@ export class UserStoryList {
           prompt:              promptEl.value.trim() || null,
           status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
         });
+        saveBtn.disabled    = false;
+        saveBtn.textContent = 'Save Changes';
         await this._load();  // refresh card list (title/status badge may change)
       } catch {
         saveBtn.disabled    = false;
@@ -385,17 +379,24 @@ export class UserStoryList {
     };
 
     saveBtn.addEventListener('click', save);
+    this._bindExpandBtns(this._detailEl, save);
+
+    this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
+      this._activeId = null;
+      this._listEl.querySelectorAll('.usl-card').forEach(el => el.classList.remove('usl-card--active'));
+      this._renderDetailEmpty();
+    });
   }
 
   // ----------------------------------------------------------------
   // Expand helper — wires expand buttons in a container
   // ----------------------------------------------------------------
-  _bindExpandBtns(container) {
+  _bindExpandBtns(container, onDone) {
     container.querySelectorAll('.usl-add-form__expand').forEach(btn => {
       btn.addEventListener('click', () => {
         const textarea  = container.querySelector('#' + btn.dataset.expand);
         const labelText = btn.previousElementSibling.textContent.trim();
-        this._openExpandOverlay(textarea, labelText);
+        this._openExpandOverlay(textarea, labelText, onDone);
       });
     });
   }
@@ -403,7 +404,7 @@ export class UserStoryList {
   // ----------------------------------------------------------------
   // Full-screen expand overlay for a textarea
   // ----------------------------------------------------------------
-  _openExpandOverlay(textarea, label) {
+  _openExpandOverlay(textarea, label, onDone) {
     const overlay = document.createElement('div');
     overlay.className = 'usl-expand-overlay';
     overlay.innerHTML = `
@@ -425,18 +426,36 @@ export class UserStoryList {
     expandTA.focus();
     expandTA.setSelectionRange(expandTA.value.length, expandTA.value.length);
 
-    const done = () => {
+    const done = async () => {
       textarea.value = expandTA.value;
       overlay.remove();
+      document.removeEventListener('keydown', escHandler);
+      if (onDone) await onDone();
+    };
+
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        // Escape just closes without saving
+        textarea.value = expandTA.value;
+        overlay.remove();
+        document.removeEventListener('keydown', escHandler);
+      }
     };
 
     overlay.querySelector('.usl-expand-btn--done').addEventListener('click', done);
-    overlay.querySelector('.usl-expand-close').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('.usl-expand-close').addEventListener('click', () => {
+      textarea.value = expandTA.value;
+      overlay.remove();
+      document.removeEventListener('keydown', escHandler);
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        textarea.value = expandTA.value;
+        overlay.remove();
+        document.removeEventListener('keydown', escHandler);
+      }
+    });
 
-    const escHandler = (e) => {
-      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); }
-    };
     document.addEventListener('keydown', escHandler);
   }
 
