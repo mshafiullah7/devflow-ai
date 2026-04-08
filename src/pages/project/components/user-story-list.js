@@ -396,7 +396,8 @@ export class UserStoryList {
       btn.addEventListener('click', () => {
         const textarea  = container.querySelector('#' + btn.dataset.expand);
         const labelText = btn.previousElementSibling.textContent.trim();
-        this._openExpandOverlay(textarea, labelText, onDone);
+        const isPrompt  = btn.dataset.expand.toLowerCase().includes('prompt');
+        this._openExpandOverlay(textarea, labelText, onDone, isPrompt);
       });
     });
   }
@@ -404,7 +405,7 @@ export class UserStoryList {
   // ----------------------------------------------------------------
   // Full-screen expand overlay for a textarea
   // ----------------------------------------------------------------
-  _openExpandOverlay(textarea, label, onDone) {
+  _openExpandOverlay(textarea, label, onDone, isPrompt = false) {
     const overlay = document.createElement('div');
     overlay.className = 'usl-expand-overlay';
     overlay.innerHTML = `
@@ -413,7 +414,12 @@ export class UserStoryList {
           <span class="usl-expand-title">${escHtml(label)}</span>
           <button class="usl-expand-close" aria-label="Close">&times;</button>
         </div>
-        <textarea class="usl-expand-textarea" placeholder="${escHtml(textarea.placeholder || '')}">${escHtml(textarea.value)}</textarea>
+        ${isPrompt ? `
+        <div class="usl-prompt-expand-wrap">
+          <div class="usl-prompt-expand-bd" aria-hidden="true"></div>
+          <textarea class="usl-expand-textarea usl-prompt-expand-ta" placeholder="${escHtml(textarea.placeholder || '')}">${escHtml(textarea.value)}</textarea>
+        </div>` : `
+        <textarea class="usl-expand-textarea" placeholder="${escHtml(textarea.placeholder || '')}">${escHtml(textarea.value)}</textarea>`}
         <div class="usl-expand-footer">
           <button class="usl-expand-btn usl-expand-btn--done">Done</button>
         </div>
@@ -425,6 +431,23 @@ export class UserStoryList {
     const expandTA = overlay.querySelector('.usl-expand-textarea');
     expandTA.focus();
     expandTA.setSelectionRange(expandTA.value.length, expandTA.value.length);
+
+    if (isPrompt) {
+      const bd = overlay.querySelector('.usl-prompt-expand-bd');
+      const syncBd = () => {
+        bd.innerHTML = expandTA.value
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/^(#{5} .+)$/gm, '<span class="usl-hl-h5">$1</span>')
+          .replace(/^(#{4} .+)$/gm, '<span class="usl-hl-h4">$1</span>')
+          .replace(/^(#{3} .+)$/gm, '<span class="usl-hl-h3">$1</span>')
+          .replace(/^(#{2} .+)$/gm, '<span class="usl-hl-h2">$1</span>')
+          .replace(/^(# .+)$/gm,    '<span class="usl-hl-h1">$1</span>') + '\n';
+        bd.scrollTop = expandTA.scrollTop;
+      };
+      expandTA.addEventListener('input', syncBd);
+      expandTA.addEventListener('scroll', () => { bd.scrollTop = expandTA.scrollTop; });
+      syncBd();
+    }
 
     const done = async () => {
       textarea.value = expandTA.value;
