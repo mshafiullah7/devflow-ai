@@ -44,7 +44,7 @@ async function loadRecent() {
     return;
   }
 
-  emptyState.hidden = true;
+  emptyState.hidden = true;  // CSS [hidden] rule ensures this wins over display:flex
   projects.forEach((p) => {
     const card = document.createElement('button');
     card.className = 'project-card';
