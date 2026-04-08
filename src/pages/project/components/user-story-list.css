@@ -168,7 +168,8 @@
 
 .usl-add-form__body {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -390,13 +391,29 @@
 }
 
 .usl-add-form__textarea {
-  resize: vertical;
-  min-height: 72px;
+  resize: none;
   scrollbar-width: none;     /* Firefox */
   -ms-overflow-style: none;  /* IE/Edge */
 }
 .usl-add-form__textarea::-webkit-scrollbar {
   display: none;             /* Chrome/Safari/Electron */
+}
+
+/* Textarea fields grow to fill remaining panel height */
+.usl-add-form__field--desc,
+.usl-add-form__field--ac,
+.usl-add-form__field--prompt {
+  min-height: 0;
+}
+.usl-add-form__field--desc   { flex: 1; }
+.usl-add-form__field--ac     { flex: 2; }
+.usl-add-form__field--prompt { flex: 4; }
+.usl-add-form__field--desc .usl-add-form__textarea,
+.usl-add-form__field--ac .usl-add-form__textarea,
+.usl-add-form__field--prompt .usl-add-form__textarea {
+  flex: 1;
+  height: 0;
+  min-height: 0;
 }
 
 .usl-add-form__select {

@@ -170,7 +170,7 @@ export class UserStoryList {
             />
           </div>
 
-          <div class="usl-add-form__field">
+          <div class="usl-add-form__field usl-add-form__field--desc">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddDesc">Description</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslAddDesc" title="Expand" aria-label="Expand Description">
@@ -180,7 +180,7 @@ export class UserStoryList {
             <textarea class="usl-add-form__textarea" id="uslAddDesc" placeholder="Describe the story…" rows="3"></textarea>
           </div>
 
-          <div class="usl-add-form__field">
+          <div class="usl-add-form__field usl-add-form__field--ac">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddAC">Acceptance Criteria</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslAddAC" title="Expand" aria-label="Expand Acceptance Criteria">
@@ -190,7 +190,7 @@ export class UserStoryList {
             <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="3"></textarea>
           </div>
 
-          <div class="usl-add-form__field">
+          <div class="usl-add-form__field usl-add-form__field--prompt">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddPrompt">Prompt</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslAddPrompt" title="Expand" aria-label="Expand Prompt">
@@ -294,7 +294,7 @@ export class UserStoryList {
             />
           </div>
 
-          <div class="usl-add-form__field">
+          <div class="usl-add-form__field usl-add-form__field--desc">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditDesc">Description</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslEditDesc" title="Expand" aria-label="Expand Description">
@@ -304,7 +304,7 @@ export class UserStoryList {
             <textarea class="usl-add-form__textarea" id="uslEditDesc" placeholder="Describe the story…" rows="3">${escHtml(story.description || '')}</textarea>
           </div>
 
-          <div class="usl-add-form__field">
+          <div class="usl-add-form__field usl-add-form__field--ac">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditAC">Acceptance Criteria</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslEditAC" title="Expand" aria-label="Expand Acceptance Criteria">
@@ -314,7 +314,7 @@ export class UserStoryList {
             <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="3">${escHtml(story.acceptance_criteria || '')}</textarea>
           </div>
 
-          <div class="usl-add-form__field">
+          <div class="usl-add-form__field usl-add-form__field--prompt">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslEditPrompt" title="Expand" aria-label="Expand Prompt">
