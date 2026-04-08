@@ -171,33 +171,33 @@ export class UserStoryList {
           </div>
 
           <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslAddDesc">Description</label>
-            <textarea
-              class="usl-add-form__textarea"
-              id="uslAddDesc"
-              placeholder="Describe the story…"
-              rows="3"
-            ></textarea>
+            <div class="usl-add-form__label-row">
+              <label class="usl-add-form__label" for="uslAddDesc">Description</label>
+              <button class="usl-add-form__expand" type="button" data-expand="uslAddDesc" title="Expand" aria-label="Expand Description">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <textarea class="usl-add-form__textarea" id="uslAddDesc" placeholder="Describe the story…" rows="3"></textarea>
           </div>
 
           <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslAddAC">Acceptance Criteria</label>
-            <textarea
-              class="usl-add-form__textarea"
-              id="uslAddAC"
-              placeholder="Given… When… Then…"
-              rows="3"
-            ></textarea>
+            <div class="usl-add-form__label-row">
+              <label class="usl-add-form__label" for="uslAddAC">Acceptance Criteria</label>
+              <button class="usl-add-form__expand" type="button" data-expand="uslAddAC" title="Expand" aria-label="Expand Acceptance Criteria">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="3"></textarea>
           </div>
 
           <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslAddPrompt">Prompt</label>
-            <textarea
-              class="usl-add-form__textarea"
-              id="uslAddPrompt"
-              placeholder="AI prompt for this story…"
-              rows="3"
-            ></textarea>
+            <div class="usl-add-form__label-row">
+              <label class="usl-add-form__label" for="uslAddPrompt">Prompt</label>
+              <button class="usl-add-form__expand" type="button" data-expand="uslAddPrompt" title="Expand" aria-label="Expand Prompt">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <textarea class="usl-add-form__textarea" id="uslAddPrompt" placeholder="AI prompt for this story…" rows="3"></textarea>
           </div>
 
           <div class="usl-add-form__field">
@@ -226,6 +226,7 @@ export class UserStoryList {
     const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
 
     titleEl.focus();
+    this._bindExpandBtns(this._detailEl);
 
     this._detailEl.querySelector('.usl-add-form__btn--cancel')
       .addEventListener('click', () => this._renderDetailEmpty());
@@ -294,33 +295,33 @@ export class UserStoryList {
           </div>
 
           <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslEditDesc">Description</label>
-            <textarea
-              class="usl-add-form__textarea"
-              id="uslEditDesc"
-              placeholder="Describe the story…"
-              rows="3"
-            >${escHtml(story.description || '')}</textarea>
+            <div class="usl-add-form__label-row">
+              <label class="usl-add-form__label" for="uslEditDesc">Description</label>
+              <button class="usl-add-form__expand" type="button" data-expand="uslEditDesc" title="Expand" aria-label="Expand Description">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <textarea class="usl-add-form__textarea" id="uslEditDesc" placeholder="Describe the story…" rows="3">${escHtml(story.description || '')}</textarea>
           </div>
 
           <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslEditAC">Acceptance Criteria</label>
-            <textarea
-              class="usl-add-form__textarea"
-              id="uslEditAC"
-              placeholder="Given… When… Then…"
-              rows="3"
-            >${escHtml(story.acceptance_criteria || '')}</textarea>
+            <div class="usl-add-form__label-row">
+              <label class="usl-add-form__label" for="uslEditAC">Acceptance Criteria</label>
+              <button class="usl-add-form__expand" type="button" data-expand="uslEditAC" title="Expand" aria-label="Expand Acceptance Criteria">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="3">${escHtml(story.acceptance_criteria || '')}</textarea>
           </div>
 
           <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
-            <textarea
-              class="usl-add-form__textarea"
-              id="uslEditPrompt"
-              placeholder="AI prompt for this story…"
-              rows="3"
-            >${escHtml(story.prompt || '')}</textarea>
+            <div class="usl-add-form__label-row">
+              <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
+              <button class="usl-add-form__expand" type="button" data-expand="uslEditPrompt" title="Expand" aria-label="Expand Prompt">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <textarea class="usl-add-form__textarea" id="uslEditPrompt" placeholder="AI prompt for this story…" rows="3">${escHtml(story.prompt || '')}</textarea>
           </div>
 
           <div class="usl-add-form__field">
@@ -347,6 +348,8 @@ export class UserStoryList {
     const promptEl = this._detailEl.querySelector('#uslEditPrompt');
     const statusEl = this._detailEl.querySelector('#uslEditStatus');
     const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
+
+    this._bindExpandBtns(this._detailEl);
 
     this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
       this._activeId = null;
@@ -382,6 +385,59 @@ export class UserStoryList {
     };
 
     saveBtn.addEventListener('click', save);
+  }
+
+  // ----------------------------------------------------------------
+  // Expand helper — wires expand buttons in a container
+  // ----------------------------------------------------------------
+  _bindExpandBtns(container) {
+    container.querySelectorAll('.usl-add-form__expand').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const textarea  = container.querySelector('#' + btn.dataset.expand);
+        const labelText = btn.previousElementSibling.textContent.trim();
+        this._openExpandOverlay(textarea, labelText);
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Full-screen expand overlay for a textarea
+  // ----------------------------------------------------------------
+  _openExpandOverlay(textarea, label) {
+    const overlay = document.createElement('div');
+    overlay.className = 'usl-expand-overlay';
+    overlay.innerHTML = `
+      <div class="usl-expand-dialog">
+        <div class="usl-expand-header">
+          <span class="usl-expand-title">${escHtml(label)}</span>
+          <button class="usl-expand-close" aria-label="Close">&times;</button>
+        </div>
+        <textarea class="usl-expand-textarea" placeholder="${escHtml(textarea.placeholder || '')}">${escHtml(textarea.value)}</textarea>
+        <div class="usl-expand-footer">
+          <button class="usl-expand-btn usl-expand-btn--done">Done</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const expandTA = overlay.querySelector('.usl-expand-textarea');
+    expandTA.focus();
+    expandTA.setSelectionRange(expandTA.value.length, expandTA.value.length);
+
+    const done = () => {
+      textarea.value = expandTA.value;
+      overlay.remove();
+    };
+
+    overlay.querySelector('.usl-expand-btn--done').addEventListener('click', done);
+    overlay.querySelector('.usl-expand-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    const escHandler = (e) => {
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); }
+    };
+    document.addEventListener('keydown', escHandler);
   }
 
   // ----------------------------------------------------------------

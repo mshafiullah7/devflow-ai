@@ -181,6 +181,137 @@
   gap: 5px;
 }
 
+.usl-add-form__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.usl-add-form__expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.usl-add-form__expand:hover {
+  color: var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Full-screen expand overlay                                           */
+/* ------------------------------------------------------------------ */
+.usl-expand-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 24px;
+  backdrop-filter: blur(3px);
+}
+
+.usl-expand-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 860px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.usl-expand-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.usl-expand-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.usl-expand-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.usl-expand-close:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.usl-expand-textarea {
+  flex: 1;
+  width: 100%;
+  background: var(--bg);
+  border: none;
+  border-radius: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.6;
+  padding: 14px 16px;
+  resize: none;
+  outline: none;
+}
+
+.usl-expand-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.usl-expand-btn {
+  padding: 6px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.usl-expand-btn--done {
+  background: var(--accent);
+  border: 1px solid transparent;
+  color: #fff;
+}
+.usl-expand-btn--done:hover {
+  background: var(--accent-hover);
+}
+
 .usl-add-form__label {
   font-size: 12px;
   font-weight: 500;
