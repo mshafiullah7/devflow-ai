@@ -42,8 +42,9 @@ contextBridge.exposeInMainWorld('db', {
   terminal: {
     homedir:     ()     => invoke('terminal:homedir'),
     exec:        (data) => invoke('terminal:exec', data),
-    execStart:   (data) => invoke('terminal:exec-start', data),
-    killActive:  ()     => invoke('terminal:kill-active'),
+    execStart:    (data) => invoke('terminal:exec-start', data),
+    killActive:   ()     => invoke('terminal:kill-active'),
+    openExternal: (data) => invoke('terminal:open-external', data),
     onData: (cb) => ipcRenderer.on('terminal:data', (_e, p) => cb(p)),
     onDone: (cb) => ipcRenderer.on('terminal:done', (_e, p) => cb(p)),
     removeListeners: () => {

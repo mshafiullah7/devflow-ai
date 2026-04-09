@@ -275,6 +275,28 @@ function registerHandlers() {
   ipcMain.handle('terminal:kill-active', () => {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
   });
+
+  // Open an interactive PowerShell window (visible, stays open)
+  ipcMain.handle('terminal:open-external', (_e, { command, cwd }) => {
+    const { spawn } = require('child_process');
+    const workDir = cwd || require('os').homedir();
+    // Escape single-quotes for PowerShell string
+    const safeCwd = workDir.replace(/'/g, "''");
+    const fullCmd = `Set-Location '${safeCwd}'; ${command}`;
+    // Use cmd /c start to guarantee a new visible console window
+    // Prefer pwsh (PowerShell 7) which has stable PSReadLine; fall back to powershell.exe
+    const shell = require('fs').existsSync('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+      ? 'pwsh.exe' : 'powershell.exe';
+    const proc = spawn('cmd.exe', ['/c', 'start', shell, '-NoLogo', '-NoExit', '-Command', fullCmd], {
+      stdio: 'ignore',
+      detached: true,
+      windowsHide: true,
+      cwd: workDir,
+      env: process.env,
+    });
+    proc.unref();
+    return { pid: proc.pid };
+  });
 }
 
 module.exports = { registerHandlers };

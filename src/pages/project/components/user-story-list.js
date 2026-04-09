@@ -10,17 +10,18 @@ import { escHtml } from '../../../shared/helpers.js';
  *   await usl.load(featureId);
  */
 export class UserStoryList {
-  constructor({ listEl, addBtn, detailEl, projectId, onSelect, onRunCommand }) {
-    this._listEl         = listEl;
-    this._addBtn         = addBtn;
-    this._detailEl       = detailEl;
-    this._projectId      = projectId;
-    this._featureId      = null;
-    this._onSelect       = onSelect || (() => {});
-    this._onRunCommand   = onRunCommand || (() => {});
-    this._activeId       = null;
-    this._statuses       = [];
-    this._confirmModal   = null;
+  constructor({ listEl, addBtn, detailEl, projectId, onSelect, onRunCommand, onRunCommandExternal }) {
+    this._listEl                 = listEl;
+    this._addBtn                 = addBtn;
+    this._detailEl               = detailEl;
+    this._projectId              = projectId;
+    this._featureId              = null;
+    this._onSelect               = onSelect || (() => {});
+    this._onRunCommand           = onRunCommand || (() => {});
+    this._onRunCommandExternal   = onRunCommandExternal || (() => {});
+    this._activeId               = null;
+    this._statuses               = [];
+    this._confirmModal           = null;
   }
 
   // ----------------------------------------------------------------
@@ -195,6 +196,9 @@ export class UserStoryList {
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddPrompt">Prompt</label>
               <div class="usl-add-form__label-actions">
+                <button class="usl-add-form__run usl-add-form__run--external" type="button" data-prompt="uslAddPrompt" title="Run in external PowerShell window" aria-label="Run in PowerShell">
+                  <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
+                </button>
                 <button class="usl-add-form__run" type="button" data-prompt="uslAddPrompt" title="Run prompt in console" aria-label="Run prompt">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
                 </button>
@@ -325,6 +329,9 @@ export class UserStoryList {
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
               <div class="usl-add-form__label-actions">
+                <button class="usl-add-form__run usl-add-form__run--external" type="button" data-prompt="uslEditPrompt" title="Run in external PowerShell window" aria-label="Run in PowerShell">
+                  <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
+                </button>
                 <button class="usl-add-form__run" type="button" data-prompt="uslEditPrompt" title="Run prompt in console" aria-label="Run prompt">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
                 </button>
@@ -432,7 +439,12 @@ export class UserStoryList {
           await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
           this._loadPromptHistory(userStoryId);
         }
-        this._onRunCommand(`claude "${prompt.replace(/"/g, '\\"')}" --dangerously-skip-permissions`);
+        const cmd = `claude "${prompt.replace(/"/g, '\\"')}"`;
+        if (btn.classList.contains('usl-add-form__run--external')) {
+          this._onRunCommandExternal(cmd);
+        } else {
+          this._onRunCommand(cmd + ' --verbose');
+        }
       });
     });
   }

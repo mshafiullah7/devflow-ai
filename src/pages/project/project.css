@@ -377,6 +377,12 @@
 .project-console__line--error {
   color: #f87171;
 }
+.project-console__line--warn {
+  color: #fbbf24;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
 .project-console__ps-prompt {
   color: #6ee7b7;
   user-select: none;

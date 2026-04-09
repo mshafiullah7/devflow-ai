@@ -17,6 +17,7 @@ export class ProjectPage {
     this._injectCss();
     this._project = await window.db.projects.get(this.projectId);
     this._termCwd = await window.db.terminal.homedir();
+    this._folderSelected = false;
     this._currentStreamDiv = null;
     this.container.innerHTML = this._template();
     this._bindEvents();
@@ -205,6 +206,7 @@ export class ProjectPage {
       .addEventListener('click', async () => {
         const folderPath = await window.db.dialog.openFolder();
         if (!folderPath) return;
+        this._folderSelected = true;
         document.getElementById('projectConsole').hidden = false;
         await this._runCommand(`cd "${folderPath}"`);
         document.getElementById('consoleInput').focus();
@@ -247,14 +249,23 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   async _mountComponents() {
     this._storyList = new UserStoryList({
-      listEl:         document.getElementById('storyList'),
-      addBtn:         document.getElementById('btnAddStory'),
-      detailEl:       document.getElementById('storyDetail'),
-      projectId:      this.projectId,
-      onSelect:       (_story) => {},
-      onRunCommand:   (cmd) => {
+      listEl:                  document.getElementById('storyList'),
+      addBtn:                  document.getElementById('btnAddStory'),
+      detailEl:                document.getElementById('storyDetail'),
+      projectId:               this.projectId,
+      onSelect:                (_story) => {},
+      onRunCommand:            (cmd) => {
         document.getElementById('projectConsole').hidden = false;
+        if (!this._folderSelected) { this._warnNoFolder(); return; }
         this._runCommand(cmd);
+      },
+      onRunCommandExternal:    (cmd) => {
+        if (!this._folderSelected) {
+          document.getElementById('projectConsole').hidden = false;
+          this._warnNoFolder();
+          return;
+        }
+        window.db.terminal.openExternal({ command: cmd, cwd: this._termCwd });
       },
     });
     await this._storyList.mount();
@@ -280,6 +291,23 @@ export class ProjectPage {
   _updatePromptLabel() {
     const label = document.getElementById('consolePromptLabel');
     if (label) label.textContent = `PS ${this._termCwd}>`;
+  }
+
+  _warnNoFolder() {
+    const out = document.getElementById('consoleOutput');
+    if (!out) return;
+    const hint = out.querySelector('.project-console__hint');
+    if (hint) hint.remove();
+    const div = document.createElement('div');
+    div.className = 'project-console__line project-console__line--warn';
+    div.innerHTML =
+      `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;margin-top:1px">` +
+      `<path d="M8 2L14 13H2L8 2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` +
+      `<path d="M8 6v3M8 11v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>` +
+      `</svg>` +
+      `<span>No project folder selected. Click the <strong>folder icon</strong> in the console toolbar to select a folder first.</span>`;
+    out.appendChild(div);
+    out.scrollTop = out.scrollHeight;
   }
 
   // ----------------------------------------------------------------
@@ -354,7 +382,7 @@ export class ProjectPage {
   }
 
   _parseGitStatus(output) {
-    return output.trim().split('\n')
+    return output.split('\n')
       .filter(l => l.trim())
       .map(line => {
         const xy   = line.substring(0, 2);
