@@ -43,12 +43,8 @@ export class LauncherPage {
       <div class="launcher">
         <header class="launcher__header">
           <div class="launcher__logo">
-            <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
-              <rect width="36" height="36" rx="10" fill="#6366f1"/>
-              <path d="M10 18h16M18 10v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-              <circle cx="18" cy="18" r="4" fill="#fff" fill-opacity="0.25"/>
-            </svg>
-            <span class="launcher__app-name">AI SDLC</span>
+            <img src="../assets/icon.png" width="32" height="32" alt="DevFlow AI" style="border-radius:8px;display:block;"/>
+            <span class="launcher__app-name">DevFlow AI</span>
           </div>
         </header>
 
@@ -206,6 +202,7 @@ export class LauncherPage {
 
   async _openProject(id) {
     await window.db.projects.open(id);
+    await window.db.window.expand();
     this.router.navigate('project', { projectId: id });
   }
 

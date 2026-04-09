@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld('db', {
   dialog: {
     openFolder: () => invoke('dialog:openFolder'),
   },
+  window: {
+    expand: () => invoke('window:expand'),
+  },
   terminal: {
     homedir:     ()     => invoke('terminal:homedir'),
     exec:        (data) => invoke('terminal:exec', data),

@@ -13,6 +13,7 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -25,10 +26,22 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
+const { ipcMain, screen } = require('electron');
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   registerHandlers();
   createWindow();
+
+  ipcMain.handle('window:expand', (event) => {
+    const win = require('electron').BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
+    const w = Math.round(sw * 0.8);
+    const h = Math.round(sh * 0.8);
+    win.setSize(w, h);
+    win.center();
+  });
 
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.

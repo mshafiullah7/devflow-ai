@@ -139,7 +139,7 @@ export class ProjectPage {
           <div class="project-panel__resize" data-resize="console"></div>
 
           <!-- 4. Console (collapsible) -->
-          <div class="project-console" id="projectConsole" hidden>
+          <div class="project-console" id="projectConsole">
             <div class="project-console__titlebar">
               <div class="project-console__title">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">

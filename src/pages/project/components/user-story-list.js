@@ -22,6 +22,7 @@ export class UserStoryList {
     this._activeId               = null;
     this._statuses               = [];
     this._confirmModal           = null;
+    this._ctrlSHandler           = null;
   }
 
   // ----------------------------------------------------------------
@@ -284,6 +285,7 @@ export class UserStoryList {
 
     saveBtn.addEventListener('click', save);
     titleEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+    this._bindCtrlS(save);
   }
 
   // ----------------------------------------------------------------
@@ -420,6 +422,7 @@ export class UserStoryList {
     };
 
     saveBtn.addEventListener('click', save);
+    this._bindCtrlS(save);
     this._bindExpandBtns(this._detailEl, save);
     this._bindRunBtns(this._detailEl, story.id);
     this._bindQuickRunBtns(this._detailEl, story.id);
@@ -435,6 +438,16 @@ export class UserStoryList {
   // ----------------------------------------------------------------
   // Expand helper — wires expand buttons in a container
   // ----------------------------------------------------------------
+  _bindCtrlS(handler) {
+    if (this._ctrlSHandler) {
+      this._detailEl.removeEventListener('keydown', this._ctrlSHandler);
+    }
+    this._ctrlSHandler = (e) => {
+      if (e.ctrlKey && e.key === 's') { e.preventDefault(); handler(); }
+    };
+    this._detailEl.addEventListener('keydown', this._ctrlSHandler);
+  }
+
   _bindExpandBtns(container, onDone) {
     container.querySelectorAll('.usl-add-form__expand').forEach(btn => {
       btn.addEventListener('click', () => {
