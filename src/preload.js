@@ -35,7 +35,14 @@ contextBridge.exposeInMainWorld('db', {
   promptHistory: {
     list:   (user_story_id) => invoke('db:prompt_history:list', user_story_id),
     create: (data)          => invoke('db:prompt_history:create', data),
-    delete: (id)            => invoke('db:prompt_history:delete', id),
+    delete:    (id)             => invoke('db:prompt_history:delete', id),
+    deleteAll: (user_story_id) => invoke('db:prompt_history:deleteAll', user_story_id),
+  },
+  quickCommands: {
+    list:   ()     => invoke('db:quick_commands:list'),
+    create: (data) => invoke('db:quick_commands:create', data),
+    update: (data) => invoke('db:quick_commands:update', data),
+    delete: (id)   => invoke('db:quick_commands:delete', id),
   },
   dialog: {
     openFolder: () => invoke('dialog:openFolder'),

@@ -249,6 +249,8 @@
   text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: 5px;
+  /* push delete-all to the right */
+  justify-content: flex-start;
 }
 
 .usl-ph-list {
@@ -310,22 +312,21 @@
   padding: 1px 5px;
 }
 
-.usl-ph-item__delete {
+.usl-ph-delete-all {
+  margin-left: auto;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  padding: 2px;
+  padding: 2px 3px;
   color: var(--text-muted);
-  opacity: 0;
   cursor: pointer;
   border-radius: 3px;
-  transition: color 0.12s, opacity 0.12s, background 0.12s;
+  transition: color 0.12s, background 0.12s;
 }
-.usl-ph-item:hover .usl-ph-item__delete { opacity: 1; }
-.usl-ph-item__delete:hover {
+.usl-ph-delete-all:hover {
   color: #ef4444;
   background: rgba(239, 68, 68, 0.12);
 }

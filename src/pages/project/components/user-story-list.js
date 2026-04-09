@@ -211,7 +211,7 @@ export class UserStoryList {
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddQuickPrompt">Quick Prompt</label>
               <div class="usl-add-form__label-actions">
-                <button class="usl-add-form__run usl-add-form__run--quick" type="button" data-quickprompt="uslAddQuickPrompt" data-preview="uslAddQuickCmdPreview" title="Run in console" aria-label="Run quick prompt">
+                <button class="usl-add-form__run usl-add-form__run--quick" type="button" data-quickprompt="uslAddQuickPrompt" data-preview="uslAddQuickCmdPreview" title="Run in console (Ctrl+Q)" aria-label="Run quick prompt">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
                 </button>
               </div>
@@ -355,7 +355,7 @@ export class UserStoryList {
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditQuickPrompt">Quick Prompt</label>
               <div class="usl-add-form__label-actions">
-                <button class="usl-add-form__run usl-add-form__run--quick" type="button" data-quickprompt="uslEditQuickPrompt" data-preview="uslEditQuickCmdPreview" title="Run in console" aria-label="Run quick prompt">
+                <button class="usl-add-form__run usl-add-form__run--quick" type="button" data-quickprompt="uslEditQuickPrompt" data-preview="uslEditQuickCmdPreview" title="Run in console (Ctrl+Q)" aria-label="Run quick prompt">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
                 </button>
               </div>
@@ -487,7 +487,7 @@ export class UserStoryList {
         textarea.addEventListener('input', updatePreview);
       }
 
-      btn.addEventListener('click', async () => {
+      const run = async () => {
         const prompt = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
         if (userStoryId) {
@@ -499,7 +499,24 @@ export class UserStoryList {
         // without any escaping, and avoids command-line length limits.
         const cmd = `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude --dangerously-skip-permissions --verbose`;
         this._onRunCommand(cmd);
-      });
+        // Clear after run
+        if (textarea) {
+          textarea.value = '';
+          textarea.dispatchEvent(new Event('input')); // reset preview
+        }
+      };
+
+      btn.addEventListener('click', run);
+
+      // Ctrl+Q shortcut — fires run when Quick Prompt textarea is focused
+      if (textarea) {
+        textarea.addEventListener('keydown', (e) => {
+          if (e.ctrlKey && e.key === 'q') {
+            e.preventDefault();
+            run();
+          }
+        });
+      }
     });
   }
 
@@ -522,6 +539,12 @@ export class UserStoryList {
           <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         Recent runs
+        <button class="usl-ph-delete-all" title="Clear all recent runs" aria-label="Clear all">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
+              stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
       <div class="usl-ph-list">
         ${items.map(h => `
@@ -531,19 +554,12 @@ export class UserStoryList {
             </svg>
             <span class="usl-ph-item__text">${escHtml(h.prompt.length > 80 ? h.prompt.slice(0, 80) + '…' : h.prompt)}</span>
             <span class="usl-ph-item__time">${this._relativeTime(h.executed_at)}</span>
-            <button class="usl-ph-item__delete" data-id="${h.id}" title="Delete" aria-label="Delete run">
-              <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
-                <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
-                  stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
           </div>
         `).join('')}
       </div>
     `;
     container.querySelectorAll('.usl-ph-item').forEach((el, i) => {
-      el.addEventListener('click', (e) => {
-        if (e.target.closest('.usl-ph-item__delete')) return;
+      el.addEventListener('click', () => {
         if (quickPromptEl) {
           quickPromptEl.value = items[i].prompt;
           quickPromptEl.dispatchEvent(new Event('input'));
@@ -551,13 +567,9 @@ export class UserStoryList {
         }
       });
     });
-    container.querySelectorAll('.usl-ph-item__delete').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const id = parseInt(btn.dataset.id, 10);
-        await window.db.promptHistory.delete(id);
-        this._loadPromptHistory(userStoryId);
-      });
+    container.querySelector('.usl-ph-delete-all').addEventListener('click', async () => {
+      await window.db.promptHistory.deleteAll(userStoryId);
+      this._loadPromptHistory(userStoryId);
     });
   }
 

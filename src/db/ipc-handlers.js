@@ -199,6 +199,38 @@ function registerHandlers() {
     return { success: true };
   });
 
+  ipcMain.handle('db:prompt_history:deleteAll', (_e, user_story_id) => {
+    db.prepare('UPDATE prompt_history SET is_active = 0 WHERE user_story_id = ?').run(user_story_id);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
+  // quick_commands
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:quick_commands:list', () => {
+    return db.prepare('SELECT * FROM quick_commands WHERE is_active = 1 ORDER BY created_at ASC').all();
+  });
+
+  ipcMain.handle('db:quick_commands:create', (_e, { command, description }) => {
+    const result = db
+      .prepare('INSERT INTO quick_commands (command, description) VALUES (?, ?)')
+      .run(command, description ?? null);
+    return db.prepare('SELECT * FROM quick_commands WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:quick_commands:update', (_e, { id, command, description }) => {
+    db.prepare(
+      `UPDATE quick_commands SET command = coalesce(?, command), description = coalesce(?, description),
+       updated_at = datetime('now') WHERE id = ?`
+    ).run(command ?? null, description ?? null, id);
+    return db.prepare('SELECT * FROM quick_commands WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:quick_commands:delete', (_e, id) => {
+    db.prepare('UPDATE quick_commands SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
+  });
+
   // ----------------------------------------------------------------
   // dialog
   // ----------------------------------------------------------------

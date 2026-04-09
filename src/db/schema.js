@@ -69,6 +69,18 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- QUICK COMMANDS
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS quick_commands (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      command     TEXT    NOT NULL,
+      description TEXT,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- AUDIT / LOG TABLES
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS projects_log (
@@ -311,6 +323,21 @@ function runMigrations(db) {
     if (!phCols.includes('is_active')) {
       db.exec('ALTER TABLE prompt_history ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
     }
+  }
+
+  // Add quick_commands table for existing databases
+  const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+  if (!allTables.includes('quick_commands')) {
+    db.exec(`
+      CREATE TABLE quick_commands (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        command     TEXT    NOT NULL,
+        description TEXT,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
   }
 }
 
