@@ -1,4 +1,4 @@
-import { escHtml } from '../../../shared/helpers.js';
+import { escHtml, injectCss, timeAgo, formatDate } from '../../../../shared/helpers.js';
 
 /**
  * UserStoryList — self-contained component for the User Stories panel.
@@ -31,7 +31,7 @@ export class UserStoryList {
   // Public API
   // ----------------------------------------------------------------
   async mount() {
-    this._injectCss();
+    injectCss('pages/project/components/user-story-list/user-story-list.css');
     this._statuses = await window.db.status.list();
     this._addBtn.addEventListener('click', () => {
       if (!this._featureId) return;
@@ -76,7 +76,7 @@ export class UserStoryList {
       records = JSON.parse(raw);
       if (!Array.isArray(records)) throw new Error('Expected a JSON array');
     } catch (err) {
-      alert(`Invalid JSON file: ${err.message}`);
+      this._showImportToast(`Invalid JSON file: ${err.message}`);
       return;
     }
 
@@ -155,9 +155,7 @@ export class UserStoryList {
     }
 
     stories.forEach(s => {
-      const created = s.created_at
-        ? new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : '';
+      const created = formatDate(s.created_at);
 
       const card = document.createElement('div');
       card.className = 'usl-card' + (s.id === this._activeId ? ' usl-card--active' : '');
@@ -494,7 +492,7 @@ export class UserStoryList {
           description:         descEl.value.trim()   || null,
           acceptance_criteria: acEl.value.trim()     || null,
           prompt:              promptEl.value.trim() || null,
-          status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null, // keep in sync
+          status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
         });
         saveBtn.disabled    = false;
         saveBtn.textContent = 'Save Changes';
@@ -520,7 +518,7 @@ export class UserStoryList {
   }
 
   // ----------------------------------------------------------------
-  // Expand helper — wires expand buttons in a container
+  // Ctrl+S binding
   // ----------------------------------------------------------------
   _bindCtrlS(handler) {
     if (this._ctrlSHandler) {
@@ -532,6 +530,9 @@ export class UserStoryList {
     this._detailEl.addEventListener('keydown', this._ctrlSHandler);
   }
 
+  // ----------------------------------------------------------------
+  // Expand helper — wires expand buttons in a container
+  // ----------------------------------------------------------------
   _bindExpandBtns(container, onDone) {
     container.querySelectorAll('.usl-add-form__expand').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -669,7 +670,7 @@ export class UserStoryList {
               <path d="M4 3l9 5-9 5V3z" fill="currentColor" opacity="0.6"/>
             </svg>
             <span class="usl-ph-item__text">${escHtml(h.prompt.length > 80 ? h.prompt.slice(0, 80) + '…' : h.prompt)}</span>
-            <span class="usl-ph-item__time">${this._relativeTime(h.executed_at)}</span>
+            <span class="usl-ph-item__time">${timeAgo(h.executed_at)}</span>
           </div>
         `).join('')}
       </div>
@@ -687,18 +688,6 @@ export class UserStoryList {
       await window.db.promptHistory.deleteAll(userStoryId);
       this._loadPromptHistory(userStoryId);
     });
-  }
-
-  _relativeTime(isoStr) {
-    const diff = Date.now() - new Date(isoStr + (isoStr.endsWith('Z') ? '' : 'Z')).getTime();
-    const s = Math.floor(diff / 1000);
-    if (s < 60)  return 'just now';
-    const m = Math.floor(s / 60);
-    if (m < 60)  return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24)  return `${h}h ago`;
-    const d = Math.floor(h / 24);
-    return `${d}d ago`;
   }
 
   // ----------------------------------------------------------------
@@ -757,7 +746,6 @@ export class UserStoryList {
 
     const escHandler = (e) => {
       if (e.key === 'Escape') {
-        // Escape just closes without saving
         textarea.value = expandTA.value;
         overlay.remove();
         document.removeEventListener('keydown', escHandler);
@@ -838,19 +826,6 @@ export class UserStoryList {
       if (this._confirmModal._removeEsc) this._confirmModal._removeEsc();
       this._confirmModal.remove();
       this._confirmModal = null;
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // CSS injection
-  // ----------------------------------------------------------------
-  _injectCss() {
-    if (!document.getElementById('user-story-list-css')) {
-      const link = document.createElement('link');
-      link.id   = 'user-story-list-css';
-      link.rel  = 'stylesheet';
-      link.href = 'pages/project/components/user-story-list.css';
-      document.head.appendChild(link);
     }
   }
 }

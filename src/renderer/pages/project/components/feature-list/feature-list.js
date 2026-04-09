@@ -1,4 +1,4 @@
-import { escHtml } from '../../../shared/helpers.js';
+import { escHtml, injectCss, formatDate } from '../../../../shared/helpers.js';
 
 /**
  * FeatureList — self-contained component that manages the Features panel.
@@ -23,7 +23,7 @@ export class FeatureList {
   // Public API
   // ----------------------------------------------------------------
   async mount() {
-    this._injectCss();
+    injectCss('pages/project/components/feature-list/feature-list.css');
     this._statuses = await window.db.status.list();
     this._addBtn.addEventListener('click', () => this._openModal(null));
     await this._load();
@@ -61,9 +61,7 @@ export class FeatureList {
     }
 
     features.forEach(f => {
-      const created = f.created_at
-        ? new Date(f.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : '';
+      const created = formatDate(f.created_at);
 
       const card = document.createElement('div');
       card.className = 'fl-card' + (f.id === this._activeId ? ' fl-card--active' : '');
@@ -196,7 +194,6 @@ export class FeatureList {
 
     const escHandler = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', escHandler);
-    // Clean up listener when modal closes
     overlay._removeEsc = () => document.removeEventListener('keydown', escHandler);
 
     const save = async () => {
@@ -303,19 +300,6 @@ export class FeatureList {
       if (this._confirmModal._removeEsc) this._confirmModal._removeEsc();
       this._confirmModal.remove();
       this._confirmModal = null;
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // CSS injection
-  // ----------------------------------------------------------------
-  _injectCss() {
-    if (!document.getElementById('feature-list-css')) {
-      const link = document.createElement('link');
-      link.id   = 'feature-list-css';
-      link.rel  = 'stylesheet';
-      link.href = 'pages/project/components/feature-list.css';
-      document.head.appendChild(link);
     }
   }
 }

@@ -144,7 +144,8 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Project card                                                         */
+/* Project card (also defined in app.css — this local copy is         */
+/* identical, the app.css version is the canonical one)                */
 /* ------------------------------------------------------------------ */
 .project-card {
   display: flex;

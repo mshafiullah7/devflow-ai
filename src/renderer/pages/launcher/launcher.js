@@ -1,4 +1,4 @@
-import { escHtml, timeAgo, initial } from '../../shared/helpers.js';
+import { escHtml, timeAgo, initial, injectCss, removeCss } from '../../shared/helpers.js';
 
 export class LauncherPage {
   constructor(container, params, router) {
@@ -10,7 +10,7 @@ export class LauncherPage {
   // Lifecycle
   // ----------------------------------------------------------------
   mount() {
-    this._injectCss();
+    injectCss('pages/launcher/launcher.css');
     this.container.innerHTML = this._template();
     this._bindRefs();
     this._bindEvents();
@@ -19,21 +19,7 @@ export class LauncherPage {
   }
 
   unmount() {
-    const link = document.getElementById('launcher-css');
-    if (link) link.remove();
-  }
-
-  // ----------------------------------------------------------------
-  // CSS injection
-  // ----------------------------------------------------------------
-  _injectCss() {
-    if (!document.getElementById('launcher-css')) {
-      const link = document.createElement('link');
-      link.id   = 'launcher-css';
-      link.rel  = 'stylesheet';
-      link.href = 'pages/launcher/launcher.css';
-      document.head.appendChild(link);
-    }
+    removeCss('pages/launcher/launcher.css');
   }
 
   // ----------------------------------------------------------------
@@ -130,41 +116,34 @@ export class LauncherPage {
   // DOM references
   // ----------------------------------------------------------------
   _bindRefs() {
-    this._projectList    = document.getElementById('projectList');
-    this._emptyState     = document.getElementById('emptyState');
-    this._modalOverlay   = document.getElementById('modalOverlay');
-    this._confirmOverlay = document.getElementById('confirmOverlay');
-    this._confirmName    = document.getElementById('confirmProjectName');
+    this._projectList      = document.getElementById('projectList');
+    this._emptyState       = document.getElementById('emptyState');
+    this._modalOverlay     = document.getElementById('modalOverlay');
+    this._confirmOverlay   = document.getElementById('confirmOverlay');
+    this._confirmName      = document.getElementById('confirmProjectName');
     this._btnConfirmRemove = document.getElementById('btnConfirmRemove');
-    this._inputName    = document.getElementById('inputName');
-    this._inputDesc    = document.getElementById('inputDesc');
-    this._formError    = document.getElementById('formError');
-    this._btnCreate    = document.getElementById('btnCreate');
+    this._inputName        = document.getElementById('inputName');
+    this._inputDesc        = document.getElementById('inputDesc');
+    this._formError        = document.getElementById('formError');
+    this._btnCreate        = document.getElementById('btnCreate');
   }
 
   // ----------------------------------------------------------------
   // Events
   // ----------------------------------------------------------------
   _bindEvents() {
-    document.getElementById('btnThemeToggle')
-      .addEventListener('click', () => {
-        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-        this._applyTheme(next);
-      });
+    document.getElementById('btnThemeToggle').addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      this._applyTheme(next);
+    });
 
-    document.getElementById('btnNewProject')
-      .addEventListener('click', () => this._openModal());
-    document.getElementById('btnModalClose')
-      .addEventListener('click', () => this._closeModal());
-    document.getElementById('btnCancel')
-      .addEventListener('click', () => this._closeModal());
-    document.getElementById('btnCreate')
-      .addEventListener('click', () => this._createProject());
+    document.getElementById('btnNewProject').addEventListener('click', () => this._openModal());
+    document.getElementById('btnModalClose').addEventListener('click', () => this._closeModal());
+    document.getElementById('btnCancel').addEventListener('click', () => this._closeModal());
+    document.getElementById('btnCreate').addEventListener('click', () => this._createProject());
 
-    document.getElementById('btnConfirmClose')
-      .addEventListener('click', () => this._closeConfirm());
-    document.getElementById('btnConfirmCancel')
-      .addEventListener('click', () => this._closeConfirm());
+    document.getElementById('btnConfirmClose').addEventListener('click', () => this._closeConfirm());
+    document.getElementById('btnConfirmCancel').addEventListener('click', () => this._closeConfirm());
     this._confirmOverlay.addEventListener('click', (e) => {
       if (e.target === this._confirmOverlay) this._closeConfirm();
     });
@@ -192,7 +171,6 @@ export class LauncherPage {
   // ----------------------------------------------------------------
   async _loadRecent() {
     const projects = await window.db.projects.recent();
-
     this._projectList.querySelectorAll('.project-card').forEach(el => el.remove());
 
     if (projects.length === 0) {
@@ -234,15 +212,15 @@ export class LauncherPage {
 
   _confirmDisable(id, name, cardEl) {
     this._confirmName.textContent = name;
-    this._confirmOverlay.hidden = false;
+    this._confirmOverlay.hidden   = false;
 
-    // Replace listener to avoid stacking handlers
-    const btn = this._btnConfirmRemove;
-    const fresh = btn.cloneNode(true);
-    btn.replaceWith(fresh);
-    this._btnConfirmRemove = fresh;
+    // Replace the button node to avoid stacking click handlers across calls
+    const oldBtn  = this._btnConfirmRemove;
+    const freshBtn = oldBtn.cloneNode(true);
+    oldBtn.replaceWith(freshBtn);
+    this._btnConfirmRemove = freshBtn;
 
-    fresh.addEventListener('click', async () => {
+    freshBtn.addEventListener('click', async () => {
       this._closeConfirm();
       await this._disableProject(id, cardEl);
     });
@@ -254,13 +232,13 @@ export class LauncherPage {
 
   async _disableProject(id, cardEl) {
     cardEl.style.pointerEvents = 'none';
-    cardEl.style.opacity = '0.5';
+    cardEl.style.opacity       = '0.5';
     try {
       await window.db.projects.update({ id, is_active: 0 });
       await this._loadRecent();
-    } catch (err) {
+    } catch {
       cardEl.style.pointerEvents = '';
-      cardEl.style.opacity = '';
+      cardEl.style.opacity       = '';
     }
   }
 
@@ -268,9 +246,9 @@ export class LauncherPage {
   // Modal
   // ----------------------------------------------------------------
   _openModal() {
-    this._inputName.value    = '';
-    this._inputDesc.value    = '';
-    this._formError.hidden   = true;
+    this._inputName.value     = '';
+    this._inputDesc.value     = '';
+    this._formError.hidden    = true;
     this._modalOverlay.hidden = false;
     this._inputName.focus();
   }
@@ -283,7 +261,7 @@ export class LauncherPage {
     const name = this._inputName.value.trim();
     if (!name) {
       this._formError.textContent = 'Project name is required.';
-      this._formError.hidden = false;
+      this._formError.hidden      = false;
       this._inputName.focus();
       return;
     }
@@ -301,7 +279,7 @@ export class LauncherPage {
       await this._loadRecent();
     } catch (err) {
       this._formError.textContent = err.message || 'Failed to create project.';
-      this._formError.hidden = false;
+      this._formError.hidden      = false;
     } finally {
       this._btnCreate.disabled    = false;
       this._btnCreate.textContent = 'Create Project';

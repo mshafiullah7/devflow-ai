@@ -287,7 +287,6 @@
   text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: 5px;
-  /* push delete-all to the right */
   justify-content: flex-start;
 }
 

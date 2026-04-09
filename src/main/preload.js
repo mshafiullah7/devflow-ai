@@ -33,9 +33,9 @@ contextBridge.exposeInMainWorld('db', {
     delete: (id)      => invoke('db:user_stories:delete', id),
   },
   promptHistory: {
-    list:   (user_story_id) => invoke('db:prompt_history:list', user_story_id),
-    create: (data)          => invoke('db:prompt_history:create', data),
-    delete:    (id)             => invoke('db:prompt_history:delete', id),
+    list:      (user_story_id) => invoke('db:prompt_history:list', user_story_id),
+    create:    (data)          => invoke('db:prompt_history:create', data),
+    delete:    (id)            => invoke('db:prompt_history:delete', id),
     deleteAll: (user_story_id) => invoke('db:prompt_history:deleteAll', user_story_id),
   },
   quickCommands: {
@@ -52,8 +52,8 @@ contextBridge.exposeInMainWorld('db', {
     expand: () => invoke('window:expand'),
   },
   terminal: {
-    homedir:     ()     => invoke('terminal:homedir'),
-    exec:        (data) => invoke('terminal:exec', data),
+    homedir:      ()     => invoke('terminal:homedir'),
+    exec:         (data) => invoke('terminal:exec', data),
     execStart:    (data) => invoke('terminal:exec-start', data),
     killActive:   ()     => invoke('terminal:kill-active'),
     openExternal: (data) => invoke('terminal:open-external', data),

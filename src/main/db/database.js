@@ -1,22 +1,20 @@
 'use strict';
 
 const path = require('node:path');
+const { app } = require('electron');
 const Database = require('better-sqlite3');
-const { applySchema, seedStatuses, runMigrations } = require('./schema');
+const { applySchema } = require('./schema');
+const { seedStatuses, runMigrations } = require('./migrations');
 
 let _db = null;
 
-/**
- * Returns the singleton DB connection, initialising it on first call.
- * @returns {import('better-sqlite3').Database}
- */
 function getDb() {
   if (_db) return _db;
 
-  const dbPath = path.join(__dirname, '..', '..', 'sdlc.db');
+  // Use userData so the DB file lives in a writable location in packaged builds.
+  const dbPath = path.join(app.getPath('userData'), 'sdlc.db');
   _db = new Database(dbPath);
 
-  // Enable WAL mode for better concurrent read performance
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
 
@@ -27,9 +25,6 @@ function getDb() {
   return _db;
 }
 
-/**
- * Closes the DB connection. Call on app quit.
- */
 function closeDb() {
   if (_db) {
     _db.close();
