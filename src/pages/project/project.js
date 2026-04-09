@@ -177,11 +177,6 @@ export class ProjectPage {
                 Console
               </div>
               <div class="project-console__actions">
-                <button class="project-console__folder" id="btnConsoleFolder" title="Select folder">
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                    <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-                  </svg>
-                </button>
                 <select class="project-console__model-select" id="aiModelSelect" title="AI Model">
                   <option value="claude-cli">Claude CLI</option>
                   <option value="gemini-cli">Gemini CLI</option>
@@ -189,6 +184,11 @@ export class ProjectPage {
                   <option value="gemini-api" disabled>Gemini API</option>
                   <option value="chatgpt-api" disabled>ChatGPT API</option>
                 </select>
+                <button class="project-console__folder" id="btnConsoleFolder" title="Select folder">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                    <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                  </svg>
+                </button>
                 <button class="project-console__commands" id="btnConsoleCommands" title="Quick commands">
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
                     <path d="M5 2h7l4 4v12a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
@@ -206,8 +206,11 @@ export class ProjectPage {
                   </svg>
                   <span class="project-console__git-badge" id="gitBadge" hidden></span>
                 </button>
-                <button class="project-console__clear" id="btnConsoleClear" title="Clear console">Clear</button>
-                <button class="project-console__close" id="btnConsoleClose" aria-label="Close console">&times;</button>
+                <button class="project-console__clear" id="btnConsoleClear" title="Clear console">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                </button>
               </div>
             </div>
             <div class="project-console__output" id="consoleOutput">
@@ -248,8 +251,6 @@ export class ProjectPage {
     const console_ = document.getElementById('projectConsole');
     document.getElementById('btnConsoleToggle')
       .addEventListener('click', () => { console_.hidden = !console_.hidden; });
-    document.getElementById('btnConsoleClose')
-      .addEventListener('click', () => { console_.hidden = true; });
     document.getElementById('btnConsoleClear')
       .addEventListener('click', () => {
         const out = document.getElementById('consoleOutput');
