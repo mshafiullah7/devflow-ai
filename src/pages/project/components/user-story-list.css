@@ -557,7 +557,7 @@
 .usl-add-form__field--prompt .usl-add-form__textarea {
   flex: 1;
   height: 0;
-  min-height: 0;
+  min-height: 32px;
 }
 
 .usl-add-form__select {
