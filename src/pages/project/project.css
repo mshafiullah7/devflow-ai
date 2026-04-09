@@ -301,25 +301,6 @@
   font-style: italic;
 }
 
-.project-console__clear {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 22px;
-  padding: 0;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-}
-.project-console__clear:hover {
-  color: var(--text-primary);
-  background: var(--surface-hover);
-}
-
 .project-console__output {
   flex: 1;
   overflow-y: auto;
@@ -342,7 +323,10 @@
   flex-shrink: 0;
 }
 
-.project-console__commands {
+.project-console__menu-wrap {
+  position: relative;
+}
+.project-console__menu-btn {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -356,10 +340,41 @@
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.project-console__commands:hover {
+.project-console__menu-btn:hover {
   color: var(--text);
   background: var(--surface-hover);
   border-color: var(--accent);
+}
+.project-console__menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 170px;
+  background: var(--surface, #1a1d27);
+  border: 1px solid var(--border, #2d3148);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  z-index: 300;
+  padding: 4px 0;
+}
+.console-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 7px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.console-menu__item:hover {
+  background: var(--surface-hover, #252840);
+  color: var(--text-primary);
 }
 
 .project-console__git {

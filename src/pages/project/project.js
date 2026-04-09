@@ -189,13 +189,6 @@ export class ProjectPage {
                     <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
                   </svg>
                 </button>
-                <button class="project-console__commands" id="btnConsoleCommands" title="Quick commands">
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 2h7l4 4v12a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                    <path d="M12 2v4h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                    <path d="M7 9h6M7 12h6M7 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  </svg>
-                </button>
                 <button class="project-console__git" id="btnConsoleGit" title="Git status / diff" hidden>
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
                     <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -206,11 +199,31 @@ export class ProjectPage {
                   </svg>
                   <span class="project-console__git-badge" id="gitBadge" hidden></span>
                 </button>
-                <button class="project-console__clear" id="btnConsoleClear" title="Clear console">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  </svg>
-                </button>
+                <div class="project-console__menu-wrap">
+                  <button class="project-console__menu-btn" id="btnConsoleMenu" title="More options">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="3" r="1.2" fill="currentColor"/>
+                      <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+                      <circle cx="8" cy="13" r="1.2" fill="currentColor"/>
+                    </svg>
+                  </button>
+                  <div class="project-console__menu-dropdown" id="consoleMenuDropdown" hidden>
+                    <button class="console-menu__item" id="menuQuickCommands">
+                      <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                        <path d="M5 2h7l4 4v12a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                        <path d="M12 2v4h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                        <path d="M7 9h6M7 12h6M7 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      </svg>
+                      Quick Commands
+                    </button>
+                    <button class="console-menu__item" id="menuClearConsole">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      </svg>
+                      Clear Console
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="project-console__output" id="consoleOutput">
@@ -251,8 +264,10 @@ export class ProjectPage {
     const console_ = document.getElementById('projectConsole');
     document.getElementById('btnConsoleToggle')
       .addEventListener('click', () => { console_.hidden = !console_.hidden; });
-    document.getElementById('btnConsoleClear')
+    document.getElementById('menuClearConsole')
       .addEventListener('click', () => {
+        const dd = document.getElementById('consoleMenuDropdown');
+        if (dd) dd.hidden = true;
         const out = document.getElementById('consoleOutput');
         out.innerHTML = '<span class="project-console__hint">Select a folder or type a command to start…</span>';
       });
@@ -275,8 +290,19 @@ export class ProjectPage {
     document.getElementById('btnStatistics')
       .addEventListener('click', () => this._showStatisticsModal());
 
-    document.getElementById('btnConsoleCommands')
-      .addEventListener('click', () => this._showQuickCommandsModal());
+    document.getElementById('btnConsoleMenu')
+      .addEventListener('click', (e) => {
+        e.stopPropagation();
+        const dd = document.getElementById('consoleMenuDropdown');
+        if (dd) dd.hidden = !dd.hidden;
+      });
+
+    document.getElementById('menuQuickCommands')
+      .addEventListener('click', () => {
+        const dd = document.getElementById('consoleMenuDropdown');
+        if (dd) dd.hidden = true;
+        this._showQuickCommandsModal();
+      });
 
     document.getElementById('btnCmdPicker')
       .addEventListener('click', (e) => { e.stopPropagation(); this._toggleCmdPickerDropdown(); });
@@ -284,6 +310,8 @@ export class ProjectPage {
     document.addEventListener('click', () => {
       const dd = document.getElementById('cmdPickerDropdown');
       if (dd) dd.hidden = true;
+      const md = document.getElementById('consoleMenuDropdown');
+      if (md) md.hidden = true;
     });
 
     document.getElementById('btnConsoleGit')
