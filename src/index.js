@@ -38,7 +38,7 @@ app.whenReady().then(() => {
     if (!win) return;
     const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
     const w = Math.round(sw * 0.8);
-    const h = Math.round(sh * 0.8);
+    const h = Math.round(sh * 0.85);
     win.setSize(w, h);
     win.center();
   });
