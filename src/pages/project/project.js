@@ -71,6 +71,13 @@ export class ProjectPage {
             <h1 class="project-page__title">${name}</h1>
             ${desc ? `<p class="project-page__desc">${desc}</p>` : ''}
           </div>
+          <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
+            <option value="claude-cli">Claude CLI</option>
+            <option value="gemini-cli">Gemini CLI</option>
+            <option value="claude-api" disabled>Claude API</option>
+            <option value="gemini-api" disabled>Gemini API</option>
+            <option value="chatgpt-api" disabled>ChatGPT API</option>
+          </select>
           <button class="project-page__stats-btn" id="btnStatistics" title="View statistics">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="8" width="3" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/>
@@ -177,13 +184,6 @@ export class ProjectPage {
                 Console
               </div>
               <div class="project-console__actions">
-                <select class="project-console__model-select" id="aiModelSelect" title="AI Model">
-                  <option value="claude-cli">Claude CLI</option>
-                  <option value="gemini-cli">Gemini CLI</option>
-                  <option value="claude-api" disabled>Claude API</option>
-                  <option value="gemini-api" disabled>Gemini API</option>
-                  <option value="chatgpt-api" disabled>ChatGPT API</option>
-                </select>
                 <button class="project-console__folder" id="btnConsoleFolder" title="Select folder">
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
                     <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
