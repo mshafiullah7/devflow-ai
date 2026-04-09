@@ -30,7 +30,7 @@ export class LauncherPage {
       <div class="launcher">
         <header class="launcher__header">
           <div class="launcher__logo">
-            <img src="../assets/icon.png" width="32" height="32" alt="DevFlow AI" style="border-radius:8px;display:block;"/>
+            <img src="../../assets/icon.png" width="32" height="32" alt="DevFlow AI" style="border-radius:8px;display:block;"/>
             <span class="launcher__app-name">DevFlow AI</span>
           </div>
           <button class="launcher__theme-toggle" id="btnThemeToggle" title="Toggle light / dark theme" aria-label="Toggle theme">
