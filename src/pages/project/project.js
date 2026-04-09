@@ -152,10 +152,9 @@ export class ProjectPage {
               <div class="project-console__actions">
                 <button class="project-console__commands" id="btnConsoleCommands" title="Quick commands">
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                    <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-                    <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-                    <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-                    <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M5 2h7l4 4v12a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M12 2v4h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M7 9h6M7 12h6M7 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                   </svg>
                 </button>
                 <button class="project-console__git" id="btnConsoleGit" title="Git status / diff" hidden>
