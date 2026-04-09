@@ -463,8 +463,8 @@
 /* Terminal input row */
 .project-console__input-row {
   display: flex;
-  align-items: flex-end;   /* align to bottom so label stays at baseline when textarea grows */
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
   padding: 6px 14px 8px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
@@ -473,9 +473,14 @@
   font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
   font-size: 12px;
   color: var(--console-prompt);
-  white-space: nowrap;
+  word-break: break-all;
   user-select: none;
-  padding-bottom: 2px; /* align with textarea text baseline */
+}
+/* Input + stop button side by side */
+.project-console__input-cmd-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
 }
 /* Wrap textarea + picker button together */
 .project-console__input-wrap {

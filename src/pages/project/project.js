@@ -215,19 +215,21 @@ export class ProjectPage {
             </div>
             <div class="project-console__input-row">
               <span class="project-console__ps-label" id="consolePromptLabel">PS ~&gt;</span>
-              <div class="project-console__input-wrap">
-                <textarea class="project-console__input" id="consoleInput" rows="1"
-                  spellcheck="false" autocomplete="off" autocorrect="off"
-                  placeholder="Enter command… (Shift+Enter for new line)"></textarea>
-                <button class="project-console__cmd-picker-btn" id="btnCmdPicker" title="Pick a saved command">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    <path d="M11 10l2 2 2-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-                <div class="project-console__cmd-dropdown" id="cmdPickerDropdown" hidden></div>
+              <div class="project-console__input-cmd-row">
+                <div class="project-console__input-wrap">
+                  <textarea class="project-console__input" id="consoleInput" rows="1"
+                    spellcheck="false" autocomplete="off" autocorrect="off"
+                    placeholder="Enter command… (Shift+Enter for new line)"></textarea>
+                  <button class="project-console__cmd-picker-btn" id="btnCmdPicker" title="Pick a saved command">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      <path d="M11 10l2 2 2-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <div class="project-console__cmd-dropdown" id="cmdPickerDropdown" hidden></div>
+                </div>
+                <button class="project-console__stop" id="btnConsoleStop" title="Stop running command" hidden>&#9632; Stop</button>
               </div>
-              <button class="project-console__stop" id="btnConsoleStop" title="Stop running command" hidden>&#9632; Stop</button>
             </div>
           </div><!-- /.project-console -->
 
