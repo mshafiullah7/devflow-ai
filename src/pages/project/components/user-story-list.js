@@ -465,15 +465,16 @@ export class UserStoryList {
   // Run button helpers
   // ----------------------------------------------------------------
 
-  // Wires the double-run (external PS) buttons on the Prompt field
+  // Wires the double-run (external CMD) buttons on the Prompt field
   _bindRunBtns(container, userStoryId = null) {
     container.querySelectorAll('.usl-add-form__run--external').forEach(btn => {
       btn.addEventListener('click', async () => {
         const textarea = container.querySelector('#' + btn.dataset.prompt);
         const prompt   = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
-        // Here-string preserves newlines and special chars for interactive PS window
-        const cmd = `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude`;
+        // Collapse to single line and escape double-quotes for CMD argument passing
+        const singleLine = prompt.replace(/\r?\n/g, ' ').replace(/"/g, '""');
+        const cmd = `claude --print "${singleLine}"`;
         this._onRunCommandExternal(cmd);
       });
     });
@@ -495,7 +496,7 @@ export class UserStoryList {
           const preview = isMulti
             ? text.split('\n')[0].trim() + ' …'
             : (text || '…');
-          previewEl.textContent = `$ claude | --dangerously-skip-permissions  ("${preview}")`;
+          previewEl.textContent = `$ claude --dangerously-skip-permissions --print ("${preview}")`;
         };
         textarea.addEventListener('input', updatePreview);
       }
@@ -510,7 +511,7 @@ export class UserStoryList {
         // Use a PowerShell single-quote here-string piped to claude via stdin.
         // This preserves newlines and all special characters ($, `, ", etc.)
         // without any escaping, and avoids command-line length limits.
-        const cmd = `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude --dangerously-skip-permissions --verbose`;
+        const cmd = `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude --dangerously-skip-permissions --print`;
         this._onRunCommand(cmd);
         // Clear after run
         if (textarea) {
