@@ -5,33 +5,7 @@
 [hidden] { display: none !important; }
 
 :root {
-  /* Light theme — milk white */
-  --bg:             #f5f0eb;
-  --surface:        #fdfaf7;
-  --surface-hover:  #ede8e2;
-  --border:         #ddd8d0;
-  --accent:         #6366f1;
-  --accent-hover:   #4f52d9;
-  --text-primary:   #1a1a2e;
-  --text-secondary: #3d3d56;
-  --text-muted:     #7a7a96;
-  --danger:         #ef4444;
-  --radius:         12px;
-  --radius-sm:      8px;
-  --shadow:         0 2px 8px rgba(0,0,0,0.10);
-  --card-shadow:    0 2px 8px rgba(0,0,0,0.08);
-
-  /* Console — matches page background */
-  --console-bg:      #f5f0eb;
-  --console-text:    #3d3d56;
-  --console-output:  #1a1a2e;
-  --console-prompt:  #4f46e5;
-  --console-input:   #1a1a2e;
-  --console-caret:   #4f46e5;
-}
-
-[data-theme="dark"] {
-  /* Dark theme — original modern dark */
+  /* Light theme — current modern dark */
   --bg:             #0f1117;
   --surface:        #1a1d27;
   --surface-hover:  #21253a;
@@ -42,16 +16,42 @@
   --text-secondary: #94a3b8;
   --text-muted:     #4b5563;
   --danger:         #ef4444;
+  --radius:         12px;
+  --radius-sm:      8px;
   --shadow:         0 4px 24px rgba(0,0,0,0.4);
   --card-shadow:    none;
 
-  /* Console / terminal */
+  /* Console */
   --console-bg:      #0d0f14;
   --console-text:    #94a3b8;
   --console-output:  #cbd5e1;
   --console-prompt:  #6ee7b7;
   --console-input:   #e2e8f0;
   --console-caret:   #6ee7b7;
+}
+
+[data-theme="dark"] {
+  /* Dark theme — full black */
+  --bg:             #000000;
+  --surface:        #0d0d0d;
+  --surface-hover:  #1a1a1a;
+  --border:         #222222;
+  --accent:         #6366f1;
+  --accent-hover:   #4f52d9;
+  --text-primary:   #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-muted:     #555555;
+  --danger:         #ef4444;
+  --shadow:         0 4px 24px rgba(0,0,0,0.7);
+  --card-shadow:    none;
+
+  /* Console */
+  --console-bg:      #000000;
+  --console-text:    #808080;
+  --console-output:  #d4d4d4;
+  --console-prompt:  #4ade80;
+  --console-input:   #ffffff;
+  --console-caret:   #4ade80;
 }
 
 html, body {
