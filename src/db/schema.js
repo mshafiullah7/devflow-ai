@@ -64,6 +64,7 @@ function applySchema(db) {
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
       prompt        TEXT    NOT NULL,
+      is_active     INTEGER NOT NULL DEFAULT 1,
       executed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -300,9 +301,16 @@ function runMigrations(db) {
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
         prompt        TEXT    NOT NULL,
+        is_active     INTEGER NOT NULL DEFAULT 1,
         executed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
       )
     `);
+  } else {
+    // Add is_active to existing prompt_history table if missing
+    const phCols = db.prepare('PRAGMA table_info(prompt_history)').all().map(c => c.name);
+    if (!phCols.includes('is_active')) {
+      db.exec('ALTER TABLE prompt_history ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+    }
   }
 }
 

@@ -215,6 +215,24 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Quick Prompt command preview                                          */
+/* ------------------------------------------------------------------ */
+.usl-quick-cmd-preview {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  margin-bottom: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: all;
+}
+
+/* ------------------------------------------------------------------ */
 /* Prompt history                                                        */
 /* ------------------------------------------------------------------ */
 .usl-prompt-history {
@@ -290,6 +308,26 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1px 5px;
+}
+
+.usl-ph-item__delete {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 2px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 0.12s, opacity 0.12s, background 0.12s;
+}
+.usl-ph-item:hover .usl-ph-item__delete { opacity: 1; }
+.usl-ph-item__delete:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .usl-add-form__expand {

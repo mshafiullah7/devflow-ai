@@ -199,15 +199,25 @@ export class UserStoryList {
                 <button class="usl-add-form__run usl-add-form__run--external" type="button" data-prompt="uslAddPrompt" title="Run in external PowerShell window" aria-label="Run in PowerShell">
                   <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
                 </button>
-                <button class="usl-add-form__run" type="button" data-prompt="uslAddPrompt" title="Run prompt in console" aria-label="Run prompt">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
-                </button>
                 <button class="usl-add-form__expand" type="button" data-expand="uslAddPrompt" title="Expand" aria-label="Expand Prompt">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
             </div>
             <textarea class="usl-add-form__textarea" id="uslAddPrompt" placeholder="AI prompt for this story…" rows="6"></textarea>
+          </div>
+
+          <div class="usl-add-form__field usl-add-form__field--quickprompt">
+            <div class="usl-add-form__label-row">
+              <label class="usl-add-form__label" for="uslAddQuickPrompt">Quick Prompt</label>
+              <div class="usl-add-form__label-actions">
+                <button class="usl-add-form__run usl-add-form__run--quick" type="button" data-quickprompt="uslAddQuickPrompt" data-preview="uslAddQuickCmdPreview" title="Run in console" aria-label="Run quick prompt">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="usl-quick-cmd-preview" id="uslAddQuickCmdPreview">$ claude "…" --dangerously-skip-permissions</div>
+            <textarea class="usl-add-form__textarea" id="uslAddQuickPrompt" placeholder="Quick prompt to run in console…" rows="3"></textarea>
           </div>
 
           <div class="usl-add-form__field">
@@ -238,6 +248,7 @@ export class UserStoryList {
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
     this._bindRunBtns(this._detailEl);
+    this._bindQuickRunBtns(this._detailEl);
 
     this._detailEl.querySelector('.usl-add-form__btn--cancel')
       .addEventListener('click', () => this._renderDetailEmpty());
@@ -332,15 +343,25 @@ export class UserStoryList {
                 <button class="usl-add-form__run usl-add-form__run--external" type="button" data-prompt="uslEditPrompt" title="Run in external PowerShell window" aria-label="Run in PowerShell">
                   <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
                 </button>
-                <button class="usl-add-form__run" type="button" data-prompt="uslEditPrompt" title="Run prompt in console" aria-label="Run prompt">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
-                </button>
                 <button class="usl-add-form__expand" type="button" data-expand="uslEditPrompt" title="Expand" aria-label="Expand Prompt">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
             </div>
             <textarea class="usl-add-form__textarea" id="uslEditPrompt" placeholder="AI prompt for this story…" rows="6">${escHtml(story.prompt || '')}</textarea>
+          </div>
+
+          <div class="usl-add-form__field usl-add-form__field--quickprompt">
+            <div class="usl-add-form__label-row">
+              <label class="usl-add-form__label" for="uslEditQuickPrompt">Quick Prompt</label>
+              <div class="usl-add-form__label-actions">
+                <button class="usl-add-form__run usl-add-form__run--quick" type="button" data-quickprompt="uslEditQuickPrompt" data-preview="uslEditQuickCmdPreview" title="Run in console" aria-label="Run quick prompt">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="usl-quick-cmd-preview" id="uslEditQuickCmdPreview">$ claude "…" --dangerously-skip-permissions</div>
+            <textarea class="usl-add-form__textarea" id="uslEditQuickPrompt" placeholder="Quick prompt to run in console…" rows="3"></textarea>
             <div class="usl-prompt-history" id="uslPromptHistory"></div>
           </div>
 
@@ -401,6 +422,7 @@ export class UserStoryList {
     saveBtn.addEventListener('click', save);
     this._bindExpandBtns(this._detailEl, save);
     this._bindRunBtns(this._detailEl, story.id);
+    this._bindQuickRunBtns(this._detailEl, story.id);
     this._loadPromptHistory(story.id);
 
     this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
@@ -427,24 +449,46 @@ export class UserStoryList {
   }
 
   // ----------------------------------------------------------------
-  // Run button helper — wires run buttons in a container
+  // Run button helpers
   // ----------------------------------------------------------------
+
+  // Wires the double-run (external PS) buttons on the Prompt field
   _bindRunBtns(container, userStoryId = null) {
-    container.querySelectorAll('.usl-add-form__run').forEach(btn => {
+    container.querySelectorAll('.usl-add-form__run--external').forEach(btn => {
       btn.addEventListener('click', async () => {
         const textarea = container.querySelector('#' + btn.dataset.prompt);
         const prompt   = textarea ? textarea.value.trim() : '';
+        if (!prompt) return;
+        this._onRunCommandExternal(`claude "${prompt.replace(/"/g, '\\"')}"`);
+      });
+    });
+  }
+
+  // Wires the single-run buttons on the Quick Prompt field
+  _bindQuickRunBtns(container, userStoryId = null) {
+    container.querySelectorAll('.usl-add-form__run--quick').forEach(btn => {
+      const taId      = btn.dataset.quickprompt;
+      const prevId    = btn.dataset.preview;
+      const textarea  = taId  ? container.querySelector('#' + taId)  : null;
+      const previewEl = prevId ? container.querySelector('#' + prevId) : null;
+
+      // Live command preview as user types
+      if (textarea && previewEl) {
+        const updatePreview = () => {
+          const text = textarea.value.trim();
+          previewEl.textContent = `$ claude "${text || '…'}" --dangerously-skip-permissions`;
+        };
+        textarea.addEventListener('input', updatePreview);
+      }
+
+      btn.addEventListener('click', async () => {
+        const prompt = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
         if (userStoryId) {
           await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
           this._loadPromptHistory(userStoryId);
         }
-        const cmd = `claude "${prompt.replace(/"/g, '\\"')}"`;
-        if (btn.classList.contains('usl-add-form__run--external')) {
-          this._onRunCommandExternal(cmd);
-        } else {
-          this._onRunCommand(cmd + ' --verbose');
-        }
+        this._onRunCommand(`claude "${prompt.replace(/"/g, '\\"')}" --dangerously-skip-permissions --verbose`);
       });
     });
   }
@@ -460,7 +504,7 @@ export class UserStoryList {
       container.innerHTML = '';
       return;
     }
-    const promptEl = this._detailEl.querySelector('#uslEditPrompt');
+    const quickPromptEl = this._detailEl.querySelector('#uslEditQuickPrompt');
     container.innerHTML = `
       <div class="usl-ph-header">
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -477,17 +521,32 @@ export class UserStoryList {
             </svg>
             <span class="usl-ph-item__text">${escHtml(h.prompt.length > 80 ? h.prompt.slice(0, 80) + '…' : h.prompt)}</span>
             <span class="usl-ph-item__time">${this._relativeTime(h.executed_at)}</span>
+            <button class="usl-ph-item__delete" data-id="${h.id}" title="Delete" aria-label="Delete run">
+              <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
+                <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
+                  stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
         `).join('')}
       </div>
     `;
     container.querySelectorAll('.usl-ph-item').forEach((el, i) => {
-      el.addEventListener('click', () => {
-        if (promptEl) {
-          promptEl.value = items[i].prompt;
-          promptEl.dispatchEvent(new Event('input'));
-          promptEl.focus();
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.usl-ph-item__delete')) return;
+        if (quickPromptEl) {
+          quickPromptEl.value = items[i].prompt;
+          quickPromptEl.dispatchEvent(new Event('input'));
+          quickPromptEl.focus();
         }
+      });
+    });
+    container.querySelectorAll('.usl-ph-item__delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = parseInt(btn.dataset.id, 10);
+        await window.db.promptHistory.delete(id);
+        this._loadPromptHistory(userStoryId);
       });
     });
   }

@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('db', {
   promptHistory: {
     list:   (user_story_id) => invoke('db:prompt_history:list', user_story_id),
     create: (data)          => invoke('db:prompt_history:create', data),
+    delete: (id)            => invoke('db:prompt_history:delete', id),
   },
   dialog: {
     openFolder: () => invoke('dialog:openFolder'),

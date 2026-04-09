@@ -183,7 +183,7 @@ function registerHandlers() {
   // ----------------------------------------------------------------
   ipcMain.handle('db:prompt_history:list', (_e, user_story_id) => {
     return db
-      .prepare('SELECT * FROM prompt_history WHERE user_story_id = ? ORDER BY executed_at DESC LIMIT 20')
+      .prepare('SELECT * FROM prompt_history WHERE user_story_id = ? AND is_active = 1 ORDER BY executed_at DESC LIMIT 20')
       .all(user_story_id);
   });
 
@@ -192,6 +192,11 @@ function registerHandlers() {
       .prepare('INSERT INTO prompt_history (user_story_id, prompt) VALUES (?, ?)')
       .run(user_story_id, prompt);
     return db.prepare('SELECT * FROM prompt_history WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:prompt_history:delete', (_e, id) => {
+    db.prepare('UPDATE prompt_history SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
   });
 
   // ----------------------------------------------------------------
