@@ -170,7 +170,7 @@
 .usl-add-form__body {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -543,21 +543,21 @@
   display: none;             /* Chrome/Safari/Electron */
 }
 
-/* Textarea fields grow to fill remaining panel height */
-.usl-add-form__field--desc,
-.usl-add-form__field--ac,
-.usl-add-form__field--prompt {
-  min-height: 0;
+/* Fixed-height textareas — scroll the body if content overflows */
+.usl-add-form__field--desc .usl-add-form__textarea {
+  height: 74px;   /* ~3 lines */
+  min-height: 74px;
+  resize: none;
 }
-.usl-add-form__field--desc   { flex: 1; }
-.usl-add-form__field--ac     { flex: 2; }
-.usl-add-form__field--prompt { flex: 4; }
-.usl-add-form__field--desc .usl-add-form__textarea,
-.usl-add-form__field--ac .usl-add-form__textarea,
+.usl-add-form__field--ac .usl-add-form__textarea {
+  height: 214px;  /* ~10 lines */
+  min-height: 214px;
+  resize: none;
+}
 .usl-add-form__field--prompt .usl-add-form__textarea {
-  flex: 1;
-  height: 0;
-  min-height: 32px;
+  height: 314px;  /* ~15 lines */
+  min-height: 314px;
+  resize: none;
 }
 
 .usl-add-form__select {
