@@ -1,0 +1,13 @@
+# Lock files — large, no value for code understanding
+package-lock.json
+yarn.lock
+
+# Binary assets
+assets/
+
+# Build output (also in .gitignore)
+out/
+
+# Electron Forge / webpack cache
+.webpack/
+.vite/
