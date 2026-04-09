@@ -372,6 +372,12 @@ export class UserStoryList {
       <div class="usl-add-form">
         <div class="usl-add-form__header">
           <h2 class="usl-add-form__title">User Story</h2>
+          <select class="usl-add-form__status-select" id="uslEditStatus">
+            <option value="">— none —</option>
+            ${this._statuses.map(st =>
+              `<option value="${st.id}"${st.id === defaultStatus ? ' selected' : ''}>${escHtml(st.name)}</option>`
+            ).join('')}
+          </select>
         </div>
         <div class="usl-add-form__body">
 
@@ -439,16 +445,6 @@ export class UserStoryList {
             <div class="usl-prompt-history" id="uslPromptHistory"></div>
           </div>
 
-          <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslEditStatus">Status</label>
-            <select class="usl-add-form__select" id="uslEditStatus">
-              <option value="">— none —</option>
-              ${this._statuses.map(st =>
-                `<option value="${st.id}"${st.id === defaultStatus ? ' selected' : ''}>${escHtml(st.name)}</option>`
-              ).join('')}
-            </select>
-          </div>
-
         </div>
         <div class="usl-add-form__footer">
           <button class="usl-add-form__btn usl-add-form__btn--cancel">Cancel</button>
@@ -469,6 +465,17 @@ export class UserStoryList {
       promptEl.value = promptEl.value.replace(/\\n/g, '\n');
     }
 
+    // Auto-save status immediately on change
+    statusEl.addEventListener('change', async () => {
+      try {
+        await window.db.userStories.update({
+          id:        story.id,
+          status_id: statusEl.value ? parseInt(statusEl.value, 10) : null,
+        });
+        await this._load(); // refresh card badge
+      } catch { /* silent */ }
+    });
+
     const save = async () => {
       const title = titleEl.value.trim();
       if (!title) {
@@ -487,7 +494,7 @@ export class UserStoryList {
           description:         descEl.value.trim()   || null,
           acceptance_criteria: acEl.value.trim()     || null,
           prompt:              promptEl.value.trim() || null,
-          status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
+          status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null, // keep in sync
         });
         saveBtn.disabled    = false;
         saveBtn.textContent = 'Save Changes';

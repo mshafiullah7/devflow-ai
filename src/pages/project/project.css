@@ -129,7 +129,26 @@
 }
 
 /* Features column */
-#panelFeatures  { flex: 0 0 18%; min-width: 120px; }
+#panelFeatures  { flex: 0 0 18%; min-width: 120px; transition: flex 0.2s ease; }
+
+/* Features collapsed — slim 32 px strip showing only the toggle chevron */
+#panelFeatures.project-panel--collapsed {
+  flex: 0 0 32px !important;
+  min-width: 32px !important;
+  overflow: hidden;
+}
+#panelFeatures.project-panel--collapsed .project-panel__title,
+#panelFeatures.project-panel--collapsed #btnAddFeature,
+#panelFeatures.project-panel--collapsed .project-panel__list {
+  display: none;
+}
+#panelFeatures.project-panel--collapsed .project-panel__header {
+  padding: 0;
+  justify-content: center;
+}
+#panelFeatures.project-panel--collapsed .project-panel__actions {
+  justify-content: center;
+}
 
 /* Stories column */
 #panelStories   { flex: 0 0 20%; min-width: 120px; }
@@ -792,11 +811,7 @@
   border-right: 1px solid var(--border);
   overflow-y: auto;
   padding: 6px 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
 }
-.git-diff-files::-webkit-scrollbar { width: 4px; }
-.git-diff-files::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .git-diff-file {
   display: flex;
@@ -841,11 +856,7 @@
   font-family: 'Consolas', 'Cascadia Code', 'Fira Code', monospace;
   font-size: 12px;
   line-height: 1.5;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
 }
-.git-diff-view::-webkit-scrollbar { width: 6px; height: 6px; }
-.git-diff-view::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 .git-diff-filename {
   position: sticky;
@@ -1015,8 +1026,6 @@
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
 }
 
 .qcmd-empty {

@@ -101,11 +101,18 @@ export class ProjectPage {
             <aside class="project-panel" id="panelFeatures">
               <div class="project-panel__header">
                 <span class="project-panel__title">Features</span>
-                <button class="project-panel__add" id="btnAddFeature" aria-label="Add feature" title="Add feature">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  </svg>
-                </button>
+                <div class="project-panel__actions">
+                  <button class="project-panel__add" id="btnAddFeature" aria-label="Add feature" title="Add feature">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button class="project-panel__add project-panel__toggle" id="btnToggleFeatures" aria-label="Collapse features" title="Collapse features">
+                    <svg class="toggle-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div class="project-panel__list" id="featureList"></div>
             </aside>
@@ -305,6 +312,7 @@ export class ProjectPage {
       });
 
     this._initResizable();
+    this._initFeatureToggle();
   }
 
   // ----------------------------------------------------------------
@@ -1115,6 +1123,40 @@ export class ProjectPage {
     this._setRunning(true);
     await window.db.terminal.execStart({ command: cmd, cwd: this._termCwd });
     // output arrives via onData / onDone listeners set up in _initTerminal
+  }
+
+  // ----------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // Features panel collapse/expand toggle
+  // ----------------------------------------------------------------
+  _initFeatureToggle() {
+    const panel       = document.getElementById('panelFeatures');
+    const toggleBtn   = document.getElementById('btnToggleFeatures');
+    const resizeHandle = panel.nextElementSibling; // the drag handle after the panel
+    const icon        = toggleBtn.querySelector('.toggle-icon');
+
+    let savedFlex = panel.style.flex || '0 0 18%';
+
+    toggleBtn.addEventListener('click', () => {
+      const isCollapsed = panel.classList.toggle('project-panel--collapsed');
+
+      if (isCollapsed) {
+        savedFlex = panel.style.flex || '0 0 18%';
+        panel.style.flex = '0 0 32px';
+        resizeHandle.style.display = 'none';
+        toggleBtn.title = 'Expand features';
+        toggleBtn.setAttribute('aria-label', 'Expand features');
+        // Point chevron right (expand direction)
+        icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+      } else {
+        panel.style.flex = savedFlex;
+        resizeHandle.style.display = '';
+        toggleBtn.title = 'Collapse features';
+        toggleBtn.setAttribute('aria-label', 'Collapse features');
+        // Point chevron left (collapse direction)
+        icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+      }
+    });
   }
 
   // ----------------------------------------------------------------

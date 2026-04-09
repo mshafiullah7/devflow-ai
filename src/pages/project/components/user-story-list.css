@@ -157,8 +157,37 @@
 
 .usl-add-form__header {
   flex-shrink: 0;
-  padding: 14px 16px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.usl-add-form__status-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: inherit;
+  padding: 4px 24px 4px 8px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%234b5563' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  transition: border-color 0.15s;
+  flex-shrink: 0;
+}
+.usl-add-form__status-select:focus {
+  border-color: var(--accent);
+}
+.usl-add-form__status-select option {
+  background: var(--surface);
 }
 
 .usl-add-form__title {
@@ -260,12 +289,7 @@
   gap: 3px;
   max-height: calc(3 * 34px + 2 * 3px);
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
 }
-.usl-ph-list::-webkit-scrollbar { width: 4px; }
-.usl-ph-list::-webkit-scrollbar-track { background: transparent; }
-.usl-ph-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .usl-ph-item {
   display: flex;
@@ -428,11 +452,6 @@
   padding: 14px 16px;
   resize: none;
   outline: none;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.usl-expand-textarea::-webkit-scrollbar {
-  display: none;
 }
 
 /* Prompt highlight — expand overlay only */
@@ -536,11 +555,6 @@
 
 .usl-add-form__textarea {
   resize: none;
-  scrollbar-width: none;     /* Firefox */
-  -ms-overflow-style: none;  /* IE/Edge */
-}
-.usl-add-form__textarea::-webkit-scrollbar {
-  display: none;             /* Chrome/Safari/Electron */
 }
 
 /* Fixed-height textareas — scroll the body if content overflows */
