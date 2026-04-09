@@ -1279,3 +1279,81 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* ------------------------------------------------------------------ */
+/* {{input}} inline prompt                                             */
+/* ------------------------------------------------------------------ */
+.qcmd-inline-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.qcmd-inline-prompt__box {
+  background: var(--surface, #1e2130);
+  border: 1px solid var(--border, #2e3148);
+  border-radius: 10px;
+  padding: 16px 18px;
+  min-width: 320px;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.qcmd-inline-prompt__label {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+}
+.qcmd-inline-prompt__label code {
+  background: rgba(167,139,250,0.12);
+  color: #a78bfa;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+.qcmd-inline-prompt__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.qcmd-inline-prompt__input {
+  flex: 1;
+  background: var(--input-bg, #13151f);
+  border: 1px solid var(--border, #2e3148);
+  border-radius: 6px;
+  color: var(--text-primary, #e2e4f0);
+  font-size: 13px;
+  padding: 6px 9px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.qcmd-inline-prompt__input:focus { border-color: #6366f1; }
+.qcmd-inline-prompt__ok {
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.qcmd-inline-prompt__ok:hover { background: #4f46e5; }
+.qcmd-inline-prompt__cancel {
+  background: transparent;
+  border: 1px solid var(--border, #2e3148);
+  border-radius: 6px;
+  color: var(--text-muted, #888);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 5px 9px;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s;
+}
+.qcmd-inline-prompt__cancel:hover { color: #ef4444; border-color: #ef4444; }

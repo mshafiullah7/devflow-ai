@@ -554,18 +554,67 @@ export class ProjectPage {
       dd.querySelectorAll('.cmd-picker__item').forEach(item => {
         item.addEventListener('click', (e) => {
           e.stopPropagation();
-          const consoleInput = document.getElementById('consoleInput');
-          if (consoleInput) {
-            consoleInput.value = item.dataset.cmd;
-            consoleInput.dispatchEvent(new Event('input'));
-            consoleInput.focus();
-          }
           dd.hidden = true;
+          this._applyQuickCommand(item.dataset.cmd);
         });
       });
     }
 
     dd.hidden = false;
+  }
+
+  // ----------------------------------------------------------------
+  // Quick command helpers
+  // ----------------------------------------------------------------
+
+  /** Shows a small centered input dialog; resolves with the typed string or null if cancelled. */
+  _promptInlineInput() {
+    return new Promise((resolve) => {
+      document.querySelector('.qcmd-inline-prompt')?.remove();
+
+      const prompt = document.createElement('div');
+      prompt.className = 'qcmd-inline-prompt';
+      prompt.innerHTML = `
+        <div class="qcmd-inline-prompt__box">
+          <div class="qcmd-inline-prompt__label">Enter value for <code>{{input}}</code></div>
+          <div class="qcmd-inline-prompt__row">
+            <input class="qcmd-inline-prompt__input" type="text" placeholder="Type value…" autocomplete="off"/>
+            <button class="qcmd-inline-prompt__ok">Run</button>
+            <button class="qcmd-inline-prompt__cancel">✕</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(prompt);
+
+      const input = prompt.querySelector('.qcmd-inline-prompt__input');
+      input.focus();
+
+      const finish = (val) => { prompt.remove(); resolve(val); };
+
+      prompt.querySelector('.qcmd-inline-prompt__ok').addEventListener('click', () => finish(input.value));
+      prompt.querySelector('.qcmd-inline-prompt__cancel').addEventListener('click', () => finish(null));
+      prompt.addEventListener('click', (e) => { if (e.target === prompt) finish(null); });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') finish(input.value);
+        if (e.key === 'Escape') finish(null);
+      });
+    });
+  }
+
+  /** Resolves {{input}} placeholders (prompts user if needed), sets consoleInput, and executes. */
+  async _applyQuickCommand(rawCmd) {
+    let cmd = rawCmd;
+    if (rawCmd.includes('{{input}}')) {
+      const value = await this._promptInlineInput();
+      if (value === null) return; // user cancelled
+      cmd = rawCmd.replaceAll('{{input}}', value);
+    }
+    const consoleInput = document.getElementById('consoleInput');
+    if (consoleInput) {
+      consoleInput.value = cmd;
+      consoleInput.dispatchEvent(new Event('input'));
+    }
+    await this._runCommand(cmd);
   }
 
   // ----------------------------------------------------------------
@@ -648,21 +697,14 @@ export class ProjectPage {
       </div>
     `;
 
-    // Copy to clipboard + paste into console input
+    // Run command (copy to console input + execute)
     body.querySelectorAll('.qcmd-item__btn--copy').forEach(btn => {
       btn.addEventListener('click', async () => {
         const cmd = btn.dataset.cmd;
-        await navigator.clipboard.writeText(cmd);
-        // Also populate the console input field
-        const consoleInput = document.getElementById('consoleInput');
-        if (consoleInput) {
-          consoleInput.value = cmd;
-          consoleInput.dispatchEvent(new Event('input')); // trigger auto-resize
-        }
-        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-        setTimeout(() => {
-          btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="10" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2h2" stroke="currentColor" stroke-width="1.4"/></svg>`;
-        }, 1500);
+        // Close the modal so the console is visible while command runs
+        const modalOverlay = btn.closest('.qcmd-overlay');
+        if (modalOverlay) modalOverlay.remove();
+        await this._applyQuickCommand(cmd);
       });
     });
 
