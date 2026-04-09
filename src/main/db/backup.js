@@ -41,7 +41,9 @@ function _runBackup(dbPath, destDir) {
  * Secondary destination: C:\dev_flow_ai_backup (Windows-only, silent on failure)
  */
 function runBackup() {
-  const dbPath    = path.join(app.getPath('userData'), 'sdlc.db');
+  const dbPath    = app.isPackaged
+    ? path.join(app.getPath('userData'), 'sdlc.db')
+    : path.join(app.getAppPath(), 'sdlc.db');
   const backupDir = path.join(app.getPath('userData'), 'backup');
 
   try {
