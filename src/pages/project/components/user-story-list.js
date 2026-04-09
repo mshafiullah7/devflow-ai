@@ -10,12 +10,13 @@ import { escHtml } from '../../../shared/helpers.js';
  *   await usl.load(featureId);
  */
 export class UserStoryList {
-  constructor({ listEl, addBtn, detailEl, projectId, onSelect, onRunCommand, onRunCommandExternal }) {
+  constructor({ listEl, addBtn, detailEl, projectId, getModel, onSelect, onRunCommand, onRunCommandExternal }) {
     this._listEl                 = listEl;
     this._addBtn                 = addBtn;
     this._detailEl               = detailEl;
     this._projectId              = projectId;
     this._featureId              = null;
+    this._getModel               = getModel || (() => 'claude-cli');
     this._onSelect               = onSelect || (() => {});
     this._onRunCommand           = onRunCommand || (() => {});
     this._onRunCommandExternal   = onRunCommandExternal || (() => {});
@@ -217,7 +218,7 @@ export class UserStoryList {
                 </button>
               </div>
             </div>
-            <div class="usl-quick-cmd-preview" id="uslAddQuickCmdPreview">$ claude | --dangerously-skip-permissions  ("…")</div>
+            <div class="usl-quick-cmd-preview" id="uslAddQuickCmdPreview">$ claude --dangerously-skip-permissions --print ("…")</div>
             <textarea class="usl-add-form__textarea" id="uslAddQuickPrompt" placeholder="Quick prompt to run in console…" rows="3"></textarea>
           </div>
 
@@ -362,7 +363,7 @@ export class UserStoryList {
                 </button>
               </div>
             </div>
-            <div class="usl-quick-cmd-preview" id="uslEditQuickCmdPreview">$ claude | --dangerously-skip-permissions  ("…")</div>
+            <div class="usl-quick-cmd-preview" id="uslEditQuickCmdPreview">$ claude --dangerously-skip-permissions --print ("…")</div>
             <textarea class="usl-add-form__textarea" id="uslEditQuickPrompt" placeholder="Quick prompt to run in console…" rows="3"></textarea>
             <div class="usl-prompt-history" id="uslPromptHistory"></div>
           </div>
@@ -465,6 +466,31 @@ export class UserStoryList {
   // Run button helpers
   // ----------------------------------------------------------------
 
+  // Builds a PowerShell command to run a prompt in external window
+  _buildExternalCmd(prompt) {
+    const model = this._getModel();
+    const cli   = model === 'gemini-cli' ? 'gemini' : 'claude';
+    return `$p = @'\n${prompt}\n'@\n${cli} $p`;
+  }
+
+  // Builds a PowerShell command to run a prompt in the console
+  _buildQuickCmd(prompt) {
+    const model = this._getModel();
+    if (model === 'gemini-cli') {
+      return `$p = @'\n${prompt}\n'@\nWrite-Output $p | gemini`;
+    }
+    return `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude --dangerously-skip-permissions --print`;
+  }
+
+  // Returns preview label text for the quick-prompt field
+  _quickCmdPreviewText(snippet) {
+    const model = this._getModel();
+    if (model === 'gemini-cli') {
+      return `$ gemini ("${snippet}")`;
+    }
+    return `$ claude --dangerously-skip-permissions --print ("${snippet}")`;
+  }
+
   // Wires the double-run (external CMD) buttons on the Prompt field
   _bindRunBtns(container, userStoryId = null) {
     container.querySelectorAll('.usl-add-form__run--external').forEach(btn => {
@@ -472,10 +498,7 @@ export class UserStoryList {
         const textarea = container.querySelector('#' + btn.dataset.prompt);
         const prompt   = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
-        // Collapse to single line and escape double-quotes for CMD argument passing
-        const singleLine = prompt.replace(/\r?\n/g, ' ').replace(/"/g, '""');
-        const cmd = `claude --print "${singleLine}"`;
-        this._onRunCommandExternal(cmd);
+        this._onRunCommandExternal(this._buildExternalCmd(prompt));
       });
     });
   }
@@ -493,10 +516,10 @@ export class UserStoryList {
         const updatePreview = () => {
           const text    = textarea.value.trim();
           const isMulti = text.includes('\n');
-          const preview = isMulti
+          const snippet = isMulti
             ? text.split('\n')[0].trim() + ' …'
             : (text || '…');
-          previewEl.textContent = `$ claude --dangerously-skip-permissions --print ("${preview}")`;
+          previewEl.textContent = this._quickCmdPreviewText(snippet);
         };
         textarea.addEventListener('input', updatePreview);
       }
@@ -508,11 +531,7 @@ export class UserStoryList {
           await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
           this._loadPromptHistory(userStoryId);
         }
-        // Use a PowerShell single-quote here-string piped to claude via stdin.
-        // This preserves newlines and all special characters ($, `, ", etc.)
-        // without any escaping, and avoids command-line length limits.
-        const cmd = `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude --dangerously-skip-permissions --print`;
-        this._onRunCommand(cmd);
+        this._onRunCommand(this._buildQuickCmd(prompt));
         // Clear after run
         if (textarea) {
           textarea.value = '';

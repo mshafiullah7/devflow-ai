@@ -315,19 +315,22 @@ function registerHandlers() {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
   });
 
-  // Open an interactive CMD window (visible, stays open)
+  // Open an interactive PowerShell window (visible, stays open)
   ipcMain.handle('terminal:open-external', (_e, { command, cwd }) => {
     const { spawn } = require('child_process');
     const fs   = require('fs');
     const os   = require('os');
     const path = require('path');
     const workDir = cwd || os.homedir();
-    // Write to a temp .bat file — avoids all CMD argument quoting and newline issues
-    const batContent = `@echo off\ncd /d "${workDir}"\n${command}\n`;
-    const tmpFile = path.join(os.tmpdir(), `ai-sdlc-run-${Date.now()}.bat`);
-    fs.writeFileSync(tmpFile, batContent, 'utf8');
-    // /k keeps the window open after the command finishes
-    const proc = spawn('cmd.exe', ['/c', 'start', 'AI SDLC', 'cmd.exe', '/k', tmpFile], {
+    const safeCwd = workDir.replace(/'/g, "''");
+    // Write to a temp .ps1 file — preserves newlines/here-strings that cmd.exe would strip
+    const fullCmd = `Set-Location '${safeCwd}'\n${command}`;
+    const tmpFile = path.join(os.tmpdir(), `ai-sdlc-run-${Date.now()}.ps1`);
+    fs.writeFileSync(tmpFile, fullCmd, 'utf8');
+    // Prefer pwsh (PowerShell 7); fall back to powershell.exe
+    const shell = fs.existsSync('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+      ? 'pwsh.exe' : 'powershell.exe';
+    const proc = spawn('cmd.exe', ['/c', 'start', shell, '-NoLogo', '-NoExit', '-File', tmpFile], {
       stdio: 'ignore',
       detached: true,
       windowsHide: true,
