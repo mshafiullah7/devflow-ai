@@ -216,7 +216,7 @@ export class UserStoryList {
                 </button>
               </div>
             </div>
-            <div class="usl-quick-cmd-preview" id="uslAddQuickCmdPreview">$ claude "…" --dangerously-skip-permissions</div>
+            <div class="usl-quick-cmd-preview" id="uslAddQuickCmdPreview">$ claude | --dangerously-skip-permissions  ("…")</div>
             <textarea class="usl-add-form__textarea" id="uslAddQuickPrompt" placeholder="Quick prompt to run in console…" rows="3"></textarea>
           </div>
 
@@ -360,7 +360,7 @@ export class UserStoryList {
                 </button>
               </div>
             </div>
-            <div class="usl-quick-cmd-preview" id="uslEditQuickCmdPreview">$ claude "…" --dangerously-skip-permissions</div>
+            <div class="usl-quick-cmd-preview" id="uslEditQuickCmdPreview">$ claude | --dangerously-skip-permissions  ("…")</div>
             <textarea class="usl-add-form__textarea" id="uslEditQuickPrompt" placeholder="Quick prompt to run in console…" rows="3"></textarea>
             <div class="usl-prompt-history" id="uslPromptHistory"></div>
           </div>
@@ -459,7 +459,9 @@ export class UserStoryList {
         const textarea = container.querySelector('#' + btn.dataset.prompt);
         const prompt   = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
-        this._onRunCommandExternal(`claude "${prompt.replace(/"/g, '\\"')}"`);
+        // Here-string preserves newlines and special chars for interactive PS window
+        const cmd = `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude`;
+        this._onRunCommandExternal(cmd);
       });
     });
   }
@@ -475,8 +477,12 @@ export class UserStoryList {
       // Live command preview as user types
       if (textarea && previewEl) {
         const updatePreview = () => {
-          const text = textarea.value.trim();
-          previewEl.textContent = `$ claude "${text || '…'}" --dangerously-skip-permissions`;
+          const text    = textarea.value.trim();
+          const isMulti = text.includes('\n');
+          const preview = isMulti
+            ? text.split('\n')[0].trim() + ' …'
+            : (text || '…');
+          previewEl.textContent = `$ claude | --dangerously-skip-permissions  ("${preview}")`;
         };
         textarea.addEventListener('input', updatePreview);
       }
@@ -488,7 +494,11 @@ export class UserStoryList {
           await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
           this._loadPromptHistory(userStoryId);
         }
-        this._onRunCommand(`claude "${prompt.replace(/"/g, '\\"')}" --dangerously-skip-permissions --verbose`);
+        // Use a PowerShell single-quote here-string piped to claude via stdin.
+        // This preserves newlines and all special characters ($, `, ", etc.)
+        // without any escaping, and avoids command-line length limits.
+        const cmd = `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude --dangerously-skip-permissions --verbose`;
+        this._onRunCommand(cmd);
       });
     });
   }
