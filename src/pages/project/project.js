@@ -615,6 +615,10 @@ export class ProjectPage {
       consoleInput.dispatchEvent(new Event('input'));
     }
     await this._runCommand(cmd);
+    if (consoleInput) {
+      consoleInput.value = '';
+      consoleInput.style.height = 'auto';
+    }
   }
 
   // ----------------------------------------------------------------
