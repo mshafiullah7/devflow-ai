@@ -68,6 +68,14 @@ export class ProjectPage {
             <h1 class="project-page__title">${name}</h1>
             ${desc ? `<p class="project-page__desc">${desc}</p>` : ''}
           </div>
+          <button class="project-page__stats-btn" id="btnStatistics" title="View statistics">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="8" width="3" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/>
+              <rect x="6" y="4" width="3" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/>
+              <rect x="11" y="1" width="3" height="14" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            </svg>
+            Statistics
+          </button>
           <div class="project-page__header-actions">
             <button class="project-page__console-toggle" id="btnConsoleToggle" aria-label="Toggle console" title="Toggle Console">
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
@@ -243,6 +251,9 @@ export class ProjectPage {
     document.getElementById('aiModelSelect')
       .addEventListener('change', (e) => { this._aiModel = e.target.value; });
 
+    document.getElementById('btnStatistics')
+      .addEventListener('click', () => this._showStatisticsModal());
+
     document.getElementById('btnConsoleCommands')
       .addEventListener('click', () => this._showQuickCommandsModal());
 
@@ -350,6 +361,191 @@ export class ProjectPage {
       `<span>No project folder selected. Click the <strong>folder icon</strong> in the console toolbar to select a folder first.</span>`;
     out.appendChild(div);
     out.scrollTop = out.scrollHeight;
+  }
+
+  // ----------------------------------------------------------------
+  // Statistics modal
+  // ----------------------------------------------------------------
+  async _showStatisticsModal() {
+    document.querySelector('.stats-overlay')?.remove();
+
+    const [stories, features, statuses] = await Promise.all([
+      window.db.userStories.list({ project_id: this.projectId }),
+      window.db.features.list(this.projectId),
+      window.db.status.list(),
+    ]);
+
+    const totalStories  = stories.length;
+    const totalFeatures = features.length;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'stats-overlay';
+    overlay.innerHTML = `
+      <div class="stats-modal">
+        <div class="stats-modal__header">
+          <span class="stats-modal__title">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="8" width="3" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/>
+              <rect x="6" y="4" width="3" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/>
+              <rect x="11" y="1" width="3" height="14" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            </svg>
+            Statistics
+          </span>
+          <button class="stats-modal__close" id="btnStatsClose">&times;</button>
+        </div>
+        <div class="stats-modal__body">
+
+          <!-- User Stories section -->
+          <div class="stats-section">
+            <div class="stats-section__header">
+              <span class="stats-section__label">User Stories</span>
+              <span class="stats-section__count">${totalStories}</span>
+            </div>
+            ${totalStories === 0
+              ? `<div class="stats-empty">No user stories yet.</div>`
+              : `<canvas id="statsChartStories" class="stats-chart"></canvas>`
+            }
+          </div>
+
+          <!-- Features section -->
+          <div class="stats-section">
+            <div class="stats-section__header">
+              <span class="stats-section__label">Features</span>
+              <span class="stats-section__count">${totalFeatures}</span>
+            </div>
+            ${totalFeatures === 0
+              ? `<div class="stats-empty">No features yet.</div>`
+              : `<canvas id="statsChartFeatures" class="stats-chart"></canvas>`
+            }
+          </div>
+
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#btnStatsClose').addEventListener('click', () => overlay.remove());
+
+    if (totalStories  > 0) this._drawStatsChart('statsChartStories',  stories,  statuses);
+    if (totalFeatures > 0) this._drawStatsChart('statsChartFeatures', features, statuses);
+  }
+
+  _drawStatsChart(canvasId, stories, statuses) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    // Count stories per status
+    const counts = {};
+    for (const s of stories) {
+      const label = s.status_name || 'No Status';
+      counts[label] = (counts[label] || 0) + 1;
+    }
+
+    // Order by statuses list first, then append any unlisted ones
+    const ordered = [];
+    for (const st of statuses) {
+      if (counts[st.name] !== undefined) ordered.push({ label: st.name, count: counts[st.name] });
+    }
+    if (counts['No Status']) ordered.push({ label: 'No Status', count: counts['No Status'] });
+
+    if (ordered.length === 0) return;
+
+    const DOT_COLOR  = '#f97316';
+    const LINE_COLOR = 'rgba(249,115,22,0.5)';
+
+    // Canvas sizing
+    const DPR = window.devicePixelRatio || 1;
+    const W   = canvas.offsetWidth  || 480;
+    const H   = canvas.offsetHeight || 220;
+    canvas.width  = W * DPR;
+    canvas.height = H * DPR;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(DPR, DPR);
+
+    const PAD  = { top: 24, right: 24, bottom: 48, left: 40 };
+    const cw   = W - PAD.left - PAD.right;
+    const ch   = H - PAD.top  - PAD.bottom;
+    const n    = ordered.length;
+    const maxY = Math.max(...ordered.map(p => p.count), 1);
+
+    const xOf = (i) => PAD.left + (n > 1 ? (i / (n - 1)) * cw : cw / 2);
+    const yOf = (v) => PAD.top  + ch - (v / maxY) * ch;
+
+    // Horizontal grid + Y labels
+    const yTicks = Math.min(maxY, 4);
+    for (let t = 0; t <= yTicks; t++) {
+      const v = Math.round((maxY / yTicks) * t);
+      const y = yOf(v);
+      ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cw, y);
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 0.5; ctx.stroke();
+      ctx.fillStyle   = 'rgba(255,255,255,0.35)';
+      ctx.font        = '10px system-ui,sans-serif';
+      ctx.textAlign   = 'right';
+      ctx.fillText(v, PAD.left - 6, y + 3);
+    }
+
+    // Vertical guides at each status point
+    for (let i = 0; i < n; i++) {
+      const x = xOf(i);
+      ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top + ch);
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.5; ctx.stroke();
+    }
+
+    // Connect the dots with a smooth line
+    ctx.beginPath();
+    ctx.strokeStyle = LINE_COLOR;
+    ctx.lineWidth   = 2;
+    ctx.lineJoin    = 'round';
+    ordered.forEach((p, i) => {
+      const x = xOf(i), y = yOf(p.count);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Fill area under the line
+    ctx.beginPath();
+    ordered.forEach((p, i) => {
+      const x = xOf(i), y = yOf(p.count);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.lineTo(xOf(n - 1), PAD.top + ch);
+    ctx.lineTo(xOf(0),     PAD.top + ch);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(249,115,22,0.08)';
+    ctx.fill();
+
+    // Dots + count labels + X status labels
+    ctx.font      = '10px system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    for (let i = 0; i < n; i++) {
+      const { label, count } = ordered[i];
+      const x = xOf(i), y = yOf(count);
+
+      // Dot
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = DOT_COLOR;
+      ctx.fill();
+      ctx.strokeStyle = '#1a1d27'; ctx.lineWidth = 2; ctx.stroke();
+
+      // Count label above dot
+      ctx.fillStyle = '#f97316';
+      ctx.font      = 'bold 11px system-ui,sans-serif';
+      ctx.fillText(count, x, y - 10);
+
+      // Status name on X axis (wrap at 10 chars)
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font      = '10px system-ui,sans-serif';
+      const words   = label.split(' ');
+      let line1 = '', line2 = '';
+      for (const w of words) {
+        if ((line1 + ' ' + w).trim().length <= 10) line1 = (line1 + ' ' + w).trim();
+        else line2 = (line2 + ' ' + w).trim();
+      }
+      ctx.fillText(line1, x, H - PAD.bottom + 14);
+      if (line2) ctx.fillText(line2, x, H - PAD.bottom + 25);
+    }
+
   }
 
   // ----------------------------------------------------------------
