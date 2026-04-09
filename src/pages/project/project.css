@@ -452,6 +452,13 @@
   user-select: none;
   padding-bottom: 2px; /* align with textarea text baseline */
 }
+/* Wrap textarea + picker button together */
+.project-console__input-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
 .project-console__input {
   flex: 1;
   background: transparent;
@@ -467,6 +474,68 @@
   color: #e2e8f0;
   caret-color: #6ee7b7;
   padding: 0;
+  padding-right: 22px; /* room for picker icon */
+}
+/* Picker button inside the input wrap */
+.project-console__cmd-picker-btn {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  background: transparent;
+  border: none;
+  padding: 2px 3px;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0.55;
+  line-height: 1;
+  border-radius: 3px;
+  transition: opacity 0.15s, color 0.15s;
+}
+.project-console__cmd-picker-btn:hover {
+  opacity: 1;
+  color: #6ee7b7;
+}
+/* Dropdown */
+.project-console__cmd-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 260px;
+  max-width: 400px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface, #1a1d27);
+  border: 1px solid var(--border, #2d3148);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  z-index: 200;
+}
+.cmd-picker__empty {
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.cmd-picker__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border, #2d3148);
+  transition: background 0.12s;
+}
+.cmd-picker__item:last-child { border-bottom: none; }
+.cmd-picker__item:hover { background: var(--surface-hover, #252840); }
+.cmd-picker__cmd {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.cmd-picker__desc {
+  font-size: 10px;
+  color: var(--text-muted);
 }
 .project-console__input::placeholder {
   color: var(--text-muted);

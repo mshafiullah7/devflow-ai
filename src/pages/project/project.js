@@ -151,6 +151,11 @@ export class ProjectPage {
                 Console
               </div>
               <div class="project-console__actions">
+                <button class="project-console__folder" id="btnConsoleFolder" title="Select folder">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                    <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                  </svg>
+                </button>
                 <select class="project-console__model-select" id="aiModelSelect" title="AI Model">
                   <option value="claude-cli">Claude CLI</option>
                   <option value="gemini-cli">Gemini CLI</option>
@@ -175,11 +180,6 @@ export class ProjectPage {
                   </svg>
                   <span class="project-console__git-badge" id="gitBadge" hidden></span>
                 </button>
-                <button class="project-console__folder" id="btnConsoleFolder" title="Select folder">
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                    <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-                  </svg>
-                </button>
                 <button class="project-console__clear" id="btnConsoleClear" title="Clear console">Clear</button>
                 <button class="project-console__close" id="btnConsoleClose" aria-label="Close console">&times;</button>
               </div>
@@ -189,9 +189,18 @@ export class ProjectPage {
             </div>
             <div class="project-console__input-row">
               <span class="project-console__ps-label" id="consolePromptLabel">PS ~&gt;</span>
-              <textarea class="project-console__input" id="consoleInput" rows="1"
-                spellcheck="false" autocomplete="off" autocorrect="off"
-                placeholder="Enter command… (Shift+Enter for new line)"></textarea>
+              <div class="project-console__input-wrap">
+                <textarea class="project-console__input" id="consoleInput" rows="1"
+                  spellcheck="false" autocomplete="off" autocorrect="off"
+                  placeholder="Enter command… (Shift+Enter for new line)"></textarea>
+                <button class="project-console__cmd-picker-btn" id="btnCmdPicker" title="Pick a saved command">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M11 10l2 2 2-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <div class="project-console__cmd-dropdown" id="cmdPickerDropdown" hidden></div>
+              </div>
               <button class="project-console__stop" id="btnConsoleStop" title="Stop running command" hidden>&#9632; Stop</button>
             </div>
           </div><!-- /.project-console -->
@@ -236,6 +245,14 @@ export class ProjectPage {
 
     document.getElementById('btnConsoleCommands')
       .addEventListener('click', () => this._showQuickCommandsModal());
+
+    document.getElementById('btnCmdPicker')
+      .addEventListener('click', (e) => { e.stopPropagation(); this._toggleCmdPickerDropdown(); });
+
+    document.addEventListener('click', () => {
+      const dd = document.getElementById('cmdPickerDropdown');
+      if (dd) dd.hidden = true;
+    });
 
     document.getElementById('btnConsoleGit')
       .addEventListener('click', async () => {
@@ -333,6 +350,43 @@ export class ProjectPage {
       `<span>No project folder selected. Click the <strong>folder icon</strong> in the console toolbar to select a folder first.</span>`;
     out.appendChild(div);
     out.scrollTop = out.scrollHeight;
+  }
+
+  // ----------------------------------------------------------------
+  // Command picker dropdown (inline in input row)
+  // ----------------------------------------------------------------
+  async _toggleCmdPickerDropdown() {
+    const dd = document.getElementById('cmdPickerDropdown');
+    if (!dd) return;
+
+    if (!dd.hidden) { dd.hidden = true; return; }
+
+    const commands = await window.db.quickCommands.list();
+    if (commands.length === 0) {
+      dd.innerHTML = `<div class="cmd-picker__empty">No saved commands. Use the commands toolbar button to add some.</div>`;
+    } else {
+      dd.innerHTML = commands.map(c => `
+        <div class="cmd-picker__item" data-cmd="${escHtml(c.command)}">
+          <span class="cmd-picker__cmd">${escHtml(c.command)}</span>
+          ${c.description ? `<span class="cmd-picker__desc">${escHtml(c.description)}</span>` : ''}
+        </div>
+      `).join('');
+
+      dd.querySelectorAll('.cmd-picker__item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const consoleInput = document.getElementById('consoleInput');
+          if (consoleInput) {
+            consoleInput.value = item.dataset.cmd;
+            consoleInput.dispatchEvent(new Event('input'));
+            consoleInput.focus();
+          }
+          dd.hidden = true;
+        });
+      });
+    }
+
+    dd.hidden = false;
   }
 
   // ----------------------------------------------------------------
