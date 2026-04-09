@@ -15,6 +15,9 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   async mount() {
     this._injectCss();
+    // Persist theme across page navigation
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.dataset.theme = savedTheme;
     this._project = await window.db.projects.get(this.projectId);
     this._termCwd = await window.db.terminal.homedir();
     this._folderSelected = false;
@@ -434,24 +437,20 @@ export class ProjectPage {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
 
-    // Count stories per status
+    // Count items per status
     const counts = {};
     for (const s of stories) {
       const label = s.status_name || 'No Status';
       counts[label] = (counts[label] || 0) + 1;
     }
 
-    // Order by statuses list first, then append any unlisted ones
+    // Order by statuses list, then any unlisted
     const ordered = [];
     for (const st of statuses) {
       if (counts[st.name] !== undefined) ordered.push({ label: st.name, count: counts[st.name] });
     }
     if (counts['No Status']) ordered.push({ label: 'No Status', count: counts['No Status'] });
-
     if (ordered.length === 0) return;
-
-    const DOT_COLOR  = '#f97316';
-    const LINE_COLOR = 'rgba(249,115,22,0.5)';
 
     // Canvas sizing
     const DPR = window.devicePixelRatio || 1;
@@ -462,14 +461,15 @@ export class ProjectPage {
     const ctx = canvas.getContext('2d');
     ctx.scale(DPR, DPR);
 
-    const PAD  = { top: 24, right: 24, bottom: 48, left: 40 };
-    const cw   = W - PAD.left - PAD.right;
-    const ch   = H - PAD.top  - PAD.bottom;
-    const n    = ordered.length;
-    const maxY = Math.max(...ordered.map(p => p.count), 1);
-
-    const xOf = (i) => PAD.left + (n > 1 ? (i / (n - 1)) * cw : cw / 2);
-    const yOf = (v) => PAD.top  + ch - (v / maxY) * ch;
+    const PAD    = { top: 24, right: 16, bottom: 48, left: 40 };
+    const cw     = W - PAD.left - PAD.right;
+    const ch     = H - PAD.top  - PAD.bottom;
+    const n      = ordered.length;
+    const maxY   = Math.max(...ordered.map(p => p.count), 1);
+    const slot   = cw / n;
+    const BAR_W  = Math.max(8, Math.min(48, slot * 0.55));
+    const yOf    = (v) => PAD.top + ch - (v / maxY) * ch;
+    const barX   = (i) => PAD.left + slot * i + (slot - BAR_W) / 2;
 
     // Horizontal grid + Y labels
     const yTicks = Math.min(maxY, 4);
@@ -484,68 +484,51 @@ export class ProjectPage {
       ctx.fillText(v, PAD.left - 6, y + 3);
     }
 
-    // Vertical guides at each status point
-    for (let i = 0; i < n; i++) {
-      const x = xOf(i);
-      ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top + ch);
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.5; ctx.stroke();
-    }
-
-    // Connect the dots with a smooth line
-    ctx.beginPath();
-    ctx.strokeStyle = LINE_COLOR;
-    ctx.lineWidth   = 2;
-    ctx.lineJoin    = 'round';
-    ordered.forEach((p, i) => {
-      const x = xOf(i), y = yOf(p.count);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-
-    // Fill area under the line
-    ctx.beginPath();
-    ordered.forEach((p, i) => {
-      const x = xOf(i), y = yOf(p.count);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.lineTo(xOf(n - 1), PAD.top + ch);
-    ctx.lineTo(xOf(0),     PAD.top + ch);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(249,115,22,0.08)';
-    ctx.fill();
-
-    // Dots + count labels + X status labels
-    ctx.font      = '10px system-ui,sans-serif';
-    ctx.textAlign = 'center';
+    // Bars
     for (let i = 0; i < n; i++) {
       const { label, count } = ordered[i];
-      const x = xOf(i), y = yOf(count);
+      const x    = barX(i);
+      const barH = (count / maxY) * ch;
+      const y    = PAD.top + ch - barH;
+      const cx   = x + BAR_W / 2; // center of bar for labels
 
-      // Dot
+      // Bar with rounded top
+      const r = Math.min(4, BAR_W / 2);
       ctx.beginPath();
-      ctx.arc(x, y, 5, 0, Math.PI * 2);
-      ctx.fillStyle = DOT_COLOR;
-      ctx.fill();
-      ctx.strokeStyle = '#1a1d27'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + BAR_W - r, y);
+      ctx.quadraticCurveTo(x + BAR_W, y, x + BAR_W, y + r);
+      ctx.lineTo(x + BAR_W, y + barH);
+      ctx.lineTo(x,         y + barH);
+      ctx.lineTo(x,         y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
 
-      // Count label above dot
+      // Gradient fill
+      const grad = ctx.createLinearGradient(0, y, 0, y + barH);
+      grad.addColorStop(0, '#f97316');
+      grad.addColorStop(1, 'rgba(249,115,22,0.3)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Count label above bar
       ctx.fillStyle = '#f97316';
       ctx.font      = 'bold 11px system-ui,sans-serif';
-      ctx.fillText(count, x, y - 10);
+      ctx.textAlign = 'center';
+      ctx.fillText(count, cx, y - 6);
 
-      // Status name on X axis (wrap at 10 chars)
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      // Status label on X axis (two lines if needed)
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.font      = '10px system-ui,sans-serif';
-      const words   = label.split(' ');
+      const words = label.split(' ');
       let line1 = '', line2 = '';
       for (const w of words) {
         if ((line1 + ' ' + w).trim().length <= 10) line1 = (line1 + ' ' + w).trim();
         else line2 = (line2 + ' ' + w).trim();
       }
-      ctx.fillText(line1, x, H - PAD.bottom + 14);
-      if (line2) ctx.fillText(line2, x, H - PAD.bottom + 25);
+      ctx.fillText(line1, cx, H - PAD.bottom + 14);
+      if (line2) ctx.fillText(line2, cx, H - PAD.bottom + 25);
     }
-
   }
 
   // ----------------------------------------------------------------

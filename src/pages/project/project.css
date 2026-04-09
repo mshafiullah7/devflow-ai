@@ -221,7 +221,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;         /* clip any overflowing content */
-  background: #0d0f14;
+  background: var(--console-bg);
   border-left: 1px solid var(--border);
 }
 
@@ -313,7 +313,7 @@
   font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
   font-size: 12px;
   line-height: 1.6;
-  color: #94a3b8;
+  color: var(--console-text);
   word-break: break-all;
   display: flex;
   flex-direction: column;
@@ -415,7 +415,7 @@
   margin-top: 6px;
 }
 .project-console__line--output {
-  color: #cbd5e1;
+  color: var(--console-output);
 }
 .project-console__line--error {
   color: #f87171;
@@ -427,12 +427,12 @@
   gap: 6px;
 }
 .project-console__ps-prompt {
-  color: #6ee7b7;
+  color: var(--console-prompt);
   user-select: none;
   margin-right: 4px;
 }
 .project-console__ps-cmd {
-  color: #e2e8f0;
+  color: var(--console-input);
 }
 
 /* Terminal input row */
@@ -447,7 +447,7 @@
 .project-console__ps-label {
   font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
   font-size: 12px;
-  color: #6ee7b7;
+  color: var(--console-prompt);
   white-space: nowrap;
   user-select: none;
   padding-bottom: 2px; /* align with textarea text baseline */
@@ -471,8 +471,8 @@
   line-height: 1.5;
   font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
   font-size: 12px;
-  color: #e2e8f0;
-  caret-color: #6ee7b7;
+  color: var(--console-input);
+  caret-color: var(--console-caret);
   padding: 0;
   padding-right: 22px; /* room for picker icon */
 }
@@ -493,7 +493,7 @@
 }
 .project-console__cmd-picker-btn:hover {
   opacity: 1;
-  color: #6ee7b7;
+  color: var(--console-prompt);
 }
 /* Dropdown */
 .project-console__cmd-dropdown {
@@ -529,7 +529,7 @@
 .cmd-picker__cmd {
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
-  color: #e2e8f0;
+  color: var(--console-input);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -576,7 +576,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #6ee7b7;
+  color: var(--console-prompt);
   font-size: 11px;
 }
 .project-console__spinner::before {
@@ -584,8 +584,8 @@
   display: inline-block;
   width: 11px;
   height: 11px;
-  border: 2px solid #1e293b;
-  border-top-color: #6ee7b7;
+  border: 2px solid var(--console-bg);
+  border-top-color: var(--console-prompt);
   border-radius: 50%;
   animation: terminal-spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -603,7 +603,7 @@
   overflow-x: hidden;
   max-width: 100%;
   line-height: 1.5;
-  color: #cbd5e1;
+  color: var(--console-output);
   flex-shrink: 0;
   margin-bottom: 2px;
 }
