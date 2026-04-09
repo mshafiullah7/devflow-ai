@@ -20,6 +20,7 @@ export class ProjectPage {
     this._folderSelected = false;
     this._currentStreamDiv = null;
     this._gitPollInterval = null;
+    this._aiModel = 'claude-cli';
     this.container.innerHTML = this._template();
     this._bindEvents();
     this._initTerminal();
@@ -150,6 +151,13 @@ export class ProjectPage {
                 Console
               </div>
               <div class="project-console__actions">
+                <select class="project-console__model-select" id="aiModelSelect" title="AI Model">
+                  <option value="claude-cli">Claude CLI</option>
+                  <option value="gemini-cli">Gemini CLI</option>
+                  <option value="claude-api" disabled>Claude API</option>
+                  <option value="gemini-api" disabled>Gemini API</option>
+                  <option value="chatgpt-api" disabled>ChatGPT API</option>
+                </select>
                 <button class="project-console__commands" id="btnConsoleCommands" title="Quick commands">
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
                     <path d="M5 2h7l4 4v12a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
@@ -223,6 +231,9 @@ export class ProjectPage {
         this._startGitPoll();
       });
 
+    document.getElementById('aiModelSelect')
+      .addEventListener('change', (e) => { this._aiModel = e.target.value; });
+
     document.getElementById('btnConsoleCommands')
       .addEventListener('click', () => this._showQuickCommandsModal());
 
@@ -266,6 +277,7 @@ export class ProjectPage {
       addBtn:                  document.getElementById('btnAddStory'),
       detailEl:                document.getElementById('storyDetail'),
       projectId:               this.projectId,
+      getModel:                () => this._aiModel,
       onSelect:                (_story) => {},
       onRunCommand:            (cmd) => {
         document.getElementById('projectConsole').hidden = false;
