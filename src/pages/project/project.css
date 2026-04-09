@@ -151,7 +151,7 @@
 }
 
 /* Stories column */
-#panelStories   { flex: 0 0 20%; min-width: 120px; }
+#panelStories   { flex: 0 0 20%; min-width: 120px; transition: flex 0.2s ease; }
 
 /* Detail column — fills remaining space */
 .project-panel--detail {

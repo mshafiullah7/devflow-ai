@@ -1161,30 +1161,35 @@ export class ProjectPage {
   // Features panel collapse/expand toggle
   // ----------------------------------------------------------------
   _initFeatureToggle() {
-    const panel       = document.getElementById('panelFeatures');
-    const toggleBtn   = document.getElementById('btnToggleFeatures');
+    const panel        = document.getElementById('panelFeatures');
+    const storiesPanel = document.getElementById('panelStories');
+    const toggleBtn    = document.getElementById('btnToggleFeatures');
     const resizeHandle = panel.nextElementSibling; // the drag handle after the panel
-    const icon        = toggleBtn.querySelector('.toggle-icon');
+    const icon         = toggleBtn.querySelector('.toggle-icon');
 
-    let savedFlex = panel.style.flex || '0 0 18%';
+    let savedFlex        = panel.style.flex        || '0 0 18%';
+    let savedStoriesFlex = storiesPanel.style.flex || '0 0 20%';
 
     toggleBtn.addEventListener('click', () => {
       const isCollapsed = panel.classList.toggle('project-panel--collapsed');
 
       if (isCollapsed) {
-        savedFlex = panel.style.flex || '0 0 18%';
+        savedFlex        = panel.style.flex        || '0 0 18%';
+        savedStoriesFlex = storiesPanel.style.flex || '0 0 20%';
         panel.style.flex = '0 0 32px';
+        // Increase stories width by 50% of its current basis
+        const currentBasis = parseFloat(savedStoriesFlex.split(' ')[2]) || 20;
+        storiesPanel.style.flex = `0 0 ${currentBasis * 1.5}%`;
         resizeHandle.style.display = 'none';
         toggleBtn.title = 'Expand features';
         toggleBtn.setAttribute('aria-label', 'Expand features');
-        // Point chevron right (expand direction)
         icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
       } else {
-        panel.style.flex = savedFlex;
+        panel.style.flex        = savedFlex;
+        storiesPanel.style.flex = savedStoriesFlex;
         resizeHandle.style.display = '';
         toggleBtn.title = 'Collapse features';
         toggleBtn.setAttribute('aria-label', 'Collapse features');
-        // Point chevron left (collapse direction)
         icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
       }
     });
