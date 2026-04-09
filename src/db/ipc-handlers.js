@@ -244,6 +244,17 @@ function registerHandlers() {
     return result.filePaths[0];
   });
 
+  ipcMain.handle('dialog:openJsonFile', async (event) => {
+    const win = require('electron').BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      title: 'Import User Stories',
+      filters: [{ name: 'JSON Files', extensions: ['json'] }],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return require('fs').readFileSync(result.filePaths[0], 'utf-8');
+  });
+
   // ----------------------------------------------------------------
   // terminal
   // ----------------------------------------------------------------

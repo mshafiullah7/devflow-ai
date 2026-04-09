@@ -117,11 +117,19 @@ export class ProjectPage {
             <aside class="project-panel" id="panelStories">
               <div class="project-panel__header">
                 <span class="project-panel__title">User Stories</span>
-                <button class="project-panel__add" id="btnAddStory" aria-label="Add user story" title="Add user story">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  </svg>
-                </button>
+                <div class="project-panel__actions">
+                  <button class="project-panel__add" id="btnImportStories" aria-label="Import user stories from JSON" title="Import from JSON">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 10V2M5 5l3-3 3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button class="project-panel__add" id="btnAddStory" aria-label="Add user story" title="Add user story">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div class="project-panel__list" id="storyList"></div>
             </aside>
@@ -306,6 +314,7 @@ export class ProjectPage {
     this._storyList = new UserStoryList({
       listEl:                  document.getElementById('storyList'),
       addBtn:                  document.getElementById('btnAddStory'),
+      importBtn:               document.getElementById('btnImportStories'),
       detailEl:                document.getElementById('storyDetail'),
       projectId:               this.projectId,
       getModel:                () => this._aiModel,

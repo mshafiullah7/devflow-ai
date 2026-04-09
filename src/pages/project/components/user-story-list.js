@@ -10,9 +10,10 @@ import { escHtml } from '../../../shared/helpers.js';
  *   await usl.load(featureId);
  */
 export class UserStoryList {
-  constructor({ listEl, addBtn, detailEl, projectId, getModel, onSelect, onRunCommand, onRunCommandExternal }) {
+  constructor({ listEl, addBtn, importBtn, detailEl, projectId, getModel, onSelect, onRunCommand, onRunCommandExternal }) {
     this._listEl                 = listEl;
     this._addBtn                 = addBtn;
+    this._importBtn              = importBtn;
     this._detailEl               = detailEl;
     this._projectId              = projectId;
     this._featureId              = null;
@@ -36,6 +37,12 @@ export class UserStoryList {
       if (!this._featureId) return;
       this._showAddForm();
     });
+    if (this._importBtn) {
+      this._importBtn.addEventListener('click', () => {
+        if (!this._featureId) return;
+        this._importFromJson();
+      });
+    }
     this._renderEmpty('Select a feature');
     this._renderDetailEmpty();
   }
@@ -50,6 +57,70 @@ export class UserStoryList {
 
   async refresh() {
     if (this._featureId) await this._load();
+  }
+
+  // ----------------------------------------------------------------
+  // JSON import
+  // ----------------------------------------------------------------
+  async _importFromJson() {
+    let raw;
+    try {
+      raw = await window.db.dialog.openJsonFile();
+    } catch {
+      return;
+    }
+    if (!raw) return; // user cancelled
+
+    let records;
+    try {
+      records = JSON.parse(raw);
+      if (!Array.isArray(records)) throw new Error('Expected a JSON array');
+    } catch (err) {
+      alert(`Invalid JSON file: ${err.message}`);
+      return;
+    }
+
+    const backlog   = this._statuses.find(s => s.name === 'Backlog');
+    const statusId  = backlog ? backlog.id : null;
+    let imported    = 0;
+    let skipped     = 0;
+
+    for (const item of records) {
+      try {
+        await window.db.userStories.create({
+          feature_id:          this._featureId,
+          project_id:          this._projectId,
+          title:               item.title               || '',
+          description:         item.description         || null,
+          acceptance_criteria: item.acceptance_criteria || null,
+          prompt:              item.prompt              || null,
+          status_id:           statusId,
+        });
+        imported++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    await this._load();
+
+    const msg = skipped > 0
+      ? `Imported ${imported} user ${imported === 1 ? 'story' : 'stories'}. ${skipped} skipped due to errors.`
+      : `Imported ${imported} user ${imported === 1 ? 'story' : 'stories'} successfully.`;
+    this._showImportToast(msg);
+  }
+
+  _showImportToast(message) {
+    document.querySelector('.usl-import-toast')?.remove();
+    const toast = document.createElement('div');
+    toast.className = 'usl-import-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('usl-import-toast--visible'));
+    setTimeout(() => {
+      toast.classList.remove('usl-import-toast--visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 
   // ----------------------------------------------------------------
@@ -392,6 +463,11 @@ export class UserStoryList {
     const promptEl = this._detailEl.querySelector('#uslEditPrompt');
     const statusEl = this._detailEl.querySelector('#uslEditStatus');
     const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
+
+    // Normalise literal \n sequences to real newlines (e.g. from JSON import)
+    if (promptEl.value.includes('\\n')) {
+      promptEl.value = promptEl.value.replace(/\\n/g, '\n');
+    }
 
     const save = async () => {
       const title = titleEl.value.trim();

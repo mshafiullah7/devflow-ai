@@ -45,7 +45,8 @@ contextBridge.exposeInMainWorld('db', {
     delete: (id)   => invoke('db:quick_commands:delete', id),
   },
   dialog: {
-    openFolder: () => invoke('dialog:openFolder'),
+    openFolder:   () => invoke('dialog:openFolder'),
+    openJsonFile: () => invoke('dialog:openJsonFile'),
   },
   window: {
     expand: () => invoke('window:expand'),

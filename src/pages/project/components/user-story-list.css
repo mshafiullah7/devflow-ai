@@ -813,3 +813,29 @@
 .usl-confirm__msg strong {
   color: var(--text-primary);
 }
+
+/* ------------------------------------------------------------------ */
+/* Import toast                                                         */
+/* ------------------------------------------------------------------ */
+.usl-import-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--surface, #1e2130);
+  border: 1px solid var(--border, #2e3148);
+  color: var(--text-primary, #e2e4f0);
+  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 9999;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.usl-import-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
