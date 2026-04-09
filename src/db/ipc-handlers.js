@@ -251,7 +251,9 @@ function registerHandlers() {
     const { spawn } = require('child_process');
     const wc = event.sender;
 
-    _activeProc = spawn('powershell.exe', ['-NoLogo', '-NonInteractive', '-Command', command], {
+    // Force UTF-8 code page so box-drawing chars from CMD tools (tree, etc.) render correctly
+    const utf8Prefix = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; ';
+    _activeProc = spawn('powershell.exe', ['-NoLogo', '-NonInteractive', '-Command', utf8Prefix + command], {
       stdio: ['ignore', 'pipe', 'pipe'],
       cwd: cwd || require('os').homedir(),
       env: process.env,
@@ -260,8 +262,8 @@ function registerHandlers() {
 
     const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
 
-    _activeProc.stdout.on('data', d => send('terminal:data', { text: d.toString(), stream: 'stdout' }));
-    _activeProc.stderr.on('data', d => send('terminal:data', { text: d.toString(), stream: 'stderr' }));
+    _activeProc.stdout.on('data', d => send('terminal:data', { text: d.toString('utf8'), stream: 'stdout' }));
+    _activeProc.stderr.on('data', d => send('terminal:data', { text: d.toString('utf8'), stream: 'stderr' }));
     _activeProc.on('close',  code => { _activeProc = null; send('terminal:done', { exitCode: code }); });
     _activeProc.on('error',  err  => {
       _activeProc = null;

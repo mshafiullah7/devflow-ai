@@ -559,21 +559,41 @@ export class ProjectPage {
   }
 
   _initTerminal() {
+    this._outputBuffer  = [];
+    this._rafPending    = false;
+
+    const flushBuffer = () => {
+      this._rafPending = false;
+      if (!this._outputBuffer.length) return;
+      const items    = this._outputBuffer.splice(0);
+      const target   = this._currentStreamDiv;
+      if (!target) return;
+      const fragment = document.createDocumentFragment();
+      for (const { text, isErr } of items) {
+        const span = document.createElement('span');
+        if (isErr) span.className = 'project-console__stderr';
+        span.textContent = text;
+        fragment.appendChild(span);
+      }
+      target.appendChild(fragment);
+      const out = document.getElementById('consoleOutput');
+      if (out) out.scrollTop = out.scrollHeight;
+    };
+
     window.db.terminal.onData(({ text, stream }) => {
       if (!this._currentStreamDiv) return;
-      // Remove spinner on first data chunk
       if (this._spinnerEl) { this._spinnerEl.remove(); this._spinnerEl = null; }
       const clean = this._stripAnsi(text);
       if (!clean) return;
-      const span = document.createElement('span');
-      span.className = stream === 'stderr' ? 'project-console__stderr' : '';
-      span.textContent = clean;
-      this._currentStreamDiv.appendChild(span);
-      const out = document.getElementById('consoleOutput');
-      if (out) out.scrollTop = out.scrollHeight;
+      this._outputBuffer.push({ text: clean, isErr: stream === 'stderr' });
+      if (!this._rafPending) {
+        this._rafPending = true;
+        requestAnimationFrame(flushBuffer);
+      }
     });
 
     window.db.terminal.onDone(() => {
+      flushBuffer(); // flush anything still in the buffer
       if (this._spinnerEl) { this._spinnerEl.remove(); this._spinnerEl = null; }
       this._currentStreamDiv = null;
       this._setRunning(false);
