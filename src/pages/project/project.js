@@ -19,6 +19,7 @@ export class ProjectPage {
     this._termCwd = await window.db.terminal.homedir();
     this._folderSelected = false;
     this._currentStreamDiv = null;
+    this._gitPollInterval = null;
     this.container.innerHTML = this._template();
     this._bindEvents();
     this._initTerminal();
@@ -29,6 +30,7 @@ export class ProjectPage {
     const link = document.getElementById('project-css');
     if (link) link.remove();
     window.db.terminal.removeListeners();
+    this._stopGitPoll();
   }
 
   // ----------------------------------------------------------------
@@ -211,6 +213,7 @@ export class ProjectPage {
         await this._runCommand(`cd "${folderPath}"`);
         document.getElementById('consoleInput').focus();
         await this._refreshGitStatus();
+        this._startGitPoll();
       });
 
     document.getElementById('btnConsoleGit')
@@ -488,6 +491,18 @@ export class ProjectPage {
     return html;
   }
 
+  _startGitPoll() {
+    this._stopGitPoll();
+    this._gitPollInterval = setInterval(() => this._refreshGitStatus(), 10000);
+  }
+
+  _stopGitPoll() {
+    if (this._gitPollInterval) {
+      clearInterval(this._gitPollInterval);
+      this._gitPollInterval = null;
+    }
+  }
+
   async _refreshGitStatus() {
     const btn   = document.getElementById('btnConsoleGit');
     const badge = document.getElementById('gitBadge');
@@ -562,6 +577,7 @@ export class ProjectPage {
       if (this._spinnerEl) { this._spinnerEl.remove(); this._spinnerEl = null; }
       this._currentStreamDiv = null;
       this._setRunning(false);
+      if (this._folderSelected) this._refreshGitStatus();
     });
   }
 
