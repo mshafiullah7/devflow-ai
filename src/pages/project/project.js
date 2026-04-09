@@ -403,10 +403,17 @@ export class ProjectPage {
       </div>
     `;
 
-    // Copy to clipboard
+    // Copy to clipboard + paste into console input
     body.querySelectorAll('.qcmd-item__btn--copy').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await navigator.clipboard.writeText(btn.dataset.cmd);
+        const cmd = btn.dataset.cmd;
+        await navigator.clipboard.writeText(cmd);
+        // Also populate the console input field
+        const consoleInput = document.getElementById('consoleInput');
+        if (consoleInput) {
+          consoleInput.value = cmd;
+          consoleInput.dispatchEvent(new Event('input')); // trigger auto-resize
+        }
         btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
         setTimeout(() => {
           btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="10" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2h2" stroke="currentColor" stroke-width="1.4"/></svg>`;
