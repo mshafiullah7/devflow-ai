@@ -534,13 +534,19 @@ export class UserStoryDetail {
       <div class="usl-expand-dialog">
         <div class="usl-expand-header">
           <span class="usl-expand-title">${escHtml(label)}</span>
+          ${isPrompt ? `
+          <div class="usl-expand-tabs">
+            <button class="usl-expand-tab usl-expand-tab--active" data-tab="edit">Edit</button>
+            <button class="usl-expand-tab" data-tab="preview">Preview</button>
+          </div>` : ''}
           <button class="usl-expand-close" aria-label="Close">&times;</button>
         </div>
         ${isPrompt ? `
-        <div class="usl-prompt-expand-wrap">
+        <div class="usl-prompt-expand-wrap" data-pane="edit">
           <div class="usl-prompt-expand-bd" aria-hidden="true"></div>
           <textarea class="usl-expand-textarea usl-prompt-expand-ta" placeholder="${escHtml(textarea.placeholder || '')}">${escHtml(textarea.value)}</textarea>
-        </div>` : `
+        </div>
+        <div class="usl-expand-preview" data-pane="preview" hidden></div>` : `
         <textarea class="usl-expand-textarea" placeholder="${escHtml(textarea.placeholder || '')}">${escHtml(textarea.value)}</textarea>`}
         <div class="usl-expand-footer">
           <button class="usl-expand-btn usl-expand-btn--done">Done</button>
@@ -555,7 +561,11 @@ export class UserStoryDetail {
     expandTA.setSelectionRange(expandTA.value.length, expandTA.value.length);
 
     if (isPrompt) {
-      const bd = overlay.querySelector('.usl-prompt-expand-bd');
+      const bd         = overlay.querySelector('.usl-prompt-expand-bd');
+      const editPane   = overlay.querySelector('[data-pane="edit"]');
+      const previewPane = overlay.querySelector('[data-pane="preview"]');
+      const tabs       = overlay.querySelectorAll('.usl-expand-tab');
+
       const syncBd = () => {
         bd.innerHTML = expandTA.value
           .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -569,6 +579,22 @@ export class UserStoryDetail {
       expandTA.addEventListener('input', syncBd);
       expandTA.addEventListener('scroll', () => { bd.scrollTop = expandTA.scrollTop; });
       syncBd();
+
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('usl-expand-tab--active'));
+          tab.classList.add('usl-expand-tab--active');
+          if (tab.dataset.tab === 'preview') {
+            previewPane.innerHTML = this._renderMarkdown(expandTA.value);
+            editPane.hidden    = true;
+            previewPane.hidden = false;
+          } else {
+            editPane.hidden   = false;
+            previewPane.hidden = true;
+            expandTA.focus();
+          }
+        });
+      });
     }
 
     const done = async () => {
@@ -592,14 +618,116 @@ export class UserStoryDetail {
       overlay.remove();
       document.removeEventListener('keydown', escHandler);
     });
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        textarea.value = expandTA.value;
-        overlay.remove();
-        document.removeEventListener('keydown', escHandler);
-      }
-    });
-
     document.addEventListener('keydown', escHandler);
+  }
+
+  // ----------------------------------------------------------------
+  // Inline markdown renderer (no external deps)
+  // ----------------------------------------------------------------
+  _renderMarkdown(text) {
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const lines    = text.split('\n');
+    const out      = [];
+    let inCode     = false;
+    let codeLines  = [];
+    let inUl       = false;
+    let inOl       = false;
+    // track last pushed block type to suppress redundant <br>
+    let lastBlock  = '';
+
+    const closeList = () => {
+      if (inUl) { out.push('</ul>'); inUl = false; lastBlock = 'list'; }
+      if (inOl) { out.push('</ol>'); inOl = false; lastBlock = 'list'; }
+    };
+
+    for (const line of lines) {
+      // Fenced code blocks
+      if (line.trimStart().startsWith('```')) {
+        closeList();
+        if (inCode) {
+          out.push(`<pre><code>${codeLines.join('\n')}</code></pre>`);
+          codeLines = [];
+          inCode    = false;
+          lastBlock = 'code';
+        } else {
+          inCode = true;
+        }
+        continue;
+      }
+      if (inCode) { codeLines.push(esc(line)); continue; }
+
+      // Headings
+      const hm = line.match(/^(#{1,6})\s+(.*)/);
+      if (hm) {
+        closeList();
+        const lvl = hm[1].length;
+        out.push(`<h${lvl}>${esc(hm[2])}</h${lvl}>`);
+        lastBlock = 'heading';
+        continue;
+      }
+
+      // Horizontal rule
+      if (/^[-*_]{3,}\s*$/.test(line)) {
+        closeList();
+        out.push('<hr>');
+        lastBlock = 'hr';
+        continue;
+      }
+
+      // Unordered list
+      const ulm = line.match(/^[-*+]\s+(.*)/);
+      if (ulm) {
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        if (!inUl) { out.push('<ul>'); inUl = true; }
+        out.push(`<li>${this._inlineMarkdown(esc(ulm[1]))}</li>`);
+        lastBlock = 'list';
+        continue;
+      }
+
+      // Ordered list
+      const olm = line.match(/^\d+\.\s+(.*)/);
+      if (olm) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (!inOl) { out.push('<ol>'); inOl = true; }
+        out.push(`<li>${this._inlineMarkdown(esc(olm[1]))}</li>`);
+        lastBlock = 'list';
+        continue;
+      }
+
+      // Blockquote
+      const bqm = line.match(/^>\s?(.*)/);
+      if (bqm) {
+        closeList();
+        out.push(`<blockquote>${this._inlineMarkdown(esc(bqm[1]))}</blockquote>`);
+        lastBlock = 'blockquote';
+        continue;
+      }
+
+      // Blank line — only emit a spacer after plain paragraphs
+      if (line.trim() === '') {
+        closeList();
+        if (lastBlock === 'p') { out.push('<br>'); lastBlock = 'br'; }
+        continue;
+      }
+
+      closeList();
+      out.push(`<p>${this._inlineMarkdown(esc(line))}</p>`);
+      lastBlock = 'p';
+    }
+
+    closeList();
+    if (inCode) out.push(`<pre><code>${codeLines.join('\n')}</code></pre>`);
+    return out.join('');
+  }
+
+  _inlineMarkdown(s) {
+    return s
+      .replace(/`([^`]+)`/g,          '<code>$1</code>')
+      .replace(/\*\*\*(.+?)\*\*\*/g,  '<strong><em>$1</em></strong>')
+      .replace(/\*\*(.+?)\*\*/g,      '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,          '<em>$1</em>')
+      .replace(/~~(.+?)~~/g,          '<del>$1</del>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
   }
 }

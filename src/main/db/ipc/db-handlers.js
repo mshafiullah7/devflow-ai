@@ -231,6 +231,51 @@ function registerDbHandlers() {
     db.prepare('UPDATE quick_commands SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
+
+  // ----------------------------------------------------------------
+  // document_templates
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:document_templates:list', () => {
+    return db
+      .prepare('SELECT * FROM document_templates WHERE is_active = 1 ORDER BY sort_order ASC')
+      .all();
+  });
+
+  // ----------------------------------------------------------------
+  // project_documents
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:documents:list', (_e, project_id) => {
+    return db
+      .prepare('SELECT * FROM project_documents WHERE project_id = ? AND is_active = 1 ORDER BY created_at ASC')
+      .all(project_id);
+  });
+
+  ipcMain.handle('db:documents:get', (_e, id) => {
+    return db.prepare('SELECT * FROM project_documents WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:documents:create', (_e, { project_id, title, content }) => {
+    const result = db
+      .prepare('INSERT INTO project_documents (project_id, title, content) VALUES (?, ?, ?)')
+      .run(project_id, title, content ?? null);
+    return db.prepare('SELECT * FROM project_documents WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:documents:update', (_e, { id, title, content }) => {
+    db.prepare(
+      `UPDATE project_documents
+          SET title   = coalesce(?, title),
+              content = ?,
+              updated_at = datetime('now')
+        WHERE id = ?`
+    ).run(title ?? null, content ?? null, id);
+    return db.prepare('SELECT * FROM project_documents WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:documents:delete', (_e, id) => {
+    db.prepare('UPDATE project_documents SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
+  });
 }
 
 module.exports = { registerDbHandlers };

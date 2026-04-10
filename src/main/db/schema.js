@@ -69,6 +69,33 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- DOCUMENT TEMPLATES
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS document_templates (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      name          TEXT    NOT NULL UNIQUE,
+      description   TEXT,
+      template_text TEXT    NOT NULL DEFAULT '',
+      sort_order    INTEGER NOT NULL DEFAULT 0,
+      is_active     INTEGER NOT NULL DEFAULT 1,
+      created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
+    -- PROJECT DOCUMENTS
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS project_documents (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      title      TEXT    NOT NULL,
+      content    TEXT,
+      is_active  INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (

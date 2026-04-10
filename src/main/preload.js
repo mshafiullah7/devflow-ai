@@ -38,6 +38,16 @@ contextBridge.exposeInMainWorld('db', {
     delete:    (id)            => invoke('db:prompt_history:delete', id),
     deleteAll: (user_story_id) => invoke('db:prompt_history:deleteAll', user_story_id),
   },
+  documentTemplates: {
+    list: () => invoke('db:document_templates:list'),
+  },
+  documents: {
+    list:   (project_id) => invoke('db:documents:list', project_id),
+    get:    (id)         => invoke('db:documents:get', id),
+    create: (data)       => invoke('db:documents:create', data),
+    update: (data)       => invoke('db:documents:update', data),
+    delete: (id)         => invoke('db:documents:delete', id),
+  },
   quickCommands: {
     list:   ()     => invoke('db:quick_commands:list'),
     create: (data) => invoke('db:quick_commands:create', data),

@@ -4,6 +4,7 @@ import { TerminalController } from './components/terminal/terminal-controller.js
 import { GitController } from './components/git/git-controller.js';
 import { StatsModal } from './components/stats/stats-modal.js';
 import { QuickCommandsModal } from './components/quick-commands/quick-commands-modal.js';
+import { DocumentsModal } from './components/documents/documents-modal.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 
 export class ProjectPage {
@@ -40,6 +41,9 @@ export class ProjectPage {
 
     this._statsModal = new StatsModal({ projectId: this.projectId });
     this._statsModal.mount();
+
+    this._docsModal = new DocumentsModal({ projectId: this.projectId });
+    this._docsModal.mount();
 
     this._qcmdModal = new QuickCommandsModal({
       onRunCommand: (cmd) => this._terminal.applyQuickCommand(cmd),
@@ -87,6 +91,16 @@ export class ProjectPage {
             <option value="chatgpt-api" disabled>ChatGPT API</option>
           </select>
           <div class="project-page__header-actions">
+            <button class="project-page__docs-btn" id="btnDocuments" title="Project documents">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"
+                  stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                <path d="M9 2v3h3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                <path d="M5.5 7.5h5M5.5 10h5M5.5 12.5h3"
+                  stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+              Documents
+            </button>
             <button class="project-page__stats-btn" id="btnStatistics" title="View statistics">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="8" width="3" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/>
@@ -297,6 +311,9 @@ export class ProjectPage {
 
     document.getElementById('btnStatistics')
       .addEventListener('click', () => this._statsModal.show());
+
+    document.getElementById('btnDocuments')
+      .addEventListener('click', () => this._docsModal.show());
 
     document.getElementById('btnConsoleMenu')
       .addEventListener('click', (e) => {
