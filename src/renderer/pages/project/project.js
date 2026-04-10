@@ -86,15 +86,15 @@ export class ProjectPage {
             <option value="gemini-api" disabled>Gemini API</option>
             <option value="chatgpt-api" disabled>ChatGPT API</option>
           </select>
-          <button class="project-page__stats-btn" id="btnStatistics" title="View statistics">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="8" width="3" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/>
-              <rect x="6" y="4" width="3" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/>
-              <rect x="11" y="1" width="3" height="14" rx="1" stroke="currentColor" stroke-width="1.3"/>
-            </svg>
-            Statistics
-          </button>
           <div class="project-page__header-actions">
+            <button class="project-page__stats-btn" id="btnStatistics" title="View statistics">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="8" width="3" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/>
+                <rect x="6" y="4" width="3" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/>
+                <rect x="11" y="1" width="3" height="14" rx="1" stroke="currentColor" stroke-width="1.3"/>
+              </svg>
+              Statistics
+            </button>
             <button class="project-page__console-toggle" id="btnConsoleToggle" aria-label="Toggle console" title="Toggle Console">
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
                 <rect x="2" y="4" width="16" height="12" rx="3" stroke="currentColor" stroke-width="1.6"/>
