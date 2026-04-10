@@ -291,3 +291,75 @@
   color: var(--text-primary);
   border-color: var(--accent);
 }
+
+/* ------------------------------------------------------------------ */
+/* Light theme — darker titles, borders, and buttons                    */
+/* ------------------------------------------------------------------ */
+:root:not([data-theme="dark"]) .project-panel__title {
+  color: #374151;
+}
+
+:root:not([data-theme="dark"]) .project-panel {
+  border-right: 1px solid #b0bec5;
+}
+
+:root:not([data-theme="dark"]) .project-panel__header {
+  border-bottom: 1px solid #b0bec5;
+}
+
+:root:not([data-theme="dark"]) .project-page__header {
+  border-bottom: 1px solid #b0bec5;
+}
+
+:root:not([data-theme="dark"]) .project-panel__resize {
+  background: #b0bec5;
+}
+
+:root:not([data-theme="dark"]) .project-panel__add {
+  border-color: #94a3b8;
+  color: #475569;
+}
+:root:not([data-theme="dark"]) .project-panel__add:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+  border-color: var(--accent);
+}
+
+:root:not([data-theme="dark"]) .project-page__back {
+  border-color: #94a3b8;
+  color: #475569;
+}
+:root:not([data-theme="dark"]) .project-page__back:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+:root:not([data-theme="dark"]) .project-page__console-toggle,
+:root:not([data-theme="dark"]) .project-page__stats-btn {
+  border-color: #94a3b8;
+  color: #374151;
+}
+:root:not([data-theme="dark"]) .project-page__console-toggle:hover,
+:root:not([data-theme="dark"]) .project-page__stats-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+  border-color: var(--accent);
+}
+
+:root:not([data-theme="dark"]) .project-page__model-select {
+  background: rgba(13, 148, 136, 0.06);
+  border: 1px solid rgba(13, 148, 136, 0.5);
+  color: #0f766e;
+  box-shadow: none;
+}
+:root:not([data-theme="dark"]) .project-page__model-select:hover,
+:root:not([data-theme="dark"]) .project-page__model-select:focus {
+  background: rgba(13, 148, 136, 0.12);
+  border-color: #0D9488;
+  color: #0f172a;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+}
+:root:not([data-theme="dark"]) .project-page__model-select option {
+  background: #ffffff;
+  color: #1e293b;
+}
