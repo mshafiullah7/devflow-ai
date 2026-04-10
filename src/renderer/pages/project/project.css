@@ -19,7 +19,7 @@
   gap: 12px;
   padding: 0 1rem;
   height: 52px;
-  background: var(--surface);
+  background: var(--surface-header);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
 }
@@ -166,7 +166,7 @@
   justify-content: space-between;
   padding: 0 12px;
   height: 40px;
-  background: var(--surface);
+  background: var(--surface-header);
   border-bottom: 1px solid var(--border);
 }
 

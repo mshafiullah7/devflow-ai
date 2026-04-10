@@ -9,7 +9,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;         /* clip any overflowing content */
-  background: var(--console-bg);
+  background: var(--bg);
   border-left: 1px solid var(--border);
 }
 
@@ -20,7 +20,7 @@
   justify-content: space-between;
   padding: 0 12px;
   height: 40px;
-  background: var(--surface);
+  background: var(--surface-header);
   border-bottom: 1px solid var(--border);
 }
 
@@ -90,10 +90,10 @@
   top: calc(100% + 4px);
   right: 0;
   min-width: 170px;
-  background: var(--surface, #1a1d27);
-  border: 1px solid var(--border, #2d3148);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  box-shadow: var(--shadow);
   z-index: 300;
   padding: 4px 0;
 }
@@ -113,7 +113,7 @@
   transition: background 0.12s, color 0.12s;
 }
 .console-menu__item:hover {
-  background: var(--surface-hover, #252840);
+  background: var(--surface-hover);
   color: var(--text-primary);
 }
 
@@ -283,10 +283,10 @@
   max-width: 400px;
   max-height: 220px;
   overflow-y: auto;
-  background: var(--surface, #1a1d27);
-  border: 1px solid var(--border, #2d3148);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  box-shadow: var(--shadow);
   z-index: 200;
 }
 .cmd-picker__empty {
@@ -300,11 +300,11 @@
   gap: 2px;
   padding: 7px 12px;
   cursor: pointer;
-  border-bottom: 1px solid var(--border, #2d3148);
+  border-bottom: 1px solid var(--border);
   transition: background 0.12s;
 }
 .cmd-picker__item:last-child { border-bottom: none; }
-.cmd-picker__item:hover { background: var(--surface-hover, #252840); }
+.cmd-picker__item:hover { background: var(--surface-hover); }
 .cmd-picker__cmd {
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
@@ -403,8 +403,8 @@
   background: rgba(0, 0, 0, 0.45);
 }
 .qcmd-inline-prompt__box {
-  background: var(--surface, #1e2130);
-  border: 1px solid var(--border, #2e3148);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 18px;
   min-width: 320px;
@@ -432,8 +432,8 @@
 }
 .qcmd-inline-prompt__input {
   flex: 1;
-  background: var(--input-bg, #13151f);
-  border: 1px solid var(--border, #2e3148);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary, #e2e4f0);
   font-size: 13px;
@@ -457,9 +457,9 @@
 .qcmd-inline-prompt__ok:hover { background: #4f46e5; }
 .qcmd-inline-prompt__cancel {
   background: transparent;
-  border: 1px solid var(--border, #2e3148);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   font-size: 13px;
   cursor: pointer;
   padding: 5px 9px;
