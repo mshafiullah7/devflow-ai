@@ -135,6 +135,11 @@
   text-overflow: ellipsis;
   user-select: all;
 }
+:root:not([data-theme="dark"]) .usl-quick-cmd-preview {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
 
 /* ------------------------------------------------------------------ */
 /* Prompt history                                                        */
@@ -365,6 +370,13 @@
 .usl-hl-h3 { color: #a78bfa; }   /* violet       — ###   */
 .usl-hl-h4 { color: #60a5fa; }   /* sky blue     — ####  */
 .usl-hl-h5 { color: #34d399; }   /* emerald      — ##### */
+
+/* Light theme — darker, more saturated header colours */
+:root:not([data-theme="dark"]) .usl-hl-h1 { color: #b45309; }  /* amber-700    — #     */
+:root:not([data-theme="dark"]) .usl-hl-h2 { color: #c2410c; }  /* orange-700   — ##    */
+:root:not([data-theme="dark"]) .usl-hl-h3 { color: #7c3aed; }  /* violet-700   — ###   */
+:root:not([data-theme="dark"]) .usl-hl-h4 { color: #1d4ed8; }  /* blue-700     — ####  */
+:root:not([data-theme="dark"]) .usl-hl-h5 { color: #047857; }  /* emerald-700  — ##### */
 
 .usl-expand-footer {
   flex-shrink: 0;

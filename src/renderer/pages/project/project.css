@@ -224,11 +224,17 @@
 /* Resize handle between panels                                         */
 /* ------------------------------------------------------------------ */
 .project-panel__resize {
-  width: 5px;
+  width: 1px;
   flex-shrink: 0;
   background: var(--border);
   cursor: col-resize;
   transition: background 0.1s;
+}
+:root:not([data-theme="dark"]) .project-panel__resize {
+  background: #e2e8f0;
+}
+:root:not([data-theme="dark"]) .project-panel {
+  border-right-color: #e2e8f0;
 }
 .project-panel__resize:hover,
 .project-panel__resize:active {
