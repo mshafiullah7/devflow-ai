@@ -1,0 +1,178 @@
+'use strict';
+
+/**
+ * Seeds the status_master table with default values (only if empty).
+ * @param {import('better-sqlite3').Database} db
+ */
+function seedStatuses(db) {
+  const count = db.prepare('SELECT COUNT(*) as c FROM status_master').get().c;
+  if (count > 0) return;
+
+  const insert = db.prepare(
+    'INSERT INTO status_master (name, sort_order) VALUES (?, ?)'
+  );
+  const statuses = [
+    ['Backlog', 1],
+    ['In Progress', 2],
+    ['Implemented', 3],
+    ['In Review', 4],
+    ['Tested', 5],
+    ['Done', 6],
+  ];
+  const insertMany = db.transaction((rows) => {
+    for (const [name, sort_order] of rows) insert.run(name, sort_order);
+  });
+  insertMany(statuses);
+}
+
+/**
+ * Runs incremental migrations for existing databases.
+ * @param {import('better-sqlite3').Database} db
+ */
+function runMigrations(db) {
+  // Add last_opened_at to projects if it doesn't exist yet
+  const cols = db.prepare('PRAGMA table_info(projects)').all().map((c) => c.name);
+  if (!cols.includes('last_opened_at')) {
+    db.exec('ALTER TABLE projects ADD COLUMN last_opened_at TEXT');
+  }
+
+  // Add prompt_history table for existing databases
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t) => t.name);
+  if (!tables.includes('prompt_history')) {
+    db.exec(`
+      CREATE TABLE prompt_history (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
+        prompt        TEXT    NOT NULL,
+        is_active     INTEGER NOT NULL DEFAULT 1,
+        executed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  } else {
+    const phCols = db.prepare('PRAGMA table_info(prompt_history)').all().map(c => c.name);
+    if (!phCols.includes('is_active')) {
+      db.exec('ALTER TABLE prompt_history ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+    }
+  }
+
+  // Add quick_commands table for existing databases
+  const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+  if (!allTables.includes('quick_commands')) {
+    db.exec(`
+      CREATE TABLE quick_commands (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        command     TEXT    NOT NULL,
+        description TEXT,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
+  // Add project_documents table for existing databases
+  const allTables2 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+  if (!allTables2.includes('project_documents')) {
+    db.exec(`
+      CREATE TABLE project_documents (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        title      TEXT    NOT NULL,
+        content    TEXT,
+        is_active  INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
+  // Add document_templates table for existing databases
+  const allTables3 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+  if (!allTables3.includes('document_templates')) {
+    db.exec(`
+      CREATE TABLE document_templates (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT    NOT NULL UNIQUE,
+        description   TEXT,
+        template_text TEXT    NOT NULL DEFAULT '',
+        sort_order    INTEGER NOT NULL DEFAULT 0,
+        is_active     INTEGER NOT NULL DEFAULT 1,
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    seedDocumentTemplates(db);
+  } else {
+    // Ensure default templates exist in case they were never seeded
+    seedDocumentTemplates(db);
+  }
+
+  // Add document_attachments table for existing databases
+  const allTables4 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+  if (!allTables4.includes('document_attachments')) {
+    db.exec(`
+      CREATE TABLE document_attachments (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL REFERENCES project_documents(id) ON DELETE CASCADE,
+        name        TEXT    NOT NULL,
+        type        TEXT    NOT NULL DEFAULT 'svg',
+        content     TEXT    NOT NULL DEFAULT '',
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+}
+
+/**
+ * Seeds the document_templates table with built-in templates.
+ * Inserts only if name doesn't already exist (idempotent).
+ * @param {import('better-sqlite3').Database} db
+ */
+function seedDocumentTemplates(db) {
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO document_templates (name, description, template_text, sort_order)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  const templates = [
+    [
+      'Empty Document',
+      'Start with a blank page',
+      '',
+      1,
+    ],
+    [
+      'Project Overview',
+      'High-level summary of the project',
+      `# Project Overview\n\n## Purpose\n\nDescribe the purpose of this project.\n\n## Goals\n\n- Goal 1\n- Goal 2\n- Goal 3\n\n## Stakeholders\n\n| Name | Role |\n|------|------|\n|      |      |\n\n## Timeline\n\nOutline key milestones here.\n`,
+      2,
+    ],
+    [
+      'Technical Specification',
+      'Architecture, components and design decisions',
+      `# Technical Specification\n\n## Overview\n\nBrief description of what is being built.\n\n## Architecture\n\nDescribe the high-level architecture.\n\n## Components\n\n### Component 1\n\nDescription.\n\n## API Design\n\n\`\`\`\nGET /api/resource\n\`\`\`\n\n## Data Model\n\nDescribe key entities.\n\n## Dependencies\n\n- Dependency 1\n- Dependency 2\n\n## Open Questions\n\n- [ ] Question 1\n`,
+      3,
+    ],
+    [
+      'Meeting Notes',
+      'Record decisions and action items from a meeting',
+      `# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n\n1. Item 1\n2. Item 2\n\n## Discussion\n\n### Item 1\n\nNotes here.\n\n## Decisions\n\n- Decision 1\n\n## Action Items\n\n| Action | Owner | Due |\n|--------|-------|-----|\n|        |       |     |\n`,
+      4,
+    ],
+    [
+      'Release Notes',
+      'What changed in this version',
+      `# Release Notes\n\n## Version X.Y.Z — \n\n### New Features\n\n- Feature 1\n\n### Bug Fixes\n\n- Fix 1\n\n### Breaking Changes\n\n_None_\n\n### Upgrade Notes\n\nDescribe any steps required to upgrade.\n`,
+      5,
+    ],
+  ];
+
+  const insertAll = db.transaction((rows) => {
+    for (const row of rows) insert.run(...row);
+  });
+  insertAll(templates);
+}
+
+module.exports = { seedStatuses, runMigrations };
