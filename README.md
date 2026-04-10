@@ -1,4 +1,4 @@
-# electron-ai-sdlc
+# devflow-ai-sdlc
 
 AI-assisted Software Development Lifecycle (SDLC) management desktop app. Manage projects, features, user stories, prompts, and documents — all stored locally with no cloud dependency.
 
