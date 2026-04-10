@@ -96,6 +96,20 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- DOCUMENT ATTACHMENTS
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS document_attachments (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL REFERENCES project_documents(id) ON DELETE CASCADE,
+      name        TEXT    NOT NULL,
+      type        TEXT    NOT NULL DEFAULT 'svg',  -- 'svg' | 'drawio'
+      content     TEXT    NOT NULL DEFAULT '',
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (

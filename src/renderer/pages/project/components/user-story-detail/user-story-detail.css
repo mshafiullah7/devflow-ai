@@ -507,6 +507,10 @@
 }
 
 
+/* Inline SVG */
+.usl-expand-preview .md-svg { margin: 0.8em 0; line-height: 0; }
+.usl-expand-preview .md-svg svg { max-width: 100%; height: auto; }
+
 .usl-expand-preview strong { font-weight: 700; }
 .usl-expand-preview em     { font-style: italic; }
 .usl-expand-preview del    { text-decoration: line-through; opacity: 0.7; }

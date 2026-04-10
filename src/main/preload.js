@@ -54,6 +54,14 @@ contextBridge.exposeInMainWorld('db', {
     update: (data) => invoke('db:quick_commands:update', data),
     delete: (id)   => invoke('db:quick_commands:delete', id),
   },
+  attachments: {
+    list:       (document_id) => invoke('db:attachments:list', document_id),
+    get:        (id)          => invoke('db:attachments:get', id),
+    getContent: (id)          => invoke('db:attachments:getContent', id),
+    create:     (data)        => invoke('db:attachments:create', data),
+    update:     (data)        => invoke('db:attachments:update', data),
+    delete:     (id)          => invoke('db:attachments:delete', id),
+  },
   dialog: {
     openFolder:   () => invoke('dialog:openFolder'),
     openJsonFile: () => invoke('dialog:openJsonFile'),
@@ -74,4 +82,9 @@ contextBridge.exposeInMainWorld('db', {
       ipcRenderer.removeAllListeners('terminal:done');
     },
   },
+});
+
+contextBridge.exposeInMainWorld('shell', {
+  openDrawio: (data)     => invoke('shell:openDrawio', data),
+  readFile:   (filepath) => invoke('shell:readFile', filepath),
 });

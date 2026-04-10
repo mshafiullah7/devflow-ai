@@ -106,6 +106,23 @@ function runMigrations(db) {
     // Ensure default templates exist in case they were never seeded
     seedDocumentTemplates(db);
   }
+
+  // Add document_attachments table for existing databases
+  const allTables4 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+  if (!allTables4.includes('document_attachments')) {
+    db.exec(`
+      CREATE TABLE document_attachments (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL REFERENCES project_documents(id) ON DELETE CASCADE,
+        name        TEXT    NOT NULL,
+        type        TEXT    NOT NULL DEFAULT 'svg',
+        content     TEXT    NOT NULL DEFAULT '',
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
 }
 
 /**

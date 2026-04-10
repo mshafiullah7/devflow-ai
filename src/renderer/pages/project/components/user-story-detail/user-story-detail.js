@@ -641,7 +641,30 @@ export class UserStoryDetail {
       if (inOl) { out.push('</ol>'); inOl = false; lastBlock = 'list'; }
     };
 
+    let inSvg    = false;
+    let svgLines = [];
+
     for (const line of lines) {
+      // SVG passthrough — collect raw lines between <svg and </svg>
+      if (!inCode && !inSvg && line.trimStart().toLowerCase().startsWith('<svg')) {
+        closeList();
+        inSvg    = true;
+        svgLines = [line];
+        if (line.includes('</svg>')) {
+          out.push(`<div class="md-svg">${svgLines.join('\n')}</div>`);
+          svgLines = []; inSvg = false; lastBlock = 'svg';
+        }
+        continue;
+      }
+      if (inSvg) {
+        svgLines.push(line);
+        if (line.includes('</svg>')) {
+          out.push(`<div class="md-svg">${svgLines.join('\n')}</div>`);
+          svgLines = []; inSvg = false; lastBlock = 'svg';
+        }
+        continue;
+      }
+
       // Fenced code blocks
       if (line.trimStart().startsWith('```')) {
         closeList();

@@ -1,6 +1,10 @@
 'use strict';
 
 const { ipcMain } = require('electron');
+const { shell } = require('electron');
+const os        = require('os');
+const fs        = require('fs');
+const path      = require('path');
 const { getDb } = require('../database');
 
 function registerDbHandlers() {
@@ -275,6 +279,61 @@ function registerDbHandlers() {
   ipcMain.handle('db:documents:delete', (_e, id) => {
     db.prepare('UPDATE project_documents SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
+  });
+
+  // ----------------------------------------------------------------
+  // document_attachments
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:attachments:list', (_e, document_id) => {
+    return db
+      .prepare('SELECT id, document_id, name, type, is_active, created_at FROM document_attachments WHERE document_id = ? AND is_active = 1 ORDER BY created_at ASC')
+      .all(document_id);
+  });
+
+  ipcMain.handle('db:attachments:get', (_e, id) => {
+    return db.prepare('SELECT * FROM document_attachments WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:attachments:create', (_e, { document_id, name, type, content }) => {
+    const result = db
+      .prepare('INSERT INTO document_attachments (document_id, name, type, content) VALUES (?, ?, ?, ?)')
+      .run(document_id, name, type ?? 'svg', content ?? '');
+    return db.prepare('SELECT id, document_id, name, type, created_at FROM document_attachments WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:attachments:update', (_e, { id, name, content }) => {
+    db.prepare(
+      `UPDATE document_attachments SET name = coalesce(?, name), content = ?, updated_at = datetime('now') WHERE id = ?`
+    ).run(name ?? null, content, id);
+    return db.prepare('SELECT id, document_id, name, type, created_at FROM document_attachments WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:attachments:delete', (_e, id) => {
+    db.prepare('UPDATE document_attachments SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
+  });
+
+  ipcMain.handle('db:attachments:getContent', (_e, id) => {
+    const row = db.prepare('SELECT content, name, type FROM document_attachments WHERE id = ?').get(id);
+    return row ?? null;
+  });
+
+  // ----------------------------------------------------------------
+  // draw.io — open in desktop app via temp file
+  // ----------------------------------------------------------------
+  ipcMain.handle('shell:openDrawio', async (_e, { id, name, content }) => {
+    const dir  = path.join(os.tmpdir(), 'electron-ai-sdlc');
+    fs.mkdirSync(dir, { recursive: true });
+    const safe = name.replace(/[^a-z0-9_\-]/gi, '_');
+    const file = path.join(dir, `${safe}_${id}.drawio`);
+    fs.writeFileSync(file, content, 'utf8');
+    await shell.openPath(file);
+    return file;
+  });
+
+  ipcMain.handle('shell:readFile', (_e, filepath) => {
+    try { return fs.readFileSync(filepath, 'utf8'); }
+    catch { return null; }
   });
 }
 
