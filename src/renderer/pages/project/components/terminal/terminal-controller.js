@@ -72,6 +72,7 @@ export class TerminalController {
     this._outputBuffer     = [];
     this._rafPending       = false;
     this._onCommandDone    = null;
+    this._running          = false;
   }
 
   // ----------------------------------------------------------------
@@ -80,6 +81,7 @@ export class TerminalController {
   get cwd() { return this._termCwd; }
   get folderSelected() { return this._folderSelected; }
   set folderSelected(v) { this._folderSelected = v; }
+  get isRunning() { return this._running; }
 
   // ----------------------------------------------------------------
   // Lifecycle
@@ -146,18 +148,46 @@ export class TerminalController {
     return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
   }
 
+  async _buildAiPromptCmd(prompt) {
+    const configs = await window.db.modelConfigs.list();
+    const cfg = configs.find(c => c.is_default) || configs[0];
+    if (!cfg) {
+      this.printOutput('No AI model configured. Add one in Settings.', { isError: true });
+      return null;
+    }
+    if (cfg.type === 'api') {
+      this.printOutput(`API model "${cfg.label || cfg.model_name}" is not supported in the terminal. Use a CLI or Ollama model.`, { isError: true });
+      return null;
+    }
+    const safePrompt = prompt.replace(/'/g, "''"); // escape single quotes for PS heredoc
+    if (cfg.type === 'ollama') {
+      const agentPath = window._agentCliPath || 'agent-cli/index.js';
+      const model = cfg.model_name || 'phi4-mini:latest';
+      const host  = cfg.base_url  || 'http://localhost:11434';
+      return `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | node "${agentPath}" --once --model ${model} --host ${host}`;
+    }
+    // CLI type (claude, gemini, mistral, etc.)
+    const exe   = cfg.executable || 'claude';
+    const flags = cfg.flags ? ` ${cfg.flags}` : '';
+    if (cfg.input_mode === 'heredoc') {
+      return `$p = @'\n${safePrompt}\n'@\n${exe}${flags} $p`;
+    }
+    return `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}`;
+  }
+
   _updatePromptLabel() {
     const label = document.getElementById('consolePromptLabel');
     if (label) label.textContent = `PS ${this._termCwd}>`;
   }
 
   _setRunning(running) {
+    this._running = running;
     const input   = document.getElementById('consoleInput');
     const stopBtn = document.getElementById('btnConsoleStop');
     const label   = document.getElementById('consolePromptLabel');
     if (running) {
-      input.disabled = true;
-      input.placeholder = 'Running…';
+      input.disabled = false; // keep enabled — Enter will forward to stdin
+      input.placeholder = 'Type input for running process… (Enter to send)';
       if (stopBtn) stopBtn.hidden = false;
       if (label)   label.textContent = '…';
     } else {
@@ -240,6 +270,27 @@ export class TerminalController {
     if (/^clear$/i.test(cmd.trim()) || /^cls$/i.test(cmd.trim())) {
       const out2 = document.getElementById('consoleOutput');
       if (out2) out2.innerHTML = '';
+      return;
+    }
+
+    // Handle `/p <prompt>` — run inline prompt with the selected AI model
+    if (/^\/p\s+/i.test(cmd.trim())) {
+      const prompt = cmd.trim().replace(/^\/p\s+/i, '').replace(/^["']|["']$/g, '');
+      if (!prompt) return;
+      const builtCmd = await this._buildAiPromptCmd(prompt);
+      if (!builtCmd) return;
+      // Re-run as a streaming command with the built shell command
+      const streamDiv = document.createElement('div');
+      streamDiv.className = 'project-console__stream-block';
+      out.appendChild(streamDiv);
+      const spinner = document.createElement('span');
+      spinner.className = 'project-console__spinner';
+      streamDiv.appendChild(spinner);
+      this._spinnerEl        = spinner;
+      this._currentStreamDiv = streamDiv;
+      out.scrollTop = out.scrollHeight;
+      this._setRunning(true);
+      await window.db.terminal.execStart({ command: builtCmd, cwd: this._termCwd });
       return;
     }
 

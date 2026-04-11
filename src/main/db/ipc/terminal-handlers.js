@@ -48,7 +48,7 @@ function registerTerminalHandlers() {
     _activeProc = spawn(
       'powershell.exe',
       ['-NoLogo', '-NonInteractive', '-Command', utf8Prefix + command],
-      { stdio: ['ignore', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: { ...process.env, FORCE_COLOR: '1', COLORTERM: 'truecolor' }, windowsHide: true }
+      { stdio: ['pipe', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: { ...process.env, FORCE_COLOR: '1', COLORTERM: 'truecolor' }, windowsHide: true }
     );
 
     const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
@@ -67,6 +67,13 @@ function registerTerminalHandlers() {
 
   ipcMain.handle('terminal:kill-active', () => {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
+  });
+
+  // Forward user input to the running process's stdin (for interactive programs)
+  ipcMain.handle('terminal:stdin', (_e, text) => {
+    if (_activeProc && _activeProc.stdin && !_activeProc.stdin.destroyed) {
+      _activeProc.stdin.write(text);
+    }
   });
 
   // Open an interactive PowerShell window (visible, stays open)

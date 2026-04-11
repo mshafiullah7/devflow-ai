@@ -145,37 +145,58 @@ function chatCompletionStream(messages) {
       (res) => {
         let fullContent = '';
         let leftover = '';
+        let holdback = '';       // buffer that might be start of <tool_call>
+        let suppressed = false;  // once true, never print again this turn
+        const TOOL_TAG = '<tool_call>';
+
+        const flushHoldback = () => {
+          if (holdback && !suppressed) process.stdout.write(holdback);
+          holdback = '';
+        };
+
+        const feedToken = (token) => {
+          if (suppressed) return;
+          holdback += token;
+          // Check if holdback contains the full tag — suppress from here on
+          if (holdback.includes(TOOL_TAG)) {
+            suppressed = true;
+            // Print only the safe part before the tag
+            const safe = holdback.split(TOOL_TAG)[0];
+            if (safe) process.stdout.write(safe);
+            holdback = '';
+            return;
+          }
+          // Check if holdback ends with a prefix of the tag (potential start)
+          let isPrefixSuffix = false;
+          for (let len = Math.min(holdback.length, TOOL_TAG.length - 1); len > 0; len--) {
+            if (TOOL_TAG.startsWith(holdback.slice(-len))) { isPrefixSuffix = true; break; }
+          }
+          if (!isPrefixSuffix) flushHoldback();
+        };
 
         res.on('data', (chunk) => {
           const lines = (leftover + chunk.toString()).split('\n');
-          leftover = lines.pop(); // last line may be incomplete
+          leftover = lines.pop();
           for (const line of lines) {
             if (!line.trim()) continue;
             try {
               const obj = JSON.parse(line);
               const token = obj.message?.content ?? '';
-              if (token) {
-                process.stdout.write(token);
-                fullContent += token;
-              }
-              if (obj.done) {
-                process.stdout.write('\n');
-              }
-            } catch {
-              // ignore malformed lines
-            }
+              if (token) { fullContent += token; feedToken(token); }
+              if (obj.done) { flushHoldback(); if (!suppressed) process.stdout.write('\n'); }
+            } catch { /* ignore malformed lines */ }
           }
         });
 
         res.on('end', () => {
-          // flush any leftover
           if (leftover.trim()) {
             try {
               const obj = JSON.parse(leftover);
               const token = obj.message?.content ?? '';
-              if (token) { process.stdout.write(token); fullContent += token; }
+              if (token) { fullContent += token; feedToken(token); }
             } catch { /* ignore */ }
           }
+          flushHoldback();
           resolve(fullContent);
         });
       }
@@ -339,6 +360,35 @@ function parseToolCalls(text) {
       }
     }
     break; // stop after first format that matched
+  }
+
+  // Format 5 — JSON object inside <tool_call>: {"name": "tool", "input"/{args}: {...}}
+  // phi4-mini and some models emit raw JSON without XML sub-tags
+  if (calls.length === 0) {
+    const jsonPattern = /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/g;
+    for (const match of text.matchAll(jsonPattern)) {
+      try {
+        const obj = JSON.parse(match[1]);
+        const name = obj.name || obj.tool || obj.function;
+        if (name) {
+          // JSON has a name field — use it directly
+          const input = obj.input || obj.arguments || obj.parameters || obj.args
+            || (({ name: _n, tool: _t, function: _f, input: _i, arguments: _a, parameters: _p, args: _aa, ...rest }) => rest)(obj);
+          calls.push({ name: String(name).trim(), input: input || {} });
+        } else {
+          // No name field — infer tool from argument key signature
+          const keys = new Set(Object.keys(obj));
+          let inferredName = null;
+          if (keys.has('command'))                        inferredName = 'run_command';
+          else if (keys.has('query'))                     inferredName = 'search_code';
+          else if (keys.has('path') && keys.has('content')) inferredName = 'write_file';
+          else if (keys.has('path') && keys.has('old'))   inferredName = 'patch_file';
+          else if (keys.has('path') && keys.has('pattern')) inferredName = 'list_files';
+          else if (keys.has('path'))                      inferredName = 'read_file';
+          if (inferredName) calls.push({ name: inferredName, input: obj });
+        }
+      } catch { /* malformed JSON, skip */ }
+    }
   }
 
   return calls;
@@ -554,16 +604,14 @@ async function runOnce() {
 
     messages.push({ role: 'assistant', content: response });
 
-    // Execute tools and collect results
+    // Execute tools and collect results (don't echo raw output — model will summarise)
     let toolResultBlock = '';
     for (const call of toolCalls) {
-      out(`[tool: ${call.name}] ${JSON.stringify(call.input)}\n`);
       const result = call.parseError
         ? `Error: ${call.parseError}`
         : executeTool(call.name, call.input);
       const truncated = typeof result === 'string' && result.length > 8000
         ? result.slice(0, 8000) + '\n... (truncated)' : result;
-      out(`${truncated}\n`);
       toolResultBlock += `<tool_result>\n<name>${call.name}</name>\n<output>${truncated}</output>\n</tool_result>\n`;
     }
 

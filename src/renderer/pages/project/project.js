@@ -371,11 +371,16 @@ export class ProjectPage {
     consoleInput.addEventListener('keydown', async (e) => {
       if (e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
-      const cmd = consoleInput.value.trim();
-      if (!cmd) return;
+      const cmd = consoleInput.value;
+      if (!cmd.trim()) return;
       consoleInput.value = '';
       consoleInput.style.height = 'auto';
-      await this._terminal.runCommand(cmd);
+      // If a process is running, forward input to its stdin (interactive mode)
+      if (this._terminal.isRunning) {
+        window.db.terminal.sendInput(cmd + '\n');
+        return;
+      }
+      await this._terminal.runCommand(cmd.trim());
     });
 
     document.getElementById('btnConsoleStop')

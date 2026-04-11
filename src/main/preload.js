@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld('db', {
     execStart:    (data) => invoke('terminal:exec-start', data),
     killActive:   ()     => invoke('terminal:kill-active'),
     openExternal: (data) => invoke('terminal:open-external', data),
+    sendInput: (text) => invoke('terminal:stdin', text),
     onData: (cb) => ipcRenderer.on('terminal:data', (_e, p) => cb(p)),
     onDone: (cb) => ipcRenderer.on('terminal:done', (_e, p) => cb(p)),
     removeListeners: () => {
