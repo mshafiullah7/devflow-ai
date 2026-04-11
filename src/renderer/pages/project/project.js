@@ -22,8 +22,7 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   async mount() {
     injectCss('pages/project/project.css');
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    document.documentElement.dataset.theme = savedTheme;
+    document.documentElement.dataset.theme = 'dark';
 
     this._project = await window.db.projects.get(this.projectId);
     this.container.innerHTML = this._template();

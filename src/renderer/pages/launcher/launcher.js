@@ -15,7 +15,7 @@ export class LauncherPage {
     this._bindRefs();
     this._bindEvents();
     this._loadRecent();
-    this._applyTheme(localStorage.getItem('theme') || 'dark');
+    document.documentElement.dataset.theme = 'dark';
   }
 
   unmount() {
@@ -33,15 +33,6 @@ export class LauncherPage {
             <img src="../../assets/icon.png" width="32" height="32" alt="DevFlow AI" style="border-radius:8px;display:block;"/>
             <span class="launcher__app-name">DevFlow AI</span>
           </div>
-          <button class="launcher__theme-toggle" id="btnThemeToggle" title="Toggle light / dark theme" aria-label="Toggle theme">
-            <svg class="theme-icon theme-icon--moon" width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <path d="M17.5 11.5A7.5 7.5 0 019 3a7.5 7.5 0 100 14 7.5 7.5 0 008.5-5.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-            </svg>
-            <svg class="theme-icon theme-icon--sun" width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="4" stroke="currentColor" stroke-width="1.6"/>
-              <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
         </header>
 
         <main class="launcher__main">
@@ -132,11 +123,6 @@ export class LauncherPage {
   // Events
   // ----------------------------------------------------------------
   _bindEvents() {
-    document.getElementById('btnThemeToggle').addEventListener('click', () => {
-      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-      this._applyTheme(next);
-    });
-
     document.getElementById('btnNewProject').addEventListener('click', () => this._openModal());
     document.getElementById('btnModalClose').addEventListener('click', () => this._closeModal());
     document.getElementById('btnCancel').addEventListener('click', () => this._closeModal());
@@ -154,16 +140,6 @@ export class LauncherPage {
     this._modalOverlay.addEventListener('click', (e) => {
       if (e.target === this._modalOverlay) this._closeModal();
     });
-  }
-
-  // ----------------------------------------------------------------
-  // Theme
-  // ----------------------------------------------------------------
-  _applyTheme(theme) {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('theme', theme);
-    const btn = document.getElementById('btnThemeToggle');
-    if (btn) btn.dataset.theme = theme;
   }
 
   // ----------------------------------------------------------------

@@ -29,33 +29,6 @@
   -webkit-app-region: no-drag;
 }
 
-.launcher__theme-toggle {
-  margin-left: auto;
-  -webkit-app-region: no-drag;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-hover);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-.launcher__theme-toggle:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-/* Default (light): show moon to switch to dark. Dark: show sun to switch to light. */
-.theme-icon--sun  { display: none; }
-.theme-icon--moon { display: block; }
-
-[data-theme="dark"] .theme-icon--sun  { display: block; }
-[data-theme="dark"] .theme-icon--moon { display: none; }
 
 .launcher__app-name {
   font-size: 15px;

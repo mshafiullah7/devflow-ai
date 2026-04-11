@@ -5,35 +5,7 @@
 [hidden] { display: none !important; }
 
 :root {
-  /* Light theme — cool slate teal */
-  --bg:             #FFFFFF;
-  --surface:        #FFFFFF;
-  --surface-header: #FFFFFF;
-  --surface-hover:  #E8EEF5;
-  --border:         #CBD5E1;
-  --accent:         #0D9488;
-  --accent-hover:   #0F766E;
-  --text-primary:   #1E293B;
-  --text-secondary: #64748B;
-  --text-muted:     #94A3B8;
-  --danger:         #ef4444;
-  --radius:         12px;
-  --radius-sm:      8px;
-  --shadow:         0 4px 20px -2px rgba(0,0,0,0.05);
-  --card-shadow:    0 4px 20px -2px rgba(0,0,0,0.05);
-  --glow-shadow:    0 0 15px rgba(13,148,136,0.25);
-
-  /* Console */
-  --console-bg:      #E8EEF5;
-  --console-text:    #64748B;
-  --console-output:  #1E293B;
-  --console-prompt:  #0D9488;
-  --console-input:   #1E293B;
-  --console-caret:   #0D9488;
-}
-
-[data-theme="dark"] {
-  /* Dark theme — modern dark */
+  /* Dark theme — only theme */
   --bg:             #0f1117;
   --surface:        #1a1d27;
   --surface-header: #13151f;
