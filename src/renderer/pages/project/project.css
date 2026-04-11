@@ -233,10 +233,10 @@
   transition: background 0.1s;
 }
 [data-theme="light"] .project-panel__resize {
-  background: #e2e8f0;
+  background: #d6d3d1;
 }
 [data-theme="light"] .project-panel {
-  border-right-color: #e2e8f0;
+  border-right-color: #d6d3d1;
 }
 .project-panel__resize:hover,
 .project-panel__resize:active {
@@ -328,56 +328,56 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Light theme — darker titles, borders, and buttons                    */
+/* Light theme — warm cream palette overrides                           */
 /* ------------------------------------------------------------------ */
 [data-theme="light"] .project-panel__title {
-  color: #374151;
+  color: #44403c;
 }
 
 [data-theme="light"] .project-panel {
-  border-right: 1px solid #b0bec5;
+  border-right: 1px solid #d6d3d1;
 }
 
 [data-theme="light"] .project-panel__header {
-  border-bottom: 1px solid #b0bec5;
+  border-bottom: 1px solid #d6d3d1;
 }
 
 [data-theme="light"] .project-page__header {
-  border-bottom: 1px solid #b0bec5;
+  border-bottom: 1px solid #d6d3d1;
 }
 
 [data-theme="light"] .project-panel__resize {
-  background: #b0bec5;
+  background: #d6d3d1;
 }
 
 [data-theme="light"] .project-panel__add {
-  border-color: #94a3b8;
-  color: #475569;
+  border-color: #a8a29e;
+  color: #57534e;
 }
 [data-theme="light"] .project-panel__add:hover {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: #f0efee;
+  color: #1c1917;
   border-color: var(--accent);
 }
 
 [data-theme="light"] .project-page__back {
-  border-color: #94a3b8;
-  color: #475569;
+  border-color: #a8a29e;
+  color: #57534e;
 }
 [data-theme="light"] .project-page__back:hover {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: #f0efee;
+  color: #1c1917;
 }
 
 [data-theme="light"] .project-page__console-toggle,
 [data-theme="light"] .project-page__stats-btn {
-  border-color: #94a3b8;
-  color: #374151;
+  border-color: #a8a29e;
+  color: #44403c;
 }
 [data-theme="light"] .project-page__console-toggle:hover,
 [data-theme="light"] .project-page__stats-btn:hover {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: #f0efee;
+  color: #1c1917;
   border-color: var(--accent);
 }
 
@@ -401,10 +401,10 @@
 [data-theme="light"] .project-page__model-select:focus {
   background: rgba(99, 102, 241, 0.12);
   border-color: #6366f1;
-  color: #0f172a;
+  color: #1c1917;
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 [data-theme="light"] .project-page__model-select option {
   background: #ffffff;
-  color: #1e293b;
+  color: #1c1917;
 }
