@@ -5,6 +5,7 @@ import { GitController } from './components/git/git-controller.js';
 import { StatsModal } from './components/stats/stats-modal.js';
 import { QuickCommandsModal } from './components/quick-commands/quick-commands-modal.js';
 import { DocumentsModal } from './components/documents/documents-modal.js';
+import { ModelConfigsModal } from './components/model-configs/model-configs-modal.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 
 export class ProjectPage {
@@ -12,8 +13,8 @@ export class ProjectPage {
     this.container = container;
     this.router    = router;
     this.projectId = params.projectId;
-    this._project  = null;
-    this._aiModel  = 'claude-cli';
+    this._project       = null;
+    this._aiModelConfig = null;  // full model_configs row
   }
 
   // ----------------------------------------------------------------
@@ -50,6 +51,12 @@ export class ProjectPage {
     });
     this._qcmdModal.mount();
 
+    this._modelConfigsModal = new ModelConfigsModal({
+      onConfigsChanged: () => this._reloadModelDropdown(),
+    });
+    this._modelConfigsModal.mount();
+
+    await this._reloadModelDropdown();
     this._bindEvents();
     this._initResizable();
     this._initFeatureToggle();
@@ -83,13 +90,18 @@ export class ProjectPage {
             <h1 class="project-page__title">${name}</h1>
             ${desc ? `<p class="project-page__desc">${desc}</p>` : ''}
           </div>
-          <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
-            <option value="claude-cli">Claude CLI</option>
-            <option value="gemini-cli">Gemini CLI</option>
-            <option value="claude-api" disabled>Claude API</option>
-            <option value="gemini-api" disabled>Gemini API</option>
-            <option value="chatgpt-api" disabled>ChatGPT API</option>
-          </select>
+          <div class="project-page__model-group">
+            <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
+              <option value="">Loading…</option>
+            </select>
+            <button class="project-page__model-cfg-btn" id="btnModelConfigs" title="Configure AI models">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
+                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
           <div class="project-page__header-actions">
             <button class="project-page__docs-btn" id="btnDocuments" title="Project documents">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -307,7 +319,13 @@ export class ProjectPage {
       });
 
     document.getElementById('aiModelSelect')
-      .addEventListener('change', (e) => { this._aiModel = e.target.value; });
+      .addEventListener('change', (e) => {
+        const id = Number(e.target.value);
+        window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
+      });
+
+    document.getElementById('btnModelConfigs')
+      .addEventListener('click', () => this._modelConfigsModal.show());
 
     document.getElementById('btnStatistics')
       .addEventListener('click', () => this._statsModal.show());
@@ -371,7 +389,7 @@ export class ProjectPage {
       importBtn:            document.getElementById('btnImportStories'),
       detailEl:             document.getElementById('storyDetail'),
       projectId:            this.projectId,
-      getModel:             () => this._aiModel,
+      getModel:             () => this._aiModelConfig,
       onSelect:             (_story) => {},
       onRunCommand:         (cmd) => {
         document.getElementById('projectConsole').hidden = false;
@@ -386,6 +404,10 @@ export class ProjectPage {
         }
         window.db.terminal.openExternal({ command: cmd, cwd: this._terminal.cwd });
       },
+      onPrintOutput: (text, opts) => {
+        document.getElementById('projectConsole').hidden = false;
+        this._terminal.printOutput(text, opts);
+      },
     });
     await this._storyList.mount();
 
@@ -396,6 +418,31 @@ export class ProjectPage {
       onSelect:  (feature) => this._storyList.load(feature.id),
     });
     await this._featureList.mount();
+  }
+
+  // ----------------------------------------------------------------
+  // Model dropdown helpers
+  // ----------------------------------------------------------------
+  async _reloadModelDropdown() {
+    const select  = document.getElementById('aiModelSelect');
+    if (!select) return;
+
+    const configs = await window.db.modelConfigs.list();
+    const prevId  = select.value ? Number(select.value) : null;
+
+    select.innerHTML = configs.length === 0
+      ? `<option value="">No models configured</option>`
+      : configs.map(c =>
+          `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
+        ).join('');
+
+    // Restore previous selection, or pick default, or pick first
+    const defaultCfg = configs.find(c => c.is_default) || configs[0];
+    const target     = configs.find(c => c.id === prevId) || defaultCfg;
+    if (target) {
+      select.value        = target.id;
+      this._aiModelConfig = target;
+    }
   }
 
   // ----------------------------------------------------------------

@@ -237,6 +237,72 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // model_configs
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:model_configs:list', () => {
+    return db.prepare('SELECT * FROM model_configs WHERE is_active = 1 ORDER BY sort_order ASC, id ASC').all();
+  });
+
+  ipcMain.handle('db:model_configs:get', (_e, id) => {
+    return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:model_configs:create', (_e, data) => {
+    const { label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order } = data;
+    // Clear existing default if setting new default
+    if (is_default) db.prepare('UPDATE model_configs SET is_default = 0').run();
+    const result = db.prepare(`
+      INSERT INTO model_configs (label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      label, type ?? 'cli',
+      executable ?? null, flags ?? null, input_mode ?? 'pipe',
+      base_url ?? null, api_key ?? null, model_name ?? null, max_tokens ?? null,
+      is_default ? 1 : 0, sort_order ?? 0
+    );
+    return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:model_configs:update', (_e, data) => {
+    const { id, label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order } = data;
+    if (is_default) db.prepare('UPDATE model_configs SET is_default = 0 WHERE id != ?').run(id);
+    db.prepare(`
+      UPDATE model_configs
+         SET label       = coalesce(?, label),
+             type        = coalesce(?, type),
+             executable  = ?,
+             flags       = ?,
+             input_mode  = coalesce(?, input_mode),
+             base_url    = ?,
+             api_key     = ?,
+             model_name  = ?,
+             max_tokens  = ?,
+             is_default  = coalesce(?, is_default),
+             sort_order  = coalesce(?, sort_order),
+             updated_at  = datetime('now')
+       WHERE id = ?
+    `).run(
+      label ?? null, type ?? null,
+      executable ?? null, flags ?? null, input_mode ?? null,
+      base_url ?? null, api_key ?? null, model_name ?? null, max_tokens ?? null,
+      is_default != null ? (is_default ? 1 : 0) : null,
+      sort_order ?? null, id
+    );
+    return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:model_configs:delete', (_e, id) => {
+    db.prepare('UPDATE model_configs SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
+  });
+
+  ipcMain.handle('db:model_configs:setDefault', (_e, id) => {
+    db.prepare('UPDATE model_configs SET is_default = 0').run();
+    db.prepare('UPDATE model_configs SET is_default = 1 WHERE id = ?').run(id);
+    return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(id);
+  });
+
+  // ----------------------------------------------------------------
   // document_templates
   // ----------------------------------------------------------------
   ipcMain.handle('db:document_templates:list', () => {

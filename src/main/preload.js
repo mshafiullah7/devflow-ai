@@ -48,6 +48,14 @@ contextBridge.exposeInMainWorld('db', {
     update: (data)       => invoke('db:documents:update', data),
     delete: (id)         => invoke('db:documents:delete', id),
   },
+  modelConfigs: {
+    list:       ()     => invoke('db:model_configs:list'),
+    get:        (id)   => invoke('db:model_configs:get', id),
+    create:     (data) => invoke('db:model_configs:create', data),
+    update:     (data) => invoke('db:model_configs:update', data),
+    delete:     (id)   => invoke('db:model_configs:delete', id),
+    setDefault: (id)   => invoke('db:model_configs:setDefault', id),
+  },
   quickCommands: {
     list:   ()     => invoke('db:quick_commands:list'),
     create: (data) => invoke('db:quick_commands:create', data),

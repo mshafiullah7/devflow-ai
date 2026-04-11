@@ -110,6 +110,27 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- MODEL CONFIGS
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS model_configs (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      label       TEXT    NOT NULL,
+      type        TEXT    NOT NULL DEFAULT 'cli',   -- 'cli' | 'api'
+      executable  TEXT,                              -- CLI: binary name (claude, gemini, vibe)
+      flags       TEXT,                              -- CLI: extra flags for inline/pipe run
+      input_mode  TEXT    NOT NULL DEFAULT 'pipe',  -- CLI: 'pipe' | 'heredoc'
+      base_url    TEXT,                              -- API: endpoint base URL
+      api_key     TEXT,                              -- API: auth key
+      model_name  TEXT,                              -- API: model identifier sent in request
+      max_tokens  INTEGER,                           -- API: optional token cap
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      is_default  INTEGER NOT NULL DEFAULT 0,
+      sort_order  INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (
@@ -310,4 +331,23 @@ function applySchema(db) {
   `);
 }
 
-module.exports = { applySchema };
+/**
+ * Seeds default model_configs rows on first run (idempotent).
+ * @param {import('better-sqlite3').Database} db
+ */
+function seedModelConfigs(db) {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM model_configs').get().n;
+  if (count > 0) return;
+
+  const insert = db.prepare(`
+    INSERT INTO model_configs (label, type, executable, flags, input_mode, is_default, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  db.transaction(() => {
+    insert.run('Claude CLI',  'cli', 'claude', '--dangerously-skip-permissions --print', 'pipe', 1, 0);
+    insert.run('Gemini CLI',  'cli', 'gemini', '', 'pipe', 0, 1);
+  })();
+}
+
+module.exports = { applySchema, seedModelConfigs };

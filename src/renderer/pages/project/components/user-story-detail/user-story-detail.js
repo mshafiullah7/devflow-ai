@@ -17,12 +17,13 @@ import { escHtml, injectCss, timeAgo } from '../../../../shared/helpers.js';
  *   detail.showEditForm(story);
  */
 export class UserStoryDetail {
-  constructor({ detailEl, projectId, getModel, onRunCommand, onRunCommandExternal, onStoryUpdated, onCancelled }) {
+  constructor({ detailEl, projectId, getModel, onRunCommand, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled }) {
     this._detailEl               = detailEl;
     this._projectId              = projectId;
-    this._getModel               = getModel || (() => 'claude-cli');
+    this._getModel               = getModel || (() => null);
     this._onRunCommand           = onRunCommand || (() => {});
     this._onRunCommandExternal   = onRunCommandExternal || (() => {});
+    this._onPrintOutput          = onPrintOutput || (() => {});
     this._onStoryUpdated         = onStoryUpdated || (() => {});
     this._onCancelled            = onCancelled || (() => {});
     this._featureId              = null;
@@ -389,26 +390,92 @@ export class UserStoryDetail {
   // Run button helpers
   // ----------------------------------------------------------------
 
+  // Returns a resolved config object, falling back to a legacy-compatible default.
+  _resolvedConfig() {
+    const cfg = this._getModel();
+    if (!cfg) return { type: 'cli', executable: 'claude', flags: '--dangerously-skip-permissions --print', input_mode: 'pipe' };
+    // Legacy: if a plain string was passed (shouldn't happen post-refactor but guard anyway)
+    if (typeof cfg === 'string') {
+      const exe = cfg === 'gemini-cli' ? 'gemini' : 'claude';
+      const flags = cfg === 'gemini-cli' ? '' : '--dangerously-skip-permissions --print';
+      return { type: 'cli', executable: exe, flags, input_mode: 'pipe' };
+    }
+    return cfg;
+  }
+
   _buildExternalCmd(prompt) {
-    const model = this._getModel();
-    const cli   = model === 'gemini-cli' ? 'gemini' : 'claude';
-    return `$p = @'\n${prompt}\n'@\n${cli} $p`;
+    const cfg = this._resolvedConfig();
+    if (cfg.type === 'api') {
+      // External window doesn't apply for API — fall back to a no-op placeholder
+      return null;
+    }
+    const exe = cfg.executable || 'claude';
+    // Always use heredoc for external (handles multiline prompts safely)
+    return `$p = @'\n${prompt}\n'@\n${exe} $p`;
   }
 
   _buildQuickCmd(prompt) {
-    const model = this._getModel();
-    if (model === 'gemini-cli') {
-      return `$p = @'\n${prompt}\n'@\nWrite-Output $p | gemini`;
+    const cfg = this._resolvedConfig();
+    if (cfg.type === 'api') return null; // handled via _runApiPrompt
+    const exe   = cfg.executable || 'claude';
+    const flags = cfg.flags ? ` ${cfg.flags}` : '';
+    if (cfg.input_mode === 'heredoc') {
+      return `$p = @'\n${prompt}\n'@\n${exe}${flags} $p`;
     }
-    return `$p = @'\n${prompt}\n'@\nWrite-Output $p | claude --dangerously-skip-permissions --print`;
+    // pipe mode
+    return `$p = @'\n${prompt}\n'@\nWrite-Output $p | ${exe}${flags}`;
   }
 
   _quickCmdPreviewText(snippet) {
-    const model = this._getModel();
-    if (model === 'gemini-cli') {
-      return `$ gemini ("${snippet}")`;
+    const cfg = this._resolvedConfig();
+    if (cfg.type === 'api') {
+      const name = cfg.label || cfg.model_name || 'API';
+      return `→ ${name} ("${snippet}")`;
     }
-    return `$ claude --dangerously-skip-permissions --print ("${snippet}")`;
+    const exe   = cfg.executable || 'claude';
+    const flags = cfg.flags ? ` ${cfg.flags}` : '';
+    return `$ ${exe}${flags} ("${snippet}")`;
+  }
+
+  async _runApiPrompt(prompt, userStoryId) {
+    const cfg = this._resolvedConfig();
+    const baseUrl = (cfg.base_url || '').replace(/\/$/, '');
+    if (!baseUrl) {
+      this._onPrintOutput('API model error: base_url is not configured.', { label: cfg.label || 'API', isError: true });
+      return;
+    }
+
+    const label = cfg.label || cfg.model_name || 'API';
+    this._onPrintOutput('', { label: `▶ ${label}` });
+
+    if (userStoryId) {
+      await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
+      this._loadPromptHistory(userStoryId);
+    }
+
+    const body = {
+      model: cfg.model_name || 'default',
+      messages: [{ role: 'user', content: prompt }],
+      stream: false,
+    };
+    if (cfg.max_tokens) body.max_tokens = cfg.max_tokens;
+
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (cfg.api_key) headers['Authorization'] = `Bearer ${cfg.api_key}`;
+
+      const res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const errText = await res.text();
+        this._onPrintOutput(`HTTP ${res.status}: ${errText}`, { isError: true });
+        return;
+      }
+      const json = await res.json();
+      const text = json.choices?.[0]?.message?.content ?? JSON.stringify(json, null, 2);
+      this._onPrintOutput(text);
+    } catch (err) {
+      this._onPrintOutput(`API call failed: ${err.message}`, { isError: true });
+    }
   }
 
   _bindRunBtns(container, userStoryId = null) {
@@ -417,7 +484,13 @@ export class UserStoryDetail {
         const textarea = container.querySelector('#' + btn.dataset.prompt);
         const prompt   = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
-        this._onRunCommandExternal(this._buildExternalCmd(prompt));
+        const cfg = this._resolvedConfig();
+        if (cfg.type === 'api') {
+          this._runApiPrompt(prompt, userStoryId);
+        } else {
+          const cmd = this._buildExternalCmd(prompt);
+          if (cmd) this._onRunCommandExternal(cmd);
+        }
       });
     });
   }
@@ -445,11 +518,17 @@ export class UserStoryDetail {
       const run = async () => {
         const prompt = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
-        if (userStoryId) {
-          await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
-          this._loadPromptHistory(userStoryId);
+        const cfg = this._resolvedConfig();
+        if (cfg.type === 'api') {
+          await this._runApiPrompt(prompt, userStoryId);
+        } else {
+          if (userStoryId) {
+            await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
+            this._loadPromptHistory(userStoryId);
+          }
+          const cmd = this._buildQuickCmd(prompt);
+          if (cmd) this._onRunCommand(cmd);
         }
-        this._onRunCommand(this._buildQuickCmd(prompt));
         // Clear after run
         if (textarea) {
           textarea.value = '';

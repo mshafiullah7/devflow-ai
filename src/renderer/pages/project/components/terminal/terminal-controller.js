@@ -143,6 +143,32 @@ export class TerminalController {
   }
 
   // ----------------------------------------------------------------
+  // Public — print text directly (API responses, info messages)
+  // ----------------------------------------------------------------
+  printOutput(text, { label = null, isError = false } = {}) {
+    const out = document.getElementById('consoleOutput');
+    if (!out) return;
+    const hint = out.querySelector('.project-console__hint');
+    if (hint) hint.remove();
+
+    if (label) {
+      const hdr = document.createElement('div');
+      hdr.className = 'project-console__line project-console__line--prompt';
+      hdr.innerHTML = `<span class="project-console__ps-prompt">${escHtml(label)}</span>`;
+      out.appendChild(hdr);
+    }
+
+    const block = document.createElement('div');
+    block.className = 'project-console__stream-block';
+    const span = document.createElement('span');
+    if (isError) span.className = 'project-console__stderr';
+    span.textContent = text;
+    block.appendChild(span);
+    out.appendChild(block);
+    out.scrollTop = out.scrollHeight;
+  }
+
+  // ----------------------------------------------------------------
   // Public — run a command
   // ----------------------------------------------------------------
   async runCommand(cmd) {
