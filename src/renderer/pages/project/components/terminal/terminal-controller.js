@@ -159,20 +159,27 @@ export class TerminalController {
       this.printOutput(`API model "${cfg.label || cfg.model_name}" is not supported in the terminal. Use a CLI or Ollama model.`, { isError: true });
       return null;
     }
-    const safePrompt = prompt.replace(/'/g, "''"); // escape single quotes for PS heredoc
     if (cfg.type === 'ollama') {
-      const agentPath = window._agentCliPath || 'agent-cli/index.js';
-      const model = cfg.model_name || 'phi4-mini:latest';
-      const host  = cfg.base_url  || 'http://localhost:11434';
-      return `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | node "${agentPath}" --once --model ${model} --host ${host}`;
+      // Launch agent-cli in REPL mode (no --once) with --dir so the model has
+      // full access to project files. Send the opening prompt via stdin so the
+      // session starts immediately, then stays open for follow-up questions.
+      const agentPath   = window._agentCliPath || 'agent-cli/index.js';
+      const model       = cfg.model_name || 'phi4-mini:latest';
+      const host        = cfg.base_url   || 'http://localhost:11434';
+      const dir         = this._termCwd  || '.';
+      return {
+        cmd:          `node "${agentPath}" --model ${model} --host ${host} --dir "${dir}"`,
+        initialStdin: prompt,
+      };
     }
-    // CLI type (claude, gemini, mistral, etc.)
+    // CLI type (claude, gemini, mistral, etc.) — single-shot via heredoc pipe
+    const safePrompt = prompt.replace(/'/g, "''");
     const exe   = cfg.executable || 'claude';
     const flags = cfg.flags ? ` ${cfg.flags}` : '';
     if (cfg.input_mode === 'heredoc') {
-      return `$p = @'\n${safePrompt}\n'@\n${exe}${flags} $p`;
+      return { cmd: `$p = @'\n${safePrompt}\n'@\n${exe}${flags} $p` };
     }
-    return `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}`;
+    return { cmd: `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}` };
   }
 
   _updatePromptLabel() {
@@ -277,9 +284,9 @@ export class TerminalController {
     if (/^\/p\s+/i.test(cmd.trim())) {
       const prompt = cmd.trim().replace(/^\/p\s+/i, '').replace(/^["']|["']$/g, '');
       if (!prompt) return;
-      const builtCmd = await this._buildAiPromptCmd(prompt);
-      if (!builtCmd) return;
-      // Re-run as a streaming command with the built shell command
+      const result = await this._buildAiPromptCmd(prompt);
+      if (!result) return;
+      const { cmd: builtCmd, initialStdin } = result;
       const streamDiv = document.createElement('div');
       streamDiv.className = 'project-console__stream-block';
       out.appendChild(streamDiv);
@@ -290,7 +297,7 @@ export class TerminalController {
       this._currentStreamDiv = streamDiv;
       out.scrollTop = out.scrollHeight;
       this._setRunning(true);
-      await window.db.terminal.execStart({ command: builtCmd, cwd: this._termCwd });
+      await window.db.terminal.execStart({ command: builtCmd, cwd: this._termCwd, initialStdin });
       return;
     }
 

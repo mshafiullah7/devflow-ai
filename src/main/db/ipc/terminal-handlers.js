@@ -39,7 +39,7 @@ function registerTerminalHandlers() {
   });
 
   // Streaming exec — no timeout, pushes chunks back via webContents.send
-  ipcMain.handle('terminal:exec-start', (event, { command, cwd }) => {
+  ipcMain.handle('terminal:exec-start', (event, { command, cwd, initialStdin }) => {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
 
     const wc = event.sender;
@@ -50,6 +50,11 @@ function registerTerminalHandlers() {
       ['-NoLogo', '-NonInteractive', '-Command', utf8Prefix + command],
       { stdio: ['pipe', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: { ...process.env, FORCE_COLOR: '1', COLORTERM: 'truecolor' }, windowsHide: true }
     );
+
+    // Send the opening prompt automatically so the user doesn't have to retype it
+    if (initialStdin) {
+      _activeProc.stdin.write(initialStdin.endsWith('\n') ? initialStdin : initialStdin + '\n');
+    }
 
     const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
 
