@@ -127,6 +127,7 @@
 }
 .mcfg-item__badge--cli     { background: rgba(79,142,247,0.15); color: #4f8ef7; }
 .mcfg-item__badge--api     { background: rgba(130,100,247,0.15); color: #8264f7; }
+.mcfg-item__badge--ollama  { background: rgba(247,150,70,0.15);  color: #f7964a; }
 .mcfg-item__badge--default { background: rgba(72,199,142,0.15); color: #48c78e; }
 
 .mcfg-item__sub {

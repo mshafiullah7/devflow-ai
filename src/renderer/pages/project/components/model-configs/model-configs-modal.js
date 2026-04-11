@@ -43,7 +43,6 @@ export class ModelConfigsModal {
 
     const close = () => overlay.remove();
     overlay.querySelector('.mcfg-close').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     const escFn = (e) => {
       if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escFn); }
     };
@@ -81,13 +80,15 @@ export class ModelConfigsModal {
             <div class="mcfg-item__info">
               <div class="mcfg-item__top">
                 <span class="mcfg-item__label">${escHtml(c.label)}</span>
-                <span class="mcfg-item__badge mcfg-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : 'API'}</span>
+                <span class="mcfg-item__badge mcfg-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : c.type === 'ollama' ? 'Ollama' : 'API'}</span>
                 ${c.is_default ? `<span class="mcfg-item__badge mcfg-item__badge--default">default</span>` : ''}
               </div>
               <div class="mcfg-item__sub">
                 ${c.type === 'cli'
                   ? escHtml(c.executable || '') + (c.flags ? ` <span class="mcfg-item__flags">${escHtml(c.flags)}</span>` : '')
-                  : escHtml(c.base_url || '') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '')}
+                  : c.type === 'ollama'
+                    ? escHtml(c.model_name || 'phi4-mini:latest') + ` <span class="mcfg-item__flags">${escHtml(c.base_url || 'http://localhost:11434')}</span>`
+                    : escHtml(c.base_url || '') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '')}
               </div>
             </div>
             <div class="mcfg-item__actions">
@@ -145,15 +146,16 @@ export class ModelConfigsModal {
         <div class="mcfg-form__row">
           <label class="mcfg-form__label">Type</label>
           <div class="mcfg-form__type-toggle">
-            <button type="button" class="mcfg-type-btn active" data-type="cli">CLI</button>
+            <button type="button" class="mcfg-type-btn ${(!config || config.type === 'cli') ? 'active' : ''}" data-type="cli">CLI</button>
+            <button type="button" class="mcfg-type-btn ${config?.type === 'ollama' ? 'active' : ''}" data-type="ollama">Ollama</button>
             <button type="button" class="mcfg-type-btn mcfg-type-btn--disabled" data-type="api" disabled title="API support is coming soon">
               API <span class="mcfg-coming-soon">Coming Soon</span>
             </button>
           </div>
-          <input type="hidden" id="mcfgType" value="cli"/>
+          <input type="hidden" id="mcfgType" value="${config?.type || 'cli'}"/>
         </div>
 
-        <!-- CLI fields (always visible) -->
+        <!-- CLI fields -->
         <div class="mcfg-fields-cli" id="mcfgFieldsCli">
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">Executable *</label>
@@ -174,16 +176,30 @@ export class ModelConfigsModal {
           </div>
         </div>
 
+        <!-- Ollama fields -->
+        <div class="mcfg-fields-ollama" id="mcfgFieldsOllama">
+          <div class="mcfg-form__row">
+            <label class="mcfg-form__label">Ollama Host</label>
+            <input class="mcfg-form__input" id="mcfgOllamaHost" type="text" placeholder="http://localhost:11434" value="${escHtml(config?.type === 'ollama' ? (config?.base_url || '') : '')}"/>
+            <span class="mcfg-form__hint">Ollama server URL (default: http://localhost:11434)</span>
+          </div>
+          <div class="mcfg-form__row">
+            <label class="mcfg-form__label">Model *</label>
+            <input class="mcfg-form__input" id="mcfgOllamaModel" type="text" placeholder="phi4-mini:latest" value="${escHtml(config?.type === 'ollama' ? (config?.model_name || '') : '')}"/>
+            <span class="mcfg-form__hint">Model name as shown in <code>ollama list</code></span>
+          </div>
+        </div>
+
         <!-- API fields — kept for future use, hidden while API type is disabled -->
         <div class="mcfg-fields-api mcfg-fields-api--hidden" id="mcfgFieldsApi">
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">Base URL *</label>
-            <input class="mcfg-form__input" id="mcfgBaseUrl" type="text" placeholder="https://api.mistral.ai/v1  or  http://localhost:11434/v1" value="${escHtml(config?.base_url || '')}"/>
+            <input class="mcfg-form__input" id="mcfgBaseUrl" type="text" placeholder="https://api.mistral.ai/v1  or  http://localhost:11434/v1" value="${escHtml(config?.type === 'api' ? (config?.base_url || '') : '')}"/>
             <span class="mcfg-form__hint">OpenAI-compatible /v1/chat/completions endpoint</span>
           </div>
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">Model name *</label>
-            <input class="mcfg-form__input" id="mcfgModelName" type="text" placeholder="mistral-large-latest, phi4-mini, gpt-4o…" value="${escHtml(config?.model_name || '')}"/>
+            <input class="mcfg-form__input" id="mcfgModelName" type="text" placeholder="mistral-large-latest, phi4-mini, gpt-4o…" value="${escHtml(config?.type === 'api' ? (config?.model_name || '') : '')}"/>
           </div>
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">API Key</label>
@@ -211,6 +227,26 @@ export class ModelConfigsModal {
 
     body.querySelector('#btnMcfgCancel').addEventListener('click', () => this._renderList(overlay, body));
 
+    // Sets field section visibility for a given type — used on init and on toggle
+    const applyType = (type) => {
+      body.querySelector('#mcfgFieldsCli').style.display    = type === 'cli'    ? '' : 'none';
+      body.querySelector('#mcfgFieldsOllama').style.display = type === 'ollama' ? '' : 'none';
+    };
+
+    // Set initial visibility based on config type
+    applyType(config?.type || 'cli');
+
+    // Type toggle
+    body.querySelectorAll('.mcfg-type-btn:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', () => {
+        body.querySelectorAll('.mcfg-type-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const type = btn.dataset.type;
+        body.querySelector('#mcfgType').value = type;
+        applyType(type);
+      });
+    });
+
     body.querySelector('#mcfgForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const type      = body.querySelector('#mcfgType').value;
@@ -219,21 +255,23 @@ export class ModelConfigsModal {
 
       if (!label) return;
 
-      const data = {
-        label,
-        type,
-        is_default: isDefault,
-        // CLI
-        executable: body.querySelector('#mcfgExecutable')?.value.trim() || null,
-        flags:      body.querySelector('#mcfgFlags')?.value.trim() || null,
-        input_mode: body.querySelector('#mcfgInputMode')?.value || 'pipe',
-        // API (preserved for future use)
-        base_url:   body.querySelector('#mcfgBaseUrl')?.value.trim() || null,
-        model_name: body.querySelector('#mcfgModelName')?.value.trim() || null,
-        api_key:    body.querySelector('#mcfgApiKey')?.value || null,
-        max_tokens: body.querySelector('#mcfgMaxTokens')?.value
-                      ? Number(body.querySelector('#mcfgMaxTokens').value) : null,
-      };
+      let data = { label, type, is_default: isDefault, input_mode: 'pipe' };
+
+      if (type === 'ollama') {
+        data.base_url   = body.querySelector('#mcfgOllamaHost')?.value.trim() || 'http://localhost:11434';
+        data.model_name = body.querySelector('#mcfgOllamaModel')?.value.trim() || 'phi4-mini:latest';
+      } else if (type === 'cli') {
+        data.executable = body.querySelector('#mcfgExecutable')?.value.trim() || null;
+        data.flags      = body.querySelector('#mcfgFlags')?.value.trim() || null;
+        data.input_mode = body.querySelector('#mcfgInputMode')?.value || 'pipe';
+      } else {
+        // API (future)
+        data.base_url   = body.querySelector('#mcfgBaseUrl')?.value.trim() || null;
+        data.model_name = body.querySelector('#mcfgModelName')?.value.trim() || null;
+        data.api_key    = body.querySelector('#mcfgApiKey')?.value || null;
+        data.max_tokens = body.querySelector('#mcfgMaxTokens')?.value
+                            ? Number(body.querySelector('#mcfgMaxTokens').value) : null;
+      }
 
       if (isEdit) {
         await window.db.modelConfigs.update({ id: config.id, ...data });

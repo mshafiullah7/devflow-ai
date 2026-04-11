@@ -403,26 +403,35 @@ export class UserStoryDetail {
     return cfg;
   }
 
+  _ollamaCmd(agentPath, cfg) {
+    const model = cfg.model_name || 'phi4-mini:latest';
+    const host  = cfg.base_url  || 'http://localhost:11434';
+    return `node "${agentPath}" --once --model ${model} --host ${host}`;
+  }
+
   _buildExternalCmd(prompt) {
     const cfg = this._resolvedConfig();
-    if (cfg.type === 'api') {
-      // External window doesn't apply for API — fall back to a no-op placeholder
-      return null;
+    if (cfg.type === 'api') return null;
+    if (cfg.type === 'ollama') {
+      const agentPath = window._agentCliPath || 'agent-cli/index.js';
+      return `$p = @'\n${prompt}\n'@\nWrite-Output $p | ${this._ollamaCmd(agentPath, cfg)}`;
     }
     const exe = cfg.executable || 'claude';
-    // Always use heredoc for external (handles multiline prompts safely)
     return `$p = @'\n${prompt}\n'@\n${exe} $p`;
   }
 
   _buildQuickCmd(prompt) {
     const cfg = this._resolvedConfig();
-    if (cfg.type === 'api') return null; // handled via _runApiPrompt
+    if (cfg.type === 'api') return null;
+    if (cfg.type === 'ollama') {
+      const agentPath = window._agentCliPath || 'agent-cli/index.js';
+      return `$p = @'\n${prompt}\n'@\nWrite-Output $p | ${this._ollamaCmd(agentPath, cfg)}`;
+    }
     const exe   = cfg.executable || 'claude';
     const flags = cfg.flags ? ` ${cfg.flags}` : '';
     if (cfg.input_mode === 'heredoc') {
       return `$p = @'\n${prompt}\n'@\n${exe}${flags} $p`;
     }
-    // pipe mode
     return `$p = @'\n${prompt}\n'@\nWrite-Output $p | ${exe}${flags}`;
   }
 
@@ -431,6 +440,10 @@ export class UserStoryDetail {
     if (cfg.type === 'api') {
       const name = cfg.label || cfg.model_name || 'API';
       return `→ ${name} ("${snippet}")`;
+    }
+    if (cfg.type === 'ollama') {
+      const model = cfg.model_name || 'phi4-mini:latest';
+      return `→ ollama/${model} ("${snippet}")`;
     }
     const exe   = cfg.executable || 'claude';
     const flags = cfg.flags ? ` ${cfg.flags}` : '';

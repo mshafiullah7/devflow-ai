@@ -56,6 +56,9 @@ export class ProjectPage {
     });
     this._modelConfigsModal.mount();
 
+    // Cache agent-cli path for Ollama model type
+    window._agentCliPath = await window.app.agentCliPath();
+
     await this._reloadModelDropdown();
     this._bindEvents();
     this._initResizable();

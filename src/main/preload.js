@@ -92,6 +92,10 @@ contextBridge.exposeInMainWorld('db', {
   },
 });
 
+contextBridge.exposeInMainWorld('app', {
+  agentCliPath: () => invoke('app:agent-cli-path'),
+});
+
 contextBridge.exposeInMainWorld('shell', {
   openDrawio: (data)     => invoke('shell:openDrawio', data),
   readFile:   (filepath) => invoke('shell:readFile', filepath),

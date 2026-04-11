@@ -344,10 +344,16 @@ function seedModelConfigs(db) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
+  const insertOllama = db.prepare(`
+    INSERT INTO model_configs (label, type, base_url, model_name, input_mode, is_default, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
   db.transaction(() => {
     insert.run('Claude CLI',  'cli', 'claude',  '--dangerously-skip-permissions --print', 'pipe', 1, 0);
     insert.run('Gemini CLI',  'cli', 'gemini',  '', 'pipe', 0, 1);
     insert.run('Mistral CLI', 'cli', 'mistral', '', 'pipe', 0, 2);
+    insertOllama.run('Ollama (phi4-mini)', 'ollama', 'http://localhost:11434', 'phi4-mini:latest', 'pipe', 0, 3);
   })();
 }
 
