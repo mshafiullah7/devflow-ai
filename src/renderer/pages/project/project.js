@@ -6,6 +6,7 @@ import { StatsModal } from './components/stats/stats-modal.js';
 import { QuickCommandsModal } from './components/quick-commands/quick-commands-modal.js';
 import { DocumentsModal } from './components/documents/documents-modal.js';
 import { ModelConfigsModal } from './components/model-configs/model-configs-modal.js';
+import { OllamaConsole } from './components/ollama-console/ollama-console.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 
 export class ProjectPage {
@@ -55,6 +56,9 @@ export class ProjectPage {
     });
     this._modelConfigsModal.mount();
 
+    this._ollamaConsole = new OllamaConsole();
+    this._ollamaConsole.mount();
+
     // Cache agent-cli path for Ollama model type
     window._agentCliPath = await window.app.agentCliPath();
 
@@ -69,6 +73,7 @@ export class ProjectPage {
     removeCss('pages/project/project.css');
     this._terminal?.unmount();
     this._git?.stopPoll();
+    this._ollamaConsole?.unmount();
   }
 
   // ----------------------------------------------------------------
@@ -130,6 +135,15 @@ export class ProjectPage {
                 <path d="M11 12h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
               </svg>
               Console
+            </button>
+            <button class="project-page__ollama-btn" id="btnOllamaConsole" aria-label="Open Ollama console" title="Ollama Chat">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M9 9c0-1.66 1.34-3 3-3s3 1.34 3 3c0 1.3-.84 2.4-2 2.82V15"
+                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <circle cx="12" cy="18" r="1" fill="currentColor"/>
+              </svg>
+              Ollama
             </button>
           </div>
         </header>
@@ -334,6 +348,9 @@ export class ProjectPage {
 
     document.getElementById('btnDocuments')
       .addEventListener('click', () => this._docsModal.show());
+
+    document.getElementById('btnOllamaConsole')
+      .addEventListener('click', () => this._ollamaConsole.show());
 
     document.getElementById('btnConsoleMenu')
       .addEventListener('click', (e) => {

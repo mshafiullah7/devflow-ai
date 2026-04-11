@@ -91,6 +91,19 @@ contextBridge.exposeInMainWorld('db', {
       ipcRenderer.removeAllListeners('terminal:done');
     },
   },
+  ollama: {
+    listModels: (opts)              => invoke('ollama:list-models', opts || {}),
+    chat:       (opts)              => invoke('ollama:chat', opts),
+    cancel:     ()                  => invoke('ollama:cancel'),
+    onToken:    (cb) => ipcRenderer.on('ollama:token', (_e, p) => cb(p)),
+    onDone:     (cb) => ipcRenderer.on('ollama:done',  (_e, p) => cb(p)),
+    onError:    (cb) => ipcRenderer.on('ollama:error', (_e, p) => cb(p)),
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('ollama:token');
+      ipcRenderer.removeAllListeners('ollama:done');
+      ipcRenderer.removeAllListeners('ollama:error');
+    },
+  },
 });
 
 contextBridge.exposeInMainWorld('app', {

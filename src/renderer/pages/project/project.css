@@ -77,7 +77,8 @@
   -webkit-app-region: no-drag;
 }
 
-.project-page__console-toggle {
+.project-page__console-toggle,
+.project-page__ollama-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -91,7 +92,8 @@
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.project-page__console-toggle:hover {
+.project-page__console-toggle:hover,
+.project-page__ollama-btn:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
   border-color: var(--accent);
