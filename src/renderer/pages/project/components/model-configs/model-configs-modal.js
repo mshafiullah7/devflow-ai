@@ -56,9 +56,18 @@ export class ModelConfigsModal {
   }
 
   // ----------------------------------------------------------------
+  // Helpers
+  // ----------------------------------------------------------------
+  _setAddBtn(overlay, visible) {
+    const btn = overlay.querySelector('#btnMcfgAdd');
+    if (btn) btn.style.display = visible ? '' : 'none';
+  }
+
+  // ----------------------------------------------------------------
   // List view
   // ----------------------------------------------------------------
   async _renderList(overlay, body) {
+    this._setAddBtn(overlay, true);
     const configs = await window.db.modelConfigs.list();
     if (configs.length === 0) {
       body.innerHTML = `<div class="mcfg-empty">No model configurations yet. Click <strong>+ Add Model</strong> to create one.</div>`;
@@ -123,27 +132,29 @@ export class ModelConfigsModal {
   // Add / Edit form
   // ----------------------------------------------------------------
   _renderForm(overlay, body, config) {
-    const isEdit  = !!config;
-    const isCli   = !config || config.type === 'cli';
+    const isEdit = !!config;
+    this._setAddBtn(overlay, false);
 
     body.innerHTML = `
       <form class="mcfg-form" id="mcfgForm" autocomplete="off">
         <div class="mcfg-form__row">
           <label class="mcfg-form__label">Label *</label>
-          <input class="mcfg-form__input" id="mcfgLabel" type="text" placeholder="e.g. Claude CLI, Mistral API…" value="${escHtml(config?.label || '')}" required/>
+          <input class="mcfg-form__input" id="mcfgLabel" type="text" placeholder="e.g. Claude CLI, Gemini CLI…" value="${escHtml(config?.label || '')}" required/>
         </div>
 
         <div class="mcfg-form__row">
-          <label class="mcfg-form__label">Type *</label>
+          <label class="mcfg-form__label">Type</label>
           <div class="mcfg-form__type-toggle">
-            <button type="button" class="mcfg-type-btn ${isCli ? 'active' : ''}" data-type="cli">CLI</button>
-            <button type="button" class="mcfg-type-btn ${!isCli ? 'active' : ''}" data-type="api">API</button>
+            <button type="button" class="mcfg-type-btn active" data-type="cli">CLI</button>
+            <button type="button" class="mcfg-type-btn mcfg-type-btn--disabled" data-type="api" disabled title="API support is coming soon">
+              API <span class="mcfg-coming-soon">Coming Soon</span>
+            </button>
           </div>
-          <input type="hidden" id="mcfgType" value="${config?.type || 'cli'}"/>
+          <input type="hidden" id="mcfgType" value="cli"/>
         </div>
 
-        <!-- CLI fields -->
-        <div class="mcfg-fields-cli" id="mcfgFieldsCli" ${!isCli ? 'style="display:none"' : ''}>
+        <!-- CLI fields (always visible) -->
+        <div class="mcfg-fields-cli" id="mcfgFieldsCli">
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">Executable *</label>
             <input class="mcfg-form__input" id="mcfgExecutable" type="text" placeholder="claude" value="${escHtml(config?.executable || '')}"/>
@@ -163,8 +174,8 @@ export class ModelConfigsModal {
           </div>
         </div>
 
-        <!-- API fields -->
-        <div class="mcfg-fields-api" id="mcfgFieldsApi" ${isCli ? 'style="display:none"' : ''}>
+        <!-- API fields — kept for future use, hidden while API type is disabled -->
+        <div class="mcfg-fields-api mcfg-fields-api--hidden" id="mcfgFieldsApi">
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">Base URL *</label>
             <input class="mcfg-form__input" id="mcfgBaseUrl" type="text" placeholder="https://api.mistral.ai/v1  or  http://localhost:11434/v1" value="${escHtml(config?.base_url || '')}"/>
@@ -198,17 +209,6 @@ export class ModelConfigsModal {
       </form>
     `;
 
-    // Type toggle
-    body.querySelectorAll('.mcfg-type-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const t = btn.dataset.type;
-        body.querySelectorAll('.mcfg-type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === t));
-        body.querySelector('#mcfgType').value = t;
-        body.querySelector('#mcfgFieldsCli').style.display = t === 'cli' ? '' : 'none';
-        body.querySelector('#mcfgFieldsApi').style.display = t === 'api' ? '' : 'none';
-      });
-    });
-
     body.querySelector('#btnMcfgCancel').addEventListener('click', () => this._renderList(overlay, body));
 
     body.querySelector('#mcfgForm').addEventListener('submit', async (e) => {
@@ -227,7 +227,7 @@ export class ModelConfigsModal {
         executable: body.querySelector('#mcfgExecutable')?.value.trim() || null,
         flags:      body.querySelector('#mcfgFlags')?.value.trim() || null,
         input_mode: body.querySelector('#mcfgInputMode')?.value || 'pipe',
-        // API
+        // API (preserved for future use)
         base_url:   body.querySelector('#mcfgBaseUrl')?.value.trim() || null,
         model_name: body.querySelector('#mcfgModelName')?.value.trim() || null,
         api_key:    body.querySelector('#mcfgApiKey')?.value || null,

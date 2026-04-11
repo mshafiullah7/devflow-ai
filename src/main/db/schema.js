@@ -345,8 +345,9 @@ function seedModelConfigs(db) {
   `);
 
   db.transaction(() => {
-    insert.run('Claude CLI',  'cli', 'claude', '--dangerously-skip-permissions --print', 'pipe', 1, 0);
-    insert.run('Gemini CLI',  'cli', 'gemini', '', 'pipe', 0, 1);
+    insert.run('Claude CLI',  'cli', 'claude',  '--dangerously-skip-permissions --print', 'pipe', 1, 0);
+    insert.run('Gemini CLI',  'cli', 'gemini',  '', 'pipe', 0, 1);
+    insert.run('Mistral CLI', 'cli', 'mistral', '', 'pipe', 0, 2);
   })();
 }
 
