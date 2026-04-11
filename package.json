@@ -20,6 +20,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "ansi-to-html": "^0.7.2",
     "better-sqlite3": "^12.8.0",
     "electron-squirrel-startup": "^1.0.1",
     "mermaid": "^11.14.0"

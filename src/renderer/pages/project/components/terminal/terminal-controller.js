@@ -1,5 +1,68 @@
 import { escHtml, injectCss } from '../../../../shared/helpers.js';
 
+// Minimal ANSI SGR → HTML converter (supports standard 16 colors + bold/dim/reset)
+const _ANSI_COLORS = [
+  '#282828','#cc241d','#98971a','#d79921','#458588','#b16286','#689d6a','#a89984', // dark (0-7)
+  '#928374','#fb4934','#b8bb26','#fabd2f','#83a598','#d3869b','#8ec07c','#ebdbb2', // bright (8-15)
+];
+function _ansiToHtml(text) {
+  let out = '';
+  let fgColor = null;
+  let bgColor = null;
+  let bold = false;
+  let openSpan = false;
+
+  const flushSpan = () => {
+    if (openSpan) { out += '</span>'; openSpan = false; }
+  };
+  const openTag = () => {
+    if (fgColor || bgColor || bold) {
+      let style = '';
+      if (fgColor) style += `color:${fgColor};`;
+      if (bgColor) style += `background:${bgColor};`;
+      if (bold)    style += 'font-weight:bold;';
+      out += `<span style="${style}">`;
+      openSpan = true;
+    }
+  };
+
+  const parts = text.split(/(\x1b\[[0-9;]*m)/);
+  for (const part of parts) {
+    if (!part) continue;
+    const m = part.match(/^\x1b\[([0-9;]*)m$/);
+    if (!m) {
+      // plain text — escape HTML
+      const escaped = part.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (!openSpan && (fgColor || bgColor || bold)) openTag();
+      out += escaped;
+      continue;
+    }
+    // SGR sequence
+    flushSpan();
+    const codes = m[1] ? m[1].split(';').map(Number) : [0];
+    let i = 0;
+    while (i < codes.length) {
+      const c = codes[i];
+      if (c === 0)  { fgColor = null; bgColor = null; bold = false; }
+      else if (c === 1) bold = true;
+      else if (c === 22) bold = false;
+      else if (c >= 30 && c <= 37) fgColor = _ANSI_COLORS[c - 30];
+      else if (c === 39) fgColor = null;
+      else if (c >= 40 && c <= 47) bgColor = _ANSI_COLORS[c - 40];
+      else if (c === 49) bgColor = null;
+      else if (c >= 90 && c <= 97) fgColor = _ANSI_COLORS[c - 90 + 8];
+      else if (c >= 100 && c <= 107) bgColor = _ANSI_COLORS[c - 100 + 8];
+      else if (c === 38 && codes[i+1] === 5) { fgColor = _ANSI_COLORS[codes[i+2]] ?? null; i += 2; }
+      else if (c === 38 && codes[i+1] === 2) { fgColor = `rgb(${codes[i+2]},${codes[i+3]},${codes[i+4]})`; i += 4; }
+      else if (c === 48 && codes[i+1] === 5) { bgColor = _ANSI_COLORS[codes[i+2]] ?? null; i += 2; }
+      else if (c === 48 && codes[i+1] === 2) { bgColor = `rgb(${codes[i+2]},${codes[i+3]},${codes[i+4]})`; i += 4; }
+      i++;
+    }
+  }
+  flushSpan();
+  return out;
+}
+
 export class TerminalController {
   constructor({ initialCwd }) {
     this._termCwd          = initialCwd;
@@ -48,7 +111,7 @@ export class TerminalController {
       for (const { text, isErr } of items) {
         const span = document.createElement('span');
         if (isErr) span.className = 'project-console__stderr';
-        span.textContent = text;
+        span.innerHTML = _ansiToHtml(text);
         fragment.appendChild(span);
       }
       target.appendChild(fragment);
@@ -59,9 +122,8 @@ export class TerminalController {
     window.db.terminal.onData(({ text, stream }) => {
       if (!this._currentStreamDiv) return;
       if (this._spinnerEl) { this._spinnerEl.remove(); this._spinnerEl = null; }
-      const clean = this._stripAnsi(text);
-      if (!clean) return;
-      this._outputBuffer.push({ text: clean, isErr: stream === 'stderr' });
+      if (!text) return;
+      this._outputBuffer.push({ text, isErr: stream === 'stderr' });
       if (!this._rafPending) {
         this._rafPending = true;
         requestAnimationFrame(flushBuffer);
@@ -173,6 +235,13 @@ export class TerminalController {
   // ----------------------------------------------------------------
   async runCommand(cmd) {
     const out = this._appendPromptLine(cmd);
+
+    // Handle `clear` locally
+    if (/^clear$/i.test(cmd.trim()) || /^cls$/i.test(cmd.trim())) {
+      const out2 = document.getElementById('consoleOutput');
+      if (out2) out2.innerHTML = '';
+      return;
+    }
 
     // Handle `cd` locally
     if (/^cd(\s|$)/i.test(cmd.trim())) {

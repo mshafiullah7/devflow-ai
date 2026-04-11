@@ -48,7 +48,7 @@ function registerTerminalHandlers() {
     _activeProc = spawn(
       'powershell.exe',
       ['-NoLogo', '-NonInteractive', '-Command', utf8Prefix + command],
-      { stdio: ['ignore', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: process.env, windowsHide: true }
+      { stdio: ['ignore', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: { ...process.env, FORCE_COLOR: '1', COLORTERM: 'truecolor' }, windowsHide: true }
     );
 
     const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
