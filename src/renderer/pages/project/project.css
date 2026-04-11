@@ -302,7 +302,7 @@
 }
 .project-page__model-select option {
   background: var(--surface);
-  color: #e5e7eb;
+  color: var(--text-primary);
 }
 
 .project-page__stats-btn {
@@ -381,18 +381,28 @@
   border-color: var(--accent);
 }
 
+[data-theme="light"] .project-page__model-cfg-btn {
+  background: rgba(99, 102, 241, 0.06);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #4f46e5;
+}
+[data-theme="light"] .project-page__model-cfg-btn:hover {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: #6366f1;
+}
+
 [data-theme="light"] .project-page__model-select {
-  background: rgba(13, 148, 136, 0.06);
-  border: 1px solid rgba(13, 148, 136, 0.5);
-  color: #0f766e;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  color: #4f46e5;
   box-shadow: none;
 }
 [data-theme="light"] .project-page__model-select:hover,
 [data-theme="light"] .project-page__model-select:focus {
-  background: rgba(13, 148, 136, 0.12);
-  border-color: #0D9488;
+  background: rgba(99, 102, 241, 0.12);
+  border-color: #6366f1;
   color: #0f172a;
-  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 [data-theme="light"] .project-page__model-select option {
   background: #ffffff;

@@ -13,8 +13,8 @@
   --surface-header: #f1f5f9;
   --surface-hover:  #e8edf5;
   --border:         #e2e8f0;
-  --accent:         #0d9488;
-  --accent-hover:   #0f766e;
+  --accent:         #6366f1;
+  --accent-hover:   #4f52d9;
   --text-primary:   #0f172a;
   --text-secondary: #475569;
   --text-muted:     #94a3b8;
@@ -29,14 +29,14 @@
   --console-bg:      #f1f5f9;
   --console-text:    #475569;
   --console-output:  #1e293b;
-  --console-prompt:  #0f766e;
+  --console-prompt:  #4f52d9;
   --console-input:   #1e293b;
-  --console-caret:   #0f766e;
+  --console-caret:   #4f52d9;
 
   /* Component-specific tokens */
-  --form-focus-shadow:  0 0 0 3px rgba(13,148,136,0.15);
+  --form-focus-shadow:  0 0 0 3px rgba(99,102,241,0.15);
   --modal-overlay-bg:   rgba(15,23,42,0.4);
-  --card-icon-bg:       linear-gradient(135deg, #0d9488 0%, #e8834a 100%);
+  --card-icon-bg:       linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
 }
 
 [data-theme="dark"] {
@@ -75,10 +75,10 @@
   --bg:             #000000;
   --surface:        #0a0a0f;
   --surface-header: #060608;
-  --surface-hover:  #12121a;
-  --border:         #1a1a2e;
-  --accent:         #818cf8;
-  --accent-hover:   #6366f1;
+  --surface-hover:  #0d1a12;
+  --border:         #0f2318;
+  --accent:         #10b981;
+  --accent-hover:   #059669;
   --text-primary:   #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted:     #374151;
@@ -87,20 +87,20 @@
   --radius-sm:      8px;
   --shadow:         0 4px 24px rgba(0,0,0,0.8);
   --card-shadow:    none;
-  --glow-shadow:    0 0 12px rgba(129,140,248,0.2);
+  --glow-shadow:    0 0 12px rgba(16,185,129,0.2);
 
   /* Console */
   --console-bg:      #000000;
-  --console-text:    #6b7280;
-  --console-output:  #cbd5e1;
-  --console-prompt:  #34d399;
-  --console-input:   #e2e8f0;
-  --console-caret:   #34d399;
+  --console-text:    #4b5563;
+  --console-output:  #d1fae5;
+  --console-prompt:  #10b981;
+  --console-input:   #ecfdf5;
+  --console-caret:   #10b981;
 
   /* Component-specific tokens */
-  --form-focus-shadow:  0 0 0 3px rgba(129,140,248,0.2);
+  --form-focus-shadow:  0 0 0 3px rgba(16,185,129,0.2);
   --modal-overlay-bg:   rgba(0,0,0,0.85);
-  --card-icon-bg:       linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  --card-icon-bg:       linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
 
 html, body {

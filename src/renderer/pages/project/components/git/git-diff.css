@@ -251,7 +251,7 @@
 
 /* Active file highlight */
 [data-theme="light"] .git-diff-file--active {
-  background: rgba(13, 148, 136, 0.12);
+  background: rgba(99, 102, 241, 0.12);
 }
 [data-theme="light"] .git-diff-file--active .git-diff-file__name {
   color: var(--text-primary);

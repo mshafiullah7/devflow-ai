@@ -16,7 +16,7 @@
 }
 .usl-card:hover {
   background: var(--surface-hover);
-  border-color: #3a3d52;
+  border-color: var(--accent);
 }
 .usl-card--active {
   border-color: var(--accent);

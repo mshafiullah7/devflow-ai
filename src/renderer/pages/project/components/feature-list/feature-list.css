@@ -15,7 +15,7 @@
 }
 .fl-card:hover {
   background: var(--surface-hover);
-  border-color: #3a3d52;
+  border-color: var(--accent);
 }
 .fl-card--active {
   border-color: var(--accent);

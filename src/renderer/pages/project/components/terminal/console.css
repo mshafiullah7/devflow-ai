@@ -177,6 +177,18 @@
   border-color: #eab308;
   box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
 }
+[data-theme="light"] .project-console__folder {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(180, 130, 0, 0.45);
+  color: #92660a;
+  box-shadow: none;
+}
+[data-theme="light"] .project-console__folder:hover {
+  color: #78520a;
+  background: rgba(234, 179, 8, 0.18);
+  border-color: #b45309;
+  box-shadow: none;
+}
 
 /* Terminal output lines */
 .project-console__line {
@@ -340,7 +352,7 @@
 }
 .project-console__stop:hover {
   background: #f87171;
-  color: #0d0f14;
+  color: var(--bg);
 }
 
 /* Running spinner */
