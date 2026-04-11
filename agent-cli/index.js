@@ -136,6 +136,11 @@ async function chatCompletion(messages) {
 // ─── Tool Execution ──────────────────────────────────────────────────────────
 
 function resolvePath(p) {
+  // Treat Unix-style absolute paths like /src as relative to PROJECT_DIR on Windows.
+  // A real Windows absolute path looks like C:\... or C:/...
+  if (path.isAbsolute(p) && !/^[A-Za-z]:[/\\]/.test(p)) {
+    p = p.replace(/^[/\\]+/, ''); // strip leading slashes → make relative
+  }
   if (path.isAbsolute(p)) return p;
   return path.join(PROJECT_DIR, p);
 }
@@ -247,18 +252,38 @@ const tools = {
 
 function parseToolCalls(text) {
   const calls = [];
-  const regex = /<tool_call>\s*<name>([\w]+)<\/name>\s*<input>([\s\S]*?)<\/input>\s*<\/tool_call>/g;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const name = match[1].trim();
-    const inputRaw = match[2].trim();
-    try {
-      const input = JSON.parse(inputRaw);
-      calls.push({ name, input });
-    } catch (e) {
-      calls.push({ name, input: null, parseError: `Invalid JSON: ${e.message}\nRaw: ${inputRaw}` });
+
+  // Try all known formats in priority order, stop at first that yields matches.
+  const patterns = [
+    // Format 1 — standard XML: <name>tool</name> <input>{...}</input>
+    /<tool_call>\s*<name>([\w]+)<\/name>\s*<input>([\s\S]*?)<\/input>\s*<\/tool_call>/g,
+    // Format 2 — missing </input>: <name>tool</name> <input>{...}   </tool_call>
+    /<tool_call>\s*<name>([\w]+)<\/name>\s*<input>([\s\S]*?)\s*<\/tool_call>/g,
+    // Format 3 — phi4-mini style: {name} tool\n{input}\n{...json...}\n</tool_call>
+    /<tool_call>\s*\{name\}\s*([\w]+)\s*\{input\}\s*([\s\S]*?)\s*<\/tool_call>/g,
+    // Format 4 — plain name/input lines inside tags
+    /<tool_call>\s*name:\s*([\w]+)\s*input:\s*([\s\S]*?)\s*<\/tool_call>/gi,
+  ];
+
+  for (const regex of patterns) {
+    const matches = [...text.matchAll(regex)];
+    if (matches.length === 0) continue;
+
+    for (const match of matches) {
+      const name     = match[1].trim();
+      const inputRaw = match[2].trim();
+      // inputRaw may be JSON directly, or wrapped in extra braces — try to find first {...}
+      const jsonStr = inputRaw.startsWith('{') ? inputRaw : (inputRaw.match(/\{[\s\S]*\}/) || [inputRaw])[0];
+      try {
+        const input = JSON.parse(jsonStr);
+        calls.push({ name, input });
+      } catch (e) {
+        calls.push({ name, input: null, parseError: `Invalid JSON: ${e.message}\nRaw: ${inputRaw}` });
+      }
     }
+    break; // stop after first format that matched
   }
+
   return calls;
 }
 
@@ -428,26 +453,38 @@ async function main() {
 // Used by the Electron app: prompt is piped via stdin, result printed to stdout, then exit.
 
 async function runOnce() {
+  // Read prompt from stdin
   const chunks = [];
+  process.stdin.resume();
   process.stdin.on('data', (d) => chunks.push(d));
   await new Promise((resolve) => process.stdin.on('end', resolve));
   const prompt = Buffer.concat(chunks).toString('utf8').trim();
 
+  const done = (code) => {
+    // Flush stdout/stderr before exiting (process.exit skips buffer flush)
+    process.stdout.write('', () => {
+      process.stderr.write('', () => process.exit(code));
+    });
+  };
+
   if (!prompt) {
     process.stderr.write('agent-cli --once: no prompt received on stdin\n');
-    process.exit(1);
+    return done(1);
   }
 
   const ok = await checkOllama();
   if (!ok) {
     process.stderr.write(`agent-cli: Cannot reach Ollama at ${OLLAMA_HOST}\n`);
-    process.exit(1);
+    return done(1);
   }
 
-  // Suppress color output — plain text goes to the app terminal panel
-  const noColor = (_, text) => text;
-
   const messages = [{ role: 'user', content: prompt }];
+
+  // Strip ANSI color codes from text going to the app terminal panel
+  const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+  const out  = (s) => process.stdout.write(stripAnsi(s));
+  const oute = (s) => process.stderr.write(stripAnsi(s));
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await chatCompletion([
@@ -458,30 +495,36 @@ async function runOnce() {
     const toolCalls = parseToolCalls(response);
 
     if (toolCalls.length === 0) {
+      // No tool calls — this is the final answer
       const clean = response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim();
-      process.stdout.write(clean + '\n');
-      process.exit(0);
+      out((clean || '(no response)') + '\n');
+      return done(0);
     }
 
+    // Print any thinking text before the tool calls
     const thinkingText = response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim();
-    if (thinkingText) process.stdout.write(thinkingText + '\n');
+    if (thinkingText) out(thinkingText + '\n');
 
     messages.push({ role: 'assistant', content: response });
 
+    // Execute tools and collect results
     let toolResultBlock = '';
     for (const call of toolCalls) {
-      process.stdout.write(`[tool: ${call.name}] ${JSON.stringify(call.input)}\n`);
-      const result = call.parseError ? `Error: ${call.parseError}` : executeTool(call.name, call.input);
+      out(`[tool: ${call.name}] ${JSON.stringify(call.input)}\n`);
+      const result = call.parseError
+        ? `Error: ${call.parseError}`
+        : executeTool(call.name, call.input);
       const truncated = typeof result === 'string' && result.length > 8000
         ? result.slice(0, 8000) + '\n... (truncated)' : result;
+      out(`${truncated}\n`);
       toolResultBlock += `<tool_result>\n<name>${call.name}</name>\n<output>${truncated}</output>\n</tool_result>\n`;
     }
 
     messages.push({ role: 'user', content: toolResultBlock });
   }
 
-  process.stderr.write('agent-cli: max tool rounds reached\n');
-  process.exit(1);
+  oute('agent-cli: max tool rounds reached\n');
+  return done(1);
 }
 
 if (args.includes('--once')) {
