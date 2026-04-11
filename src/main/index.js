@@ -30,8 +30,8 @@ app.whenReady().then(() => {
   ipcMain.handle('app:agent-cli-path', () =>
     path.join(app.getAppPath(), 'agent-cli', 'index.js')
   );
-  runBackup();
   createWindow();
+  setImmediate(() => runBackup());
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
