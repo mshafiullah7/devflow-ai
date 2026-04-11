@@ -1,4 +1,5 @@
 import { escHtml, timeAgo, initial, injectCss, removeCss } from '../../shared/helpers.js';
+import { applyStoredTheme, getTheme, setTheme } from '../../shared/theme-manager.js';
 
 export class LauncherPage {
   constructor(container, params, router) {
@@ -15,7 +16,7 @@ export class LauncherPage {
     this._bindRefs();
     this._bindEvents();
     this._loadRecent();
-    document.documentElement.dataset.theme = 'dark';
+    applyStoredTheme();
   }
 
   unmount() {
@@ -32,6 +33,17 @@ export class LauncherPage {
           <div class="launcher__logo">
             <img src="../../assets/icon.png" width="32" height="32" alt="DevFlow AI" style="border-radius:8px;display:block;"/>
             <span class="launcher__app-name">DevFlow AI</span>
+          </div>
+          <div class="launcher__theme-control">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            </svg>
+            <select class="launcher__theme-select" id="themeSelect">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="midnight">Midnight</option>
+            </select>
           </div>
         </header>
 
@@ -117,12 +129,15 @@ export class LauncherPage {
     this._inputDesc        = document.getElementById('inputDesc');
     this._formError        = document.getElementById('formError');
     this._btnCreate        = document.getElementById('btnCreate');
+    this._themeSelect      = document.getElementById('themeSelect');
+    this._themeSelect.value = getTheme();
   }
 
   // ----------------------------------------------------------------
   // Events
   // ----------------------------------------------------------------
   _bindEvents() {
+    document.getElementById('themeSelect').addEventListener('change', (e) => setTheme(e.target.value));
     document.getElementById('btnNewProject').addEventListener('click', () => this._openModal());
     document.getElementById('btnModalClose').addEventListener('click', () => this._closeModal());
     document.getElementById('btnCancel').addEventListener('click', () => this._closeModal());

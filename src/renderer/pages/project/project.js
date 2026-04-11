@@ -8,6 +8,7 @@ import { DocumentsModal } from './components/documents/documents-modal.js';
 import { ModelConfigsModal } from './components/model-configs/model-configs-modal.js';
 import { OllamaConsole } from './components/ollama-console/ollama-console.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
+import { applyStoredTheme } from '../../shared/theme-manager.js';
 
 export class ProjectPage {
   constructor(container, params, router) {
@@ -23,7 +24,7 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   async mount() {
     injectCss('pages/project/project.css');
-    document.documentElement.dataset.theme = 'dark';
+    applyStoredTheme();
 
     this._project = await window.db.projects.get(this.projectId);
     this.container.innerHTML = this._template();

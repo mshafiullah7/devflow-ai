@@ -204,3 +204,40 @@
   color: #ef4444;
   background: rgba(239, 68, 68, 0.1);
 }
+
+/* ------------------------------------------------------------------ */
+/* Theme control (header top-right)                                     */
+/* ------------------------------------------------------------------ */
+.launcher__theme-control {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  -webkit-app-region: no-drag;
+}
+
+.launcher__theme-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 4px 24px 4px 8px;
+  height: 28px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%234b5563' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  transition: border-color 0.15s, color 0.15s;
+}
+.launcher__theme-select:hover { border-color: var(--accent); }
+.launcher__theme-select:focus { border-color: var(--accent); }
+.launcher__theme-select option {
+  background: var(--surface);
+  color: var(--text-primary);
+}

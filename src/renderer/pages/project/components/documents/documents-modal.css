@@ -116,7 +116,7 @@
   border-color: var(--accent);
   background: rgba(99, 102, 241, 0.06);
 }
-:root:not([data-theme="dark"]) .doc-sidebar__add:hover {
+[data-theme="light"] .doc-sidebar__add:hover {
   background: rgba(13, 148, 136, 0.06);
 }
 
@@ -150,7 +150,7 @@
 .doc-sidebar__item--active {
   background: rgba(99, 102, 241, 0.1);
 }
-:root:not([data-theme="dark"]) .doc-sidebar__item--active {
+[data-theme="light"] .doc-sidebar__item--active {
   background: rgba(13, 148, 136, 0.08);
 }
 .doc-sidebar__item--active .doc-sidebar__item-title {
@@ -370,11 +370,11 @@
 .doc-editor__pane--preview h5 { font-size: 1em;    color: #34d399; }
 .doc-editor__pane--preview h6 { font-size: 0.9em;  color: var(--text-muted); }
 
-:root:not([data-theme="dark"]) .doc-editor__pane--preview h1 { color: #b45309; }
-:root:not([data-theme="dark"]) .doc-editor__pane--preview h2 { color: #c2410c; }
-:root:not([data-theme="dark"]) .doc-editor__pane--preview h3 { color: #7c3aed; }
-:root:not([data-theme="dark"]) .doc-editor__pane--preview h4 { color: #1d4ed8; }
-:root:not([data-theme="dark"]) .doc-editor__pane--preview h5 { color: #047857; }
+[data-theme="light"] .doc-editor__pane--preview h1 { color: #b45309; }
+[data-theme="light"] .doc-editor__pane--preview h2 { color: #c2410c; }
+[data-theme="light"] .doc-editor__pane--preview h3 { color: #7c3aed; }
+[data-theme="light"] .doc-editor__pane--preview h4 { color: #1d4ed8; }
+[data-theme="light"] .doc-editor__pane--preview h5 { color: #047857; }
 
 .doc-editor__pane--preview p  { margin: 0.4em 0; }
 .doc-editor__pane--preview br { display: block; margin: 0.5em 0; content: ''; }
@@ -395,7 +395,7 @@
   padding: 1px 5px;
   color: #a78bfa;
 }
-:root:not([data-theme="dark"]) .doc-editor__pane--preview code {
+[data-theme="light"] .doc-editor__pane--preview code {
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #7c3aed;
@@ -409,7 +409,7 @@
   overflow-x: auto;
   margin: 0.6em 0;
 }
-:root:not([data-theme="dark"]) .doc-editor__pane--preview pre {
+[data-theme="light"] .doc-editor__pane--preview pre {
   background: #f8fafc;
   border-color: #e2e8f0;
 }
@@ -531,7 +531,7 @@
   background: rgba(99, 102, 241, 0.07);
   border-color: var(--accent);
 }
-:root:not([data-theme="dark"]) .doc-tpl-item:hover {
+[data-theme="light"] .doc-tpl-item:hover {
   background: rgba(13, 148, 136, 0.06);
 }
 
@@ -569,7 +569,7 @@
   border-color: var(--accent);
   background: rgba(99, 102, 241, 0.06);
 }
-:root:not([data-theme="dark"]) .project-page__docs-btn:hover {
+[data-theme="light"] .project-page__docs-btn:hover {
   background: rgba(13, 148, 136, 0.06);
 }
 
@@ -663,8 +663,8 @@
 .doc-attach-item__type--svg    { background: rgba(99,102,241,0.12); color: #818cf8; }
 .doc-attach-item__type--drawio { background: rgba(249,115,22,0.12);  color: #fb923c; }
 
-:root:not([data-theme="dark"]) .doc-attach-item__type--svg    { background: rgba(99,102,241,0.1); color: #4f46e5; }
-:root:not([data-theme="dark"]) .doc-attach-item__type--drawio { background: rgba(249,115,22,0.1); color: #ea580c; }
+[data-theme="light"] .doc-attach-item__type--svg    { background: rgba(99,102,241,0.1); color: #4f46e5; }
+[data-theme="light"] .doc-attach-item__type--drawio { background: rgba(249,115,22,0.1); color: #ea580c; }
 
 .doc-attach-item__name {
   flex: 1;
@@ -685,7 +685,7 @@
   border-radius: 3px;
   padding: 1px 5px;
 }
-:root:not([data-theme="dark"]) .doc-attach-item__ref { background: #f1f5f9; }
+[data-theme="light"] .doc-attach-item__ref { background: #f1f5f9; }
 
 .doc-attach-item__actions {
   flex-shrink: 0;
@@ -732,7 +732,7 @@
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .doc-attach-add-btn:hover { color: var(--accent); border-color: var(--accent); background: rgba(99,102,241,0.06); }
-:root:not([data-theme="dark"]) .doc-attach-add-btn:hover { background: rgba(13,148,136,0.06); }
+[data-theme="light"] .doc-attach-add-btn:hover { background: rgba(13,148,136,0.06); }
 
 /* ------------------------------------------------------------------ */
 /* Add attachment form overlay                                           */
@@ -967,7 +967,7 @@
   transition: background 0.12s, border-color 0.12s;
 }
 .doc-attach-link:hover { background: rgba(99,102,241,0.15); border-color: var(--accent); }
-:root:not([data-theme="dark"]) .doc-attach-link { background: rgba(13,148,136,0.06); border-color: rgba(13,148,136,0.25); color: var(--accent); }
+[data-theme="light"] .doc-attach-link { background: rgba(13,148,136,0.06); border-color: rgba(13,148,136,0.25); color: var(--accent); }
 
 /* ------------------------------------------------------------------ */
 /* Toast                                                                 */

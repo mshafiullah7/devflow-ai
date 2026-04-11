@@ -4,8 +4,42 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
 
-:root {
-  /* Dark theme — only theme */
+/* ------------------------------------------------------------------ */
+/* Themes                                                               */
+/* ------------------------------------------------------------------ */
+[data-theme="light"] {
+  --bg:             #f8fafc;
+  --surface:        #ffffff;
+  --surface-header: #f1f5f9;
+  --surface-hover:  #e8edf5;
+  --border:         #e2e8f0;
+  --accent:         #0d9488;
+  --accent-hover:   #0f766e;
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
+  --danger:         #ef4444;
+  --radius:         12px;
+  --radius-sm:      8px;
+  --shadow:         0 4px 24px rgba(0,0,0,0.08);
+  --card-shadow:    0 1px 4px rgba(0,0,0,0.06);
+  --glow-shadow:    none;
+
+  /* Console */
+  --console-bg:      #f1f5f9;
+  --console-text:    #475569;
+  --console-output:  #1e293b;
+  --console-prompt:  #0f766e;
+  --console-input:   #1e293b;
+  --console-caret:   #0f766e;
+
+  /* Component-specific tokens */
+  --form-focus-shadow:  0 0 0 3px rgba(13,148,136,0.15);
+  --modal-overlay-bg:   rgba(15,23,42,0.4);
+  --card-icon-bg:       linear-gradient(135deg, #0d9488 0%, #e8834a 100%);
+}
+
+[data-theme="dark"] {
   --bg:             #0f1117;
   --surface:        #1a1d27;
   --surface-header: #13151f;
@@ -30,6 +64,43 @@
   --console-prompt:  #6ee7b7;
   --console-input:   #e2e8f0;
   --console-caret:   #6ee7b7;
+
+  /* Component-specific tokens */
+  --form-focus-shadow:  0 0 0 3px rgba(99,102,241,0.15);
+  --modal-overlay-bg:   rgba(0,0,0,0.6);
+  --card-icon-bg:       linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+}
+
+[data-theme="midnight"] {
+  --bg:             #000000;
+  --surface:        #0a0a0f;
+  --surface-header: #060608;
+  --surface-hover:  #12121a;
+  --border:         #1a1a2e;
+  --accent:         #818cf8;
+  --accent-hover:   #6366f1;
+  --text-primary:   #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted:     #374151;
+  --danger:         #f87171;
+  --radius:         12px;
+  --radius-sm:      8px;
+  --shadow:         0 4px 24px rgba(0,0,0,0.8);
+  --card-shadow:    none;
+  --glow-shadow:    0 0 12px rgba(129,140,248,0.2);
+
+  /* Console */
+  --console-bg:      #000000;
+  --console-text:    #6b7280;
+  --console-output:  #cbd5e1;
+  --console-prompt:  #34d399;
+  --console-input:   #e2e8f0;
+  --console-caret:   #34d399;
+
+  /* Component-specific tokens */
+  --form-focus-shadow:  0 0 0 3px rgba(129,140,248,0.2);
+  --modal-overlay-bg:   rgba(0,0,0,0.85);
+  --card-icon-bg:       linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
 }
 
 html, body {
@@ -149,11 +220,7 @@ html, body {
 .form-input:focus,
 .form-textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(13,148,136,0.15);
-}
-[data-theme="dark"] .form-input:focus,
-[data-theme="dark"] .form-textarea:focus {
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  box-shadow: var(--form-focus-shadow);
 }
 
 .form-error {
@@ -170,15 +237,12 @@ html, body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(62,39,35,0.35);
+  background: var(--modal-overlay-bg);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
-}
-[data-theme="dark"] .modal-overlay {
-  background: rgba(0,0,0,0.6);
 }
 
 .modal {
@@ -256,7 +320,7 @@ html, body {
   width: 38px;
   height: 38px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent) 0%, #e8834a 100%);
+  background: var(--card-icon-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -264,9 +328,6 @@ html, body {
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
-}
-[data-theme="dark"] .project-card__icon {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
 }
 
 .project-card__info { flex: 1; min-width: 0; }

@@ -215,44 +215,44 @@
 /* ------------------------------------------------------------------ */
 /* Light theme overrides — strong, visible diff colours                 */
 /* ------------------------------------------------------------------ */
-:root:not([data-theme="dark"]) .gd-ln {
+[data-theme="light"] .gd-ln {
   background: #f1f5f9;
   color: #94a3b8;
 }
 
 /* Hunk header */
-:root:not([data-theme="dark"]) .gd-row--hunk .gd-ln {
+[data-theme="light"] .gd-row--hunk .gd-ln {
   background: #dbeafe;
 }
-:root:not([data-theme="dark"]) .gd-row--hunk .gd-code {
+[data-theme="light"] .gd-row--hunk .gd-code {
   background: #dbeafe;
   color: #1d4ed8;
 }
 
 /* Added lines */
-:root:not([data-theme="dark"]) .gd-ln--add {
+[data-theme="light"] .gd-ln--add {
   background: #bbf7d0;
   color: #15803d;
 }
-:root:not([data-theme="dark"]) .gd-row--add .gd-code {
+[data-theme="light"] .gd-row--add .gd-code {
   background: #dcfce7;
   color: #14532d;
 }
 
 /* Deleted lines */
-:root:not([data-theme="dark"]) .gd-ln--del {
+[data-theme="light"] .gd-ln--del {
   background: #fecaca;
   color: #b91c1c;
 }
-:root:not([data-theme="dark"]) .gd-row--del .gd-code {
+[data-theme="light"] .gd-row--del .gd-code {
   background: #fee2e2;
   color: #7f1d1d;
 }
 
 /* Active file highlight */
-:root:not([data-theme="dark"]) .git-diff-file--active {
+[data-theme="light"] .git-diff-file--active {
   background: rgba(13, 148, 136, 0.12);
 }
-:root:not([data-theme="dark"]) .git-diff-file--active .git-diff-file__name {
+[data-theme="light"] .git-diff-file--active .git-diff-file__name {
   color: var(--text-primary);
 }
