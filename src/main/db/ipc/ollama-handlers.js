@@ -3,13 +3,16 @@
 /**
  * Ollama Console IPC handlers.
  *
- * Uses Ollama's REST API (POST /api/chat with stream:true) rather than the
- * CLI REPL so we get clean, reliable streaming without TTY detection issues.
+ * Uses the same agent-cli mechanism as "Run in console" — spawns:
+ *   node <agentCliPath> --once --model <model> --host <host> [--dir <dir>]
+ * and writes the user's prompt to its stdin.  This gives the model access
+ * to all filesystem tools (read_file, write_file, list_files, etc.) when
+ * a working directory is provided.
  *
  * IPC channels (invoke):
- *   ollama:list-models  { host }           → string[]
- *   ollama:chat         { host, model, messages } → streams tokens back
- *   ollama:cancel       ()                 → kills active stream
+ *   ollama:list-models  { host }                           → string[]
+ *   ollama:chat         { agentCliPath, model, host, dir, prompt } → streams
+ *   ollama:cancel       ()                                 → kills active proc
  *
  * IPC channels (send → renderer):
  *   ollama:token   { token: string }
@@ -18,21 +21,25 @@
  */
 
 const { ipcMain } = require('electron');
+const { spawn }   = require('child_process');
 const http        = require('node:http');
 const https       = require('node:https');
+const os          = require('node:os');
 
-let _activeReq = null; // current in-flight http.ClientRequest
+let _activeProc = null;
 
 // ----------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------
-function pickModule(url) {
-  return url.startsWith('https') ? https : http;
-}
-
 function safeBase(host) {
   const h = (host || 'http://localhost:11434').replace(/\/$/, '');
   return h.startsWith('http') ? h : `http://${h}`;
+}
+
+function killActive() {
+  if (!_activeProc) return;
+  try { _activeProc.kill('SIGTERM'); } catch (_) {}
+  _activeProc = null;
 }
 
 // ----------------------------------------------------------------
@@ -40,13 +47,14 @@ function safeBase(host) {
 // ----------------------------------------------------------------
 function registerOllamaHandlers() {
 
-  // ── List available local models ─────────────────────────────────
+  // ── List available local models via Ollama REST API ─────────────
   ipcMain.handle('ollama:list-models', (_e, { host } = {}) => {
     return new Promise((resolve) => {
       const base = safeBase(host);
       const url  = `${base}/api/tags`;
+      const mod  = url.startsWith('https') ? https : http;
 
-      const req = pickModule(url).get(url, { timeout: 6000 }, (res) => {
+      const req = mod.get(url, { timeout: 6000 }, (res) => {
         let raw = '';
         res.on('data', d => { raw += d; });
         res.on('end', () => {
@@ -64,109 +72,74 @@ function registerOllamaHandlers() {
     });
   });
 
-  // ── Stream a chat turn ──────────────────────────────────────────
-  // messages = [{role:'user'|'assistant', content: string}, …]
-  ipcMain.handle('ollama:chat', (event, { host, model, messages }) => {
+  // ── Run one prompt turn via agent-cli --once ────────────────────
+  // Same mechanism as "Run in console" but streams tokens back to the
+  // Ollama Console UI rather than the terminal panel.
+  ipcMain.handle('ollama:chat', (event, { agentCliPath, model, host, dir, prompt }) => {
     const wc   = event.sender;
     const send = (ch, p) => { if (!wc.isDestroyed()) wc.send(ch, p); };
 
-    // Cancel any previous stream
-    if (_activeReq) {
-      try { _activeReq.destroy(); } catch (_) {}
-      _activeReq = null;
-    }
+    // Kill any previous run
+    killActive();
 
-    const base    = safeBase(host);
-    const url     = `${base}/api/chat`;
-    const body    = JSON.stringify({ model, messages, stream: true });
-    const mod     = pickModule(url);
-    const urlObj  = new URL(url);
+    const args = [
+      agentCliPath,
+      '--once',
+      '--model', model || 'phi4-mini:latest',
+      '--host',  safeBase(host),
+    ];
+    if (dir) args.push('--dir', dir);
 
-    const options = {
-      hostname: urlObj.hostname,
-      port:     urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
-      path:     urlObj.pathname,
-      method:   'POST',
-      headers:  {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(body),
+    _activeProc = spawn('node', args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd:   dir || os.homedir(),
+      windowsHide: true,
+      env: {
+        ...process.env,
+        FORCE_COLOR:  '0',   // no ANSI colours — agent-cli strips them in --once mode
+        NO_COLOR:     '1',
       },
-    };
+    });
+
+    // Write prompt to stdin and close the stream so agent-cli gets EOF
+    _activeProc.stdin.write(prompt + '\n');
+    _activeProc.stdin.end();
 
     return new Promise((resolve) => {
       let doneFired = false;
       const finish = (success, error) => {
         if (doneFired) return;
-        doneFired = true;
-        _activeReq = null;
+        doneFired    = true;
+        _activeProc  = null;
         send('ollama:done', { success, error });
         resolve({ success });
       };
 
-      const req = mod.request(options, (res) => {
-        if (res.statusCode !== 200) {
-          let errBody = '';
-          res.on('data', d => { errBody += d; });
-          res.on('end', () => {
-            send('ollama:error', { message: `HTTP ${res.statusCode}: ${errBody.slice(0, 200)}` });
-            finish(false, `HTTP ${res.statusCode}`);
-          });
-          return;
-        }
-
-        let buf = '';
-        res.on('data', (chunk) => {
-          buf += chunk.toString('utf8');
-          // Ollama sends newline-delimited JSON — process complete lines
-          const lines = buf.split('\n');
-          buf = lines.pop(); // keep the possibly-incomplete trailing line
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const json = JSON.parse(line);
-              const token = json.message?.content;
-              if (token) send('ollama:token', { token });
-              if (json.done) finish(true);
-            } catch (_) {}
-          }
-        });
-
-        res.on('end', () => {
-          // Flush any remaining buffer
-          if (buf.trim()) {
-            try {
-              const json  = JSON.parse(buf);
-              const token = json.message?.content;
-              if (token) send('ollama:token', { token });
-            } catch (_) {}
-          }
-          finish(true);
-        });
-
-        res.on('error', (err) => {
-          send('ollama:error', { message: err.message });
-          finish(false, err.message);
-        });
+      // Stream stdout tokens directly to the renderer
+      _activeProc.stdout.on('data', (chunk) => {
+        const text = chunk.toString('utf8');
+        if (text) send('ollama:token', { token: text });
       });
 
-      req.on('error', (err) => {
-        send('ollama:error', { message: err.message });
+      // Treat stderr as error info (agent-cli rarely writes here)
+      _activeProc.stderr.on('data', (chunk) => {
+        const text = chunk.toString('utf8').trim();
+        if (text) send('ollama:error', { message: text });
+      });
+
+      _activeProc.on('close', (code) => {
+        finish(code === 0, code !== 0 ? `Process exited with code ${code}` : undefined);
+      });
+
+      _activeProc.on('error', (err) => {
+        send('ollama:error', { message: `Failed to start agent: ${err.message}` });
         finish(false, err.message);
       });
-
-      _activeReq = req;
-      req.write(body);
-      req.end();
     });
   });
 
-  // ── Cancel active stream ────────────────────────────────────────
-  ipcMain.handle('ollama:cancel', () => {
-    if (_activeReq) {
-      try { _activeReq.destroy(); } catch (_) {}
-      _activeReq = null;
-    }
-  });
+  // ── Cancel active run ───────────────────────────────────────────
+  ipcMain.handle('ollama:cancel', () => killActive());
 }
 
 module.exports = { registerOllamaHandlers };

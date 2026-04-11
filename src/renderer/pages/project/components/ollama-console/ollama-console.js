@@ -33,14 +33,15 @@ const S = {
 // ----------------------------------------------------------------
 export class OllamaConsole {
   constructor() {
-    this._state       = S.IDLE;
-    this._history     = [];        // [{role, content}, …]
-    this._host        = 'http://localhost:11434';
-    this._model       = '';
-    this._streamEl    = null;      // <div> receiving current token stream
-    this._streamText  = '';        // accumulated tokens for current turn
-    this._rafId       = null;
-    this._tokenQueue  = [];
+    this._state        = S.IDLE;
+    this._host         = 'http://localhost:11434';
+    this._model        = '';
+    this._cwd          = '';        // working directory for --dir context
+    this._agentCliPath = '';        // path to agent-cli/index.js
+    this._streamEl     = null;      // <div> receiving current token stream
+    this._streamText   = '';        // accumulated tokens for current turn
+    this._rafId        = null;
+    this._tokenQueue   = [];
   }
 
   // ----------------------------------------------------------------
@@ -71,7 +72,51 @@ export class OllamaConsole {
 
   hide() {
     const overlay = document.getElementById('ollamaOverlay');
-    if (overlay) overlay.hidden = true;
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.classList.remove('ola-overlay--expanded'); // reset to compact mode
+  }
+
+  /**
+   * Called from the double-run button when an Ollama model is selected.
+   * Opens the panel, selects the correct model, starts a session, and
+   * auto-sends the prompt with the current working directory as context.
+   *
+   * @param {string}  prompt  - Text from the Prompt textarea
+   * @param {object}  cfg     - Resolved model config ({ model_name, base_url, … })
+   * @param {string}  cwd     - Current working directory from the terminal
+   */
+  async openWithPrompt({ prompt, cfg, cwd }) {
+    // 1. Show panel in expanded (centered, 80%) mode
+    const overlay = document.getElementById('ollamaOverlay');
+    if (!overlay) return;
+    overlay.classList.add('ola-overlay--expanded');
+    overlay.hidden = false;
+    if (this._state === S.IDLE) await this._loadModels();
+
+    // 2. Store working directory — passed as --dir to agent-cli so it has
+    //    full filesystem tool access (read_file, write_file, list_files, etc.)
+    this._cwd = cwd || '';
+
+    // 3. Switch to the correct Ollama model
+    const model = cfg?.model_name || this._model;
+    if (model) {
+      const sel = document.getElementById('olaModelSelect');
+      const opt = sel ? [...sel.options].find(o => o.value === model) : null;
+      if (opt) { sel.value = model; this._model = model; }
+    }
+
+    // 4. Start a fresh session (clears chat DOM, sets state=READY)
+    this._startSession();
+
+    // 5. Fill input and auto-send after state settles
+    await new Promise(r => setTimeout(r, 120));
+    const input = document.getElementById('ollamaInput');
+    if (input) {
+      input.value = prompt;
+      input.dispatchEvent(new Event('input')); // trigger auto-resize
+    }
+    this._send();
   }
 
   // ----------------------------------------------------------------
@@ -213,9 +258,10 @@ export class OllamaConsole {
       if (!success && error) {
         this._appendError(`Stream error: ${error}`);
       }
-      // Save assistant turn to history
-      if (this._streamText.trim()) {
-        this._history.push({ role: 'assistant', content: this._streamText.trim() });
+      // Remove blinking cursor from last bubble
+      if (this._streamEl) {
+        const cursor = this._streamEl.parentNode?.querySelector('.ola-cursor');
+        if (cursor) cursor.remove();
       }
       this._streamEl   = null;
       this._streamText = '';
@@ -248,6 +294,9 @@ export class OllamaConsole {
   // ----------------------------------------------------------------
   async _loadModels() {
     this._setState(S.LOADING);
+    // Capture agent-cli path (set on window by project.js at mount time)
+    this._agentCliPath = window._agentCliPath || 'agent-cli/index.js';
+
     const configs = await window.db.modelConfigs.list();
     // Prefer an Ollama-type config for host resolution
     const ollamaCfg = configs.find(c => c.type === 'ollama');
@@ -274,7 +323,6 @@ export class OllamaConsole {
 
   _startSession() {
     if (!this._model) return;
-    this._history = [];
     this._clearChatDOM();
     this._appendStatus(`Session started · ${this._model}`, 'info');
     this._setState(S.READY);
@@ -282,16 +330,15 @@ export class OllamaConsole {
 
   _endSession() {
     window.db.ollama.cancel();
-    this._appendStatus('Session ended.', 'info');
-    this._history = [];
     this._streamEl   = null;
     this._streamText = '';
     this._tokenQueue = [];
+    this._cwd        = '';
+    this._appendStatus('Session ended.', 'info');
     this._setState(S.IDLE);
   }
 
   _clearChat() {
-    this._history = [];
     this._clearChatDOM();
     this._appendStatus(`Session cleared · ${this._model}`, 'info');
   }
@@ -312,9 +359,6 @@ export class OllamaConsole {
     // Append user bubble
     this._appendUserMsg(text);
 
-    // Add to history
-    this._history.push({ role: 'user', content: text });
-
     // Create AI response bubble (streaming target)
     this._streamEl   = this._appendAiMsg();
     this._streamText = '';
@@ -322,10 +366,14 @@ export class OllamaConsole {
 
     this._setState(S.THINKING);
 
+    // Use the same agent-cli mechanism as "Run in console" — gives the model
+    // full filesystem tools access when a working directory is set.
     await window.db.ollama.chat({
-      host:     this._host,
-      model:    this._model,
-      messages: this._history,
+      agentCliPath: this._agentCliPath,
+      model:        this._model,
+      host:         this._host,
+      dir:          this._cwd,   // empty string = no --dir (no file access)
+      prompt:       text,
     });
   }
 

@@ -13,7 +13,7 @@ import { UserStoryDetail } from '../user-story-detail/user-story-detail.js';
  *   await usl.load(featureId);
  */
 export class UserStoryList {
-  constructor({ listEl, addBtn, importBtn, detailEl, projectId, getModel, onSelect, onRunCommand, onRunCommandExternal, onPrintOutput }) {
+  constructor({ listEl, addBtn, importBtn, detailEl, projectId, getModel, onSelect, onRunCommand, onRunCommandExternal, onPrintOutput, onOllamaPrompt }) {
     this._listEl    = listEl;
     this._addBtn    = addBtn;
     this._importBtn = importBtn;
@@ -31,6 +31,7 @@ export class UserStoryList {
       onRunCommand,
       onRunCommandExternal,
       onPrintOutput,
+      onOllamaPrompt,
       onStoryUpdated: () => this._load(),
       onCancelled:    () => {
         this._activeId = null;

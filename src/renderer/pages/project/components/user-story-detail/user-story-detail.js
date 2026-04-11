@@ -17,7 +17,7 @@ import { escHtml, injectCss, timeAgo } from '../../../../shared/helpers.js';
  *   detail.showEditForm(story);
  */
 export class UserStoryDetail {
-  constructor({ detailEl, projectId, getModel, onRunCommand, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled }) {
+  constructor({ detailEl, projectId, getModel, onRunCommand, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled, onOllamaPrompt }) {
     this._detailEl               = detailEl;
     this._projectId              = projectId;
     this._getModel               = getModel || (() => null);
@@ -26,6 +26,7 @@ export class UserStoryDetail {
     this._onPrintOutput          = onPrintOutput || (() => {});
     this._onStoryUpdated         = onStoryUpdated || (() => {});
     this._onCancelled            = onCancelled || (() => {});
+    this._onOllamaPrompt         = onOllamaPrompt || (() => {});
     this._featureId              = null;
     this._statuses               = [];
     this._ctrlSHandler           = null;
@@ -500,6 +501,9 @@ export class UserStoryDetail {
         const cfg = this._resolvedConfig();
         if (cfg.type === 'api') {
           this._runApiPrompt(prompt, userStoryId);
+        } else if (cfg.type === 'ollama') {
+          // Route through the console /p command — uses agent-cli with --dir
+          this._onRunCommand('/p ' + prompt);
         } else {
           const cmd = this._buildExternalCmd(prompt);
           if (cmd) this._onRunCommandExternal(cmd);
@@ -534,6 +538,13 @@ export class UserStoryDetail {
         const cfg = this._resolvedConfig();
         if (cfg.type === 'api') {
           await this._runApiPrompt(prompt, userStoryId);
+        } else if (cfg.type === 'ollama') {
+          // Route through the console /p command — uses agent-cli with --dir
+          if (userStoryId) {
+            await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
+            this._loadPromptHistory(userStoryId);
+          }
+          this._onRunCommand('/p ' + prompt);
         } else {
           if (userStoryId) {
             await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });

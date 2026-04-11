@@ -432,6 +432,13 @@ export class ProjectPage {
         document.getElementById('projectConsole').hidden = false;
         this._terminal.printOutput(text, opts);
       },
+      onOllamaPrompt: (prompt, cfg) => {
+        this._ollamaConsole.openWithPrompt({
+          prompt,
+          cfg,
+          cwd: this._terminal.cwd,
+        });
+      },
     });
     await this._storyList.mount();
 
