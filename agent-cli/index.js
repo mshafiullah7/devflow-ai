@@ -122,15 +122,72 @@ function ollamaRequest(endpoint, body) {
   });
 }
 
-async function chatCompletion(messages) {
-  const res = await ollamaRequest('/api/chat', {
-    model: MODEL,
-    messages,
-    stream: false,
-    options: { temperature: 0.2, num_predict: 4096 },
+// Streaming chat: writes tokens to stdout as they arrive, returns full content
+function chatCompletionStream(messages) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(OLLAMA_HOST + '/api/chat');
+    const lib = url.protocol === 'https:' ? https : http;
+    const body = JSON.stringify({
+      model: MODEL,
+      messages,
+      stream: true,
+      options: { temperature: 0.2, num_predict: 4096 },
+    });
+
+    const req = lib.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      },
+      (res) => {
+        let fullContent = '';
+        let leftover = '';
+
+        res.on('data', (chunk) => {
+          const lines = (leftover + chunk.toString()).split('\n');
+          leftover = lines.pop(); // last line may be incomplete
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const obj = JSON.parse(line);
+              const token = obj.message?.content ?? '';
+              if (token) {
+                process.stdout.write(token);
+                fullContent += token;
+              }
+              if (obj.done) {
+                process.stdout.write('\n');
+              }
+            } catch {
+              // ignore malformed lines
+            }
+          }
+        });
+
+        res.on('end', () => {
+          // flush any leftover
+          if (leftover.trim()) {
+            try {
+              const obj = JSON.parse(leftover);
+              const token = obj.message?.content ?? '';
+              if (token) { process.stdout.write(token); fullContent += token; }
+            } catch { /* ignore */ }
+          }
+          resolve(fullContent);
+        });
+      }
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
   });
-  if (!res.message) throw new Error('No message in response: ' + JSON.stringify(res));
-  return res.message.content;
+}
+
+async function chatCompletion(messages) {
+  return chatCompletionStream(messages);
 }
 
 // ─── Tool Execution ──────────────────────────────────────────────────────────
@@ -305,8 +362,6 @@ async function runAgentLoop(userMessage, conversationHistory) {
     { role: 'user', content: userMessage },
   ];
 
-  console.log(clr('dim', '\n[Thinking...]\n'));
-
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await chatCompletion([
       { role: 'system', content: SYSTEM_PROMPT },
@@ -316,18 +371,13 @@ async function runAgentLoop(userMessage, conversationHistory) {
     const toolCalls = parseToolCalls(response);
 
     if (toolCalls.length === 0) {
-      // No tool calls — final answer
-      const clean = response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim();
-      console.log(clr('cyan', '\nAssistant: ') + clean + '\n');
+      // No tool calls — final answer (already streamed token-by-token to stdout)
       messages.push({ role: 'assistant', content: response });
       return messages;
     }
 
-    // Show thinking text (before tool calls)
-    const thinkingText = response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim();
-    if (thinkingText) {
-      console.log(clr('dim', thinkingText) + '\n');
-    }
+    // Tool calls present — the streamed text was the thinking portion; add a newline separator
+    process.stdout.write('\n');
 
     messages.push({ role: 'assistant', content: response });
 
@@ -495,15 +545,12 @@ async function runOnce() {
     const toolCalls = parseToolCalls(response);
 
     if (toolCalls.length === 0) {
-      // No tool calls — this is the final answer
-      const clean = response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim();
-      out((clean || '(no response)') + '\n');
+      // No tool calls — final answer already streamed token-by-token
       return done(0);
     }
 
-    // Print any thinking text before the tool calls
-    const thinkingText = response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim();
-    if (thinkingText) out(thinkingText + '\n');
+    // Tool calls present — streamed text was the thinking portion; separator newline
+    process.stdout.write('\n');
 
     messages.push({ role: 'assistant', content: response });
 
