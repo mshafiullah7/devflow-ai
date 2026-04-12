@@ -2,7 +2,7 @@
 /* Console panel                                                        */
 /* ------------------------------------------------------------------ */
 .project-console {
-  flex: 0 0 32%;
+  flex: 0 0 25%;
   min-width: 180px;
   max-width: 100%;          /* never push past viewport */
   min-width: 0;             /* let flex shrink below content width */

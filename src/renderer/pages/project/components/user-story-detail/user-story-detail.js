@@ -445,59 +445,181 @@ export class UserStoryDetail {
     list.forEach(p => this._addPromptRow(listEl, userStoryId, p));
   }
 
+  _showConfirm(message, confirmLabel = 'Delete') {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'usl-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="usl-confirm-dialog">
+          <p class="usl-confirm-msg">${escHtml(message)}</p>
+          <div class="usl-confirm-btns">
+            <button class="usl-confirm-btn usl-confirm-btn--cancel">Cancel</button>
+            <button class="usl-confirm-btn usl-confirm-btn--ok">${escHtml(confirmLabel)}</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const cleanup = (result) => { overlay.remove(); resolve(result); };
+      overlay.querySelector('.usl-confirm-btn--cancel').addEventListener('click', () => cleanup(false));
+      overlay.querySelector('.usl-confirm-btn--ok').addEventListener('click', () => cleanup(true));
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
+    });
+  }
+
+  _showRunDirModal(cmd) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'usl-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="usl-confirm-dialog">
+          <p class="usl-confirm-title">Run Prompt</p>
+          <p class="usl-confirm-msg">Choose the directory to execute this prompt in:</p>
+          <div class="usl-confirm-btns">
+            <button class="usl-confirm-btn usl-confirm-btn--cancel">Cancel</button>
+            <button class="usl-confirm-btn usl-confirm-btn--secondary" data-action="current">Current Directory</button>
+            <button class="usl-confirm-btn usl-confirm-btn--ok" data-action="choose">Choose Folder…</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const cleanup = () => overlay.remove();
+
+      overlay.querySelector('[data-action="current"]').addEventListener('click', () => {
+        cleanup();
+        this._onRunCommandExternal(cmd);
+        resolve();
+      });
+
+      overlay.querySelector('[data-action="choose"]').addEventListener('click', async () => {
+        cleanup();
+        const folderPath = await window.db.dialog.openFolder();
+        if (folderPath) {
+          window.db.terminal.openExternal({ command: cmd, cwd: folderPath });
+        }
+        resolve();
+      });
+
+      overlay.querySelector('.usl-confirm-btn--cancel').addEventListener('click', () => { cleanup(); resolve(); });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) { cleanup(); resolve(); } });
+    });
+  }
+
+  _getOrInitTabsContainer(listEl) {
+    let bar = listEl.querySelector('.usl-ptabs__bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.className = 'usl-ptabs__bar';
+      const contentEl = document.createElement('div');
+      contentEl.className = 'usl-ptabs__content';
+      listEl.appendChild(bar);
+      listEl.appendChild(contentEl);
+    }
+    return {
+      bar:     listEl.querySelector('.usl-ptabs__bar'),
+      content: listEl.querySelector('.usl-ptabs__content'),
+    };
+  }
+
+  _activateTab(tab, panel, bar, content) {
+    bar.querySelectorAll('.usl-ptab').forEach(t => t.classList.remove('usl-ptab--active'));
+    content.querySelectorAll('.usl-ptabs__panel').forEach(p => p.classList.remove('usl-ptabs__panel--active'));
+    tab.classList.add('usl-ptab--active');
+    panel.classList.add('usl-ptabs__panel--active');
+  }
+
   _addPromptRow(listEl, userStoryId, existing) {
-    const row      = document.createElement('div');
-    row.className  = 'usl-prompt-row';
-    row.dataset.id = existing?.id ?? '';
+    const { bar, content } = this._getOrInitTabsContainer(listEl);
 
-    const tag = existing?.tag?.trim() || '';
+    const tag      = existing?.tag?.trim() || '';
+    const tabCount = bar.querySelectorAll('.usl-ptab').length;
+    const label    = tag || `Prompt ${tabCount + 1}`;
 
-    row.innerHTML = `
-      <div class="usl-prompt-row__top">
-        <input class="usl-prompt-row__tag-input" type="text" placeholder="Tag (optional)" value="${escHtml(tag)}" autocomplete="off"/>
-        <div class="usl-prompt-row__actions">
-          <button class="usl-prompt-row__btn usl-prompt-row__btn--run-ext" type="button" title="Run in external PowerShell window">
+    // Panel
+    const panel         = document.createElement('div');
+    panel.className     = 'usl-ptabs__panel';
+    panel.dataset.rowId = existing?.id ?? '';
+    panel.innerHTML = `
+      <div class="usl-ptabs__toolbar">
+        <input class="usl-ptabs__tag-input" type="text" placeholder="Tab label (optional)" value="${escHtml(tag)}" autocomplete="off"/>
+        <div class="usl-ptabs__actions">
+          <button class="usl-ptabs__btn usl-ptabs__btn--run-ext" type="button" title="Run in external PowerShell window">
             <svg width="13" height="11" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
           </button>
-          <button class="usl-prompt-row__btn usl-prompt-row__btn--expand" type="button" title="Expand to full editor">
+          <button class="usl-ptabs__btn usl-ptabs__btn--expand" type="button" title="Expand to full editor">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button class="usl-prompt-row__btn usl-prompt-row__btn--delete" type="button" title="Delete">
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
       </div>
-      <textarea class="usl-prompt-row__textarea" placeholder="Prompt text…" rows="4">${escHtml(existing?.prompt || '')}</textarea>
+      <textarea class="usl-ptabs__textarea" placeholder="Prompt text…">${escHtml(existing?.prompt || '')}</textarea>
     `;
+    content.appendChild(panel);
 
-    listEl.appendChild(row);
+    // Tab button
+    const tab     = document.createElement('button');
+    tab.className = 'usl-ptab';
+    tab.type      = 'button';
+    tab.innerHTML = `<span class="usl-ptab__label">${escHtml(label)}</span><span class="usl-ptab__close" title="Delete">×</span>`;
+    bar.appendChild(tab);
 
-    const tagInput = row.querySelector('.usl-prompt-row__tag-input');
-    const taEl     = row.querySelector('.usl-prompt-row__textarea');
+    const tagInput = panel.querySelector('.usl-ptabs__tag-input');
+    const taEl     = panel.querySelector('.usl-ptabs__textarea');
+    const tabLabel = tab.querySelector('.usl-ptab__label');
+
+    // Activate first tab automatically, or activate newly added tab
+    this._activateTab(tab, panel, bar, content);
+    if (!existing) taEl.focus();
+
+    // Live-update tab label when tag changes
+    tagInput.addEventListener('input', () => {
+      const idx = Array.from(bar.querySelectorAll('.usl-ptab')).indexOf(tab);
+      tabLabel.textContent = tagInput.value.trim() || `Prompt ${idx + 1}`;
+    });
+
+    // Tab click to switch
+    tab.addEventListener('click', (e) => {
+      if (e.target.closest('.usl-ptab__close')) return;
+      this._activateTab(tab, panel, bar, content);
+    });
 
     // Auto-save on blur
     const save = async () => {
       const prompt = taEl.value.trim();
       const tagVal = tagInput.value.trim() || null;
       if (!prompt) return;
-      if (row.dataset.id) {
-        await window.db.prompts.update({ id: parseInt(row.dataset.id), tag: tagVal, prompt });
+      if (panel.dataset.rowId) {
+        await window.db.prompts.update({ id: parseInt(panel.dataset.rowId), tag: tagVal, prompt });
       } else if (userStoryId) {
         const created = await window.db.prompts.create({ user_story_id: userStoryId, tag: tagVal, prompt });
-        row.dataset.id = created.id;
+        panel.dataset.rowId = created.id;
       }
     };
     tagInput.addEventListener('blur', save);
     taEl.addEventListener('blur', save);
 
-    // Delete
-    row.querySelector('.usl-prompt-row__btn--delete').addEventListener('click', async () => {
-      if (row.dataset.id) await window.db.prompts.delete(parseInt(row.dataset.id));
-      row.remove();
+    // Delete via × on tab
+    tab.querySelector('.usl-ptab__close').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const confirmed = await this._showConfirm('Delete this prompt tab?', 'Delete');
+      if (!confirmed) return;
+      if (panel.dataset.rowId) await window.db.prompts.delete(parseInt(panel.dataset.rowId));
+      const wasActive = tab.classList.contains('usl-ptab--active');
+      const allTabs   = Array.from(bar.querySelectorAll('.usl-ptab'));
+      const idx       = allTabs.indexOf(tab);
+      tab.remove();
+      panel.remove();
+      if (wasActive) {
+        const remaining = bar.querySelectorAll('.usl-ptab');
+        if (remaining.length > 0) {
+          const newIdx   = Math.min(idx, remaining.length - 1);
+          const newTab   = remaining[newIdx];
+          const newPanel = content.querySelectorAll('.usl-ptabs__panel')[newIdx];
+          this._activateTab(newTab, newPanel, bar, content);
+        }
+      }
     });
 
     // Run external
-    row.querySelector('.usl-prompt-row__btn--run-ext').addEventListener('click', async () => {
+    panel.querySelector('.usl-ptabs__btn--run-ext').addEventListener('click', async () => {
       await save();
       const prompt = taEl.value.trim();
       if (!prompt) return;
@@ -508,12 +630,12 @@ export class UserStoryDetail {
         this._onRunCommand('/p ' + prompt);
       } else {
         const cmd = this._buildExternalCmd(prompt);
-        if (cmd) this._onRunCommandExternal(cmd);
+        if (cmd) await this._showRunDirModal(cmd);
       }
     });
 
     // Expand overlay
-    row.querySelector('.usl-prompt-row__btn--expand').addEventListener('click', async () => {
+    panel.querySelector('.usl-ptabs__btn--expand').addEventListener('click', async () => {
       await save();
       this._openExpandOverlay(taEl, tagInput.value.trim() || 'Prompt', async () => { await save(); }, true);
     });
@@ -667,7 +789,7 @@ export class UserStoryDetail {
           this._onRunCommand('/p ' + prompt);
         } else {
           const cmd = this._buildExternalCmd(prompt);
-          if (cmd) this._onRunCommandExternal(cmd);
+          if (cmd) await this._showRunDirModal(cmd);
         }
       });
     });
