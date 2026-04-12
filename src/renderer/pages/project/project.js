@@ -529,7 +529,15 @@ export class ProjectPage {
     const toggleBtn     = document.getElementById('btnConsoleToggle');
     const icon          = toggleBtn.querySelector('.console-toggle-icon');
 
-    let savedFlex = console_el.style.flex || '0 0 32%';
+    let savedFlex = console_el.style.flex || '0 0 25%';
+
+    // Collapsed by default
+    console_el.classList.add('project-console--collapsed');
+    resizeHandle.style.display = 'none';
+    toggleBtn.title = 'Expand console';
+    toggleBtn.setAttribute('aria-label', 'Expand console');
+    toggleBtn.querySelector('.console-toggle-icon').innerHTML =
+      '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
 
     toggleBtn.addEventListener('click', () => {
       const isCollapsed = console_el.classList.toggle('project-console--collapsed');

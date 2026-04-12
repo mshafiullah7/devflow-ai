@@ -18,7 +18,7 @@
   --text-primary:   #1c1917;
   --text-secondary: #78716c;
   --text-muted:     #a8a29e;
-  --item-text:      #78350f;   /* dark brown for unselected feature/story items */
+  --item-text:      #78716c;   /* warm gray-brown for unselected feature/story items */
   --danger:         #ef4444;
   --radius:         12px;
   --radius-sm:      8px;
