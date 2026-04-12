@@ -18,6 +18,7 @@
   --text-primary:   #1c1917;
   --text-secondary: #78716c;
   --text-muted:     #a8a29e;
+  --item-text:      #78350f;   /* dark brown for unselected feature/story items */
   --danger:         #ef4444;
   --radius:         12px;
   --radius-sm:      8px;
@@ -107,7 +108,28 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text-primary);
+
+  /* ── Font options ─────────────────────────────────────────────────────
+     Uncomment ONE of the lines below (and comment out the active one)
+     to change the app-wide font across all sections.
+
+     Option 1 — System Default (current, safe cross-platform):
+       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+     Option 2 — Segoe UI Variable (crisp modern Windows 11 feel):
+       font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+
+     Option 3 — Verdana (wide letter-spacing, high legibility):
+       font-family: Verdana, Geneva, Tahoma, sans-serif;
+
+     Option 4 — Calibri (warm humanist, familiar Office style):
+       font-family: Calibri, Candara, 'Segoe UI', sans-serif;
+
+     Option 5 — Georgia (elegant serif, great for reading long text):
+       font-family: Georgia, Cambria, 'Times New Roman', serif;
+     ──────────────────────────────────────────────────────────────────── */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
