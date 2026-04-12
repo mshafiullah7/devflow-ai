@@ -773,10 +773,7 @@ export class UserStoryDetail {
     const label = cfg.label || cfg.model_name || 'API';
     this._onPrintOutput('', { label: `▶ ${label}` });
 
-    if (userStoryId) {
-      await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
-      this._loadPromptHistory(userStoryId);
-    }
+    await this._saveToHistory(userStoryId, prompt);
 
     const body = {
       model: cfg.model_name || 'default',
@@ -860,16 +857,10 @@ export class UserStoryDetail {
           await this._runApiPrompt(prompt, userStoryId);
         } else if (cfg.type === 'ollama') {
           // Route through the console /p command — uses agent-cli with --dir
-          if (userStoryId) {
-            await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
-            this._loadPromptHistory(userStoryId);
-          }
+          await this._saveToHistory(userStoryId, prompt);
           this._onRunCommand('/p ' + prompt);
         } else {
-          if (userStoryId) {
-            await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
-            this._loadPromptHistory(userStoryId);
-          }
+          await this._saveToHistory(userStoryId, prompt);
           const cmd = this._buildQuickCmd(prompt);
           if (cmd) this._onRunCommand(cmd);
         }
@@ -913,6 +904,15 @@ export class UserStoryDetail {
   // ----------------------------------------------------------------
   // Prompt history
   // ----------------------------------------------------------------
+  async _saveToHistory(userStoryId, prompt) {
+    if (!userStoryId) return;
+    const existing = await window.db.promptHistory.list(userStoryId);
+    const last = existing[existing.length - 1];
+    if (last && last.prompt === prompt) return; // skip duplicate
+    await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
+    this._loadPromptHistory(userStoryId);
+  }
+
   async _loadPromptHistory(userStoryId) {
     const container = this._detailEl.querySelector('#uslPromptHistory');
     if (!container) return;
