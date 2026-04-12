@@ -73,6 +73,7 @@ export class TerminalController {
     this._rafPending       = false;
     this._onCommandDone    = null;
     this._running          = false;
+    this._aiMode           = false;   // /p prefix toggle
   }
 
   // ----------------------------------------------------------------
@@ -82,6 +83,7 @@ export class TerminalController {
   get folderSelected() { return this._folderSelected; }
   set folderSelected(v) { this._folderSelected = v; }
   get isRunning() { return this._running; }
+  get aiMode()    { return this._aiMode; }
 
   // ----------------------------------------------------------------
   // Lifecycle
@@ -347,10 +349,21 @@ export class TerminalController {
     if (!dd.hidden) { dd.hidden = true; return; }
 
     const commands = await window.db.quickCommands.list();
+
+    const switchHtml = `
+      <div class="cmd-picker__ai-toggle" id="cmdPickerAiToggle">
+        <span class="cmd-picker__ai-label">AI prompt (/p)</span>
+        <label class="cmd-picker__switch">
+          <input type="checkbox" id="cmdPickerAiSwitch" ${this._aiMode ? 'checked' : ''}>
+          <span class="cmd-picker__switch-track"></span>
+        </label>
+      </div>
+    `;
+
     if (commands.length === 0) {
-      dd.innerHTML = `<div class="cmd-picker__empty">No saved commands. Use the commands toolbar button to add some.</div>`;
+      dd.innerHTML = switchHtml + `<div class="cmd-picker__empty">No saved commands. Use the commands toolbar button to add some.</div>`;
     } else {
-      dd.innerHTML = commands.map(c => `
+      dd.innerHTML = switchHtml + commands.map(c => `
         <div class="cmd-picker__item" data-cmd="${escHtml(c.command)}">
           <span class="cmd-picker__cmd">${escHtml(c.command)}</span>
           ${c.description ? `<span class="cmd-picker__desc">${escHtml(c.description)}</span>` : ''}
@@ -366,7 +379,18 @@ export class TerminalController {
       });
     }
 
+    dd.querySelector('#cmdPickerAiSwitch').addEventListener('change', (e) => {
+      e.stopPropagation();
+      this._aiMode = e.target.checked;
+      this._updateAiModeIndicator();
+    });
+
     dd.hidden = false;
+  }
+
+  _updateAiModeIndicator() {
+    const btn = document.getElementById('btnCmdPicker');
+    if (btn) btn.style.color = this._aiMode ? 'var(--console-prompt)' : '';
   }
 
   // ----------------------------------------------------------------
@@ -414,6 +438,9 @@ export class TerminalController {
       const value = await this.promptInlineInput();
       if (value === null) return;
       cmd = rawCmd.replaceAll('{{input}}', value);
+    }
+    if (this._aiMode && !/^\/p\s/i.test(cmd.trim())) {
+      cmd = `/p ${cmd}`;
     }
     const consoleInput = document.getElementById('consoleInput');
     if (consoleInput) {

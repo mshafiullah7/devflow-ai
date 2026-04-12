@@ -129,14 +129,6 @@ export class ProjectPage {
               </svg>
               Statistics
             </button>
-            <button class="project-page__console-toggle" id="btnConsoleToggle" aria-label="Toggle console" title="Toggle Console">
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-                <rect x="2" y="4" width="16" height="12" rx="3" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M6 8l3 2-3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M11 12h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              </svg>
-              Console
-            </button>
             <button class="project-page__ollama-btn" id="btnOllamaConsole" aria-label="Open Ollama console" title="Ollama Chat">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
@@ -227,6 +219,11 @@ export class ProjectPage {
           <div class="project-console" id="projectConsole">
             <div class="project-console__titlebar">
               <div class="project-console__title">
+                <button class="project-console__collapse-btn" id="btnConsoleToggle" aria-label="Collapse console" title="Collapse console">
+                  <svg class="console-toggle-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <rect x="1" y="2" width="14" height="12" rx="3" stroke="currentColor" stroke-width="1.4"/>
                   <path d="M4 6l3 2-3 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -312,9 +309,7 @@ export class ProjectPage {
     document.getElementById('btnBack')
       .addEventListener('click', () => this.router.navigate('launcher'));
 
-    const consoleEl = document.getElementById('projectConsole');
-    document.getElementById('btnConsoleToggle')
-      .addEventListener('click', () => { consoleEl.hidden = !consoleEl.hidden; });
+    this._initConsoleToggle();
 
     document.getElementById('menuClearConsole')
       .addEventListener('click', () => {
@@ -388,7 +383,7 @@ export class ProjectPage {
     consoleInput.addEventListener('keydown', async (e) => {
       if (e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
-      const cmd = consoleInput.value;
+      let cmd = consoleInput.value;
       if (!cmd.trim()) return;
       consoleInput.value = '';
       consoleInput.style.height = 'auto';
@@ -397,7 +392,9 @@ export class ProjectPage {
         window.db.terminal.sendInput(cmd + '\n');
         return;
       }
-      await this._terminal.runCommand(cmd.trim());
+      cmd = cmd.trim();
+      if (this._terminal.aiMode && !/^\/p\s/i.test(cmd)) cmd = `/p ${cmd}`;
+      await this._terminal.runCommand(cmd);
     });
 
     document.getElementById('btnConsoleStop')
@@ -510,6 +507,36 @@ export class ProjectPage {
         toggleBtn.title = 'Collapse features';
         toggleBtn.setAttribute('aria-label', 'Collapse features');
         icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+      }
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Console panel collapse/expand
+  // ----------------------------------------------------------------
+  _initConsoleToggle() {
+    const console_el    = document.getElementById('projectConsole');
+    const resizeHandle  = document.querySelector('.project-panel__resize[data-resize="console"]');
+    const toggleBtn     = document.getElementById('btnConsoleToggle');
+    const icon          = toggleBtn.querySelector('.console-toggle-icon');
+
+    let savedFlex = console_el.style.flex || '0 0 32%';
+
+    toggleBtn.addEventListener('click', () => {
+      const isCollapsed = console_el.classList.toggle('project-console--collapsed');
+
+      if (isCollapsed) {
+        savedFlex = console_el.style.flex || '0 0 32%';
+        resizeHandle.style.display = 'none';
+        toggleBtn.title = 'Expand console';
+        toggleBtn.setAttribute('aria-label', 'Expand console');
+        icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+      } else {
+        console_el.style.flex = savedFlex;
+        resizeHandle.style.display = '';
+        toggleBtn.title = 'Collapse console';
+        toggleBtn.setAttribute('aria-label', 'Collapse console');
+        icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
       }
     });
   }
