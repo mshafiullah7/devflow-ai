@@ -57,6 +57,11 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
   });
 
+  ipcMain.handle('db:projects:setPath', (_e, { id, project_path }) => {
+    db.prepare(`UPDATE projects SET project_path = ?, updated_at = datetime('now') WHERE id = ?`).run(project_path, id);
+    return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+  });
+
   ipcMain.handle('db:projects:recent', () => {
     return db
       .prepare(

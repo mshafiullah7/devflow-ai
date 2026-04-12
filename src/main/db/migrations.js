@@ -35,6 +35,9 @@ function runMigrations(db) {
   if (!cols.includes('last_opened_at')) {
     db.exec('ALTER TABLE projects ADD COLUMN last_opened_at TEXT');
   }
+  if (!cols.includes('project_path')) {
+    db.exec('ALTER TABLE projects ADD COLUMN project_path TEXT');
+  }
 
   // Add prompt_history table for existing databases
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t) => t.name);

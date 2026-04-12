@@ -15,8 +15,9 @@ contextBridge.exposeInMainWorld('db', {
     create: (data)   => invoke('db:projects:create', data),
     update: (data)   => invoke('db:projects:update', data),
     delete: (id)     => invoke('db:projects:delete', id),
-    open:   (id)     => invoke('db:projects:open', id),
-    recent: ()       => invoke('db:projects:recent'),
+    open:    (id)     => invoke('db:projects:open', id),
+    recent:  ()       => invoke('db:projects:recent'),
+    setPath: (data)   => invoke('db:projects:setPath', data),
   },
   features: {
     list:   (project_id) => invoke('db:features:list', project_id),

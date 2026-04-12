@@ -29,8 +29,9 @@ export class ProjectPage {
     this._project = await window.db.projects.get(this.projectId);
     this.container.innerHTML = this._template();
 
-    // Init controllers
-    const initialCwd = await window.db.terminal.homedir();
+    // Init controllers — restore last used project path if available
+    const homedir     = await window.db.terminal.homedir();
+    const initialCwd  = this._project?.project_path || homedir;
     this._terminal = new TerminalController({ initialCwd });
     this._terminal.mount();
 
@@ -40,6 +41,14 @@ export class ProjectPage {
     this._terminal.setCommandDoneCallback(() => {
       if (this._terminal.folderSelected) this._git.refreshStatus();
     });
+
+    // If a saved path exists, activate folder mode and restore prompt label
+    if (this._project?.project_path) {
+      this._terminal.folderSelected = true;
+      this._terminal._updatePromptLabel();
+      this._git.refreshStatus();
+      this._git.startPoll();
+    }
 
     this._statsModal = new StatsModal({ projectId: this.projectId });
     this._statsModal.mount();
@@ -323,9 +332,9 @@ export class ProjectPage {
         const folderPath = await window.db.dialog.openFolder();
         if (!folderPath) return;
         this._terminal.folderSelected = true;
-        consoleEl.hidden = false;
         await this._terminal.runCommand(`cd "${folderPath}"`);
         document.getElementById('consoleInput').focus();
+        await window.db.projects.setPath({ id: this.projectId, project_path: folderPath });
         await this._git.refreshStatus();
         this._git.startPoll();
       });
