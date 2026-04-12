@@ -212,6 +212,34 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // prompts
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:prompts:list', (_e, user_story_id) => {
+    return db.prepare(
+      'SELECT * FROM prompts WHERE user_story_id = ? AND is_active = 1 ORDER BY created_at ASC'
+    ).all(user_story_id);
+  });
+
+  ipcMain.handle('db:prompts:create', (_e, { user_story_id, tag, prompt }) => {
+    const result = db.prepare(
+      'INSERT INTO prompts (user_story_id, tag, prompt) VALUES (?, ?, ?)'
+    ).run(user_story_id, tag ?? null, prompt);
+    return db.prepare('SELECT * FROM prompts WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:prompts:update', (_e, { id, tag, prompt }) => {
+    db.prepare(
+      `UPDATE prompts SET tag = coalesce(?, tag), prompt = coalesce(?, prompt), updated_at = datetime('now') WHERE id = ?`
+    ).run(tag ?? null, prompt ?? null, id);
+    return db.prepare('SELECT * FROM prompts WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:prompts:delete', (_e, id) => {
+    db.prepare(`UPDATE prompts SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
   // quick_commands
   // ----------------------------------------------------------------
   ipcMain.handle('db:quick_commands:list', () => {

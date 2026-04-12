@@ -39,6 +39,12 @@ contextBridge.exposeInMainWorld('db', {
     delete:    (id)            => invoke('db:prompt_history:delete', id),
     deleteAll: (user_story_id) => invoke('db:prompt_history:deleteAll', user_story_id),
   },
+  prompts: {
+    list:   (user_story_id) => invoke('db:prompts:list', user_story_id),
+    create: (data)          => invoke('db:prompts:create', data),
+    update: (data)          => invoke('db:prompts:update', data),
+    delete: (id)            => invoke('db:prompts:delete', id),
+  },
   documentTemplates: {
     list: () => invoke('db:document_templates:list'),
   },

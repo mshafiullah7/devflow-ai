@@ -127,6 +127,17 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslAddPrompt" placeholder="AI prompt for this story…" rows="6"></textarea>
           </div>
 
+          <div class="usl-prompts-section" data-prompt-field>
+            <div class="usl-prompts-section__header">
+              <span class="usl-prompts-section__title">Additional Prompts</span>
+              <button class="usl-prompts-section__add-btn" id="uslAddPromptBtn" type="button" title="Add prompt">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                Add
+              </button>
+            </div>
+            <div class="usl-prompts-list" id="uslAddPromptsList"></div>
+          </div>
+
           <div class="usl-add-form__field usl-add-form__field--quickprompt" data-quickprompt-field>
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddQuickPrompt">Quick Prompt</label>
@@ -166,6 +177,7 @@ export class UserStoryDetail {
     const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
 
     this._bindViewToggle(this._detailEl, 'details');
+    this._bindPromptsSection(this._detailEl, null);
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
     this._bindRunBtns(this._detailEl);
@@ -282,6 +294,17 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslEditPrompt" placeholder="AI prompt for this story…" rows="6">${escHtml(story.prompt || '')}</textarea>
           </div>
 
+          <div class="usl-prompts-section" data-prompt-field>
+            <div class="usl-prompts-section__header">
+              <span class="usl-prompts-section__title">Additional Prompts</span>
+              <button class="usl-prompts-section__add-btn" id="uslEditPromptBtn" type="button" title="Add prompt">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                Add
+              </button>
+            </div>
+            <div class="usl-prompts-list" id="uslEditPromptsList"></div>
+          </div>
+
           <div class="usl-add-form__field usl-add-form__field--quickprompt" data-quickprompt-field>
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditQuickPrompt">Quick Prompt</label>
@@ -357,6 +380,8 @@ export class UserStoryDetail {
     };
 
     this._bindViewToggle(this._detailEl, 'details');
+    this._bindPromptsSection(this._detailEl, story.id);
+    this._loadPrompts(story.id);
     saveBtn.addEventListener('click', save);
     this._bindCtrlS(save);
     this._bindExpandBtns(this._detailEl, save);
@@ -394,6 +419,105 @@ export class UserStoryDetail {
     });
 
     applyView(defaultView);
+  }
+
+  // ----------------------------------------------------------------
+  // Additional prompts CRUD section
+  // ----------------------------------------------------------------
+  _bindPromptsSection(container, userStoryId) {
+    const addBtn  = container.querySelector('#uslAddPromptBtn, #uslEditPromptBtn');
+    if (!addBtn) return;
+    addBtn.addEventListener('click', () => {
+      this._addPromptRow(container, userStoryId, null);
+    });
+  }
+
+  async _loadPrompts(userStoryId) {
+    if (!userStoryId) return;
+    const list = await window.db.prompts.list(userStoryId);
+    const container = this._detailEl;
+    const listEl = container.querySelector('#uslEditPromptsList, #uslAddPromptsList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    list.forEach(p => this._addPromptRow(container, userStoryId, p));
+  }
+
+  _addPromptRow(container, userStoryId, existing) {
+    const listEl = container.querySelector('#uslEditPromptsList, #uslAddPromptsList');
+    if (!listEl) return;
+
+    const row     = document.createElement('div');
+    row.className = 'usl-prompt-row';
+    row.dataset.id = existing?.id ?? '';
+
+    row.innerHTML = `
+      <div class="usl-prompt-row__top">
+        <input class="usl-prompt-row__tag" type="text" placeholder="Tag (optional)"
+               value="${escHtml(existing?.tag || '')}" autocomplete="off"/>
+        <div class="usl-prompt-row__actions">
+          <button class="usl-prompt-row__btn usl-prompt-row__btn--run-ext" type="button" title="Run in external PowerShell window" aria-label="Run in PowerShell">
+            <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
+          </button>
+          <button class="usl-prompt-row__btn usl-prompt-row__btn--expand" type="button" title="Expand" aria-label="Expand prompt">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="usl-prompt-row__btn usl-prompt-row__btn--delete" type="button" title="Delete" aria-label="Delete prompt">
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <textarea class="usl-prompt-row__textarea" placeholder="Prompt text…" rows="4">${escHtml(existing?.prompt || '')}</textarea>
+    `;
+
+    listEl.appendChild(row);
+
+    const tagEl  = row.querySelector('.usl-prompt-row__tag');
+    const taEl   = row.querySelector('.usl-prompt-row__textarea');
+
+    // Auto-save on blur
+    const save = async () => {
+      const tag    = tagEl.value.trim() || null;
+      const prompt = taEl.value.trim();
+      if (!prompt) return;
+      if (row.dataset.id) {
+        await window.db.prompts.update({ id: parseInt(row.dataset.id), tag, prompt });
+      } else if (userStoryId) {
+        const created = await window.db.prompts.create({ user_story_id: userStoryId, tag, prompt });
+        row.dataset.id = created.id;
+      }
+    };
+    tagEl.addEventListener('blur', save);
+    taEl.addEventListener('blur', save);
+
+    // Delete
+    row.querySelector('.usl-prompt-row__btn--delete').addEventListener('click', async () => {
+      if (row.dataset.id) {
+        await window.db.prompts.delete(parseInt(row.dataset.id));
+      }
+      row.remove();
+    });
+
+    // Run external
+    row.querySelector('.usl-prompt-row__btn--run-ext').addEventListener('click', async () => {
+      await save();
+      const prompt = taEl.value.trim();
+      if (!prompt) return;
+      const cfg = this._resolvedConfig();
+      if (cfg.type === 'api') {
+        this._runApiPrompt(prompt, userStoryId);
+      } else if (cfg.type === 'ollama') {
+        this._onRunCommand('/p ' + prompt);
+      } else {
+        const cmd = this._buildExternalCmd(prompt);
+        if (cmd) this._onRunCommandExternal(cmd);
+      }
+    });
+
+    // Expand
+    row.querySelector('.usl-prompt-row__btn--expand').addEventListener('click', async () => {
+      await save();
+      this._openExpandOverlay(taEl, existing?.tag || 'Prompt', async () => { await save(); }, true);
+    });
   }
 
   // ----------------------------------------------------------------

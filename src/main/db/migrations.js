@@ -110,6 +110,22 @@ function runMigrations(db) {
     seedDocumentTemplates(db);
   }
 
+  // Add prompts table for existing databases
+  const promptsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='prompts'").get();
+  if (!promptsCheck) {
+    db.exec(`
+      CREATE TABLE prompts (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
+        tag           TEXT,
+        prompt        TEXT    NOT NULL DEFAULT '',
+        is_active     INTEGER NOT NULL DEFAULT 1,
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
   // Add document_attachments table for existing databases
   const allTables4 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
   if (!allTables4.includes('document_attachments')) {
