@@ -44,14 +44,13 @@
 .project-console__output {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   scrollbar-gutter: stable;   /* reserve scrollbar space so it never causes a layout shift */
   padding: 10px 14px;
   font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
   font-size: 12px;
   line-height: 1.6;
   color: var(--console-text);
-  word-break: break-all;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -192,10 +191,11 @@
 
 /* Terminal output lines */
 .project-console__line {
-  white-space: pre-wrap;
-  word-break: break-all;
+  white-space: pre;
+  word-break: normal;
   line-height: 1.5;
   flex-shrink: 0;
+  min-width: max-content;
 }
 .project-console__line--prompt {
   margin-top: 6px;
@@ -388,15 +388,13 @@
 
 /* Streaming output block */
 .project-console__stream-block {
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-wrap: break-word;
-  overflow-x: hidden;
-  max-width: 100%;
+  white-space: pre;
+  word-break: normal;
   line-height: 1.5;
   color: var(--console-output);
   flex-shrink: 0;
   margin-bottom: 2px;
+  min-width: max-content;
 }
 .project-console__stderr {
   color: #f87171;
