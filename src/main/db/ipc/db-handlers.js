@@ -159,7 +159,7 @@ function registerDbHandlers() {
 
   ipcMain.handle(
     'db:user_stories:update',
-    (_e, { id, title, description, acceptance_criteria, prompt, status_id, is_active }) => {
+    (_e, { id, title, description, acceptance_criteria, prompt, status_id, is_active, is_executed }) => {
       db.prepare(
         `UPDATE user_stories
             SET title = coalesce(?, title),
@@ -168,11 +168,13 @@ function registerDbHandlers() {
                 prompt = coalesce(?, prompt),
                 status_id = coalesce(?, status_id),
                 is_active = coalesce(?, is_active),
+                is_executed = CASE WHEN ? IS NOT NULL THEN ? ELSE is_executed END,
                 updated_at = datetime('now')
           WHERE id = ?`
       ).run(
         title ?? null, description ?? null, acceptance_criteria ?? null,
-        prompt ?? null, status_id ?? null, is_active ?? null, id
+        prompt ?? null, status_id ?? null, is_active ?? null,
+        is_executed ?? null, is_executed ?? null, id
       );
       return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(id);
     }
@@ -227,10 +229,12 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM prompts WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:prompts:update', (_e, { id, tag, prompt }) => {
+  ipcMain.handle('db:prompts:update', (_e, { id, tag, prompt, is_executed }) => {
     db.prepare(
-      `UPDATE prompts SET tag = coalesce(?, tag), prompt = coalesce(?, prompt), updated_at = datetime('now') WHERE id = ?`
-    ).run(tag ?? null, prompt ?? null, id);
+      `UPDATE prompts SET tag = coalesce(?, tag), prompt = coalesce(?, prompt),
+       is_executed = CASE WHEN ? IS NOT NULL THEN ? ELSE is_executed END,
+       updated_at = datetime('now') WHERE id = ?`
+    ).run(tag ?? null, prompt ?? null, is_executed ?? null, is_executed ?? null, id);
     return db.prepare('SELECT * FROM prompts WHERE id = ?').get(id);
   });
 

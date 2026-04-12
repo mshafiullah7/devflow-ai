@@ -116,6 +116,9 @@ export class UserStoryDetail {
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddPrompt">Prompt</label>
               <div class="usl-add-form__label-actions">
+                <button class="usl-add-form__mark-executed" type="button" data-story-prompt title="Mark as Executed" aria-label="Mark as Executed">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
                 <button class="usl-add-form__run usl-add-form__run--external" type="button" data-prompt="uslAddPrompt" title="Run in external PowerShell window" aria-label="Run in PowerShell">
                   <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
                 </button>
@@ -283,6 +286,9 @@ export class UserStoryDetail {
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
               <div class="usl-add-form__label-actions">
+                <button class="usl-add-form__mark-executed${story.is_executed ? ' is-executed' : ''}" type="button" data-story-prompt title="${story.is_executed ? 'Executed' : 'Mark as Executed'}" aria-label="Mark as Executed">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
                 <button class="usl-add-form__run usl-add-form__run--external" type="button" data-prompt="uslEditPrompt" title="Run in external PowerShell window" aria-label="Run in PowerShell">
                   <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
                 </button>
@@ -387,6 +393,7 @@ export class UserStoryDetail {
     this._bindExpandBtns(this._detailEl, save);
     this._bindRunBtns(this._detailEl, story.id);
     this._bindQuickRunBtns(this._detailEl, story.id);
+    this._bindMarkExecutedBtns(this._detailEl, story);
     this._loadPromptHistory(story.id);
 
     this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
@@ -538,10 +545,14 @@ export class UserStoryDetail {
     const panel         = document.createElement('div');
     panel.className     = 'usl-ptabs__panel';
     panel.dataset.rowId = existing?.id ?? '';
+    const isExecuted = !!existing?.is_executed;
     panel.innerHTML = `
       <div class="usl-ptabs__toolbar">
         <input class="usl-ptabs__tag-input" type="text" placeholder="Tab label (optional)" value="${escHtml(tag)}" autocomplete="off"/>
         <div class="usl-ptabs__actions">
+          <button class="usl-ptabs__btn usl-ptabs__btn--mark-executed${isExecuted ? ' is-executed' : ''}" type="button" title="${isExecuted ? 'Executed' : 'Mark as Executed'}">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <button class="usl-ptabs__btn usl-ptabs__btn--run-ext" type="button" title="Run in external PowerShell window">
             <svg width="13" height="11" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
           </button>
@@ -618,8 +629,25 @@ export class UserStoryDetail {
       }
     });
 
+    // Mark as executed
+    const markExecBtn = panel.querySelector('.usl-ptabs__btn--mark-executed');
+    markExecBtn.addEventListener('click', async () => {
+      const nowExecuted = !markExecBtn.classList.contains('is-executed');
+      markExecBtn.classList.toggle('is-executed', nowExecuted);
+      markExecBtn.title = nowExecuted ? 'Executed' : 'Mark as Executed';
+      if (panel.dataset.rowId) {
+        await window.db.prompts.update({ id: parseInt(panel.dataset.rowId), is_executed: nowExecuted ? 1 : 0 });
+      }
+    });
+
     // Run external
     panel.querySelector('.usl-ptabs__btn--run-ext').addEventListener('click', async () => {
+      if (markExecBtn.classList.contains('is-executed')) {
+        const ok = await this._showConfirm(
+          'This prompt has already been marked as executed. Run again?', 'Run Again'
+        );
+        if (!ok) return;
+      }
       await save();
       const prompt = taEl.value.trim();
       if (!prompt) return;
@@ -778,6 +806,15 @@ export class UserStoryDetail {
   _bindRunBtns(container, userStoryId = null) {
     container.querySelectorAll('.usl-add-form__run--external').forEach(btn => {
       btn.addEventListener('click', async () => {
+        const markBtn = btn.closest('.usl-add-form__label-actions')
+          ?.querySelector('.usl-add-form__mark-executed');
+        const isExecuted = markBtn?.classList.contains('is-executed');
+        if (isExecuted) {
+          const ok = await this._showConfirm(
+            'This prompt has already been marked as executed. Run again?', 'Run Again'
+          );
+          if (!ok) return;
+        }
         const textarea = container.querySelector('#' + btn.dataset.prompt);
         const prompt   = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
@@ -854,6 +891,22 @@ export class UserStoryDetail {
           }
         });
       }
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Mark-executed button — main Prompt field (user story level)
+  // ----------------------------------------------------------------
+  _bindMarkExecutedBtns(container, story) {
+    container.querySelectorAll('.usl-add-form__mark-executed[data-story-prompt]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const nowExecuted = !btn.classList.contains('is-executed');
+        btn.classList.toggle('is-executed', nowExecuted);
+        btn.title = nowExecuted ? 'Executed' : 'Mark as Executed';
+        if (story?.id) {
+          await window.db.userStories.update({ id: story.id, is_executed: nowExecuted ? 1 : 0 });
+        }
+      });
     });
   }
 

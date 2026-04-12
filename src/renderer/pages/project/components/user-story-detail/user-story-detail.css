@@ -133,6 +133,31 @@
   gap: 4px;
 }
 
+.usl-add-form__mark-executed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.usl-add-form__mark-executed:hover {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+  border-color: #22c55e;
+}
+.usl-add-form__mark-executed.is-executed {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;
+}
+
 .usl-add-form__run {
   display: flex;
   align-items: center;
@@ -200,7 +225,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: calc(3 * 34px + 2 * 3px);
+  max-height: calc(10 * 34px + 9 * 3px);
   overflow-y: auto;
 }
 
@@ -359,8 +384,9 @@
   border: none;
   border-radius: 0;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 13px;
   font-family: inherit;
+  font-weight: 450;
   line-height: 1.6;
   padding: 14px 16px;
   resize: none;
@@ -378,7 +404,7 @@
   position: absolute;
   inset: 0;
   padding: 14px 16px;
-  font-size: 15px;
+  font-size: 13px;
   font-family: inherit;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -596,8 +622,9 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 13px;
   font-family: inherit;
+  font-weight: 450;
   padding: 7px 10px;
   outline: none;
   transition: border-color 0.12s;
@@ -866,6 +893,14 @@
 .usl-ptabs__btn--run-ext:hover {
   color: #a78bfa;
 }
+.usl-ptabs__btn--mark-executed:hover {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+.usl-ptabs__btn--mark-executed.is-executed {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+}
 
 .usl-ptabs__textarea {
   width: 100%;
@@ -875,8 +910,9 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 13px;
   font-family: inherit;
+  font-weight: 450;
   padding: 7px 10px;
   resize: vertical;
   outline: none;

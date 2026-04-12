@@ -126,6 +126,18 @@ function runMigrations(db) {
     `);
   }
 
+  // Add is_executed to user_stories
+  const usCols = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
+  if (!usCols.includes('is_executed')) {
+    db.exec('ALTER TABLE user_stories ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0');
+  }
+
+  // Add is_executed to prompts
+  const promptsCols = db.prepare('PRAGMA table_info(prompts)').all().map(c => c.name);
+  if (!promptsCols.includes('is_executed')) {
+    db.exec('ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0');
+  }
+
   // Add document_attachments table for existing databases
   const allTables4 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
   if (!allTables4.includes('document_attachments')) {
