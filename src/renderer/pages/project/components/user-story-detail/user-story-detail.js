@@ -425,10 +425,13 @@ export class UserStoryDetail {
   // Additional prompts CRUD section
   // ----------------------------------------------------------------
   _bindPromptsSection(container, userStoryId) {
-    const addBtn  = container.querySelector('#uslAddPromptBtn, #uslEditPromptBtn');
+    const addBtn = container.querySelector('#uslAddPromptBtn, #uslEditPromptBtn');
     if (!addBtn) return;
     addBtn.addEventListener('click', () => {
-      this._addPromptRow(container, userStoryId, null);
+      const listEl = container.querySelector('#uslEditPromptsList, #uslAddPromptsList');
+      if (!listEl) return;
+      // New items start expanded so user can type immediately
+      this._addPromptRow(listEl, userStoryId, null);
     });
   }
 
@@ -439,30 +442,28 @@ export class UserStoryDetail {
     const listEl = container.querySelector('#uslEditPromptsList, #uslAddPromptsList');
     if (!listEl) return;
     listEl.innerHTML = '';
-    list.forEach(p => this._addPromptRow(container, userStoryId, p));
+    list.forEach(p => this._addPromptRow(listEl, userStoryId, p));
   }
 
-  _addPromptRow(container, userStoryId, existing) {
-    const listEl = container.querySelector('#uslEditPromptsList, #uslAddPromptsList');
-    if (!listEl) return;
-
-    const row     = document.createElement('div');
-    row.className = 'usl-prompt-row';
+  _addPromptRow(listEl, userStoryId, existing) {
+    const row      = document.createElement('div');
+    row.className  = 'usl-prompt-row';
     row.dataset.id = existing?.id ?? '';
+
+    const tag = existing?.tag?.trim() || '';
 
     row.innerHTML = `
       <div class="usl-prompt-row__top">
-        <input class="usl-prompt-row__tag" type="text" placeholder="Tag (optional)"
-               value="${escHtml(existing?.tag || '')}" autocomplete="off"/>
+        <input class="usl-prompt-row__tag-input" type="text" placeholder="Tag (optional)" value="${escHtml(tag)}" autocomplete="off"/>
         <div class="usl-prompt-row__actions">
-          <button class="usl-prompt-row__btn usl-prompt-row__btn--run-ext" type="button" title="Run in external PowerShell window" aria-label="Run in PowerShell">
-            <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
+          <button class="usl-prompt-row__btn usl-prompt-row__btn--run-ext" type="button" title="Run in external PowerShell window">
+            <svg width="13" height="11" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
           </button>
-          <button class="usl-prompt-row__btn usl-prompt-row__btn--expand" type="button" title="Expand" aria-label="Expand prompt">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <button class="usl-prompt-row__btn usl-prompt-row__btn--expand" type="button" title="Expand to full editor">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button class="usl-prompt-row__btn usl-prompt-row__btn--delete" type="button" title="Delete" aria-label="Delete prompt">
-            <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <button class="usl-prompt-row__btn usl-prompt-row__btn--delete" type="button" title="Delete">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
       </div>
@@ -471,29 +472,27 @@ export class UserStoryDetail {
 
     listEl.appendChild(row);
 
-    const tagEl  = row.querySelector('.usl-prompt-row__tag');
-    const taEl   = row.querySelector('.usl-prompt-row__textarea');
+    const tagInput = row.querySelector('.usl-prompt-row__tag-input');
+    const taEl     = row.querySelector('.usl-prompt-row__textarea');
 
     // Auto-save on blur
     const save = async () => {
-      const tag    = tagEl.value.trim() || null;
       const prompt = taEl.value.trim();
+      const tagVal = tagInput.value.trim() || null;
       if (!prompt) return;
       if (row.dataset.id) {
-        await window.db.prompts.update({ id: parseInt(row.dataset.id), tag, prompt });
+        await window.db.prompts.update({ id: parseInt(row.dataset.id), tag: tagVal, prompt });
       } else if (userStoryId) {
-        const created = await window.db.prompts.create({ user_story_id: userStoryId, tag, prompt });
+        const created = await window.db.prompts.create({ user_story_id: userStoryId, tag: tagVal, prompt });
         row.dataset.id = created.id;
       }
     };
-    tagEl.addEventListener('blur', save);
+    tagInput.addEventListener('blur', save);
     taEl.addEventListener('blur', save);
 
     // Delete
     row.querySelector('.usl-prompt-row__btn--delete').addEventListener('click', async () => {
-      if (row.dataset.id) {
-        await window.db.prompts.delete(parseInt(row.dataset.id));
-      }
+      if (row.dataset.id) await window.db.prompts.delete(parseInt(row.dataset.id));
       row.remove();
     });
 
@@ -513,10 +512,10 @@ export class UserStoryDetail {
       }
     });
 
-    // Expand
+    // Expand overlay
     row.querySelector('.usl-prompt-row__btn--expand').addEventListener('click', async () => {
       await save();
-      this._openExpandOverlay(taEl, existing?.tag || 'Prompt', async () => { await save(); }, true);
+      this._openExpandOverlay(taEl, tagInput.value.trim() || 'Prompt', async () => { await save(); }, true);
     });
   }
 
