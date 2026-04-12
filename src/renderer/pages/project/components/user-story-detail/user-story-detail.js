@@ -419,10 +419,35 @@ export class UserStoryDetail {
       container.querySelectorAll('.usl-view-toggle__btn').forEach(btn => {
         btn.classList.toggle('usl-view-toggle__btn--active', btn.dataset.view === view);
       });
+      const footer = container.querySelector('.usl-add-form__footer');
+      if (footer) {
+        const isDetails = view === 'details';
+        footer.querySelectorAll('button').forEach(btn => {
+          btn.disabled = !isDetails;
+        });
+      }
     };
 
     container.querySelectorAll('.usl-view-toggle__btn').forEach(btn => {
-      btn.addEventListener('click', () => applyView(btn.dataset.view));
+      btn.addEventListener('click', () => {
+        if (btn.dataset.view === 'quickprompts') {
+          const consoleEl   = document.getElementById('projectConsole');
+          const toggleBtn   = document.getElementById('btnConsoleToggle');
+          const resizeHandle = document.querySelector('.project-panel__resize[data-resize="console"]');
+          if (consoleEl?.classList.contains('project-console--collapsed')) {
+            consoleEl.classList.remove('project-console--collapsed');
+            consoleEl.style.flex = '0 0 25%';
+            if (resizeHandle) resizeHandle.style.display = '';
+            if (toggleBtn) {
+              toggleBtn.title = 'Collapse console';
+              toggleBtn.setAttribute('aria-label', 'Collapse console');
+              const icon = toggleBtn.querySelector('.console-toggle-icon');
+              if (icon) icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+            }
+          }
+        }
+        applyView(btn.dataset.view);
+      });
     });
 
     applyView(defaultView);
