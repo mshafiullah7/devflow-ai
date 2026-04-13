@@ -74,6 +74,32 @@ function registerTerminalHandlers() {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
   });
 
+  // Spawn node directly (no PowerShell) for persistent REPL sessions (Ollama agent-cli).
+  // PowerShell closes its own stdin after launch, sending EOF to child processes and
+  // killing the readline loop — bypassing it keeps the stdin pipe alive indefinitely.
+  ipcMain.handle('terminal:repl-start', (event, { agentPath, model, host, dir, initialPrompt }) => {
+    if (_activeProc) { killTree(_activeProc); _activeProc = null; }
+    const wc = event.sender;
+    _activeProc = spawn(
+      'node',
+      [agentPath, '--model', model, '--host', host, '--dir', dir],
+      { stdio: ['pipe', 'pipe', 'pipe'], cwd: dir || os.homedir(), env: process.env, windowsHide: true }
+    );
+    if (initialPrompt) {
+      _activeProc.stdin.write(initialPrompt + '\n');
+    }
+    const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
+    _activeProc.stdout.on('data', d => send('terminal:data', { text: d.toString('utf8'), stream: 'stdout' }));
+    _activeProc.stderr.on('data', d => send('terminal:data', { text: d.toString('utf8'), stream: 'stderr' }));
+    _activeProc.on('close', code => { _activeProc = null; send('terminal:done', { exitCode: code }); });
+    _activeProc.on('error', err => {
+      _activeProc = null;
+      send('terminal:data', { text: err.message, stream: 'stderr' });
+      send('terminal:done', { exitCode: 1 });
+    });
+    return { pid: _activeProc.pid };
+  });
+
   // Forward user input to the running process's stdin (for interactive programs)
   ipcMain.handle('terminal:stdin', (_e, text) => {
     if (_activeProc && _activeProc.stdin && !_activeProc.stdin.destroyed) {

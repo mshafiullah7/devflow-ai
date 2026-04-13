@@ -2,13 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; img-src 'self' data:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
     <title>DevFlow AI</title>
     <link rel="stylesheet" href="styles/app.css" />
-    <script>
-      var _t = localStorage.getItem('devflow-theme');
-      document.documentElement.dataset.theme = (['light','dark','midnight'].indexOf(_t) !== -1 ? _t : 'dark');
-    </script>
+    <script src="theme-init.js"></script>
   </head>
   <body>
     <div id="app"></div>

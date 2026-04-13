@@ -73,7 +73,6 @@ export class UserStoryDetail {
           <div class="usl-view-toggle" id="uslAddViewToggle">
             <button class="usl-view-toggle__btn usl-view-toggle__btn--active" data-view="details">Details</button>
             <button class="usl-view-toggle__btn" data-view="prompts">Prompts</button>
-            <button class="usl-view-toggle__btn" data-view="quickprompts">Quick Prompts</button>
           </div>
         </div>
         <div class="usl-add-form__body">
@@ -112,7 +111,7 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="6"></textarea>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--prompt" data-prompt-field>
+          <div class="usl-add-form__field usl-add-form__field--prompt" data-detail-field>
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddPrompt">Prompt</label>
               <div class="usl-add-form__label-actions">
@@ -141,7 +140,7 @@ export class UserStoryDetail {
             <div class="usl-prompts-list" id="uslAddPromptsList"></div>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--quickprompt" data-quickprompt-field>
+          <div class="usl-add-form__field usl-add-form__field--quickprompt" data-prompt-field>
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddQuickPrompt">Quick Prompt</label>
               <div class="usl-add-form__label-actions">
@@ -233,7 +232,6 @@ export class UserStoryDetail {
           <div class="usl-view-toggle" id="uslEditViewToggle">
             <button class="usl-view-toggle__btn usl-view-toggle__btn--active" data-view="details">Details</button>
             <button class="usl-view-toggle__btn" data-view="prompts">Prompts</button>
-            <button class="usl-view-toggle__btn" data-view="quickprompts">Quick Prompts</button>
           </div>
           <select class="usl-add-form__status-select" id="uslEditStatus">
             <option value="">— none —</option>
@@ -279,7 +277,7 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="6">${escHtml(story.acceptance_criteria || '')}</textarea>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--prompt" data-prompt-field>
+          <div class="usl-add-form__field usl-add-form__field--prompt" data-detail-field>
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
               <div class="usl-add-form__label-actions">
@@ -308,7 +306,7 @@ export class UserStoryDetail {
             <div class="usl-prompts-list" id="uslEditPromptsList"></div>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--quickprompt" data-quickprompt-field>
+          <div class="usl-add-form__field usl-add-form__field--quickprompt" data-prompt-field>
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditQuickPrompt">Quick Prompt</label>
               <div class="usl-add-form__label-actions">
@@ -404,9 +402,6 @@ export class UserStoryDetail {
       });
       container.querySelectorAll('[data-prompt-field]').forEach(el => {
         el.style.display = view === 'prompts' ? '' : 'none';
-      });
-      container.querySelectorAll('[data-quickprompt-field]').forEach(el => {
-        el.style.display = view === 'quickprompts' ? '' : 'none';
       });
       container.querySelectorAll('.usl-view-toggle__btn').forEach(btn => {
         btn.classList.toggle('usl-view-toggle__btn--active', btn.dataset.view === view);
@@ -924,8 +919,7 @@ export class UserStoryDetail {
   async _saveToHistory(userStoryId, prompt) {
     if (!userStoryId) return;
     const existing = await window.db.promptHistory.list(userStoryId);
-    const last = existing[existing.length - 1];
-    if (last && last.prompt === prompt) return; // skip duplicate
+    if (existing.some(e => e.prompt === prompt)) return; // skip duplicate
     await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
     this._loadPromptHistory(userStoryId);
   }

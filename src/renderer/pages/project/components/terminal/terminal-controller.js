@@ -162,17 +162,14 @@ export class TerminalController {
       return null;
     }
     if (cfg.type === 'ollama') {
-      // Launch agent-cli in REPL mode (no --once) with --dir so the model has
-      // full access to project files. Send the opening prompt via stdin so the
-      // session starts immediately, then stays open for follow-up questions.
-      const agentPath   = window._agentCliPath || 'agent-cli/index.js';
-      const model       = cfg.model_name || 'phi4-mini:latest';
-      const host        = cfg.base_url   || 'http://localhost:11434';
-      const dir         = this._termCwd  || '.';
-      return {
-        cmd:          `node "${agentPath}" --model ${model} --host ${host} --dir "${dir}"`,
-        initialStdin: prompt,
-      };
+      // Spawn node directly (not via PowerShell) so the stdin pipe stays open
+      // for follow-up messages. PowerShell closes its own stdin after launch,
+      // which sends EOF to the child and kills the readline REPL loop.
+      const agentPath = window._agentCliPath || 'agent-cli/index.js';
+      const model     = cfg.model_name || 'phi4-mini:latest';
+      const host      = cfg.base_url   || 'http://localhost:11434';
+      const dir       = this._termCwd  || '.';
+      return { repl: true, agentPath, model, host, dir, initialPrompt: prompt };
     }
     // CLI type (claude, gemini, mistral, etc.) — single-shot via heredoc pipe
     const safePrompt = prompt.replace(/'/g, "''");
@@ -305,7 +302,6 @@ export class TerminalController {
       if (!prompt) return;
       const result = await this._buildAiPromptCmd(prompt);
       if (!result) return;
-      const { cmd: builtCmd, initialStdin } = result;
       const streamDiv = document.createElement('div');
       streamDiv.className = 'project-console__stream-block';
       out.appendChild(streamDiv);
@@ -316,14 +312,17 @@ export class TerminalController {
       this._currentStreamDiv = streamDiv;
       out.scrollTop = out.scrollHeight;
       this._setRunning(true);
-      await window.db.terminal.execStart({ command: builtCmd, cwd: this._termCwd, initialStdin });
-      // Show conversation hint for Ollama REPL sessions (initialStdin means REPL mode)
-      if (initialStdin) {
+      if (result.repl) {
+        // Ollama REPL: spawn node directly to keep stdin pipe open
+        await window.db.terminal.replStart(result);
         const hint = document.createElement('div');
         hint.className = 'project-console__conv-hint';
         hint.textContent = 'Conversation active — type /q to end';
         out.appendChild(hint);
         out.scrollTop = out.scrollHeight;
+      } else {
+        const { cmd: builtCmd, initialStdin } = result;
+        await window.db.terminal.execStart({ command: builtCmd, cwd: this._termCwd, initialStdin });
       }
       return;
     }

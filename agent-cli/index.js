@@ -8,7 +8,6 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const readline = require('readline');
 const { execSync } = require('child_process');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -486,66 +485,63 @@ async function main() {
   }
   console.log(clr('green', '  Ollama connection OK\n'));
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: clr('magenta', 'You > '),
-  });
-
+  // Use raw stdin events instead of readline to avoid Windows named-pipe EOF
+  // issues where readline's internal pause()/resume() cycle triggers premature
+  // 'close' events when stdin is a piped (non-TTY) stream.
   let conversationHistory = [];
-  let currentModel = MODEL;
+  let stdinBuffer = '';
+  let processing = false;
+  const lineQueue = [];
 
-  rl.prompt();
+  const processNextLine = async () => {
+    if (processing || lineQueue.length === 0) return;
+    processing = true;
+    const input = lineQueue.shift();
 
-  rl.on('line', async (line) => {
-    const input = line.trim();
-    if (!input) { rl.prompt(); return; }
-
-    // Commands
-    if (input === '/exit' || input === '/quit') {
-      console.log(clr('dim', 'Goodbye.\n'));
-      process.exit(0);
-    }
     if (input === '/clear') {
       conversationHistory = [];
       console.log(clr('green', '  Conversation cleared.\n'));
-      rl.prompt();
-      return;
-    }
-    if (input === '/dir') {
+    } else if (input === '/dir') {
       console.log(clr('cyan', `  Project dir: ${PROJECT_DIR}\n`));
-      rl.prompt();
-      return;
-    }
-    if (input.startsWith('/model ')) {
-      currentModel = input.slice(7).trim();
-      console.log(clr('green', `  Switched to model: ${currentModel}\n`));
-      rl.prompt();
-      return;
-    }
-    if (input === '/history') {
+    } else if (input.startsWith('/model ')) {
+      const m = input.slice(7).trim();
+      if (m) console.log(clr('green', `  Switched to model: ${m}\n`));
+    } else if (input === '/history') {
       console.log(clr('dim', JSON.stringify(conversationHistory, null, 2) + '\n'));
-      rl.prompt();
-      return;
+    } else {
+      try {
+        conversationHistory = await runAgentLoop(input, conversationHistory);
+        if (conversationHistory.length > 40) {
+          conversationHistory = conversationHistory.slice(-40);
+        }
+      } catch (err) {
+        console.error(clr('red', `\nError: ${err.message}\n`));
+      }
     }
 
-    rl.pause();
-    try {
-      conversationHistory = await runAgentLoop(input, conversationHistory);
-      // Keep last 20 turns to avoid context overflow
-      if (conversationHistory.length > 40) {
-        conversationHistory = conversationHistory.slice(-40);
+    processing = false;
+    processNextLine();
+  };
+
+  process.stdin.setEncoding('utf8');
+  process.stdin.resume();
+
+  process.stdin.on('data', (chunk) => {
+    stdinBuffer += chunk;
+    let nl;
+    while ((nl = stdinBuffer.indexOf('\n')) !== -1) {
+      const line = stdinBuffer.slice(0, nl).replace(/\r$/, '').trim();
+      stdinBuffer = stdinBuffer.slice(nl + 1);
+      if (line) {
+        lineQueue.push(line);
+        processNextLine();
       }
-    } catch (err) {
-      console.error(clr('red', `\nError: ${err.message}\n`));
     }
-    rl.resume();
-    rl.prompt();
   });
 
-  rl.on('close', () => {
-    console.log(clr('dim', '\nGoodbye.\n'));
-    process.exit(0);
+  // Keep the process alive even if stdin closes — the app sends /q via killActive()
+  process.stdin.on('end', () => {
+    // stdin EOF: do nothing, wait to be killed externally
   });
 }
 
