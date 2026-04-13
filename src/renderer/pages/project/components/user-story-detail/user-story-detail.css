@@ -572,6 +572,15 @@
 .usl-expand-preview .md-svg { margin: 0.8em 0; line-height: 0; }
 .usl-expand-preview .md-svg svg { max-width: 100%; height: auto; }
 
+/* Markdown tables */
+.usl-expand-preview .md-table { width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 0.85rem; }
+.usl-expand-preview .md-table th,
+.usl-expand-preview .md-table td { padding: 0.35em 0.7em; border: 1px solid #374151; text-align: left; vertical-align: top; }
+.usl-expand-preview .md-table thead tr { background: #1f2937; }
+.usl-expand-preview .md-table th { font-weight: 600; color: #e5e7eb; }
+.usl-expand-preview .md-table tbody tr:nth-child(even) { background: #161b22; }
+.usl-expand-preview .md-table tbody tr:hover { background: #1e2a38; }
+
 .usl-expand-preview strong { font-weight: 700; }
 .usl-expand-preview em     { font-style: italic; }
 .usl-expand-preview del    { text-decoration: line-through; opacity: 0.7; }

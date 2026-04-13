@@ -986,8 +986,8 @@ export class UserStoryDetail {
           <span class="usl-expand-title">${escHtml(label)}</span>
           ${isPrompt ? `
           <div class="usl-expand-tabs">
-            <button class="usl-expand-tab usl-expand-tab--active" data-tab="edit">Edit</button>
-            <button class="usl-expand-tab" data-tab="preview">Preview</button>
+            <button class="usl-expand-tab" data-tab="edit">Edit</button>
+            <button class="usl-expand-tab usl-expand-tab--active" data-tab="preview">Preview</button>
           </div>` : ''}
           <button class="usl-expand-close" aria-label="Close">&times;</button>
         </div>
@@ -1029,6 +1029,11 @@ export class UserStoryDetail {
       expandTA.addEventListener('input', syncBd);
       expandTA.addEventListener('scroll', () => { bd.scrollTop = expandTA.scrollTop; });
       syncBd();
+
+      // Default to Preview tab on open
+      previewPane.innerHTML = this._renderMarkdown(expandTA.value);
+      editPane.hidden    = true;
+      previewPane.hidden = false;
 
       tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -1089,6 +1094,46 @@ export class UserStoryDetail {
     const closeList = () => {
       if (inUl) { out.push('</ul>'); inUl = false; lastBlock = 'list'; }
       if (inOl) { out.push('</ol>'); inOl = false; lastBlock = 'list'; }
+    };
+
+    let inTable     = false;
+    let tableLines  = [];
+
+    const flushTable = () => {
+      if (!inTable) return;
+      inTable = false;
+      if (tableLines.length < 2) {
+        // Not enough lines to form a proper table — emit as paragraphs
+        tableLines.forEach(l => out.push(`<p>${this._inlineMarkdown(esc(l))}</p>`));
+        tableLines = [];
+        lastBlock = 'p';
+        return;
+      }
+      const parseRow = r => r.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      const isSep    = r => /^\|?[\s\-|:]+\|?$/.test(r) && r.includes('-');
+      const sepIdx   = tableLines.findIndex(isSep);
+      const headRows = sepIdx > 0 ? tableLines.slice(0, sepIdx) : [];
+      const bodyRows = tableLines.slice(sepIdx + 1);
+
+      let html = '<table class="md-table">';
+      if (headRows.length) {
+        html += '<thead>';
+        headRows.forEach(r => {
+          html += '<tr>' + parseRow(r).map(c => `<th>${this._inlineMarkdown(esc(c))}</th>`).join('') + '</tr>';
+        });
+        html += '</thead>';
+      }
+      if (bodyRows.length) {
+        html += '<tbody>';
+        bodyRows.forEach(r => {
+          html += '<tr>' + parseRow(r).map(c => `<td>${this._inlineMarkdown(esc(c))}</td>`).join('') + '</tr>';
+        });
+        html += '</tbody>';
+      }
+      html += '</table>';
+      out.push(html);
+      tableLines = [];
+      lastBlock = 'table';
     };
 
     let inSvg    = false;
@@ -1177,6 +1222,17 @@ export class UserStoryDetail {
         continue;
       }
 
+      // Markdown table row
+      if (line.trim().startsWith('|')) {
+        closeList();
+        inTable = true;
+        tableLines.push(line.trim());
+        continue;
+      }
+
+      // Flush any open table when a non-table line is encountered
+      if (inTable) flushTable();
+
       // Blank line — only emit a spacer after plain paragraphs
       if (line.trim() === '') {
         closeList();
@@ -1190,6 +1246,7 @@ export class UserStoryDetail {
     }
 
     closeList();
+    if (inTable) flushTable();
     if (inCode) out.push(`<pre><code>${codeLines.join('\n')}</code></pre>`);
     return out.join('');
   }
