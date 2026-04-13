@@ -2,7 +2,7 @@
 /* Console panel                                                        */
 /* ------------------------------------------------------------------ */
 .project-console {
-  flex: 0 0 25%;
+  flex: 0 0 20%;
   min-width: 180px;
   max-width: 100%;          /* never push past viewport */
   min-width: 0;             /* let flex shrink below content width */
@@ -13,7 +13,7 @@
   border-left: 1px solid var(--border);
 }
 
-/* Collapsed console — slim strip showing only the titlebar */
+/* Collapsed console — slim vertical strip */
 .project-console--collapsed {
   flex: 0 0 36px !important;
   min-width: 36px !important;
@@ -21,6 +21,45 @@
 .project-console--collapsed .project-console__output,
 .project-console--collapsed .project-console__input-row {
   display: none;
+}
+
+/* Collapsed titlebar becomes a full-height vertical column */
+.project-console--collapsed .project-console__titlebar {
+  height: 100%;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 6px 0;
+  gap: 4px;
+  border-bottom: none;
+  border-right: none;
+  overflow: hidden;
+}
+
+/* Hide the console icon + "Console" text when collapsed */
+.project-console--collapsed .project-console__title > svg,
+.project-console--collapsed .project-console__title-text {
+  display: none;
+}
+/* The title div itself becomes a column to stack collapse-btn vertically */
+.project-console--collapsed .project-console__title {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* Stack action buttons vertically */
+.project-console--collapsed .project-console__actions {
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Keep the menu dropdown opening to the left when collapsed */
+.project-console--collapsed .project-console__menu-dropdown {
+  top: 0;
+  right: calc(100% + 6px);
+  left: auto;
 }
 
 /* Collapse toggle button in titlebar */

@@ -180,12 +180,21 @@ export class LauncherPage {
           ${p.description ? `<div class="project-card__desc">${escHtml(p.description)}</div>` : ''}
         </div>
         <div class="project-card__meta">${timeAgo(p.created_at)}</div>
+        <button class="project-card__edit" aria-label="Edit project" title="Edit project">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+            <path d="M14.5 2.5a2.121 2.121 0 013 3L6 17H3v-3L14.5 2.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </button>
         <button class="project-card__delete" aria-label="Remove project" title="Remove from list">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
             <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
           </svg>
         </button>
       `;
+      card.querySelector('.project-card__edit').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._openEditModal(p, card);
+      });
       card.querySelector('.project-card__delete').addEventListener('click', (e) => {
         e.stopPropagation();
         this._confirmDisable(p.id, p.name, card);
@@ -199,6 +208,68 @@ export class LauncherPage {
     await window.db.projects.open(id);
     await window.db.window.expand();
     this.router.navigate('project', { projectId: id });
+  }
+
+  _openEditModal(project, cardEl) {
+    // Remove any existing edit modal
+    document.querySelector('.proj-edit-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'proj-edit-overlay';
+    overlay.innerHTML = `
+      <div class="proj-edit-dialog">
+        <h3 class="proj-edit-title">Edit Project</h3>
+        <div class="proj-edit-field">
+          <label class="proj-edit-label">Name</label>
+          <input class="proj-edit-input" id="projEditName" type="text" value="${escHtml(project.name)}" placeholder="Project name" autocomplete="off"/>
+        </div>
+        <div class="proj-edit-field">
+          <label class="proj-edit-label">Description</label>
+          <textarea class="proj-edit-textarea" id="projEditDesc" placeholder="Optional description" rows="3">${escHtml(project.description || '')}</textarea>
+        </div>
+        <div class="proj-edit-footer">
+          <button class="proj-edit-btn proj-edit-btn--cancel">Cancel</button>
+          <button class="proj-edit-btn proj-edit-btn--save">Save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const nameInput = overlay.querySelector('#projEditName');
+    const descInput = overlay.querySelector('#projEditDesc');
+    nameInput.focus();
+    nameInput.select();
+
+    const close = () => overlay.remove();
+
+    overlay.querySelector('.proj-edit-btn--cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('.proj-edit-btn--save').addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      await window.db.projects.update({ id: project.id, name, description: descInput.value.trim() || null });
+      // Update card in place
+      cardEl.querySelector('.project-card__name').textContent = name;
+      const descEl = cardEl.querySelector('.project-card__desc');
+      const newDesc = descInput.value.trim();
+      if (newDesc) {
+        if (descEl) descEl.textContent = newDesc;
+        else {
+          const info = cardEl.querySelector('.project-card__info');
+          const d = document.createElement('div');
+          d.className = 'project-card__desc';
+          d.textContent = newDesc;
+          info.appendChild(d);
+        }
+      } else if (descEl) {
+        descEl.remove();
+      }
+      // Update the initial badge
+      const icon = cardEl.querySelector('.project-card__icon');
+      if (icon) icon.textContent = name.trim()[0]?.toUpperCase() || '?';
+      close();
+    });
   }
 
   _confirmDisable(id, name, cardEl) {

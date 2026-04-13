@@ -166,7 +166,6 @@ export class UserStoryDetail {
 
         </div>
         <div class="usl-add-form__footer">
-          <button class="usl-add-form__btn usl-add-form__btn--cancel">Cancel</button>
           <button class="usl-add-form__btn usl-add-form__btn--save">Add User Story</button>
         </div>
       </div>
@@ -186,8 +185,6 @@ export class UserStoryDetail {
     this._bindRunBtns(this._detailEl);
     this._bindQuickRunBtns(this._detailEl);
 
-    this._detailEl.querySelector('.usl-add-form__btn--cancel')
-      .addEventListener('click', () => this.showEmpty());
 
     const save = async () => {
       const title = titleEl.value.trim();
@@ -327,7 +324,6 @@ export class UserStoryDetail {
 
         </div>
         <div class="usl-add-form__footer">
-          <button class="usl-add-form__btn usl-add-form__btn--cancel">Cancel</button>
           <button class="usl-add-form__btn usl-add-form__btn--save">Save Changes</button>
         </div>
       </div>
@@ -396,10 +392,6 @@ export class UserStoryDetail {
     this._bindMarkExecutedBtns(this._detailEl, story);
     this._loadPromptHistory(story.id);
 
-    this._detailEl.querySelector('.usl-add-form__btn--cancel').addEventListener('click', () => {
-      this._onCancelled();
-      this.showEmpty();
-    });
   }
 
   // ----------------------------------------------------------------
@@ -419,33 +411,10 @@ export class UserStoryDetail {
       container.querySelectorAll('.usl-view-toggle__btn').forEach(btn => {
         btn.classList.toggle('usl-view-toggle__btn--active', btn.dataset.view === view);
       });
-      const footer = container.querySelector('.usl-add-form__footer');
-      if (footer) {
-        const isDetails = view === 'details';
-        footer.querySelectorAll('button').forEach(btn => {
-          btn.disabled = !isDetails;
-        });
-      }
     };
 
     container.querySelectorAll('.usl-view-toggle__btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (btn.dataset.view === 'quickprompts') {
-          const consoleEl   = document.getElementById('projectConsole');
-          const toggleBtn   = document.getElementById('btnConsoleToggle');
-          const resizeHandle = document.querySelector('.project-panel__resize[data-resize="console"]');
-          if (consoleEl?.classList.contains('project-console--collapsed')) {
-            consoleEl.classList.remove('project-console--collapsed');
-            consoleEl.style.flex = '0 0 25%';
-            if (resizeHandle) resizeHandle.style.display = '';
-            if (toggleBtn) {
-              toggleBtn.title = 'Collapse console';
-              toggleBtn.setAttribute('aria-label', 'Collapse console');
-              const icon = toggleBtn.querySelector('.console-toggle-icon');
-              if (icon) icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
-            }
-          }
-        }
         applyView(btn.dataset.view);
       });
     });
@@ -536,137 +505,120 @@ export class UserStoryDetail {
     });
   }
 
-  _getOrInitTabsContainer(listEl) {
-    let bar = listEl.querySelector('.usl-ptabs__bar');
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.className = 'usl-ptabs__bar';
-      const contentEl = document.createElement('div');
-      contentEl.className = 'usl-ptabs__content';
-      listEl.appendChild(bar);
-      listEl.appendChild(contentEl);
-    }
-    return {
-      bar:     listEl.querySelector('.usl-ptabs__bar'),
-      content: listEl.querySelector('.usl-ptabs__content'),
-    };
-  }
-
-  _activateTab(tab, panel, bar, content) {
-    bar.querySelectorAll('.usl-ptab').forEach(t => t.classList.remove('usl-ptab--active'));
-    content.querySelectorAll('.usl-ptabs__panel').forEach(p => p.classList.remove('usl-ptabs__panel--active'));
-    tab.classList.add('usl-ptab--active');
-    panel.classList.add('usl-ptabs__panel--active');
-  }
-
   _addPromptRow(listEl, userStoryId, existing) {
-    const { bar, content } = this._getOrInitTabsContainer(listEl);
-
     const tag      = existing?.tag?.trim() || '';
-    const tabCount = bar.querySelectorAll('.usl-ptab').length;
-    const label    = tag || `Prompt ${tabCount + 1}`;
-
-    // Panel
-    const panel         = document.createElement('div');
-    panel.className     = 'usl-ptabs__panel';
-    panel.dataset.rowId = existing?.id ?? '';
+    const itemCount = listEl.querySelectorAll('.usl-pl-item').length;
     const isExecuted = !!existing?.is_executed;
-    panel.innerHTML = `
-      <div class="usl-ptabs__toolbar">
-        <input class="usl-ptabs__tag-input" type="text" placeholder="Tab label (optional)" value="${escHtml(tag)}" autocomplete="off"/>
-        <div class="usl-ptabs__actions">
-          <button class="usl-ptabs__btn usl-ptabs__btn--mark-executed${isExecuted ? ' is-executed' : ''}" type="button" title="${isExecuted ? 'Executed' : 'Mark as Executed'}">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button class="usl-ptabs__btn usl-ptabs__btn--run-ext" type="button" title="Run in external PowerShell window">
-            <svg width="13" height="11" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
-          </button>
-          <button class="usl-ptabs__btn usl-ptabs__btn--expand" type="button" title="Expand to full editor">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
+
+    const _buildLabel = (tagVal, promptText) => {
+      const t = tagVal?.trim() || `Prompt ${itemCount + 1}`;
+      const firstLine = (promptText || '').split('\n')[0].trim();
+      const snippet = firstLine.length > 50 ? firstLine.slice(0, 50) + '…' : firstLine;
+      return snippet ? `${t} — ${snippet}` : t;
+    };
+    const label = _buildLabel(tag, existing?.prompt || '');
+
+    const item = document.createElement('div');
+    item.className     = 'usl-pl-item';
+    item.dataset.rowId = existing?.id ?? '';
+
+    const statusIconExecuted = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const statusIconPending  = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/></svg>`;
+
+    item.innerHTML = `
+      <div class="usl-pl-item__header">
+        <span class="usl-pl-item__status ${isExecuted ? 'usl-pl-status--executed' : 'usl-pl-status--pending'}" title="${isExecuted ? 'Executed' : 'Not executed'}">
+          ${isExecuted ? statusIconExecuted : statusIconPending}
+        </span>
+        <span class="usl-pl-item__label">${escHtml(label)}</span>
+        <svg class="usl-pl-item__chevron" width="10" height="10" viewBox="0 0 16 16" fill="none">
+          <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
-      <textarea class="usl-ptabs__textarea" placeholder="Prompt text…">${escHtml(existing?.prompt || '')}</textarea>
+      <div class="usl-pl-item__body" hidden>
+        <div class="usl-pl-item__toolbar">
+          <input class="usl-pl-item__tag-input" type="text" placeholder="Label (optional)" value="${escHtml(tag)}" autocomplete="off"/>
+          <div class="usl-pl-item__actions">
+            <button class="usl-pl-item__btn usl-pl-item__btn--mark-executed${isExecuted ? ' is-executed' : ''}" type="button" title="${isExecuted ? 'Executed' : 'Mark as Executed'}">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="usl-pl-item__btn usl-pl-item__btn--run-ext" type="button" title="Run in external PowerShell window">
+              <svg width="13" height="11" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
+            </button>
+            <button class="usl-pl-item__btn usl-pl-item__btn--expand" type="button" title="Expand to full editor">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="usl-pl-item__btn usl-pl-item__btn--delete" type="button" title="Delete prompt">
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <textarea class="usl-pl-item__textarea" placeholder="Prompt text…">${escHtml(existing?.prompt || '')}</textarea>
+      </div>
     `;
-    content.appendChild(panel);
 
-    // Tab button
-    const tab     = document.createElement('button');
-    tab.className = 'usl-ptab';
-    tab.type      = 'button';
-    tab.innerHTML = `<span class="usl-ptab__label">${escHtml(label)}</span><span class="usl-ptab__close" title="Delete">×</span>`;
-    bar.appendChild(tab);
+    listEl.appendChild(item);
 
-    const tagInput = panel.querySelector('.usl-ptabs__tag-input');
-    const taEl     = panel.querySelector('.usl-ptabs__textarea');
-    const tabLabel = tab.querySelector('.usl-ptab__label');
+    const headerEl   = item.querySelector('.usl-pl-item__header');
+    const bodyEl     = item.querySelector('.usl-pl-item__body');
+    const statusEl   = item.querySelector('.usl-pl-item__status');
+    const labelEl    = item.querySelector('.usl-pl-item__label');
+    const tagInput   = item.querySelector('.usl-pl-item__tag-input');
+    const taEl       = item.querySelector('.usl-pl-item__textarea');
+    const markExecBtn = item.querySelector('.usl-pl-item__btn--mark-executed');
 
-    // Activate first tab automatically, or activate newly added tab
-    this._activateTab(tab, panel, bar, content);
-    if (!existing) taEl.focus();
+    // Open new (unsaved) items immediately
+    if (!existing) {
+      item.classList.add('usl-pl-item--open');
+      bodyEl.hidden = false;
+      taEl.focus();
+    }
 
-    // Live-update tab label when tag changes
-    tagInput.addEventListener('input', () => {
-      const idx = Array.from(bar.querySelectorAll('.usl-ptab')).indexOf(tab);
-      tabLabel.textContent = tagInput.value.trim() || `Prompt ${idx + 1}`;
+    // Toggle open/close on header click
+    headerEl.addEventListener('click', () => {
+      const isOpen = item.classList.toggle('usl-pl-item--open');
+      bodyEl.hidden = !isOpen;
     });
 
-    // Tab click to switch
-    tab.addEventListener('click', (e) => {
-      if (e.target.closest('.usl-ptab__close')) return;
-      this._activateTab(tab, panel, bar, content);
-    });
+    // Live-update label when tag or prompt changes
+    const refreshLabel = () => {
+      labelEl.textContent = _buildLabel(tagInput.value, taEl.value);
+    };
+    tagInput.addEventListener('input', refreshLabel);
+    taEl.addEventListener('input', refreshLabel);
 
     // Auto-save on blur
     const save = async () => {
       const prompt = taEl.value.trim();
       const tagVal = tagInput.value.trim() || null;
       if (!prompt) return;
-      if (panel.dataset.rowId) {
-        await window.db.prompts.update({ id: parseInt(panel.dataset.rowId), tag: tagVal, prompt });
+      if (item.dataset.rowId) {
+        await window.db.prompts.update({ id: parseInt(item.dataset.rowId), tag: tagVal, prompt });
       } else if (userStoryId) {
         const created = await window.db.prompts.create({ user_story_id: userStoryId, tag: tagVal, prompt });
-        panel.dataset.rowId = created.id;
+        item.dataset.rowId = created.id;
       }
     };
     tagInput.addEventListener('blur', save);
     taEl.addEventListener('blur', save);
 
-    // Delete via × on tab
-    tab.querySelector('.usl-ptab__close').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const confirmed = await this._showConfirm('Delete this prompt tab?', 'Delete');
-      if (!confirmed) return;
-      if (panel.dataset.rowId) await window.db.prompts.delete(parseInt(panel.dataset.rowId));
-      const wasActive = tab.classList.contains('usl-ptab--active');
-      const allTabs   = Array.from(bar.querySelectorAll('.usl-ptab'));
-      const idx       = allTabs.indexOf(tab);
-      tab.remove();
-      panel.remove();
-      if (wasActive) {
-        const remaining = bar.querySelectorAll('.usl-ptab');
-        if (remaining.length > 0) {
-          const newIdx   = Math.min(idx, remaining.length - 1);
-          const newTab   = remaining[newIdx];
-          const newPanel = content.querySelectorAll('.usl-ptabs__panel')[newIdx];
-          this._activateTab(newTab, newPanel, bar, content);
-        }
-      }
-    });
-
     // Mark as executed
-    const markExecBtn = panel.querySelector('.usl-ptabs__btn--mark-executed');
-    markExecBtn.addEventListener('click', async () => {
+    markExecBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       const nowExecuted = !markExecBtn.classList.contains('is-executed');
       markExecBtn.classList.toggle('is-executed', nowExecuted);
       markExecBtn.title = nowExecuted ? 'Executed' : 'Mark as Executed';
-      if (panel.dataset.rowId) {
-        await window.db.prompts.update({ id: parseInt(panel.dataset.rowId), is_executed: nowExecuted ? 1 : 0 });
+      statusEl.className = `usl-pl-item__status ${nowExecuted ? 'usl-pl-status--executed' : 'usl-pl-status--pending'}`;
+      statusEl.title     = nowExecuted ? 'Executed' : 'Not executed';
+      statusEl.innerHTML = nowExecuted ? statusIconExecuted : statusIconPending;
+      if (item.dataset.rowId) {
+        await window.db.prompts.update({ id: parseInt(item.dataset.rowId), is_executed: nowExecuted ? 1 : 0 });
       }
     });
 
     // Run external
-    panel.querySelector('.usl-ptabs__btn--run-ext').addEventListener('click', async () => {
+    item.querySelector('.usl-pl-item__btn--run-ext').addEventListener('click', async (e) => {
+      e.stopPropagation();
       if (markExecBtn.classList.contains('is-executed')) {
         const ok = await this._showConfirm(
           'This prompt has already been marked as executed. Run again?', 'Run Again'
@@ -688,9 +640,31 @@ export class UserStoryDetail {
     });
 
     // Expand overlay
-    panel.querySelector('.usl-ptabs__btn--expand').addEventListener('click', async () => {
+    item.querySelector('.usl-pl-item__btn--expand').addEventListener('click', async (e) => {
+      e.stopPropagation();
       await save();
       this._openExpandOverlay(taEl, tagInput.value.trim() || 'Prompt', async () => { await save(); }, true);
+    });
+
+    // Delete
+    item.querySelector('.usl-pl-item__btn--delete').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const confirmed = await this._showConfirm('Delete this prompt?', 'Delete');
+      if (!confirmed) return;
+      if (item.dataset.rowId) await window.db.prompts.delete(parseInt(item.dataset.rowId));
+      item.remove();
+      // Re-number remaining items that still have default labels
+      listEl.querySelectorAll('.usl-pl-item').forEach((el, i) => {
+        const ti = el.querySelector('.usl-pl-item__tag-input');
+        const ta = el.querySelector('.usl-pl-item__textarea');
+        const li = el.querySelector('.usl-pl-item__label');
+        if (ti && li) {
+          const t = ti.value.trim() || `Prompt ${i + 1}`;
+          const firstLine = (ta?.value || '').split('\n')[0].trim();
+          const snippet = firstLine.length > 50 ? firstLine.slice(0, 50) + '…' : firstLine;
+          li.textContent = snippet ? `${t} — ${snippet}` : t;
+        }
+      });
     });
   }
 
@@ -854,6 +828,23 @@ export class UserStoryDetail {
     });
   }
 
+  _expandConsole() {
+    const consoleEl    = document.getElementById('projectConsole');
+    const toggleBtn    = document.getElementById('btnConsoleToggle');
+    const resizeHandle = document.querySelector('.project-panel__resize[data-resize="console"]');
+    if (consoleEl?.classList.contains('project-console--collapsed')) {
+      consoleEl.classList.remove('project-console--collapsed');
+      consoleEl.style.flex = '0 0 20%';
+      if (resizeHandle) resizeHandle.style.display = '';
+      if (toggleBtn) {
+        toggleBtn.title = 'Collapse console';
+        toggleBtn.setAttribute('aria-label', 'Collapse console');
+        const icon = toggleBtn.querySelector('.console-toggle-icon');
+        if (icon) icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+      }
+    }
+  }
+
   _bindQuickRunBtns(container, userStoryId = null) {
     container.querySelectorAll('.usl-add-form__run--quick').forEach(btn => {
       const taId      = btn.dataset.quickprompt;
@@ -877,6 +868,7 @@ export class UserStoryDetail {
       const run = async () => {
         const prompt = textarea ? textarea.value.trim() : '';
         if (!prompt) return;
+        this._expandConsole();
         const cfg = this._resolvedConfig();
         if (cfg.type === 'api') {
           await this._runApiPrompt(prompt, userStoryId);

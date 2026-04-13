@@ -238,7 +238,7 @@ export class ProjectPage {
                   <path d="M4 6l3 2-3 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
                   <path d="M9 10h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                 </svg>
-                Console
+                <span class="project-console__title-text">Console</span>
               </div>
               <div class="project-console__actions">
                 <button class="project-console__folder" id="btnConsoleFolder" title="Select folder">
