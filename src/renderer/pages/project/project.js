@@ -6,7 +6,6 @@ import { StatsModal } from './components/stats/stats-modal.js';
 import { QuickCommandsModal } from './components/quick-commands/quick-commands-modal.js';
 import { DocumentsModal } from './components/documents/documents-modal.js';
 import { ModelConfigsModal } from './components/model-configs/model-configs-modal.js';
-import { OllamaConsole } from './components/ollama-console/ollama-console.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
@@ -66,11 +65,6 @@ export class ProjectPage {
     });
     this._modelConfigsModal.mount();
 
-    this._ollamaConsole = new OllamaConsole();
-    this._ollamaConsole.mount();
-
-    // Cache agent-cli path for Ollama model type
-    window._agentCliPath = await window.app.agentCliPath();
 
     await this._reloadModelDropdown();
     this._bindEvents();
@@ -83,7 +77,6 @@ export class ProjectPage {
     removeCss('pages/project/project.css');
     this._terminal?.unmount();
     this._git?.stopPoll();
-    this._ollamaConsole?.unmount();
   }
 
   // ----------------------------------------------------------------
@@ -137,15 +130,6 @@ export class ProjectPage {
                 <rect x="11" y="1" width="3" height="14" rx="1" stroke="currentColor" stroke-width="1.3"/>
               </svg>
               Statistics
-            </button>
-            <button class="project-page__ollama-btn" id="btnOllamaConsole" aria-label="Open Ollama console" title="Ollama Chat">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M9 9c0-1.66 1.34-3 3-3s3 1.34 3 3c0 1.3-.84 2.4-2 2.82V15"
-                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <circle cx="12" cy="18" r="1" fill="currentColor"/>
-              </svg>
-              Ollama
             </button>
           </div>
         </header>
@@ -354,9 +338,6 @@ export class ProjectPage {
     document.getElementById('btnDocuments')
       .addEventListener('click', () => this._docsModal.show());
 
-    document.getElementById('btnOllamaConsole')
-      .addEventListener('click', () => this._ollamaConsole.show());
-
     document.getElementById('btnConsoleMenu')
       .addEventListener('click', (e) => {
         e.stopPropagation();
@@ -445,13 +426,6 @@ export class ProjectPage {
       onPrintOutput: (text, opts) => {
         document.getElementById('projectConsole').hidden = false;
         this._terminal.printOutput(text, opts);
-      },
-      onOllamaPrompt: (prompt, cfg) => {
-        this._ollamaConsole.openWithPrompt({
-          prompt,
-          cfg,
-          cwd: this._terminal.cwd,
-        });
       },
     });
     await this._storyList.mount();

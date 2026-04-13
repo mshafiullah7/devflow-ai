@@ -17,7 +17,7 @@ import { escHtml, injectCss, timeAgo } from '../../../../shared/helpers.js';
  *   detail.showEditForm(story);
  */
 export class UserStoryDetail {
-  constructor({ detailEl, projectId, getModel, onRunCommand, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled, onOllamaPrompt }) {
+  constructor({ detailEl, projectId, getModel, onRunCommand, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled }) {
     this._detailEl               = detailEl;
     this._projectId              = projectId;
     this._getModel               = getModel || (() => null);
@@ -26,7 +26,6 @@ export class UserStoryDetail {
     this._onPrintOutput          = onPrintOutput || (() => {});
     this._onStoryUpdated         = onStoryUpdated || (() => {});
     this._onCancelled            = onCancelled || (() => {});
-    this._onOllamaPrompt         = onOllamaPrompt || (() => {});
     this._featureId              = null;
     this._statuses               = [];
     this._ctrlSHandler           = null;
@@ -626,8 +625,6 @@ export class UserStoryDetail {
       const cfg = this._resolvedConfig();
       if (cfg.type === 'api') {
         this._runApiPrompt(prompt, userStoryId);
-      } else if (cfg.type === 'ollama') {
-        this._onRunCommand('/p ' + prompt);
       } else {
         const cmd = this._buildExternalCmd(prompt);
         if (cmd) await this._showRunDirModal(cmd);
@@ -709,19 +706,9 @@ export class UserStoryDetail {
     return cfg;
   }
 
-  _ollamaCmd(agentPath, cfg) {
-    const model = cfg.model_name || 'phi4-mini:latest';
-    const host  = cfg.base_url  || 'http://localhost:11434';
-    return `node "${agentPath}" --once --model ${model} --host ${host}`;
-  }
-
   _buildExternalCmd(prompt) {
     const cfg = this._resolvedConfig();
     if (cfg.type === 'api') return null;
-    if (cfg.type === 'ollama') {
-      const agentPath = window._agentCliPath || 'agent-cli/index.js';
-      return `$p = @'\n${prompt}\n'@\nWrite-Output $p | ${this._ollamaCmd(agentPath, cfg)}`;
-    }
     const exe = cfg.executable || 'claude';
     return `$p = @'\n${prompt}\n'@\n${exe} $p`;
   }
@@ -729,10 +716,6 @@ export class UserStoryDetail {
   _buildQuickCmd(prompt) {
     const cfg = this._resolvedConfig();
     if (cfg.type === 'api') return null;
-    if (cfg.type === 'ollama') {
-      const agentPath = window._agentCliPath || 'agent-cli/index.js';
-      return `$p = @'\n${prompt}\n'@\nWrite-Output $p | ${this._ollamaCmd(agentPath, cfg)}`;
-    }
     const exe   = cfg.executable || 'claude';
     const flags = cfg.flags ? ` ${cfg.flags}` : '';
     if (cfg.input_mode === 'heredoc') {
@@ -746,10 +729,6 @@ export class UserStoryDetail {
     if (cfg.type === 'api') {
       const name = cfg.label || cfg.model_name || 'API';
       return `→ ${name} ("${snippet}")`;
-    }
-    if (cfg.type === 'ollama') {
-      const model = cfg.model_name || 'phi4-mini:latest';
-      return `→ ollama/${model} ("${snippet}")`;
     }
     const exe   = cfg.executable || 'claude';
     const flags = cfg.flags ? ` ${cfg.flags}` : '';
@@ -812,9 +791,6 @@ export class UserStoryDetail {
         const cfg = this._resolvedConfig();
         if (cfg.type === 'api') {
           this._runApiPrompt(prompt, userStoryId);
-        } else if (cfg.type === 'ollama') {
-          // Route through the console /p command — uses agent-cli with --dir
-          this._onRunCommand('/p ' + prompt);
         } else {
           const cmd = this._buildExternalCmd(prompt);
           if (cmd) await this._showRunDirModal(cmd);
@@ -867,10 +843,6 @@ export class UserStoryDetail {
         const cfg = this._resolvedConfig();
         if (cfg.type === 'api') {
           await this._runApiPrompt(prompt, userStoryId);
-        } else if (cfg.type === 'ollama') {
-          // Route through the console /p command — uses agent-cli with --dir
-          await this._saveToHistory(userStoryId, prompt);
-          this._onRunCommand('/p ' + prompt);
         } else {
           await this._saveToHistory(userStoryId, prompt);
           const cmd = this._buildQuickCmd(prompt);

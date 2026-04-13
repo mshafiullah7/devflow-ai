@@ -80,15 +80,13 @@ export class ModelConfigsModal {
             <div class="mcfg-item__info">
               <div class="mcfg-item__top">
                 <span class="mcfg-item__label">${escHtml(c.label)}</span>
-                <span class="mcfg-item__badge mcfg-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : c.type === 'ollama' ? 'Ollama' : 'API'}</span>
+                <span class="mcfg-item__badge mcfg-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : 'API'}</span>
                 ${c.is_default ? `<span class="mcfg-item__badge mcfg-item__badge--default">default</span>` : ''}
               </div>
               <div class="mcfg-item__sub">
                 ${c.type === 'cli'
                   ? escHtml(c.executable || '') + (c.flags ? ` <span class="mcfg-item__flags">${escHtml(c.flags)}</span>` : '')
-                  : c.type === 'ollama'
-                    ? escHtml(c.model_name || 'phi4-mini:latest') + ` <span class="mcfg-item__flags">${escHtml(c.base_url || 'http://localhost:11434')}</span>`
-                    : escHtml(c.base_url || '') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '')}
+                  : escHtml(c.base_url || '') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '')}
               </div>
             </div>
             <div class="mcfg-item__actions">
@@ -147,7 +145,6 @@ export class ModelConfigsModal {
           <label class="mcfg-form__label">Type</label>
           <div class="mcfg-form__type-toggle">
             <button type="button" class="mcfg-type-btn ${(!config || config.type === 'cli') ? 'active' : ''}" data-type="cli">CLI</button>
-            <button type="button" class="mcfg-type-btn ${config?.type === 'ollama' ? 'active' : ''}" data-type="ollama">Ollama</button>
             <button type="button" class="mcfg-type-btn mcfg-type-btn--disabled" data-type="api" disabled title="API support is coming soon">
               API <span class="mcfg-coming-soon">Coming Soon</span>
             </button>
@@ -173,20 +170,6 @@ export class ModelConfigsModal {
               <option value="pipe" ${(!config || config.input_mode === 'pipe') ? 'selected' : ''}>Pipe (Write-Output $p | exe)</option>
               <option value="heredoc" ${config?.input_mode === 'heredoc' ? 'selected' : ''}>Heredoc ($p = @'…'@; exe $p)</option>
             </select>
-          </div>
-        </div>
-
-        <!-- Ollama fields -->
-        <div class="mcfg-fields-ollama" id="mcfgFieldsOllama">
-          <div class="mcfg-form__row">
-            <label class="mcfg-form__label">Ollama Host</label>
-            <input class="mcfg-form__input" id="mcfgOllamaHost" type="text" placeholder="http://localhost:11434" value="${escHtml(config?.type === 'ollama' ? (config?.base_url || '') : '')}"/>
-            <span class="mcfg-form__hint">Ollama server URL (default: http://localhost:11434)</span>
-          </div>
-          <div class="mcfg-form__row">
-            <label class="mcfg-form__label">Model *</label>
-            <input class="mcfg-form__input" id="mcfgOllamaModel" type="text" placeholder="phi4-mini:latest" value="${escHtml(config?.type === 'ollama' ? (config?.model_name || '') : '')}"/>
-            <span class="mcfg-form__hint">Model name as shown in <code>ollama list</code></span>
           </div>
         </div>
 
@@ -229,8 +212,7 @@ export class ModelConfigsModal {
 
     // Sets field section visibility for a given type — used on init and on toggle
     const applyType = (type) => {
-      body.querySelector('#mcfgFieldsCli').style.display    = type === 'cli'    ? '' : 'none';
-      body.querySelector('#mcfgFieldsOllama').style.display = type === 'ollama' ? '' : 'none';
+      body.querySelector('#mcfgFieldsCli').style.display = type === 'cli' ? '' : 'none';
     };
 
     // Set initial visibility based on config type
@@ -257,10 +239,7 @@ export class ModelConfigsModal {
 
       let data = { label, type, is_default: isDefault, input_mode: 'pipe' };
 
-      if (type === 'ollama') {
-        data.base_url   = body.querySelector('#mcfgOllamaHost')?.value.trim() || 'http://localhost:11434';
-        data.model_name = body.querySelector('#mcfgOllamaModel')?.value.trim() || 'phi4-mini:latest';
-      } else if (type === 'cli') {
+      if (type === 'cli') {
         data.executable = body.querySelector('#mcfgExecutable')?.value.trim() || null;
         data.flags      = body.querySelector('#mcfgFlags')?.value.trim() || null;
         data.input_mode = body.querySelector('#mcfgInputMode')?.value || 'pipe';

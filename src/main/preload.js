@@ -88,7 +88,6 @@ contextBridge.exposeInMainWorld('db', {
     homedir:      ()     => invoke('terminal:homedir'),
     exec:         (data) => invoke('terminal:exec', data),
     execStart:    (data) => invoke('terminal:exec-start', data),
-    replStart:    (data) => invoke('terminal:repl-start', data),
     killActive:   ()     => invoke('terminal:kill-active'),
     openExternal: (data) => invoke('terminal:open-external', data),
     sendInput: (text) => invoke('terminal:stdin', text),
@@ -97,19 +96,6 @@ contextBridge.exposeInMainWorld('db', {
     removeListeners: () => {
       ipcRenderer.removeAllListeners('terminal:data');
       ipcRenderer.removeAllListeners('terminal:done');
-    },
-  },
-  ollama: {
-    listModels: (opts)              => invoke('ollama:list-models', opts || {}),
-    chat:       (opts)              => invoke('ollama:chat', opts),
-    cancel:     ()                  => invoke('ollama:cancel'),
-    onToken:    (cb) => ipcRenderer.on('ollama:token', (_e, p) => cb(p)),
-    onDone:     (cb) => ipcRenderer.on('ollama:done',  (_e, p) => cb(p)),
-    onError:    (cb) => ipcRenderer.on('ollama:error', (_e, p) => cb(p)),
-    removeListeners: () => {
-      ipcRenderer.removeAllListeners('ollama:token');
-      ipcRenderer.removeAllListeners('ollama:done');
-      ipcRenderer.removeAllListeners('ollama:error');
     },
   },
 });

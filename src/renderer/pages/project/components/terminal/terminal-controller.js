@@ -158,18 +158,8 @@ export class TerminalController {
       return null;
     }
     if (cfg.type === 'api') {
-      this.printOutput(`API model "${cfg.label || cfg.model_name}" is not supported in the terminal. Use a CLI or Ollama model.`, { isError: true });
+      this.printOutput(`API model "${cfg.label || cfg.model_name}" is not supported in the terminal. Use a CLI model.`, { isError: true });
       return null;
-    }
-    if (cfg.type === 'ollama') {
-      // Spawn node directly (not via PowerShell) so the stdin pipe stays open
-      // for follow-up messages. PowerShell closes its own stdin after launch,
-      // which sends EOF to the child and kills the readline REPL loop.
-      const agentPath = window._agentCliPath || 'agent-cli/index.js';
-      const model     = cfg.model_name || 'phi4-mini:latest';
-      const host      = cfg.base_url   || 'http://localhost:11434';
-      const dir       = this._termCwd  || '.';
-      return { repl: true, agentPath, model, host, dir, initialPrompt: prompt };
     }
     // CLI type (claude, gemini, mistral, etc.) — single-shot via heredoc pipe
     const safePrompt = prompt.replace(/'/g, "''");
@@ -312,18 +302,8 @@ export class TerminalController {
       this._currentStreamDiv = streamDiv;
       out.scrollTop = out.scrollHeight;
       this._setRunning(true);
-      if (result.repl) {
-        // Ollama REPL: spawn node directly to keep stdin pipe open
-        await window.db.terminal.replStart(result);
-        const hint = document.createElement('div');
-        hint.className = 'project-console__conv-hint';
-        hint.textContent = 'Conversation active — type /q to end';
-        out.appendChild(hint);
-        out.scrollTop = out.scrollHeight;
-      } else {
-        const { cmd: builtCmd, initialStdin } = result;
-        await window.db.terminal.execStart({ command: builtCmd, cwd: this._termCwd, initialStdin });
-      }
+      const { cmd: builtCmd, initialStdin } = result;
+      await window.db.terminal.execStart({ command: builtCmd, cwd: this._termCwd, initialStdin });
       return;
     }
 
