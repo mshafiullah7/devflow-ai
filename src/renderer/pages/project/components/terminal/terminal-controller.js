@@ -269,6 +269,23 @@ export class TerminalController {
     out.scrollTop = out.scrollHeight;
   }
 
+  printUserEcho(text) {
+    const out = document.getElementById('consoleOutput');
+    if (!out) return;
+    const line = document.createElement('div');
+    line.className = 'project-console__user-echo';
+    line.textContent = `You: ${text}`;
+    out.appendChild(line);
+    out.scrollTop = out.scrollHeight;
+  }
+
+  clearConversationHint() {
+    const out = document.getElementById('consoleOutput');
+    if (!out) return;
+    const hint = out.querySelector('.project-console__conv-hint');
+    if (hint) hint.remove();
+  }
+
   // ----------------------------------------------------------------
   // Public — run a command
   // ----------------------------------------------------------------
@@ -300,6 +317,14 @@ export class TerminalController {
       out.scrollTop = out.scrollHeight;
       this._setRunning(true);
       await window.db.terminal.execStart({ command: builtCmd, cwd: this._termCwd, initialStdin });
+      // Show conversation hint for Ollama REPL sessions (initialStdin means REPL mode)
+      if (initialStdin) {
+        const hint = document.createElement('div');
+        hint.className = 'project-console__conv-hint';
+        hint.textContent = 'Conversation active — type /q to end';
+        out.appendChild(hint);
+        out.scrollTop = out.scrollHeight;
+      }
       return;
     }
 

@@ -398,6 +398,13 @@ export class ProjectPage {
       consoleInput.style.height = 'auto';
       // If a process is running, forward input to its stdin (interactive mode)
       if (this._terminal.isRunning) {
+        if (cmd.trim() === '/q') {
+          window.db.terminal.killActive();
+          this._terminal.printOutput('Conversation ended.', { isError: false });
+          this._terminal.clearConversationHint();
+          return;
+        }
+        this._terminal.printUserEcho(cmd.trim());
         window.db.terminal.sendInput(cmd + '\n');
         return;
       }

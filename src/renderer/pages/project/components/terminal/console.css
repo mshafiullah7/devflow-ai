@@ -519,6 +519,19 @@
 .project-console__stderr {
   color: #f87171;
 }
+.project-console__user-echo {
+  color: #7eb8f7;
+  font-style: italic;
+  padding: 2px 0;
+  flex-shrink: 0;
+}
+.project-console__conv-hint {
+  color: #888;
+  font-size: 0.8em;
+  padding: 4px 0 2px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
 
 /* ------------------------------------------------------------------ */
 /* {{input}} inline prompt (used by TerminalController)                */
