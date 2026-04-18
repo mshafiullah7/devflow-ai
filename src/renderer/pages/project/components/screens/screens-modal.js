@@ -85,25 +85,42 @@ function buildPsCommand(prompt, model, outputFile) {
 // ScreensModal
 // ----------------------------------------------------------------
 export class ScreensModal {
-  constructor({ projectId, getProject, getModel }) {
-    this._projectId  = projectId;
-    this._getProject = getProject;
-    this._getModel   = getModel;
-    this._overlay    = null;
-    this._screens    = [];
-    this._activeId   = null;
-    this._activeTab  = 'preview';
+  constructor({ projectId, getProject }) {
+    this._projectId      = projectId;
+    this._getProject     = getProject;
+    this._overlay        = null;
+    this._screens        = [];
+    this._activeId       = null;
+    this._activeTab      = 'preview';
+    this._modelConfigs   = [];
+    this._selectedModelId = null;
   }
 
   mount() {
     injectCss('pages/project/components/screens/screens-modal.css');
   }
 
+  _getSelectedModel() {
+    if (this._selectedModelId) {
+      const m = this._modelConfigs.find(c => c.id === this._selectedModelId);
+      if (m) return m;
+    }
+    return this._modelConfigs.find(c => c.is_default) || this._modelConfigs[0] || null;
+  }
+
   async show() {
     this._overlay?.remove();
-    this._screens  = await window.db.screenDesigns.list(this._projectId);
-    this._activeId = this._screens[0]?.id ?? null;
+    [this._screens, this._modelConfigs] = await Promise.all([
+      window.db.screenDesigns.list(this._projectId),
+      window.db.modelConfigs.list(),
+    ]);
+    this._activeId  = this._screens[0]?.id ?? null;
     this._activeTab = 'preview';
+    // Default to first CLI model
+    const defCli = this._modelConfigs.find(c => c.is_default && c.type !== 'anthropic')
+                || this._modelConfigs.find(c => c.type !== 'anthropic')
+                || this._modelConfigs[0];
+    this._selectedModelId = defCli?.id ?? null;
 
     this._overlay = document.createElement('div');
     this._overlay.className = 'scr-overlay';
@@ -222,7 +239,14 @@ export class ScreensModal {
         </div>
 
         <div class="scr-form__actions">
-          <div class="scr-model-info" id="scrModelInfo">${this._modelInfoHtml(model)}</div>
+          <select class="scr-model-select" id="scrModelSelect">
+            ${this._modelConfigs.length === 0
+              ? `<option value="">No models configured</option>`
+              : this._modelConfigs.map(c =>
+                  `<option value="${c.id}"${c.id === this._selectedModelId ? ' selected' : ''}>${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
+                ).join('')
+            }
+          </select>
           <div class="scr-form__btns">
             <button class="scr-btn scr-btn--primary" id="scrRunBtn">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -248,14 +272,11 @@ export class ScreensModal {
       </div>
     `;
 
+    main.querySelector('#scrModelSelect')?.addEventListener('change', (e) => {
+      this._selectedModelId = Number(e.target.value) || null;
+    });
     main.querySelector('#scrRunBtn').addEventListener('click', () => this._runInTerminal());
     main.querySelector('#scrChooseFileBtn').addEventListener('click', () => this._chooseFile());
-  }
-
-  _modelInfoHtml(model) {
-    if (!model) return `<span class="scr-model-info--warn">No model selected.</span>`;
-    if (model.type === 'anthropic') return `<span class="scr-model-info--warn">Anthropic API model selected — switch to a CLI model (Claude CLI or Gemini CLI) for terminal generation.</span>`;
-    return `Using <strong>${escHtml(model.label)}</strong> [${model.type.toUpperCase()}]`;
   }
 
   async _runInTerminal() {
@@ -267,9 +288,9 @@ export class ScreensModal {
     if (!title) { main.querySelector('#scrTitle').focus(); return; }
     if (!desc)  { main.querySelector('#scrDescription').focus(); return; }
 
-    const model = this._getModel();
+    const model = this._getSelectedModel();
     if (!model || model.type === 'anthropic' || !model.executable) {
-      alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model selector in the project header.');
+      alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
       return;
     }
 
@@ -308,7 +329,7 @@ export class ScreensModal {
       tech_stack:   stack,
       html_content: result.content,
       prompt_used:  desc,
-      model_used:   this._getModel()?.label || '',
+      model_used:   this._getSelectedModel()?.label || '',
     });
 
     this._screens = await window.db.screenDesigns.list(this._projectId);
@@ -376,7 +397,7 @@ export class ScreensModal {
         <div class="scr-viewer__content" id="scrViewerContent">
           ${mobile
             ? `<pre class="scr-viewer__code-block"><code>${escHtml(screen.html_content)}</code></pre>`
-            : `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts"></iframe>`
+            : `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts allow-same-origin"></iframe>`
           }
         </div>
       </div>
@@ -389,10 +410,7 @@ export class ScreensModal {
   _loadPreview(html) {
     const frame = this._overlay?.querySelector('#scrPreviewFrame');
     if (!frame) return;
-    const blob = new Blob([html], { type: 'text/html' });
-    const url  = URL.createObjectURL(blob);
-    frame.src  = url;
-    frame.onload = () => URL.revokeObjectURL(url);
+    frame.srcdoc = html;
   }
 
   _bindViewerEvents(screen) {
@@ -406,7 +424,7 @@ export class ScreensModal {
         tab.classList.add('scr-viewer__tab--active');
         const content = main.querySelector('#scrViewerContent');
         if (this._activeTab === 'preview') {
-          content.innerHTML = `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts"></iframe>`;
+          content.innerHTML = `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts allow-same-origin"></iframe>`;
           this._loadPreview(screen.html_content);
         } else {
           content.innerHTML = `<pre class="scr-viewer__code-block"><code>${escHtml(screen.html_content)}</code></pre>`;
@@ -439,7 +457,6 @@ export class ScreensModal {
   // ----------------------------------------------------------------
   async _showExtractDialog(screen) {
     const features = await window.db.features.list(this._projectId);
-    const model    = this._getModel();
 
     const dlg = document.createElement('div');
     dlg.className = 'scr-extract-overlay';
@@ -463,7 +480,11 @@ export class ScreensModal {
 
           <div class="scr-form__row" style="margin-top:12px">
             <label class="scr-form__label">Step 1 — Run the extraction prompt in the terminal</label>
-            <div class="scr-model-info" style="margin-bottom:6px">${this._modelInfoHtml(model)}</div>
+            <select class="scr-model-select" id="extModelSelect" style="margin-bottom:6px">
+              ${this._modelConfigs.map(c =>
+                `<option value="${c.id}"${c.id === this._selectedModelId ? ' selected' : ''}>${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
+              ).join('')}
+            </select>
             <button class="scr-btn scr-btn--primary" id="extRunBtn" ${features.length === 0 ? 'disabled' : ''}>
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
@@ -504,9 +525,10 @@ export class ScreensModal {
 
     if (runBtn) {
       runBtn.addEventListener('click', async () => {
-        const m = this._getModel();
+        const selId = Number(dlg.querySelector('#extModelSelect')?.value) || this._selectedModelId;
+        const m = this._modelConfigs.find(c => c.id === selId) || this._getSelectedModel();
         if (!m || m.type === 'anthropic' || !m.executable) {
-          alert('Please select a CLI model from the project header.');
+          alert('Please select a CLI model from the dropdown.');
           return;
         }
         const screensDir = await window.app.screensDir();

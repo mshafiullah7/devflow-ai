@@ -59,7 +59,6 @@ export class ProjectPage {
     this._screensModal = new ScreensModal({
       projectId:  this.projectId,
       getProject: () => this._project,
-      getModel:   () => this._aiModelConfig,
     });
     this._screensModal.mount();
 

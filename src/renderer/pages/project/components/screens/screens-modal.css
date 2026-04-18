@@ -8,7 +8,7 @@
   background: var(--modal-overlay-bg, rgba(0,0,0,.55));
   z-index: 600;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
   padding: 24px;
   box-sizing: border-box;
@@ -23,6 +23,8 @@
   flex-direction: column;
   width: 100%;
   max-width: 1100px;
+  height: 80vh;
+  max-height: 80vh;
   overflow: hidden;
 }
 
@@ -197,33 +199,86 @@
 .scr-form__actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.scr-form__model-hint {
+.scr-form__btns {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Model info line */
+.scr-model-info {
   font-size: 11px;
   color: var(--text-muted);
   flex: 1;
 }
-.scr-form__model-hint--warn { color: #f59e0b; }
+.scr-model-info--warn { color: #f59e0b; }
 
-.scr-form__generate-btn {
-  display: flex;
+/* ------------------------------------------------------------------ */
+/* Shared button component                                              */
+/* ------------------------------------------------------------------ */
+.scr-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: 5px;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity .15s, background .15s;
+}
+.scr-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.scr-btn--primary {
   background: var(--accent);
   color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  flex-shrink: 0;
+  border-color: var(--accent);
 }
-.scr-form__generate-btn:hover { opacity: .9; }
-.scr-form__generate-btn:disabled { opacity: .5; cursor: not-allowed; }
+.scr-btn--primary:hover:not(:disabled) { opacity: .88; }
+
+.scr-btn--secondary {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+.scr-btn--secondary:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+
+.scr-btn--accent {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.scr-btn--accent:hover:not(:disabled) { background: rgba(99,102,241,.08); }
+
+.scr-btn--danger {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.scr-btn--danger:hover:not(:disabled) { background: rgba(239,68,68,.08); color: #ef4444; border-color: #ef4444; }
+
+.scr-btn--sm { padding: 5px 10px; font-size: 11px; }
+
+/* Model select inside form */
+.scr-model-select {
+  padding: 5px 8px;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  max-width: 220px;
+}
+.scr-model-select:focus { border-color: var(--accent); }
 
 /* Stream output */
 .scr-stream {
