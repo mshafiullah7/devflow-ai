@@ -38,7 +38,6 @@ Screen to design:
 ${description}`;
 }
 
-// Instruction prompt — includes the file path so the CLI reads it directly.
 function buildExtractPrompt(techStack, screenTitle, htmlFilePath, outputFile) {
   const tech = TECH_LABELS[techStack] || techStack;
   const save = outputFile ? `\nWhen done, write the complete JSON array to: ${outputFile}` : '';
@@ -51,18 +50,21 @@ Screen content at: ${htmlFilePath}
 ${save}
 Extract every distinct user action, form, state, or interaction visible in this screen as a separate user story.
 
-For each story's implementation prompt, include the relevant design elements observed in the UI — colours, typography, spacing, layout, component styles, icons — so that a developer can recreate the exact look and feel using ${tech}.
+IMPORTANT: Output ONLY a raw JSON array — no markdown fences, no explanation, no extra text. Start with [ and end with ].
 
-Output ONLY a valid JSON array — no markdown, no explanation:
+Each object MUST use EXACTLY these four field names — no other field names are accepted:
+- "title": short action-oriented title (string)
+- "description": "As a user, I want to [action] so that [benefit]." (string)
+- "acceptance_criteria": all criteria as ONE string, each criterion on its own line starting with "- " (string, NOT an array)
+- "prompt": detailed implementation prompt referencing exact design details from the UI — colours, typography, spacing, layout, component styles (string)
+
+Example:
 [
   {
-    "title": "Short action-oriented title",
-    "description": "As a user, I want to [action] so that [benefit].",
-    "acceptance_criteria": "- Criterion 1\\n- Criterion 2\\n- Criterion 3\\n- Criterion 4",
-    "prompts": [
-      { "tag": "implementation", "prompt": "Implement [specific component] using ${tech}. Design details: [colours, fonts, spacing, layout, styles extracted from the UI]..." },
-      { "tag": "test", "prompt": "Write tests for [story]: test [case 1], test [case 2]..." }
-    ]
+    "title": "User clicks Get Started button",
+    "description": "As a user, I want to click the Get Started button so that I can begin using the app.",
+    "acceptance_criteria": "- Button is visible and labelled 'Get Started'\\n- Button triggers navigation to the next screen\\n- Hover and active states are visually distinct",
+    "prompt": "Implement a pill-shaped button labelled 'Get Started' using ${tech}. Style: background linear-gradient(135deg,#11998e,#38ef7d), color white, border-radius 50px, padding 14px 36px, font-size 16px, font-weight 600. Add hover (translateY(-2px), deeper shadow) and active (translateY(0)) transitions."
   }
 ]`;
 }
@@ -768,17 +770,19 @@ export class ScreensModal {
 
         let created = 0;
         for (const story of stories) {
-          const newStory = await window.db.userStories.create({
+          // acceptance_criteria may come as array (old format) or string (new format)
+          const ac = Array.isArray(story.acceptance_criteria)
+            ? story.acceptance_criteria.map(c => `- ${c}`).join('\n')
+            : (story.acceptance_criteria || '');
+
+          await window.db.userStories.create({
             feature_id:          featureId,
             project_id:          this._projectId,
             title:               story.title || 'Untitled',
-            description:         story.description || '',
-            acceptance_criteria: story.acceptance_criteria || '',
-            prompt:              story.prompts?.[0]?.prompt || '',
+            description:         story.description || story.story || '',
+            acceptance_criteria: ac,
+            prompt:              story.prompt || story.implementation_prompt || '',
           });
-          for (const p of (story.prompts || [])) {
-            await window.db.prompts.create({ user_story_id: newStory.id, tag: p.tag, prompt: p.prompt });
-          }
           created++;
         }
 
