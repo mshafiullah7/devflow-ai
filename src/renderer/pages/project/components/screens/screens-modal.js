@@ -274,8 +274,9 @@ export class ScreensModal {
     }
 
     const project    = this._getProject();
+    const screensDir = await window.app.screensDir();
     const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
-    const outputFile = `$env:TEMP\\electron-ai-sdlc\\screens\\${safeTitle}.html`;
+    const outputFile = `${screensDir}\\${safeTitle}.html`;
     const prompt     = buildScreenPrompt(desc, stack, project?.description || '');
     const cmd        = buildPsCommand(prompt, model, outputFile);
 
@@ -508,8 +509,9 @@ export class ScreensModal {
           alert('Please select a CLI model from the project header.');
           return;
         }
-        const safeTitle = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
-        const outputFile = `$env:TEMP\\electron-ai-sdlc\\screens\\${safeTitle}_stories.json`;
+        const screensDir = await window.app.screensDir();
+        const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
+        const outputFile = `${screensDir}\\${safeTitle}_stories.json`;
         const prompt = buildExtractPrompt(screen.html_content, screen.tech_stack, screen.title);
         const cmd    = buildPsCommand(prompt, m, outputFile);
 
