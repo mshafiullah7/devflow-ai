@@ -211,7 +211,6 @@ export class ScreensModal {
   _showNewForm(prefill = {}) {
     this._activeId = null;
     this._setActiveItem(null);
-    const model = this._getModel();
 
     const main = this._overlay.querySelector('#scrMain');
     main.innerHTML = `
