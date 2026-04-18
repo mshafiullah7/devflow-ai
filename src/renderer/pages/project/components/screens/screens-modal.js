@@ -73,7 +73,7 @@ function buildPsCommand(prompt, model, outputFile) {
   const flags  = model.flags ? ` ${model.flags}` : '';
   // Escape single-quotes in the prompt for PS here-string
   const safe   = prompt.replace(/'/g, "''");
-  const outPart = outputFile ? ` | Out-File "${outputFile}" -Encoding UTF8` : '';
+  const outPart = outputFile ? ` | Tee-Object -FilePath "${outputFile}"` : '';
 
   if (model.input_mode === 'heredoc') {
     return `$p = @'\n${safe}\n'@\n${exe}${flags} $p${outPart}`;
