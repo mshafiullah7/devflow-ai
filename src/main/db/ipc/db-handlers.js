@@ -214,6 +214,32 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // screen_prompt_history
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:screen_prompt_history:list', (_e, project_id) => {
+    return db
+      .prepare('SELECT * FROM screen_prompt_history WHERE project_id = ? AND is_active = 1 ORDER BY executed_at DESC LIMIT 20')
+      .all(project_id);
+  });
+
+  ipcMain.handle('db:screen_prompt_history:create', (_e, { project_id, prompt }) => {
+    const result = db
+      .prepare('INSERT INTO screen_prompt_history (project_id, prompt) VALUES (?, ?)')
+      .run(project_id, prompt);
+    return db.prepare('SELECT * FROM screen_prompt_history WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:screen_prompt_history:delete', (_e, id) => {
+    db.prepare('UPDATE screen_prompt_history SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
+  });
+
+  ipcMain.handle('db:screen_prompt_history:deleteAll', (_e, project_id) => {
+    db.prepare('UPDATE screen_prompt_history SET is_active = 0 WHERE project_id = ?').run(project_id);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
   // prompts
   // ----------------------------------------------------------------
   ipcMain.handle('db:prompts:list', (_e, user_story_id) => {

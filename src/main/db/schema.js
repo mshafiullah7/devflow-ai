@@ -162,6 +162,17 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- SCREEN PROMPT HISTORY
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS screen_prompt_history (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      prompt      TEXT    NOT NULL,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      executed_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (

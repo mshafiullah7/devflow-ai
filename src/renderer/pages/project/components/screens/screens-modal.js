@@ -1,4 +1,4 @@
-import { escHtml, injectCss } from '../../../../shared/helpers.js';
+import { escHtml, injectCss, timeAgo } from '../../../../shared/helpers.js';
 
 const TECH_STACKS = [
   { value: 'html',           label: 'Plain HTML / CSS',     mobile: false },
@@ -191,26 +191,133 @@ export class ScreensModal {
   }
 
   _bindShellEvents() {
-    this._overlay.querySelector('#scrClose').addEventListener('click', () => this._overlay.remove());
+    this._overlay.querySelector('#scrClose').addEventListener('click', () => this._tryClose());
     this._overlay.querySelector('#scrNewBtn').addEventListener('click', () => this._showNewForm());
     this._bindSidebarItems();
-    const escFn = (e) => {
-      if (e.key === 'Escape') { this._overlay?.remove(); document.removeEventListener('keydown', escFn); }
+    this._escFn = (e) => {
+      if (e.key === 'Escape') this._tryClose();
     };
-    document.addEventListener('keydown', escFn);
+    document.addEventListener('keydown', this._escFn);
+  }
+
+  _tryClose() {
+    if (this._activeId === null && this._newFormHasData()) {
+      this._showUnsavedDialog();
+    } else {
+      this._closeModal();
+    }
+  }
+
+  _closeModal() {
+    document.removeEventListener('keydown', this._escFn);
+    this._overlay?.remove();
+  }
+
+  _newFormHasData() {
+    const main = this._overlay?.querySelector('#scrMain');
+    if (!main) return false;
+    const title = main.querySelector('#scrTitle')?.value.trim() || '';
+    const desc  = main.querySelector('#scrDescription')?.value.trim() || '';
+    return title.length > 0 || desc.length > 0;
+  }
+
+  _showUnsavedDialog() {
+    const existing = this._overlay.querySelector('.scr-unsaved-overlay');
+    if (existing) return;
+
+    const dlg = document.createElement('div');
+    dlg.className = 'scr-unsaved-overlay';
+    dlg.innerHTML = `
+      <div class="scr-unsaved-dialog">
+        <div class="scr-unsaved-dialog__icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M12 9v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3 class="scr-unsaved-dialog__title">Unsaved Screen Design</h3>
+        <p class="scr-unsaved-dialog__body">
+          You have unsaved changes. What would you like to do?
+        </p>
+        <div class="scr-unsaved-dialog__actions">
+          <button class="scr-btn scr-btn--primary" id="unsavedDraft">Save as Draft</button>
+          <button class="scr-btn scr-btn--danger"   id="unsavedDiscard">Discard</button>
+          <button class="scr-btn scr-btn--secondary" id="unsavedCancel">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    this._overlay.appendChild(dlg);
+
+    dlg.querySelector('#unsavedCancel').addEventListener('click',  () => dlg.remove());
+    dlg.querySelector('#unsavedDiscard').addEventListener('click', () => { dlg.remove(); this._closeModal(); });
+    dlg.querySelector('#unsavedDraft').addEventListener('click',   () => this._saveAsDraft(dlg));
+  }
+
+  // Saves form data (create or update), returns the screen record or null if validation fails.
+  async _saveForm() {
+    const main  = this._overlay?.querySelector('#scrMain');
+    const title = main?.querySelector('#scrTitle')?.value.trim() || '';
+    const desc  = main?.querySelector('#scrDescription')?.value.trim() || '';
+    const stack = main?.querySelector('#scrTechStack')?.value || 'html';
+
+    if (!title) { main?.querySelector('#scrTitle')?.focus(); return null; }
+
+    if (this._editingId) {
+      return window.db.screenDesigns.update({
+        id:          this._editingId,
+        title,
+        description: desc,
+        tech_stack:  stack,
+        prompt_used: desc,
+        model_used:  this._getSelectedModel()?.label || '',
+      });
+    }
+
+    const screen = await window.db.screenDesigns.create({
+      project_id:   this._projectId,
+      title,
+      description:  desc,
+      tech_stack:   stack,
+      html_content: '',
+      prompt_used:  desc,
+      model_used:   this._getSelectedModel()?.label || '',
+    });
+    this._editingId = screen.id;
+    return screen;
+  }
+
+  // Save then navigate to viewer.
+  async _saveAndView() {
+    const screen = await this._saveForm();
+    if (!screen) return;
+    this._screens  = await window.db.screenDesigns.list(this._projectId);
+    this._activeId = screen.id;
+    this._refreshSidebar();
+    this._showScreenViewer(screen);
+  }
+
+  async _saveAsDraft(dlg) {
+    const btn = dlg.querySelector('#unsavedDraft');
+    btn.disabled    = true;
+    btn.textContent = 'Saving…';
+    await this._saveForm();
+    dlg.remove();
+    this._closeModal();
   }
 
   // ----------------------------------------------------------------
   // New Screen form
   // ----------------------------------------------------------------
   _showNewForm(prefill = {}) {
-    this._activeId = null;
+    this._activeId  = null;
+    this._editingId = prefill.editId ?? null;
     this._setActiveItem(null);
 
     const main = this._overlay.querySelector('#scrMain');
     main.innerHTML = `
       <div class="scr-form">
-        <h2 class="scr-form__heading">New Screen Design</h2>
+        <h2 class="scr-form__heading">${this._editingId ? 'Edit Screen Design' : 'New Screen Design'}</h2>
 
         <div class="scr-form__row">
           <label class="scr-form__label">Title *</label>
@@ -242,6 +349,14 @@ export class ScreensModal {
             }
           </select>
           <div class="scr-form__btns">
+            <button class="scr-btn scr-btn--accent" id="scrSaveBtn">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+                <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
+              Save
+            </button>
             <button class="scr-btn scr-btn--primary" id="scrRunBtn">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
@@ -263,14 +378,89 @@ export class ScreensModal {
           <div class="scr-cmd-preview__label">Command sent to terminal:</div>
           <pre class="scr-cmd-preview__code" id="scrCmdCode"></pre>
         </div>
+
+        <div class="scr-ph-container" id="scrPromptHistory"></div>
       </div>
     `;
 
     main.querySelector('#scrModelSelect')?.addEventListener('change', (e) => {
       this._selectedModelId = Number(e.target.value) || null;
     });
+    main.querySelector('#scrSaveBtn').addEventListener('click', () => this._saveAndView());
     main.querySelector('#scrRunBtn').addEventListener('click', () => this._runInTerminal());
     main.querySelector('#scrChooseFileBtn').addEventListener('click', () => this._chooseFile());
+    this._loadPromptHistory();
+  }
+
+  async _saveToHistory(prompt) {
+    if (!prompt) return;
+    const existing = await window.db.screenPromptHistory.list(this._projectId);
+    if (existing.some(e => e.prompt === prompt)) return;
+    await window.db.screenPromptHistory.create({ project_id: this._projectId, prompt });
+    this._loadPromptHistory();
+  }
+
+  async _loadPromptHistory() {
+    const container = this._overlay?.querySelector('#scrPromptHistory');
+    if (!container) return;
+    const items = await window.db.screenPromptHistory.list(this._projectId);
+    if (items.length === 0) { container.innerHTML = ''; return; }
+
+    const descEl = () => this._overlay?.querySelector('#scrDescription');
+
+    container.innerHTML = `
+      <div class="scr-ph-header">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Recent prompts
+        <button class="scr-ph-delete-all" title="Clear all recent prompts" aria-label="Clear all">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
+              stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="scr-ph-list">
+        ${items.map(h => `
+          <div class="scr-ph-item" data-id="${h.id}" title="${escHtml(h.prompt)}">
+            <svg class="scr-ph-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M4 3l9 5-9 5V3z" fill="currentColor" opacity="0.6"/>
+            </svg>
+            <span class="scr-ph-item__text">${escHtml(h.prompt.length > 80 ? h.prompt.slice(0, 80) + '…' : h.prompt)}</span>
+            <span class="scr-ph-item__time">${timeAgo(h.executed_at)}</span>
+            <button class="scr-ph-item__delete" data-id="${h.id}" title="Remove" aria-label="Remove">
+              <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
+                <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8"
+                  stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    container.querySelectorAll('.scr-ph-item').forEach((el, i) => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.scr-ph-item__delete')) return;
+        const ta = descEl();
+        if (ta) { ta.value = items[i].prompt; ta.focus(); }
+      });
+    });
+
+    container.querySelectorAll('.scr-ph-item__delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await window.db.screenPromptHistory.delete(Number(btn.dataset.id));
+        this._loadPromptHistory();
+      });
+    });
+
+    container.querySelector('.scr-ph-delete-all').addEventListener('click', async () => {
+      await window.db.screenPromptHistory.deleteAll(this._projectId);
+      this._loadPromptHistory();
+    });
   }
 
   async _runInTerminal() {
@@ -288,6 +478,11 @@ export class ScreensModal {
       return;
     }
 
+    // Save the record first so it exists in the sidebar before the terminal opens.
+    await this._saveForm();
+    this._screens = await window.db.screenDesigns.list(this._projectId);
+    this._refreshSidebar();
+
     const project    = this._getProject();
     const screensDir = await window.app.screensDir(project?.name);
     const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
@@ -297,13 +492,15 @@ export class ScreensModal {
 
     const cwd = project?.project_path || undefined;
     await window.db.terminal.openExternal({ command: cmd, cwd });
+    await this._saveToHistory(desc);
   }
 
   async _chooseFile() {
-    const main  = this._overlay.querySelector('#scrMain');
-    const title = main.querySelector('#scrTitle')?.value.trim() || 'Untitled Screen';
-    const stack = main.querySelector('#scrTechStack')?.value || 'html';
-    const desc  = main.querySelector('#scrDescription')?.value.trim() || '';
+    // Ensure a DB record exists before picking the file.
+    if (!this._editingId) {
+      const saved = await this._saveForm();
+      if (!saved) return;
+    }
 
     const result = await window.db.dialog.openFile({
       title:      'Choose Generated Screen File',
@@ -311,17 +508,13 @@ export class ScreensModal {
     });
     if (!result) return;
 
-    const screen = await window.db.screenDesigns.create({
-      project_id:   this._projectId,
-      title,
-      description:  desc,
-      tech_stack:   stack,
+    const screen = await window.db.screenDesigns.update({
+      id:           this._editingId,
       html_content: result.content,
-      prompt_used:  desc,
-      model_used:   this._getSelectedModel()?.label || '',
     });
+    this._editingId = null;
 
-    this._screens = await window.db.screenDesigns.list(this._projectId);
+    this._screens  = await window.db.screenDesigns.list(this._projectId);
     this._activeId = screen.id;
     this._refreshSidebar();
     this._showScreenViewer(screen);
@@ -363,10 +556,9 @@ export class ScreensModal {
             </div>` : ''}
             <button class="scr-btn scr-btn--sm" id="scrRegenBtn">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                <path d="M2 8a6 6 0 1110.4-4H10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M10 4l2.5 0 0 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M11.5 2.5a1.414 1.414 0 012 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              Regenerate
+              Edit
             </button>
             <button class="scr-btn scr-btn--sm scr-btn--accent" id="scrExtractBtn">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -421,9 +613,9 @@ export class ScreensModal {
       });
     });
 
-    // Regenerate — go back to form pre-filled with existing values
+    // Edit — go back to form pre-filled with existing values, overwrite on save
     main.querySelector('#scrRegenBtn').addEventListener('click', () => {
-      this._showNewForm({ title: screen.title, tech_stack: screen.tech_stack, description: screen.description || screen.prompt_used || '' });
+      this._showNewForm({ title: screen.title, tech_stack: screen.tech_stack, description: screen.description || screen.prompt_used || '', editId: screen.id });
     });
 
     // Extract stories

@@ -138,6 +138,20 @@ function runMigrations(db) {
     db.exec('ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0');
   }
 
+  // Add screen_prompt_history table for existing databases
+  const sphCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='screen_prompt_history'").get();
+  if (!sphCheck) {
+    db.exec(`
+      CREATE TABLE screen_prompt_history (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        prompt      TEXT    NOT NULL,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        executed_at TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
   // Add document_attachments table for existing databases
   const allTables4 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
   if (!allTables4.includes('document_attachments')) {

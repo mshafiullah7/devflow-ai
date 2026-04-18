@@ -637,3 +637,147 @@
 }
 .scr-extract-dialog__confirm:hover { opacity: .9; }
 .scr-extract-dialog__confirm:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ------------------------------------------------------------------ */
+/* Prompt History (below description textarea in new-screen form)       */
+/* ------------------------------------------------------------------ */
+.scr-ph-container { margin-top: 6px; }
+
+.scr-ph-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+
+.scr-ph-delete-all {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.scr-ph-delete-all:hover { background: var(--surface-hover); color: #ef4444; }
+
+.scr-ph-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.scr-ph-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.scr-ph-item:hover { background: rgba(var(--accent-rgb, 99,102,241), .08); }
+
+.scr-ph-item__icon { opacity: .45; flex-shrink: 0; }
+.scr-ph-item:hover .scr-ph-item__icon { opacity: .9; }
+
+.scr-ph-item__text {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scr-ph-item__delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity .12s;
+}
+.scr-ph-item:hover .scr-ph-item__delete { opacity: 1; }
+.scr-ph-item__delete:hover { background: rgba(239,68,68,.1); color: #ef4444; }
+
+.scr-ph-item__time {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Unsaved Changes dialog                                               */
+/* ------------------------------------------------------------------ */
+.scr-unsaved-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+}
+
+.scr-unsaved-dialog {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  width: 340px;
+  padding: 24px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.scr-unsaved-dialog__icon {
+  color: #f59e0b;
+  display: flex;
+}
+
+.scr-unsaved-dialog__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.scr-unsaved-dialog__body {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.scr-unsaved-dialog__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
