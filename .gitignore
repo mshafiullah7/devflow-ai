@@ -98,3 +98,6 @@ out/
 
 # Claude local settings
 .claude/settings.local.json
+
+# Generated screen design files (runtime output)
+screens/
