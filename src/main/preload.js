@@ -115,8 +115,9 @@ contextBridge.exposeInMainWorld('db', {
 });
 
 contextBridge.exposeInMainWorld('app', {
-  agentCliPath: () => invoke('app:agent-cli-path'),
-  screensDir:   (projectName) => invoke('app:screens-dir', projectName),
+  agentCliPath:     () => invoke('app:agent-cli-path'),
+  screensDir:       (projectName) => invoke('app:screens-dir', projectName),
+  prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),
 });
 
 

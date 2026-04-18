@@ -46,6 +46,26 @@ app.whenReady().then(() => {
     }
     return root;
   });
+
+  // Returns a file path for the screen's HTML — the canonical file if it exists
+  // in screensDir, otherwise a fresh temp file. Cleans up previous temp files first.
+  ipcMain.handle('app:prepare-screen-ref', (_e, { screensDir, safeTitle, htmlContent }) => {
+    // Clean up any leftover temp files from previous runs
+    try {
+      fs.readdirSync(screensDir)
+        .filter(f => f.startsWith('_tmp_') && f.endsWith('.html'))
+        .forEach(f => {
+          try { fs.unlinkSync(path.join(screensDir, f)); } catch {}
+        });
+    } catch {}
+
+    const canonical = path.join(screensDir, `${safeTitle}.html`);
+    if (fs.existsSync(canonical)) return canonical;
+
+    const tmpPath = path.join(screensDir, `_tmp_${safeTitle}.html`);
+    fs.writeFileSync(tmpPath, htmlContent, 'utf8');
+    return tmpPath;
+  });
   createWindow();
   setImmediate(() => runBackup());
 

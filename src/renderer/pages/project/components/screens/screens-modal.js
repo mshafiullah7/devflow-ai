@@ -38,19 +38,20 @@ Screen to design:
 ${description}`;
 }
 
-function buildExtractPrompt(htmlContent, techStack, screenTitle) {
+// Instruction prompt — includes the file path so the CLI reads it directly.
+function buildExtractPrompt(techStack, screenTitle, htmlFilePath, outputFile) {
   const tech = TECH_LABELS[techStack] || techStack;
-  return `You are an expert product manager. Analyze the following UI screen design and extract user stories.
+  const save = outputFile ? `\nWhen done, write the complete JSON array to: ${outputFile}` : '';
+  return `You are an expert product manager and UI developer. Analyze the ${tech} UI screen design provided below and extract user stories.
 
 Screen: "${screenTitle}"
 Tech stack: ${tech}
 
-UI code:
-\`\`\`
-${htmlContent.slice(0, 8000)}
-\`\`\`
-
+Screen content at: ${htmlFilePath}
+${save}
 Extract every distinct user action, form, state, or interaction visible in this screen as a separate user story.
+
+For each story's implementation prompt, include the relevant design elements observed in the UI — colours, typography, spacing, layout, component styles, icons — so that a developer can recreate the exact look and feel using ${tech}.
 
 Output ONLY a valid JSON array — no markdown, no explanation:
 [
@@ -59,11 +60,19 @@ Output ONLY a valid JSON array — no markdown, no explanation:
     "description": "As a user, I want to [action] so that [benefit].",
     "acceptance_criteria": "- Criterion 1\\n- Criterion 2\\n- Criterion 3\\n- Criterion 4",
     "prompts": [
-      { "tag": "implementation", "prompt": "Implement [specific component] using ${tech}..." },
+      { "tag": "implementation", "prompt": "Implement [specific component] using ${tech}. Design details: [colours, fonts, spacing, layout, styles extracted from the UI]..." },
       { "tag": "test", "prompt": "Write tests for [story]: test [case 1], test [case 2]..." }
     ]
   }
 ]`;
+}
+
+// Passes the prompt as an argument so the CLI opens its own TTY (required by Ink).
+// The file path reference is embedded inside the prompt text.
+function buildExtractPsCommand(instruction, model) {
+  const exe      = model.executable || 'claude';
+  const safeInst = instruction.replace(/'/g, "''");
+  return `$p = @'\n${safeInst}\n'@\n${exe} $p`;
 }
 
 // ----------------------------------------------------------------
@@ -716,8 +725,16 @@ export class ScreensModal {
         const screensDir = await window.app.screensDir(project?.name);
         const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
         const outputFile = `${screensDir}\\${safeTitle}_stories.json`;
-        const prompt = buildExtractPrompt(screen.html_content, screen.tech_stack, screen.title);
-        const cmd    = buildPsCommand(prompt, m);
+
+        // Resolve HTML file path — canonical if saved to disk, temp otherwise.
+        const htmlFilePath = await window.app.prepareScreenRef({
+          screensDir,
+          safeTitle,
+          htmlContent: screen.html_content,
+        });
+
+        const instruction = buildExtractPrompt(screen.tech_stack, screen.title, htmlFilePath, outputFile);
+        const cmd         = buildExtractPsCommand(instruction, m);
 
         dlg.querySelector('#extCmdCode').textContent = cmd;
         dlg.querySelector('#extCmdPreview').hidden = false;
