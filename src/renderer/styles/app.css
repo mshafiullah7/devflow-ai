@@ -8,36 +8,36 @@
 /* Themes                                                               */
 /* ------------------------------------------------------------------ */
 [data-theme="light"] {
-  --bg:             #fafaf9;
+  --bg:             #ffffff;
   --surface:        #ffffff;
-  --surface-header: #f5f5f4;
-  --surface-hover:  #f0efee;
-  --border:         #e7e5e4;
-  --accent:         #6366f1;
-  --accent-hover:   #4f52d9;
-  --text-primary:   #1c1917;
-  --text-secondary: #78716c;
-  --text-muted:     #a8a29e;
-  --item-text:      #78716c;   /* warm gray-brown for unselected feature/story items */
+  --surface-header: #f0f0f0;
+  --surface-hover:  #e0e0e0;
+  --border:         #555555;
+  --accent:         #4338ca;
+  --accent-hover:   #3730a3;
+  --text-primary:   #000000;
+  --text-secondary: #222222;
+  --text-muted:     #555555;
+  --item-text:      #333333;
   --danger:         #ef4444;
   --radius:         12px;
   --radius-sm:      8px;
-  --shadow:         0 4px 24px rgba(0,0,0,0.08);
-  --card-shadow:    0 1px 4px rgba(0,0,0,0.06);
+  --shadow:         0 4px 24px rgba(0,0,0,0.12);
+  --card-shadow:    0 1px 4px rgba(0,0,0,0.10);
   --glow-shadow:    none;
 
   /* Console */
-  --console-bg:      #f5f5f4;
-  --console-text:    #78716c;
-  --console-output:  #1c1917;
-  --console-prompt:  #4f52d9;
-  --console-input:   #1c1917;
-  --console-caret:   #4f52d9;
+  --console-bg:      #f0f0f0;
+  --console-text:    #222222;
+  --console-output:  #000000;
+  --console-prompt:  #4338ca;
+  --console-input:   #000000;
+  --console-caret:   #4338ca;
 
   /* Component-specific tokens */
-  --form-focus-shadow:  0 0 0 3px rgba(99,102,241,0.15);
-  --modal-overlay-bg:   rgba(28,25,23,0.4);
-  --card-icon-bg:       linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --form-focus-shadow:  0 0 0 3px rgba(67,56,202,0.20);
+  --modal-overlay-bg:   rgba(0,0,0,0.5);
+  --card-icon-bg:       linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
 }
 
 [data-theme="dark"] {

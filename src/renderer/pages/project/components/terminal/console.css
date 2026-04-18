@@ -243,6 +243,11 @@
   border-color: #eab308;
   box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
 }
+[data-theme="light"] .project-console__titlebar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
 [data-theme="light"] .project-console__folder {
   background: rgba(234, 179, 8, 0.08);
   border-color: rgba(180, 130, 0, 0.45);
