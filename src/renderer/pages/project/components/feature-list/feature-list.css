@@ -116,6 +116,11 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+[data-theme="light"] .fl-card__status {
+  background: var(--surface-hover);
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
 
 /* ------------------------------------------------------------------ */
 /* Empty state                                                          */

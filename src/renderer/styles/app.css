@@ -8,17 +8,17 @@
 /* Themes                                                               */
 /* ------------------------------------------------------------------ */
 [data-theme="light"] {
-  --bg:             #ffffff;
-  --surface:        #ffffff;
-  --surface-header: #f0f0f0;
-  --surface-hover:  #e0e0e0;
-  --border:         #555555;
-  --accent:         #4338ca;
-  --accent-hover:   #3730a3;
-  --text-primary:   #000000;
-  --text-secondary: #222222;
-  --text-muted:     #555555;
-  --item-text:      #333333;
+  --bg:             #fdf8f0;
+  --surface:        #fffdf7;
+  --surface-header: #f0e8d8;
+  --surface-hover:  #e8dcc8;
+  --border:         #4a3f2f;
+  --accent:         #1e3a5f;
+  --accent-hover:   #162c47;
+  --text-primary:   #0a0804;
+  --text-secondary: #2a2218;
+  --text-muted:     #6b5c44;
+  --item-text:      #3d3022;
   --danger:         #ef4444;
   --radius:         12px;
   --radius-sm:      8px;
@@ -27,17 +27,17 @@
   --glow-shadow:    none;
 
   /* Console */
-  --console-bg:      #f0f0f0;
-  --console-text:    #222222;
-  --console-output:  #000000;
-  --console-prompt:  #4338ca;
-  --console-input:   #000000;
-  --console-caret:   #4338ca;
+  --console-bg:      #f0e8d8;
+  --console-text:    #2a2218;
+  --console-output:  #0a0804;
+  --console-prompt:  #1e3a5f;
+  --console-input:   #0a0804;
+  --console-caret:   #1e3a5f;
 
   /* Component-specific tokens */
-  --form-focus-shadow:  0 0 0 3px rgba(67,56,202,0.20);
-  --modal-overlay-bg:   rgba(0,0,0,0.5);
-  --card-icon-bg:       linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+  --form-focus-shadow:  0 0 0 3px rgba(30,58,95,0.20);
+  --modal-overlay-bg:   rgba(10,8,4,0.5);
+  --card-icon-bg:       linear-gradient(135deg, #1e3a5f 0%, #162c47 100%);
 }
 
 [data-theme="dark"] {

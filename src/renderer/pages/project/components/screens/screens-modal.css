@@ -461,6 +461,7 @@
   cursor: pointer;
 }
 .scr-viewer__tab--active { background: var(--surface); color: var(--text-primary); font-weight: 500; }
+[data-theme="light"] .scr-viewer__tab--active { background: var(--accent); color: #fff; font-weight: 500; }
 
 .scr-viewer__btn {
   display: flex;
@@ -478,6 +479,39 @@
 .scr-viewer__btn--accent { color: var(--accent); border-color: var(--accent); }
 .scr-viewer__btn--accent:hover { background: rgba(var(--accent-rgb,99,102,241),.08); }
 .scr-viewer__btn--danger:hover { background: rgba(239,68,68,.08); color: #ef4444; border-color: #ef4444; }
+
+[data-theme="light"] .scr-btn {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+[data-theme="light"] .scr-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--accent-hover);
+  color: var(--accent-hover);
+}
+[data-theme="light"] .scr-btn--sm {
+  padding: 7px 10px;
+}
+[data-theme="light"] .scr-btn--primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+[data-theme="light"] .scr-btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+}
+[data-theme="light"] .scr-btn--danger {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+[data-theme="light"] .scr-btn--danger:hover:not(:disabled) {
+  background: rgba(239,68,68,.08);
+  color: #ef4444;
+  border-color: #ef4444;
+}
 
 .scr-viewer__content { flex: 1; overflow: hidden; position: relative; }
 
