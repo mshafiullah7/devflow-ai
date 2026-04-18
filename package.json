@@ -20,6 +20,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "better-sqlite3": "^12.8.0",
     "electron-squirrel-startup": "^1.0.1"
   },

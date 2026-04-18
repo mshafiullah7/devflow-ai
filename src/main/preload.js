@@ -77,6 +77,13 @@ contextBridge.exposeInMainWorld('db', {
     update:     (data)        => invoke('db:attachments:update', data),
     delete:     (id)          => invoke('db:attachments:delete', id),
   },
+  screenDesigns: {
+    list:   (project_id) => invoke('db:screen_designs:list', project_id),
+    get:    (id)         => invoke('db:screen_designs:get', id),
+    create: (data)       => invoke('db:screen_designs:create', data),
+    update: (data)       => invoke('db:screen_designs:update', data),
+    delete: (id)         => invoke('db:screen_designs:delete', id),
+  },
   dialog: {
     openFolder:   () => invoke('dialog:openFolder'),
     openJsonFile: () => invoke('dialog:openJsonFile'),
@@ -102,6 +109,20 @@ contextBridge.exposeInMainWorld('db', {
 
 contextBridge.exposeInMainWorld('app', {
   agentCliPath: () => invoke('app:agent-cli-path'),
+});
+
+contextBridge.exposeInMainWorld('claude', {
+  generateScreen:  (data) => invoke('claude:generate-screen', data),
+  extractStories:  (data) => invoke('claude:extract-stories', data),
+  cancel:          ()     => invoke('claude:cancel'),
+  onToken:  (cb) => ipcRenderer.on('claude:token',  (_e, t) => cb(t)),
+  onDone:   (cb) => ipcRenderer.on('claude:done',   (_e, p) => cb(p)),
+  onError:  (cb) => ipcRenderer.on('claude:error',  (_e, m) => cb(m)),
+  removeListeners: () => {
+    ipcRenderer.removeAllListeners('claude:token');
+    ipcRenderer.removeAllListeners('claude:done');
+    ipcRenderer.removeAllListeners('claude:error');
+  },
 });
 
 contextBridge.exposeInMainWorld('shell', {

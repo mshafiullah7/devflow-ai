@@ -422,6 +422,47 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // screen_designs
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:screen_designs:list', (_e, project_id) => {
+    return db
+      .prepare('SELECT * FROM screen_designs WHERE project_id = ? AND is_active = 1 ORDER BY created_at ASC')
+      .all(project_id);
+  });
+
+  ipcMain.handle('db:screen_designs:get', (_e, id) => {
+    return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:screen_designs:create', (_e, { project_id, title, description, tech_stack, html_content, prompt_used, model_used }) => {
+    const result = db
+      .prepare(`INSERT INTO screen_designs (project_id, title, description, tech_stack, html_content, prompt_used, model_used)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(project_id, title, description ?? null, tech_stack ?? 'html', html_content ?? '', prompt_used ?? null, model_used ?? null);
+    return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:screen_designs:update', (_e, { id, title, description, tech_stack, html_content, prompt_used, model_used }) => {
+    db.prepare(
+      `UPDATE screen_designs
+          SET title        = coalesce(?, title),
+              description  = coalesce(?, description),
+              tech_stack   = coalesce(?, tech_stack),
+              html_content = coalesce(?, html_content),
+              prompt_used  = coalesce(?, prompt_used),
+              model_used   = coalesce(?, model_used),
+              updated_at   = datetime('now')
+        WHERE id = ?`
+    ).run(title ?? null, description ?? null, tech_stack ?? null, html_content ?? null, prompt_used ?? null, model_used ?? null, id);
+    return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:screen_designs:delete', (_e, id) => {
+    db.prepare('UPDATE screen_designs SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
   // draw.io — open in desktop app via temp file
   // ----------------------------------------------------------------
   ipcMain.handle('shell:openDrawio', async (_e, { id, name, content }) => {

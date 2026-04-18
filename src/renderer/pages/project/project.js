@@ -5,6 +5,7 @@ import { GitController } from './components/git/git-controller.js';
 import { StatsModal } from './components/stats/stats-modal.js';
 import { QuickCommandsModal } from './components/quick-commands/quick-commands-modal.js';
 import { DocumentsModal } from './components/documents/documents-modal.js';
+import { ScreensModal } from './components/screens/screens-modal.js';
 import { ModelConfigsModal } from './components/model-configs/model-configs-modal.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
@@ -54,6 +55,13 @@ export class ProjectPage {
 
     this._docsModal = new DocumentsModal({ projectId: this.projectId });
     this._docsModal.mount();
+
+    this._screensModal = new ScreensModal({
+      projectId:  this.projectId,
+      getProject: () => this._project,
+      getModel:   () => this._aiModelConfig,
+    });
+    this._screensModal.mount();
 
     this._qcmdModal = new QuickCommandsModal({
       onRunCommand: (cmd) => this._terminal.applyQuickCommand(cmd),
@@ -113,6 +121,14 @@ export class ProjectPage {
             </button>
           </div>
           <div class="project-page__header-actions">
+            <button class="project-page__docs-btn" id="btnScreens" title="Screen designs">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M4 6h5M4 9h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                <circle cx="12" cy="6" r="1.5" fill="currentColor" opacity=".6"/>
+              </svg>
+              Screens
+            </button>
             <button class="project-page__docs-btn" id="btnDocuments" title="Project documents">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"
@@ -334,6 +350,9 @@ export class ProjectPage {
 
     document.getElementById('btnStatistics')
       .addEventListener('click', () => this._statsModal.show());
+
+    document.getElementById('btnScreens')
+      .addEventListener('click', () => this._screensModal.show());
 
     document.getElementById('btnDocuments')
       .addEventListener('click', () => this._docsModal.show());

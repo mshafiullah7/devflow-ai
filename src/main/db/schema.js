@@ -145,6 +145,23 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- SCREEN DESIGNS
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS screen_designs (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      title               TEXT    NOT NULL,
+      description         TEXT,
+      tech_stack          TEXT    NOT NULL DEFAULT 'html',
+      html_content        TEXT    NOT NULL DEFAULT '',
+      prompt_used         TEXT,
+      model_used          TEXT,
+      is_active           INTEGER NOT NULL DEFAULT 1,
+      created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (

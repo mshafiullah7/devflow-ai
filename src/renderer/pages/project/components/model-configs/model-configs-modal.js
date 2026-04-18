@@ -86,7 +86,9 @@ export class ModelConfigsModal {
               <div class="mcfg-item__sub">
                 ${c.type === 'cli'
                   ? escHtml(c.executable || '') + (c.flags ? ` <span class="mcfg-item__flags">${escHtml(c.flags)}</span>` : '')
-                  : escHtml(c.base_url || '') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '')}
+                  : c.type === 'anthropic'
+                    ? escHtml(c.model_name || 'claude-sonnet-4-6')
+                    : escHtml(c.base_url || '') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '')}
               </div>
             </div>
             <div class="mcfg-item__actions">
@@ -145,9 +147,7 @@ export class ModelConfigsModal {
           <label class="mcfg-form__label">Type</label>
           <div class="mcfg-form__type-toggle">
             <button type="button" class="mcfg-type-btn ${(!config || config.type === 'cli') ? 'active' : ''}" data-type="cli">CLI</button>
-            <button type="button" class="mcfg-type-btn mcfg-type-btn--disabled" data-type="api" disabled title="API support is coming soon">
-              API <span class="mcfg-coming-soon">Coming Soon</span>
-            </button>
+            <button type="button" class="mcfg-type-btn ${config?.type === 'anthropic' ? 'active' : ''}" data-type="anthropic">Anthropic API</button>
           </div>
           <input type="hidden" id="mcfgType" value="${config?.type || 'cli'}"/>
         </div>
@@ -173,24 +173,21 @@ export class ModelConfigsModal {
           </div>
         </div>
 
-        <!-- API fields — kept for future use, hidden while API type is disabled -->
-        <div class="mcfg-fields-api mcfg-fields-api--hidden" id="mcfgFieldsApi">
-          <div class="mcfg-form__row">
-            <label class="mcfg-form__label">Base URL *</label>
-            <input class="mcfg-form__input" id="mcfgBaseUrl" type="text" placeholder="https://api.mistral.ai/v1  or  http://localhost:11434/v1" value="${escHtml(config?.type === 'api' ? (config?.base_url || '') : '')}"/>
-            <span class="mcfg-form__hint">OpenAI-compatible /v1/chat/completions endpoint</span>
-          </div>
+        <!-- Anthropic API fields -->
+        <div class="mcfg-fields-api" id="mcfgFieldsApi" style="display:none">
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">Model name *</label>
-            <input class="mcfg-form__input" id="mcfgModelName" type="text" placeholder="mistral-large-latest, phi4-mini, gpt-4o…" value="${escHtml(config?.type === 'api' ? (config?.model_name || '') : '')}"/>
+            <input class="mcfg-form__input" id="mcfgModelName" type="text" placeholder="claude-sonnet-4-6" value="${escHtml(config?.type === 'anthropic' ? (config?.model_name || '') : '')}"/>
+            <span class="mcfg-form__hint">e.g. claude-sonnet-4-6, claude-opus-4-7, claude-haiku-4-5-20251001</span>
           </div>
           <div class="mcfg-form__row">
-            <label class="mcfg-form__label">API Key</label>
-            <input class="mcfg-form__input" id="mcfgApiKey" type="password" placeholder="Leave blank for local models" value="${escHtml(config?.api_key || '')}"/>
+            <label class="mcfg-form__label">API Key *</label>
+            <input class="mcfg-form__input" id="mcfgApiKey" type="password" placeholder="sk-ant-…" value="${escHtml(config?.type === 'anthropic' ? (config?.api_key || '') : '')}"/>
+            <span class="mcfg-form__hint">Your Anthropic API key from console.anthropic.com</span>
           </div>
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">Max tokens</label>
-            <input class="mcfg-form__input mcfg-form__input--short" id="mcfgMaxTokens" type="number" min="1" max="128000" placeholder="4096" value="${config?.max_tokens || ''}"/>
+            <input class="mcfg-form__input mcfg-form__input--short" id="mcfgMaxTokens" type="number" min="1" max="128000" placeholder="8192" value="${config?.type === 'anthropic' ? (config?.max_tokens || '') : ''}"/>
           </div>
         </div>
 
@@ -210,12 +207,11 @@ export class ModelConfigsModal {
 
     body.querySelector('#btnMcfgCancel').addEventListener('click', () => this._renderList(overlay, body));
 
-    // Sets field section visibility for a given type — used on init and on toggle
     const applyType = (type) => {
-      body.querySelector('#mcfgFieldsCli').style.display = type === 'cli' ? '' : 'none';
+      body.querySelector('#mcfgFieldsCli').style.display = type === 'cli'        ? '' : 'none';
+      body.querySelector('#mcfgFieldsApi').style.display = type === 'anthropic'  ? '' : 'none';
     };
 
-    // Set initial visibility based on config type
     applyType(config?.type || 'cli');
 
     // Type toggle
@@ -243,10 +239,8 @@ export class ModelConfigsModal {
         data.executable = body.querySelector('#mcfgExecutable')?.value.trim() || null;
         data.flags      = body.querySelector('#mcfgFlags')?.value.trim() || null;
         data.input_mode = body.querySelector('#mcfgInputMode')?.value || 'pipe';
-      } else {
-        // API (future)
-        data.base_url   = body.querySelector('#mcfgBaseUrl')?.value.trim() || null;
-        data.model_name = body.querySelector('#mcfgModelName')?.value.trim() || null;
+      } else if (type === 'anthropic') {
+        data.model_name = body.querySelector('#mcfgModelName')?.value.trim() || 'claude-sonnet-4-6';
         data.api_key    = body.querySelector('#mcfgApiKey')?.value || null;
         data.max_tokens = body.querySelector('#mcfgMaxTokens')?.value
                             ? Number(body.querySelector('#mcfgMaxTokens').value) : null;
