@@ -8,25 +8,91 @@ const TECH_STACKS = [
   { value: 'react-native',   label: 'React Native',          mobile: true  },
 ];
 
-function techLabel(value) {
-  return TECH_STACKS.find(t => t.value === value)?.label || value;
+const TECH_LABELS = Object.fromEntries(TECH_STACKS.map(t => [t.value, t.label]));
+
+function techLabel(value) { return TECH_LABELS[value] || value; }
+function isMobile(value)  { return TECH_STACKS.find(t => t.value === value)?.mobile ?? false; }
+
+// ----------------------------------------------------------------
+// Prompt builders
+// ----------------------------------------------------------------
+function buildScreenPrompt(description, techStack, projectDescription) {
+  const tech   = TECH_LABELS[techStack] || techStack;
+  const mobile = isMobile(techStack);
+  const ctx    = projectDescription ? `\nProject context: ${projectDescription}` : '';
+
+  if (mobile) {
+    return `You are an expert mobile UI developer. Generate complete, production-quality ${tech} code for the screen described below. Output ONLY the code — no explanation, no markdown fences.${ctx}\n\nScreen to design:\n${description}`;
+  }
+
+  return `You are an expert UI/UX developer. Generate a complete, self-contained HTML file for the screen described below using ${tech}.
+Rules:
+- Output ONLY valid HTML starting with <!DOCTYPE html>
+- All CSS goes inside a <style> tag; CDN links (e.g. Tailwind CDN) are allowed
+- Visually polished, modern design with realistic placeholder content
+- Fully responsive
+- No explanation, no markdown — raw HTML only${ctx}
+
+Screen to design:
+${description}`;
 }
 
-function isMobile(value) {
-  return TECH_STACKS.find(t => t.value === value)?.mobile ?? false;
+function buildExtractPrompt(htmlContent, techStack, screenTitle) {
+  const tech = TECH_LABELS[techStack] || techStack;
+  return `You are an expert product manager. Analyze the following UI screen design and extract user stories.
+
+Screen: "${screenTitle}"
+Tech stack: ${tech}
+
+UI code:
+\`\`\`
+${htmlContent.slice(0, 8000)}
+\`\`\`
+
+Extract every distinct user action, form, state, or interaction visible in this screen as a separate user story.
+
+Output ONLY a valid JSON array — no markdown, no explanation:
+[
+  {
+    "title": "Short action-oriented title",
+    "description": "As a user, I want to [action] so that [benefit].",
+    "acceptance_criteria": "- Criterion 1\\n- Criterion 2\\n- Criterion 3\\n- Criterion 4",
+    "prompts": [
+      { "tag": "implementation", "prompt": "Implement [specific component] using ${tech}..." },
+      { "tag": "test", "prompt": "Write tests for [story]: test [case 1], test [case 2]..." }
+    ]
+  }
+]`;
 }
 
+// ----------------------------------------------------------------
+// Build the PowerShell command for a CLI model
+// ----------------------------------------------------------------
+function buildPsCommand(prompt, model, outputFile) {
+  const exe    = model.executable || 'claude';
+  const flags  = model.flags ? ` ${model.flags}` : '';
+  // Escape single-quotes in the prompt for PS here-string
+  const safe   = prompt.replace(/'/g, "''");
+  const outPart = outputFile ? ` | Out-File "${outputFile}" -Encoding UTF8` : '';
+
+  if (model.input_mode === 'heredoc') {
+    return `$p = @'\n${safe}\n'@\n${exe}${flags} $p${outPart}`;
+  }
+  return `$p = @'\n${safe}\n'@\nWrite-Output $p | ${exe}${flags}${outPart}`;
+}
+
+// ----------------------------------------------------------------
+// ScreensModal
+// ----------------------------------------------------------------
 export class ScreensModal {
   constructor({ projectId, getProject, getModel }) {
     this._projectId  = projectId;
-    this._getProject = getProject;  // () => project row
-    this._getModel   = getModel;    // () => model_configs row
+    this._getProject = getProject;
+    this._getModel   = getModel;
     this._overlay    = null;
     this._screens    = [];
     this._activeId   = null;
-    this._streamBuf  = '';
-    this._generating = false;
-    this._activeTab  = 'preview'; // 'preview' | 'code'
+    this._activeTab  = 'preview';
   }
 
   mount() {
@@ -51,7 +117,7 @@ export class ScreensModal {
   }
 
   // ----------------------------------------------------------------
-  // Shell (sidebar + wrapper)
+  // Shell
   // ----------------------------------------------------------------
   _shellTemplate() {
     return `
@@ -91,7 +157,6 @@ export class ScreensModal {
       <div class="scr-sidebar__item${s.id === this._activeId ? ' scr-sidebar__item--active' : ''}" data-id="${s.id}">
         <svg class="scr-sidebar__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
           <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-          <path d="M3 5h7M3 8h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
         </svg>
         <div class="scr-sidebar__item-info">
           <span class="scr-sidebar__item-title">${escHtml(s.title)}</span>
@@ -104,40 +169,32 @@ export class ScreensModal {
   _refreshSidebar() {
     const list = this._overlay?.querySelector('#scrList');
     if (list) list.innerHTML = this._renderList();
+    this._bindSidebarItems();
+  }
+
+  _bindSidebarItems() {
     this._overlay?.querySelectorAll('.scr-sidebar__item').forEach(el => {
       el.addEventListener('click', () => this._selectScreen(Number(el.dataset.id)));
     });
   }
 
   _bindShellEvents() {
-    this._overlay.querySelector('#scrClose').addEventListener('click', () => this._close());
+    this._overlay.querySelector('#scrClose').addEventListener('click', () => this._overlay.remove());
     this._overlay.querySelector('#scrNewBtn').addEventListener('click', () => this._showNewForm());
-    this._overlay.querySelectorAll('.scr-sidebar__item').forEach(el => {
-      el.addEventListener('click', () => this._selectScreen(Number(el.dataset.id)));
-    });
+    this._bindSidebarItems();
     const escFn = (e) => {
-      if (e.key === 'Escape' && !this._generating) {
-        this._close();
-        document.removeEventListener('keydown', escFn);
-      }
+      if (e.key === 'Escape') { this._overlay?.remove(); document.removeEventListener('keydown', escFn); }
     };
     document.addEventListener('keydown', escFn);
-  }
-
-  _close() {
-    window.claude.removeListeners();
-    this._overlay?.remove();
-    this._overlay = null;
   }
 
   // ----------------------------------------------------------------
   // New Screen form
   // ----------------------------------------------------------------
-  _showNewForm() {
+  _showNewForm(prefill = {}) {
     this._activeId = null;
-    this._streamBuf = '';
-    this._generateing = false;
     this._setActiveItem(null);
+    const model = this._getModel();
 
     const main = this._overlay.querySelector('#scrMain');
     main.innerHTML = `
@@ -146,150 +203,117 @@ export class ScreensModal {
 
         <div class="scr-form__row">
           <label class="scr-form__label">Title *</label>
-          <input class="scr-form__input" id="scrTitle" type="text" placeholder="e.g. Login Screen, Dashboard, Product List…" autocomplete="off"/>
+          <input class="scr-form__input" id="scrTitle" type="text"
+            placeholder="e.g. Login Screen, Dashboard, Product List…"
+            value="${escHtml(prefill.title || '')}" autocomplete="off"/>
         </div>
 
         <div class="scr-form__row">
           <label class="scr-form__label">Tech Stack</label>
           <select class="scr-form__select" id="scrTechStack">
-            ${TECH_STACKS.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
+            ${TECH_STACKS.map(t => `<option value="${t.value}"${prefill.tech_stack === t.value ? ' selected' : ''}>${t.label}</option>`).join('')}
           </select>
         </div>
 
         <div class="scr-form__row scr-form__row--grow">
           <label class="scr-form__label">Describe the screen *</label>
           <textarea class="scr-form__textarea" id="scrDescription"
-            placeholder="Describe what this screen should contain: purpose, sections, components, user actions, visual style, etc.
-Example: A login screen with an email and password field, a 'Remember me' checkbox, a Sign In button, and a 'Forgot password?' link. Use a clean white card on a light gray background."></textarea>
+            placeholder="Describe what this screen should contain: purpose, sections, components, user actions, visual style, etc.&#10;&#10;Example: A login screen with email and password fields, a Remember me checkbox, a Sign In button, and a Forgot password? link. Clean white card on a light gray background.">${escHtml(prefill.description || '')}</textarea>
         </div>
 
         <div class="scr-form__actions">
-          <div class="scr-form__model-hint" id="scrModelHint"></div>
-          <button class="scr-form__generate-btn" id="scrGenerateBtn">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2l2.4 5.4L18 8.6l-4 3.9.9 5.5L10 15.4l-4.9 2.6.9-5.5L2 8.6l5.6-1.2z"
-                fill="currentColor" opacity=".9"/>
-            </svg>
-            Generate with AI
-          </button>
+          <div class="scr-model-info" id="scrModelInfo">${this._modelInfoHtml(model)}</div>
+          <div class="scr-form__btns">
+            <button class="scr-btn scr-btn--primary" id="scrRunBtn">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
+                <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+              Run in Terminal
+            </button>
+            <button class="scr-btn scr-btn--secondary" id="scrChooseFileBtn">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+              Choose File
+            </button>
+          </div>
         </div>
 
-        <div class="scr-stream" id="scrStream" hidden>
-          <div class="scr-stream__bar">
-            <span class="scr-stream__dot"></span>
-            <span class="scr-stream__label">Generating…</span>
-            <button class="scr-stream__cancel" id="scrCancelBtn">Cancel</button>
-          </div>
-          <pre class="scr-stream__code" id="scrStreamCode"></pre>
+        <div class="scr-cmd-preview" id="scrCmdPreview" hidden>
+          <div class="scr-cmd-preview__label">Command sent to terminal:</div>
+          <pre class="scr-cmd-preview__code" id="scrCmdCode"></pre>
         </div>
       </div>
     `;
 
-    this._updateModelHint();
-    main.querySelector('#scrGenerateBtn').addEventListener('click', () => this._startGenerate());
-    main.querySelector('#scrCancelBtn')?.addEventListener('click', () => this._cancelGenerate());
+    main.querySelector('#scrRunBtn').addEventListener('click', () => this._runInTerminal());
+    main.querySelector('#scrChooseFileBtn').addEventListener('click', () => this._chooseFile());
   }
 
-  _updateModelHint() {
-    const hint = this._overlay?.querySelector('#scrModelHint');
-    if (!hint) return;
-    const model = this._getModel();
-    if (!model) {
-      hint.textContent = 'No model selected.';
-      hint.className = 'scr-form__model-hint scr-form__model-hint--warn';
-    } else if (model.type !== 'anthropic') {
-      hint.innerHTML = `Using <strong>${escHtml(model.label)}</strong> — for AI generation, add a <em>Claude (Anthropic API)</em> model config.`;
-      hint.className = 'scr-form__model-hint scr-form__model-hint--warn';
-    } else {
-      hint.innerHTML = `Using <strong>${escHtml(model.label)}</strong> (${escHtml(model.model_name || 'claude-sonnet-4-6')})`;
-      hint.className = 'scr-form__model-hint';
-    }
+  _modelInfoHtml(model) {
+    if (!model) return `<span class="scr-model-info--warn">No model selected.</span>`;
+    if (model.type === 'anthropic') return `<span class="scr-model-info--warn">Anthropic API model selected — switch to a CLI model (Claude CLI or Gemini CLI) for terminal generation.</span>`;
+    return `Using <strong>${escHtml(model.label)}</strong> [${model.type.toUpperCase()}]`;
   }
 
-  async _startGenerate() {
-    const main        = this._overlay.querySelector('#scrMain');
-    const titleEl     = main.querySelector('#scrTitle');
-    const descEl      = main.querySelector('#scrDescription');
-    const techEl      = main.querySelector('#scrTechStack');
-    const streamEl    = main.querySelector('#scrStream');
-    const streamCode  = main.querySelector('#scrStreamCode');
-    const generateBtn = main.querySelector('#scrGenerateBtn');
+  async _runInTerminal() {
+    const main   = this._overlay.querySelector('#scrMain');
+    const title  = main.querySelector('#scrTitle').value.trim();
+    const desc   = main.querySelector('#scrDescription').value.trim();
+    const stack  = main.querySelector('#scrTechStack').value;
 
-    const title       = titleEl.value.trim();
-    const description = descEl.value.trim();
-    const tech_stack  = techEl.value;
-
-    if (!title)       { titleEl.focus(); return; }
-    if (!description) { descEl.focus(); return; }
+    if (!title) { main.querySelector('#scrTitle').focus(); return; }
+    if (!desc)  { main.querySelector('#scrDescription').focus(); return; }
 
     const model = this._getModel();
-    if (!model || model.type !== 'anthropic') {
-      alert('Please select a Claude (Anthropic API) model config first, or add one via the model settings button in the header.');
+    if (!model || model.type === 'anthropic' || !model.executable) {
+      alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model selector in the project header.');
       return;
     }
 
-    this._generating = true;
-    this._streamBuf  = '';
-    generateBtn.disabled = true;
-    streamEl.hidden      = false;
-    streamCode.textContent = '';
+    const project    = this._getProject();
+    const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
+    const outputFile = `$env:TEMP\\electron-ai-sdlc\\screens\\${safeTitle}.html`;
+    const prompt     = buildScreenPrompt(desc, stack, project?.description || '');
+    const cmd        = buildPsCommand(prompt, model, outputFile);
 
-    window.claude.removeListeners();
+    // Show the command preview
+    const preview = main.querySelector('#scrCmdPreview');
+    main.querySelector('#scrCmdCode').textContent = cmd;
+    preview.hidden = false;
 
-    window.claude.onToken((token) => {
-      this._streamBuf += token;
-      streamCode.textContent = this._streamBuf;
-      streamCode.scrollTop   = streamCode.scrollHeight;
-    });
-
-    window.claude.onDone(async () => {
-      this._generating = false;
-      generateBtn.disabled = false;
-      streamEl.hidden = true;
-
-      const project = this._getProject();
-      const screen  = await window.db.screenDesigns.create({
-        project_id:   this._projectId,
-        title,
-        description,
-        tech_stack,
-        html_content: this._streamBuf,
-        prompt_used:  description,
-        model_used:   model.model_name || 'claude-sonnet-4-6',
-      });
-
-      this._screens = await window.db.screenDesigns.list(this._projectId);
-      this._activeId = screen.id;
-      this._refreshSidebar();
-      this._showScreenViewer(screen);
-    });
-
-    window.claude.onError((msg) => {
-      this._generating = false;
-      generateBtn.disabled = false;
-      streamEl.hidden = true;
-      streamCode.textContent = `Error: ${msg}`;
-      streamEl.hidden = false;
-    });
-
-    const project = this._getProject();
-    await window.claude.generateScreen({
-      api_key:             model.api_key,
-      model_name:          model.model_name || 'claude-sonnet-4-6',
-      description,
-      tech_stack,
-      project_description: project?.description || '',
-    });
+    const cwd = project?.project_path || undefined;
+    await window.db.terminal.openExternal({ command: cmd, cwd });
   }
 
-  _cancelGenerate() {
-    window.claude.cancel();
-    window.claude.removeListeners();
-    this._generating = false;
-    const streamEl = this._overlay?.querySelector('#scrStream');
-    if (streamEl) streamEl.hidden = true;
-    const btn = this._overlay?.querySelector('#scrGenerateBtn');
-    if (btn) btn.disabled = false;
+  async _chooseFile() {
+    const main  = this._overlay.querySelector('#scrMain');
+    const title = main.querySelector('#scrTitle')?.value.trim() || 'Untitled Screen';
+    const stack = main.querySelector('#scrTechStack')?.value || 'html';
+    const desc  = main.querySelector('#scrDescription')?.value.trim() || '';
+
+    const result = await window.db.dialog.openFile({
+      title:      'Choose Generated Screen File',
+      extensions: ['html', 'htm', 'dart', 'js', 'jsx', 'tsx', '*'],
+    });
+    if (!result) return;
+
+    const screen = await window.db.screenDesigns.create({
+      project_id:   this._projectId,
+      title,
+      description:  desc,
+      tech_stack:   stack,
+      html_content: result.content,
+      prompt_used:  desc,
+      model_used:   this._getModel()?.label || '',
+    });
+
+    this._screens = await window.db.screenDesigns.list(this._projectId);
+    this._activeId = screen.id;
+    this._refreshSidebar();
+    this._showScreenViewer(screen);
   }
 
   // ----------------------------------------------------------------
@@ -310,7 +334,7 @@ Example: A login screen with an email and password field, a 'Remember me' checkb
   }
 
   _showScreenViewer(screen) {
-    const main = this._overlay.querySelector('#scrMain');
+    const main   = this._overlay.querySelector('#scrMain');
     const mobile = isMobile(screen.tech_stack);
 
     main.innerHTML = `
@@ -324,24 +348,24 @@ Example: A login screen with an email and password field, a 'Remember me' checkb
             ${!mobile ? `
             <div class="scr-viewer__tabs">
               <button class="scr-viewer__tab${this._activeTab === 'preview' ? ' scr-viewer__tab--active' : ''}" data-tab="preview">Preview</button>
-              <button class="scr-viewer__tab${this._activeTab === 'code' ? ' scr-viewer__tab--active' : ''}" data-tab="code">Code</button>
+              <button class="scr-viewer__tab${this._activeTab === 'code'    ? ' scr-viewer__tab--active' : ''}" data-tab="code">Code</button>
             </div>` : ''}
-            <button class="scr-viewer__btn" id="scrRegenerateBtn" title="Regenerate">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M2 8a6 6 0 1110.4-4H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M10 4l2.4 0 0 2.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <button class="scr-btn scr-btn--sm" id="scrRegenBtn">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8a6 6 0 1110.4-4H10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M10 4l2.5 0 0 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
               Regenerate
             </button>
-            <button class="scr-viewer__btn scr-viewer__btn--accent" id="scrExtractBtn" title="Extract user stories from this screen">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M3 4h10M3 8h7M3 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                <path d="M13 10l1.5 1.5L13 13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <button class="scr-btn scr-btn--sm scr-btn--accent" id="scrExtractBtn">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M3 4h10M3 8h7M3 12h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                <path d="M12 10l2 2-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
               Extract Stories
             </button>
-            <button class="scr-viewer__btn scr-viewer__btn--danger" id="scrDeleteBtn" title="Delete screen">
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+            <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrDeleteBtn" title="Delete screen">
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
                 <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
@@ -351,39 +375,13 @@ Example: A login screen with an email and password field, a 'Remember me' checkb
         <div class="scr-viewer__content" id="scrViewerContent">
           ${mobile
             ? `<pre class="scr-viewer__code-block"><code>${escHtml(screen.html_content)}</code></pre>`
-            : this._activeTab === 'preview'
-              ? `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts allow-same-origin"></iframe>`
-              : `<pre class="scr-viewer__code-block"><code>${escHtml(screen.html_content)}</code></pre>`
+            : `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts"></iframe>`
           }
-        </div>
-
-        <div class="scr-regen" id="scrRegenPanel" hidden>
-          <textarea class="scr-regen__input" id="scrRegenDesc" placeholder="Describe changes or leave blank to regenerate as-is…">${escHtml(screen.description || '')}</textarea>
-          <div class="scr-regen__actions">
-            <button class="scr-regen__cancel" id="scrRegenCancelBtn">Cancel</button>
-            <button class="scr-regen__go" id="scrRegenGoBtn">
-              <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2l2.4 5.4L18 8.6l-4 3.9.9 5.5L10 15.4l-4.9 2.6.9-5.5L2 8.6l5.6-1.2z" fill="currentColor"/>
-              </svg>
-              Generate
-            </button>
-          </div>
-          <div class="scr-stream scr-stream--inline" id="scrRegenStream" hidden>
-            <div class="scr-stream__bar">
-              <span class="scr-stream__dot"></span>
-              <span class="scr-stream__label">Regenerating…</span>
-              <button class="scr-stream__cancel" id="scrRegenCancelStreamBtn">Cancel</button>
-            </div>
-          </div>
         </div>
       </div>
     `;
 
-    // Load iframe preview
-    if (!mobile && this._activeTab === 'preview') {
-      this._loadPreview(screen.html_content);
-    }
-
+    if (!mobile) this._loadPreview(screen.html_content);
     this._bindViewerEvents(screen);
   }
 
@@ -407,7 +405,7 @@ Example: A login screen with an email and password field, a 'Remember me' checkb
         tab.classList.add('scr-viewer__tab--active');
         const content = main.querySelector('#scrViewerContent');
         if (this._activeTab === 'preview') {
-          content.innerHTML = `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts allow-same-origin"></iframe>`;
+          content.innerHTML = `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts"></iframe>`;
           this._loadPreview(screen.html_content);
         } else {
           content.innerHTML = `<pre class="scr-viewer__code-block"><code>${escHtml(screen.html_content)}</code></pre>`;
@@ -415,24 +413,9 @@ Example: A login screen with an email and password field, a 'Remember me' checkb
       });
     });
 
-    // Regenerate
-    main.querySelector('#scrRegenerateBtn').addEventListener('click', () => {
-      const panel = main.querySelector('#scrRegenPanel');
-      panel.hidden = !panel.hidden;
-    });
-
-    main.querySelector('#scrRegenCancelBtn').addEventListener('click', () => {
-      main.querySelector('#scrRegenPanel').hidden = true;
-    });
-
-    main.querySelector('#scrRegenGoBtn').addEventListener('click', () => this._doRegenerate(screen));
-
-    main.querySelector('#scrRegenCancelStreamBtn')?.addEventListener('click', () => {
-      window.claude.cancel();
-      window.claude.removeListeners();
-      this._generating = false;
-      main.querySelector('#scrRegenStream').hidden = true;
-      main.querySelector('#scrRegenGoBtn').disabled = false;
+    // Regenerate — go back to form pre-filled with existing values
+    main.querySelector('#scrRegenBtn').addEventListener('click', () => {
+      this._showNewForm({ title: screen.title, tech_stack: screen.tech_stack, description: screen.description || screen.prompt_used || '' });
     });
 
     // Extract stories
@@ -442,7 +425,7 @@ Example: A login screen with an email and password field, a 'Remember me' checkb
     main.querySelector('#scrDeleteBtn').addEventListener('click', async () => {
       if (!confirm(`Delete "${screen.title}"?`)) return;
       await window.db.screenDesigns.delete(screen.id);
-      this._screens = await window.db.screenDesigns.list(this._projectId);
+      this._screens  = await window.db.screenDesigns.list(this._projectId);
       this._activeId = this._screens[0]?.id ?? null;
       this._refreshSidebar();
       if (this._activeId) this._selectScreen(this._activeId);
@@ -451,166 +434,128 @@ Example: A login screen with an email and password field, a 'Remember me' checkb
   }
 
   // ----------------------------------------------------------------
-  // Regenerate
-  // ----------------------------------------------------------------
-  async _doRegenerate(screen) {
-    const main    = this._overlay.querySelector('#scrMain');
-    const descEl  = main.querySelector('#scrRegenDesc');
-    const goBtn   = main.querySelector('#scrRegenGoBtn');
-    const stream  = main.querySelector('#scrRegenStream');
-
-    const model = this._getModel();
-    if (!model || model.type !== 'anthropic') {
-      alert('Please select a Claude (Anthropic API) model config first.');
-      return;
-    }
-
-    const description = descEl.value.trim() || screen.description || screen.prompt_used || `Regenerate the ${screen.title} screen`;
-    this._generating  = true;
-    this._streamBuf   = '';
-    goBtn.disabled    = true;
-    stream.hidden     = false;
-
-    window.claude.removeListeners();
-
-    window.claude.onToken((token) => { this._streamBuf += token; });
-
-    window.claude.onDone(async () => {
-      this._generating = false;
-      goBtn.disabled   = false;
-      stream.hidden    = true;
-
-      const updated = await window.db.screenDesigns.update({
-        id:           screen.id,
-        html_content: this._streamBuf,
-        prompt_used:  description,
-        model_used:   model.model_name,
-        description:  descEl.value.trim() || undefined,
-      });
-
-      screen.html_content = this._streamBuf;
-      main.querySelector('#scrRegenPanel').hidden = true;
-
-      const content = main.querySelector('#scrViewerContent');
-      if (this._activeTab === 'preview' && !isMobile(screen.tech_stack)) {
-        content.innerHTML = `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts allow-same-origin"></iframe>`;
-        this._loadPreview(this._streamBuf);
-      } else {
-        content.innerHTML = `<pre class="scr-viewer__code-block"><code>${escHtml(this._streamBuf)}</code></pre>`;
-      }
-    });
-
-    window.claude.onError((msg) => {
-      this._generating = false;
-      goBtn.disabled   = false;
-      stream.hidden    = true;
-      alert(`Generation error: ${msg}`);
-    });
-
-    const project = this._getProject();
-    await window.claude.generateScreen({
-      api_key:             model.api_key,
-      model_name:          model.model_name || 'claude-sonnet-4-6',
-      description,
-      tech_stack:          screen.tech_stack,
-      project_description: project?.description || '',
-    });
-  }
-
-  // ----------------------------------------------------------------
   // Extract Stories dialog
   // ----------------------------------------------------------------
   async _showExtractDialog(screen) {
     const features = await window.db.features.list(this._projectId);
+    const model    = this._getModel();
 
     const dlg = document.createElement('div');
     dlg.className = 'scr-extract-overlay';
     dlg.innerHTML = `
       <div class="scr-extract-dialog">
         <div class="scr-extract-dialog__header">
-          <span>Extract User Stories</span>
-          <button class="scr-extract-dialog__close" id="scrExtractClose">&times;</button>
+          <span>Extract User Stories — ${escHtml(screen.title)}</span>
+          <button class="scr-extract-dialog__close">&times;</button>
         </div>
         <div class="scr-extract-dialog__body">
-          <p class="scr-extract-dialog__desc">
-            Claude will analyze <strong>${escHtml(screen.title)}</strong> and generate user stories with implementation and test prompts.
-          </p>
-          <label class="scr-form__label">Target Feature *</label>
+
           ${features.length === 0
-            ? `<p class="scr-extract-dialog__warn">No features found. Create a feature first in the project panel.</p>`
-            : `<select class="scr-form__select" id="scrExtractFeature">
-                ${features.map(f => `<option value="${f.id}" data-project="${f.project_id}">${escHtml(f.name)}</option>`).join('')}
-               </select>`
+            ? `<p class="scr-extract-dialog__warn">No features found. Create a feature in the project panel first.</p>`
+            : `<div class="scr-form__row">
+                <label class="scr-form__label">Target Feature *</label>
+                <select class="scr-form__select" id="extFeatureSelect">
+                  ${features.map(f => `<option value="${f.id}">${escHtml(f.name)}</option>`).join('')}
+                </select>
+               </div>`
           }
+
+          <div class="scr-form__row" style="margin-top:12px">
+            <label class="scr-form__label">Step 1 — Run the extraction prompt in the terminal</label>
+            <div class="scr-model-info" style="margin-bottom:6px">${this._modelInfoHtml(model)}</div>
+            <button class="scr-btn scr-btn--primary" id="extRunBtn" ${features.length === 0 ? 'disabled' : ''}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
+              </svg>
+              Run in Terminal
+            </button>
+            <span class="scr-form__hint">This opens a terminal window. The AI will output a JSON array — save it to a .json file.</span>
+          </div>
+
+          <div class="scr-cmd-preview" id="extCmdPreview" hidden>
+            <div class="scr-cmd-preview__label">Command:</div>
+            <pre class="scr-cmd-preview__code" id="extCmdCode"></pre>
+          </div>
+
+          <div class="scr-form__row" style="margin-top:12px">
+            <label class="scr-form__label">Step 2 — Load the generated JSON file</label>
+            <button class="scr-btn scr-btn--secondary" id="extLoadBtn" ${features.length === 0 ? 'disabled' : ''}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+              Choose JSON File
+            </button>
+          </div>
         </div>
         <div class="scr-extract-dialog__footer">
-          <button class="scr-extract-dialog__cancel" id="scrExtractCancelBtn">Cancel</button>
-          ${features.length > 0
-            ? `<button class="scr-extract-dialog__confirm" id="scrExtractConfirmBtn">
-                <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
-                  <path d="M10 2l2.4 5.4L18 8.6l-4 3.9.9 5.5L10 15.4l-4.9 2.6.9-5.5L2 8.6l5.6-1.2z" fill="currentColor"/>
-                </svg>
-                Extract Stories
-               </button>`
-            : ''
-          }
+          <button class="scr-btn scr-btn--secondary" id="extCancelBtn">Close</button>
         </div>
       </div>
     `;
 
     document.body.appendChild(dlg);
+    dlg.querySelector('.scr-extract-dialog__close').addEventListener('click', () => dlg.remove());
+    dlg.querySelector('#extCancelBtn').addEventListener('click',            () => dlg.remove());
 
-    dlg.querySelector('#scrExtractClose').addEventListener('click', () => dlg.remove());
-    dlg.querySelector('#scrExtractCancelBtn').addEventListener('click', () => dlg.remove());
+    const runBtn  = dlg.querySelector('#extRunBtn');
+    const loadBtn = dlg.querySelector('#extLoadBtn');
 
-    const confirmBtn = dlg.querySelector('#scrExtractConfirmBtn');
-    if (confirmBtn) {
-      confirmBtn.addEventListener('click', async () => {
-        const featureSelect = dlg.querySelector('#scrExtractFeature');
-        const featureId     = Number(featureSelect.value);
-        confirmBtn.disabled      = true;
-        confirmBtn.textContent   = 'Extracting…';
+    if (runBtn) {
+      runBtn.addEventListener('click', async () => {
+        const m = this._getModel();
+        if (!m || m.type === 'anthropic' || !m.executable) {
+          alert('Please select a CLI model from the project header.');
+          return;
+        }
+        const safeTitle = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
+        const outputFile = `$env:TEMP\\electron-ai-sdlc\\screens\\${safeTitle}_stories.json`;
+        const prompt = buildExtractPrompt(screen.html_content, screen.tech_stack, screen.title);
+        const cmd    = buildPsCommand(prompt, m, outputFile);
 
-        const model = this._getModel();
-        if (!model || model.type !== 'anthropic') {
-          alert('Please select a Claude (Anthropic API) model config first.');
-          confirmBtn.disabled    = false;
-          confirmBtn.textContent = 'Extract Stories';
+        dlg.querySelector('#extCmdCode').textContent = cmd;
+        dlg.querySelector('#extCmdPreview').hidden = false;
+
+        const project = this._getProject();
+        await window.db.terminal.openExternal({ command: cmd, cwd: project?.project_path || undefined });
+      });
+    }
+
+    if (loadBtn) {
+      loadBtn.addEventListener('click', async () => {
+        const featureSelect = dlg.querySelector('#extFeatureSelect');
+        const featureId     = featureSelect ? Number(featureSelect.value) : null;
+        if (!featureId) { alert('Please select a feature first.'); return; }
+
+        const result = await window.db.dialog.openFile({ title: 'Choose Stories JSON File', extensions: ['json'] });
+        if (!result) return;
+
+        let stories;
+        try {
+          let text = result.content.trim();
+          const md = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (md) text = md[1].trim();
+          stories = JSON.parse(text);
+        } catch (err) {
+          alert(`Could not parse JSON file: ${err.message}\n\nMake sure the file contains a valid JSON array of stories.`);
           return;
         }
 
-        const result = await window.claude.extractStories({
-          api_key:      model.api_key,
-          model_name:   model.model_name || 'claude-sonnet-4-6',
-          html_content: screen.html_content,
-          tech_stack:   screen.tech_stack,
-          screen_title: screen.title,
-        });
-
-        if (result.error) {
-          alert(`Extraction failed: ${result.error}`);
-          confirmBtn.disabled    = false;
-          confirmBtn.textContent = 'Extract Stories';
-          return;
-        }
+        loadBtn.disabled    = true;
+        loadBtn.textContent = 'Creating…';
 
         let created = 0;
-        for (const story of result.stories) {
+        for (const story of stories) {
           const newStory = await window.db.userStories.create({
             feature_id:          featureId,
             project_id:          this._projectId,
-            title:               story.title,
-            description:         story.description,
-            acceptance_criteria: story.acceptance_criteria,
+            title:               story.title || 'Untitled',
+            description:         story.description || '',
+            acceptance_criteria: story.acceptance_criteria || '',
             prompt:              story.prompts?.[0]?.prompt || '',
           });
-
           for (const p of (story.prompts || [])) {
-            await window.db.prompts.create({
-              user_story_id: newStory.id,
-              tag:           p.tag,
-              prompt:        p.prompt,
-            });
+            await window.db.prompts.create({ user_story_id: newStory.id, tag: p.tag, prompt: p.prompt });
           }
           created++;
         }

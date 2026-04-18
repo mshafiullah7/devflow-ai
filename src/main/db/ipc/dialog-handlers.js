@@ -26,6 +26,20 @@ function registerDialogHandlers() {
     return fs.readFile(result.filePaths[0], 'utf-8');
   });
 
+  ipcMain.handle('dialog:openFile', async (event, { title, extensions } = {}) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      title: title || 'Open File',
+      filters: extensions
+        ? [{ name: 'Files', extensions }]
+        : [{ name: 'All Files', extensions: ['*'] }],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const content = await fs.readFile(result.filePaths[0], 'utf-8');
+    return { path: result.filePaths[0], content };
+  });
+
   ipcMain.handle('window:expand', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
