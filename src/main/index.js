@@ -32,13 +32,19 @@ app.whenReady().then(() => {
     path.join(app.getAppPath(), 'agent-cli', 'index.js')
   );
 
-  ipcMain.handle('app:screens-dir', () => {
+  ipcMain.handle('app:screens-dir', (event, projectName) => {
     const base = app.isPackaged
       ? app.getPath('userData')
       : app.getAppPath();
-    const dir = path.join(base, 'screens');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    return dir;
+    const root = path.join(base, 'screens');
+    if (!fs.existsSync(root)) fs.mkdirSync(root, { recursive: true });
+    if (projectName) {
+      const safe = projectName.replace(/[^a-z0-9_\-]/gi, '_');
+      const dir  = path.join(root, safe);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      return dir;
+    }
+    return root;
   });
   createWindow();
   setImmediate(() => runBackup());

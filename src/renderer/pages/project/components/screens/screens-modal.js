@@ -16,13 +16,14 @@ function isMobile(value)  { return TECH_STACKS.find(t => t.value === value)?.mob
 // ----------------------------------------------------------------
 // Prompt builders
 // ----------------------------------------------------------------
-function buildScreenPrompt(description, techStack, projectDescription) {
+function buildScreenPrompt(description, techStack, projectDescription, outputFile) {
   const tech   = TECH_LABELS[techStack] || techStack;
   const mobile = isMobile(techStack);
   const ctx    = projectDescription ? `\nProject context: ${projectDescription}` : '';
+  const save   = outputFile ? `\nWhen done, save the complete output to: ${outputFile}` : '';
 
   if (mobile) {
-    return `You are an expert mobile UI developer. Generate complete, production-quality ${tech} code for the screen described below. Output ONLY the code — no explanation, no markdown fences.${ctx}\n\nScreen to design:\n${description}`;
+    return `You are an expert mobile UI developer. Generate complete, production-quality ${tech} code for the screen described below. Output ONLY the code — no explanation, no markdown fences.${ctx}${save}\n\nScreen to design:\n${description}`;
   }
 
   return `You are an expert UI/UX developer. Generate a complete, self-contained HTML file for the screen described below using ${tech}.
@@ -31,7 +32,7 @@ Rules:
 - All CSS goes inside a <style> tag; CDN links (e.g. Tailwind CDN) are allowed
 - Visually polished, modern design with realistic placeholder content
 - Fully responsive
-- No explanation, no markdown — raw HTML only${ctx}
+- No explanation, no markdown — raw HTML only${ctx}${save}
 
 Screen to design:
 ${description}`;
@@ -68,17 +69,11 @@ Output ONLY a valid JSON array — no markdown, no explanation:
 // ----------------------------------------------------------------
 // Build the PowerShell command for a CLI model
 // ----------------------------------------------------------------
-function buildPsCommand(prompt, model, outputFile) {
-  const exe    = model.executable || 'claude';
-  const flags  = model.flags ? ` ${model.flags}` : '';
-  // Escape single-quotes in the prompt for PS here-string
-  const safe   = prompt.replace(/'/g, "''");
-  const outPart = outputFile ? ` | Tee-Object -FilePath "${outputFile}"` : '';
-
-  if (model.input_mode === 'heredoc') {
-    return `$p = @'\n${safe}\n'@\n${exe}${flags} $p${outPart}`;
-  }
-  return `$p = @'\n${safe}\n'@\nWrite-Output $p | ${exe}${flags}${outPart}`;
+function buildPsCommand(prompt, model) {
+  const exe  = model.executable || 'claude';
+  const safe = prompt.replace(/'/g, "''");
+  // Pass prompt as argument (not piped) so Claude opens its interactive TUI
+  return `$p = @'\n${safe}\n'@\n${exe} $p`;
 }
 
 // ----------------------------------------------------------------
@@ -97,7 +92,7 @@ export class ScreensModal {
   }
 
   mount() {
-    injectCss('pages/project/components/screens/screens-modal.css');
+    injectCss('pages/project/components/screens/screens-modal.css?v=2');
   }
 
   _getSelectedModel() {
@@ -279,10 +274,10 @@ export class ScreensModal {
   }
 
   async _runInTerminal() {
-    const main   = this._overlay.querySelector('#scrMain');
-    const title  = main.querySelector('#scrTitle').value.trim();
-    const desc   = main.querySelector('#scrDescription').value.trim();
-    const stack  = main.querySelector('#scrTechStack').value;
+    const main  = this._overlay.querySelector('#scrMain');
+    const title = main.querySelector('#scrTitle').value.trim();
+    const desc  = main.querySelector('#scrDescription').value.trim();
+    const stack = main.querySelector('#scrTechStack').value;
 
     if (!title) { main.querySelector('#scrTitle').focus(); return; }
     if (!desc)  { main.querySelector('#scrDescription').focus(); return; }
@@ -294,16 +289,11 @@ export class ScreensModal {
     }
 
     const project    = this._getProject();
-    const screensDir = await window.app.screensDir();
+    const screensDir = await window.app.screensDir(project?.name);
     const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
     const outputFile = `${screensDir}\\${safeTitle}.html`;
-    const prompt     = buildScreenPrompt(desc, stack, project?.description || '');
-    const cmd        = buildPsCommand(prompt, model, outputFile);
-
-    // Show the command preview
-    const preview = main.querySelector('#scrCmdPreview');
-    main.querySelector('#scrCmdCode').textContent = cmd;
-    preview.hidden = false;
+    const prompt     = buildScreenPrompt(desc, stack, project?.description || '', outputFile);
+    const cmd        = buildPsCommand(prompt, model);
 
     const cwd = project?.project_path || undefined;
     await window.db.terminal.openExternal({ command: cmd, cwd });
@@ -530,16 +520,16 @@ export class ScreensModal {
           alert('Please select a CLI model from the dropdown.');
           return;
         }
-        const screensDir = await window.app.screensDir();
+        const project    = this._getProject();
+        const screensDir = await window.app.screensDir(project?.name);
         const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
         const outputFile = `${screensDir}\\${safeTitle}_stories.json`;
         const prompt = buildExtractPrompt(screen.html_content, screen.tech_stack, screen.title);
-        const cmd    = buildPsCommand(prompt, m, outputFile);
+        const cmd    = buildPsCommand(prompt, m);
 
         dlg.querySelector('#extCmdCode').textContent = cmd;
         dlg.querySelector('#extCmdPreview').hidden = false;
 
-        const project = this._getProject();
         await window.db.terminal.openExternal({ command: cmd, cwd: project?.project_path || undefined });
       });
     }

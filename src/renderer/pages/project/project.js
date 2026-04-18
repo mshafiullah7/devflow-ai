@@ -351,7 +351,10 @@ export class ProjectPage {
       .addEventListener('click', () => this._statsModal.show());
 
     document.getElementById('btnScreens')
-      .addEventListener('click', () => this._screensModal.show());
+      .addEventListener('click', async () => {
+        await window.app.screensDir(this._project?.name);
+        this._screensModal.show();
+      });
 
     document.getElementById('btnDocuments')
       .addEventListener('click', () => this._docsModal.show());

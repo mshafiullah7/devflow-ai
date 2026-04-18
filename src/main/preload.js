@@ -110,7 +110,7 @@ contextBridge.exposeInMainWorld('db', {
 
 contextBridge.exposeInMainWorld('app', {
   agentCliPath: () => invoke('app:agent-cli-path'),
-  screensDir:   () => invoke('app:screens-dir'),
+  screensDir:   (projectName) => invoke('app:screens-dir', projectName),
 });
 
 
