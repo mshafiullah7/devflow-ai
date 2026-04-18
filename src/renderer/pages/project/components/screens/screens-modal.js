@@ -16,14 +16,17 @@ function isMobile(value)  { return TECH_STACKS.find(t => t.value === value)?.mob
 // ----------------------------------------------------------------
 // Prompt builders
 // ----------------------------------------------------------------
-function buildScreenPrompt(description, techStack, projectDescription, outputFile) {
+function buildScreenPrompt(description, techStack, projectDescription, outputFile, designTemplate) {
   const tech   = TECH_LABELS[techStack] || techStack;
   const mobile = isMobile(techStack);
   const ctx    = projectDescription ? `\nProject context: ${projectDescription}` : '';
   const save   = outputFile ? `\nWhen done, save the complete output to: ${outputFile}` : '';
+  const design = designTemplate
+    ? `\n\nDESIGN SYSTEM — you MUST follow this for every element (colours, fonts, spacing, components):\n${designTemplate}`
+    : '';
 
   if (mobile) {
-    return `You are an expert mobile UI developer. Generate complete, production-quality ${tech} code for the screen described below. Output ONLY the code — no explanation, no markdown fences.${ctx}${save}\n\nScreen to design:\n${description}`;
+    return `You are an expert mobile UI developer. Generate complete, production-quality ${tech} code for the screen described below. Output ONLY the code — no explanation, no markdown fences.${ctx}${design}${save}\n\nScreen to design:\n${description}`;
   }
 
   return `You are an expert UI/UX developer. Generate a complete, self-contained HTML file for the screen described below using ${tech}.
@@ -32,7 +35,7 @@ Rules:
 - All CSS goes inside a <style> tag; CDN links (e.g. Tailwind CDN) are allowed
 - Visually polished, modern design with realistic placeholder content
 - Fully responsive
-- No explanation, no markdown — raw HTML only${ctx}${save}
+- No explanation, no markdown — raw HTML only${ctx}${design}${save}
 
 Screen to design:
 ${description}`;
@@ -92,18 +95,19 @@ function buildPsCommand(prompt, model) {
 // ----------------------------------------------------------------
 export class ScreensModal {
   constructor({ projectId, getProject }) {
-    this._projectId      = projectId;
-    this._getProject     = getProject;
-    this._overlay        = null;
-    this._screens        = [];
-    this._activeId       = null;
-    this._activeTab      = 'preview';
-    this._modelConfigs   = [];
+    this._projectId       = projectId;
+    this._getProject      = getProject;
+    this._overlay         = null;
+    this._screens         = [];
+    this._activeId        = null;
+    this._activeTab       = 'preview';
+    this._modelConfigs    = [];
     this._selectedModelId = null;
+    this._designTemplate  = '';
   }
 
   mount() {
-    injectCss('pages/project/components/screens/screens-modal.css?v=2');
+    injectCss('pages/project/components/screens/screens-modal.css?v=3');
   }
 
   _getSelectedModel() {
@@ -120,6 +124,7 @@ export class ScreensModal {
       window.db.screenDesigns.list(this._projectId),
       window.db.modelConfigs.list(),
     ]);
+    this._designTemplate = this._getProject()?.design_template || '';
     this._activeId  = this._screens[0]?.id ?? null;
     this._activeTab = 'preview';
     // Default to first CLI model
@@ -351,6 +356,13 @@ export class ScreensModal {
         </div>
 
         <div class="scr-form__actions">
+          <button class="scr-btn scr-btn--sm${this._designTemplate ? ' scr-btn--ds-active' : ''}" id="scrDesignBtnForm" title="Edit project design system">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            Design System
+          </button>
           <select class="scr-model-select" id="scrModelSelect">
             ${this._modelConfigs.length === 0
               ? `<option value="">No models configured</option>`
@@ -396,6 +408,9 @@ export class ScreensModal {
 
     main.querySelector('#scrModelSelect')?.addEventListener('change', (e) => {
       this._selectedModelId = Number(e.target.value) || null;
+    });
+    main.querySelector('#scrDesignBtnForm').addEventListener('click', () => {
+      this._showDesignSystemPanel(() => this._showNewForm());
     });
     main.querySelector('#scrSaveBtn').addEventListener('click', () => this._saveAndView());
     main.querySelector('#scrRunBtn').addEventListener('click', () => this._runInTerminal());
@@ -498,7 +513,7 @@ export class ScreensModal {
     const screensDir = await window.app.screensDir(project?.name);
     const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
     const outputFile = `${screensDir}\\${safeTitle}.html`;
-    const prompt     = buildScreenPrompt(desc, stack, project?.description || '', outputFile);
+    const prompt     = buildScreenPrompt(desc, stack, project?.description || '', outputFile, this._designTemplate);
     const cmd        = buildPsCommand(prompt, model);
 
     const cwd = project?.project_path || undefined;
@@ -560,6 +575,13 @@ export class ScreensModal {
             <span class="scr-viewer__tech-badge">${escHtml(techLabel(screen.tech_stack))}</span>
           </div>
           <div class="scr-viewer__actions">
+            <button class="scr-btn scr-btn--sm${this._designTemplate ? ' scr-btn--ds-active' : ''}" id="scrDesignBtn" title="Edit project design system">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              Design System
+            </button>
             ${!mobile ? `
             <div class="scr-viewer__tabs">
               <button class="scr-viewer__tab${this._activeTab === 'preview' ? ' scr-viewer__tab--active' : ''}" data-tab="preview">Preview</button>
@@ -632,6 +654,11 @@ export class ScreensModal {
     // Extract stories
     main.querySelector('#scrExtractBtn').addEventListener('click', () => this._showExtractDialog(screen));
 
+    // Design System
+    main.querySelector('#scrDesignBtn').addEventListener('click', () => {
+      this._showDesignSystemPanel(() => this._showScreenViewer(screen));
+    });
+
     // Delete
     main.querySelector('#scrDeleteBtn').addEventListener('click', async () => {
       if (!confirm(`Delete "${screen.title}"?`)) return;
@@ -641,6 +668,166 @@ export class ScreensModal {
       this._refreshSidebar();
       if (this._activeId) this._selectScreen(this._activeId);
       else                this._showNewForm();
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Design System panel
+  // ----------------------------------------------------------------
+  _showDesignSystemPanel(onBack) {
+    const EXAMPLES = [
+      {
+        label: 'Dark Web (HTML/CSS)',
+        template:
+`Color Palette:
+- Primary: #6366f1
+- Background: #0f1117
+- Surface: #1a1d27
+- Text primary: #f1f5f9
+- Text secondary: #94a3b8
+- Border: #2a2d3e
+- Danger: #ef4444
+
+Typography:
+- Font family: 'Segoe UI', system-ui, sans-serif
+- Heading: font-weight 600, font-size 24px
+- Body: font-weight 400, font-size 14px, line-height 1.5
+
+Components:
+- Buttons: border-radius 8px, padding 8px 18px, font-weight 500
+- Cards: border-radius 12px, border 1px solid #2a2d3e, background #1a1d27
+- Inputs: border-radius 8px, background #1a1d27, border 1px solid #2a2d3e, color #f1f5f9
+- Modals: border-radius 12px, background #1a1d27, box-shadow 0 4px 24px rgba(0,0,0,0.4)
+
+Spacing:
+- Base unit: 4px
+- Common gaps: 8px, 12px, 16px, 24px
+- Standard padding: 16px 20px`,
+      },
+      {
+        label: 'Flutter / Material 3',
+        template:
+`Framework: Flutter (Dart) — Material Design 3
+
+─── Color Scheme ───────────────────────────────────────
+Primary:            #6366F1
+PrimaryContainer:   #E0E7FF
+Secondary:          #10B981
+SecondaryContainer: #D1FAE5
+Background:         #0F1117
+Surface:            #1A1D27
+SurfaceVariant:     #21253A
+OnPrimary:          #FFFFFF
+OnBackground:       #F1F5F9
+OnSurface:          #94A3B8
+Error:              #EF4444
+OnError:            #FFFFFF
+Outline:            #2A2D3E
+
+─── Typography (TextTheme) ─────────────────────────────
+Font family: 'Inter' with fallback to system-ui
+displayLarge:   size 57, weight 400, letterSpacing -0.25
+headlineLarge:  size 32, weight 600
+headlineMedium: size 28, weight 600
+headlineSmall:  size 24, weight 600
+titleLarge:     size 22, weight 500
+titleMedium:    size 16, weight 500, letterSpacing 0.15
+titleSmall:     size 14, weight 500, letterSpacing 0.1
+bodyLarge:      size 16, weight 400, letterSpacing 0.5
+bodyMedium:     size 14, weight 400, letterSpacing 0.25
+bodySmall:      size 12, weight 400, letterSpacing 0.4
+labelLarge:     size 14, weight 500, letterSpacing 1.25
+
+─── Spacing & Layout ───────────────────────────────────
+Base unit: 4dp
+xs: 4dp | sm: 8dp | md: 16dp | lg: 24dp | xl: 32dp | 2xl: 48dp
+Screen horizontal padding: 16dp
+Card internal padding: 16dp
+Section gap: 24dp
+List item height: 56dp
+
+─── Shape (BorderRadius) ───────────────────────────────
+ExtraSmall: 4dp | Small: 8dp | Medium: 12dp
+Large: 16dp | ExtraLarge: 28dp | Full: 999dp
+
+─── Elevation & Shadows ────────────────────────────────
+Level 1: BoxShadow(0 1dp 2dp rgba(0,0,0,0.3))
+Level 2: BoxShadow(0 2dp 6dp rgba(0,0,0,0.3))
+Level 3: BoxShadow(0 4dp 8dp rgba(0,0,0,0.3))
+
+─── Components ─────────────────────────────────────────
+AppBar: height 64dp, background Surface, title titleLarge OnSurface, elevation Level 0
+FilledButton: height 40dp, borderRadius Full, background Primary, text OnPrimary, padding horizontal 24dp
+OutlinedButton: height 40dp, borderRadius Full, border 1dp Primary, text Primary
+FAB: size 56dp, borderRadius Large, background PrimaryContainer, icon Primary 24dp, elevation Level 3
+Card: background SurfaceVariant, borderRadius Medium, elevation Level 1, padding 16dp
+BottomNavigationBar: height 80dp, background Surface, border-top 1dp Outline, selectedColor Primary, unselectedColor OnSurface
+TextField: filled true, fillColor SurfaceVariant, borderRadius Small, focusedBorder 2dp Primary, contentPadding 12dp 16dp
+Chip: height 32dp, borderRadius Full, background SurfaceVariant, border Outline
+ListTile: minHeight 56dp, padding horizontal 16dp, title bodyLarge, subtitle bodyMedium opacity 0.7
+Divider: height 1dp, color Outline, indent 16dp
+
+─── Icons ──────────────────────────────────────────────
+Package: Material Icons (Icons.*)
+Default size: 24dp, color match context
+
+─── Animation & Motion ─────────────────────────────────
+Page transition: MaterialPageRoute (slide right)
+Duration: short 150ms | medium 300ms | long 500ms
+Curve: Curves.easeInOut`,
+      },
+    ];
+
+    const main = this._overlay.querySelector('#scrMain');
+    main.innerHTML = `
+      <div class="scr-form">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+          <h2 class="scr-form__heading">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right:6px;vertical-align:-2px">
+              <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            Design System
+          </h2>
+          <span class="scr-ds-badge${this._designTemplate ? ' scr-ds-badge--set' : ''}">
+            ${this._designTemplate ? 'Active — applied to all screens' : 'Not set'}
+          </span>
+        </div>
+        <p class="scr-form__hint" style="margin-top:-8px">
+          Define colours, typography, spacing and component styles once. This is injected into every screen generation prompt so all pages share the same visual identity.
+        </p>
+        <div class="scr-form__row scr-form__row--grow">
+          <label class="scr-form__label">Design Template</label>
+          <textarea class="scr-form__textarea" id="scrDsTpl" placeholder="Paste your design system here…">${escHtml(this._designTemplate || '')}</textarea>
+        </div>
+        <div class="scr-form__actions">
+          <button class="scr-btn scr-btn--sm" id="scrDsDefault">Example: ${EXAMPLES[0].label} ↻</button>
+          <div class="scr-form__btns">
+            <button class="scr-btn scr-btn--secondary" id="scrDsCancel">Cancel</button>
+            <button class="scr-btn scr-btn--primary" id="scrDsSave">Save Design System</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    let exampleIdx = 0;
+    const cycleBtn = main.querySelector('#scrDsDefault');
+    cycleBtn.addEventListener('click', () => {
+      exampleIdx = (exampleIdx + 1) % EXAMPLES.length;
+      main.querySelector('#scrDsTpl').value = EXAMPLES[exampleIdx].template;
+      cycleBtn.textContent = `Example: ${EXAMPLES[exampleIdx].label} \u21bb`;
+    });
+
+    main.querySelector('#scrDsCancel').addEventListener('click', () => onBack());
+
+    main.querySelector('#scrDsSave').addEventListener('click', async () => {
+      const tpl     = main.querySelector('#scrDsTpl').value.trim();
+      const project = this._getProject();
+      await window.db.projects.update({ id: project.id, design_template: tpl });
+      this._designTemplate = tpl;
+      // Patch the in-memory project object so getProject() returns updated value
+      if (project) project.design_template = tpl;
+      onBack();
     });
   }
 

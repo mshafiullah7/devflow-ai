@@ -5,6 +5,14 @@
  * @param {import('better-sqlite3').Database} db
  */
 function applySchema(db) {
+  // Safe column migrations — silently ignored if column already exists
+  const migrations = [
+    `ALTER TABLE projects ADD COLUMN design_template TEXT`,
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch {}
+  }
+
   db.exec(`
     PRAGMA foreign_keys = ON;
 

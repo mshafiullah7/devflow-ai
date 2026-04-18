@@ -278,6 +278,29 @@
 
 .scr-btn--sm { padding: 5px 10px; font-size: 11px; }
 
+/* Design System button — lit up when a template is saved */
+.scr-btn--ds-active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(99,102,241,.08);
+}
+
+/* Design System status badge */
+.scr-ds-badge {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  flex-shrink: 0;
+}
+.scr-ds-badge--set {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(99,102,241,.08);
+}
+
 /* Command preview block */
 .scr-cmd-preview {
   border: 1px solid var(--border);
