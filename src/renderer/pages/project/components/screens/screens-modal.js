@@ -157,7 +157,7 @@ export class ScreensModal {
               <path d="M4 6h5M4 9h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               <circle cx="12" cy="6" r="1.5" fill="currentColor" opacity=".5"/>
             </svg>
-            Screen Designs
+            Mockups
           </span>
           <button class="scr-dialog__close" id="scrClose" aria-label="Close">&times;</button>
         </div>
@@ -187,7 +187,10 @@ export class ScreensModal {
           <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
         </svg>
         <div class="scr-sidebar__item-info">
-          <span class="scr-sidebar__item-title">${escHtml(s.title)}</span>
+          <div class="scr-sidebar__item-row">
+            <span class="scr-sidebar__item-id">#${s.id}</span>
+            <span class="scr-sidebar__item-title">${escHtml(s.title)}</span>
+          </div>
           <span class="scr-sidebar__item-tech">${escHtml(techLabel(s.tech_stack))}</span>
         </div>
       </div>
@@ -580,7 +583,7 @@ export class ScreensModal {
                 <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
                 <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
               </svg>
-              Design System
+              Style Guide
             </button>
             ${!mobile ? `
             <div class="scr-viewer__tabs">
@@ -598,7 +601,7 @@ export class ScreensModal {
                 <path d="M3 4h10M3 8h7M3 12h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                 <path d="M12 10l2 2-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              Extract Stories
+              Extract User Stories
             </button>
             <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrDeleteBtn" title="Delete screen">
               <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
@@ -787,7 +790,7 @@ Curve: Curves.easeInOut`,
               <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
               <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
             </svg>
-            Design System
+            Project style guide
           </h2>
           <span class="scr-ds-badge${this._designTemplate ? ' scr-ds-badge--set' : ''}">
             ${this._designTemplate ? 'Active — applied to all screens' : 'Not set'}

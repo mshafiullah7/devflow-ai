@@ -120,15 +120,15 @@ export class ProjectPage {
             </button>
           </div>
           <div class="project-page__header-actions">
-            <button class="project-page__docs-btn" id="btnScreens" title="Screen designs">
+            <button class="project-page__docs-btn" id="btnScreens" title="Project Mockups">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M4 6h5M4 9h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                 <circle cx="12" cy="6" r="1.5" fill="currentColor" opacity=".6"/>
               </svg>
-              Screens
+              Project Mockups
             </button>
-            <button class="project-page__docs-btn" id="btnDocuments" title="Project documents">
+            <button class="project-page__docs-btn" id="btnDocuments" title="Project Documents">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"
                   stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -136,7 +136,7 @@ export class ProjectPage {
                 <path d="M5.5 7.5h5M5.5 10h5M5.5 12.5h3"
                   stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               </svg>
-              Documents
+              Project Documents
             </button>
             <button class="project-page__stats-btn" id="btnStatistics" title="View statistics">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
