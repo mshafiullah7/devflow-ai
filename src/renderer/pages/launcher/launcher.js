@@ -207,7 +207,7 @@ export class LauncherPage {
   async _openProject(id) {
     await window.db.projects.open(id);
     await window.db.window.expand();
-    this.router.navigate('project', { projectId: id });
+    this.router.navigate('project-home', { projectId: id });
   }
 
   _openEditModal(project, cardEl) {

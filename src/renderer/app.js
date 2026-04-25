@@ -4,6 +4,10 @@ import { LauncherPage } from './pages/launcher/launcher.js';
 const router = new Router(document.getElementById('app'));
 
 router.register('launcher', LauncherPage);
+router.register('project-home', async () => {
+  const { ProjectHomePage } = await import('./pages/project-home/project-home.js');
+  return ProjectHomePage;
+});
 router.register('project', async () => {
   const { ProjectPage } = await import('./pages/project/project.js');
   return ProjectPage;

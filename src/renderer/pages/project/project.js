@@ -315,7 +315,7 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   _bindEvents() {
     document.getElementById('btnBack')
-      .addEventListener('click', () => this.router.navigate('launcher'));
+      .addEventListener('click', () => this.router.navigate('project-home', { projectId: this.projectId }));
 
     this._initConsoleToggle();
 
