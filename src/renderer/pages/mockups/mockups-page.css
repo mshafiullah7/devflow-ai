@@ -1,0 +1,373 @@
+/* ------------------------------------------------------------------ */
+/* Mockups full page — shell only; inner .scr-* styles from             */
+/* screens-modal.css are loaded alongside this file                     */
+/* ------------------------------------------------------------------ */
+
+.mockups-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* Strip Chromium UA button appearance inside the page */
+.mockups-page button {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+}
+
+/* ------------------------------------------------------------------ */
+/* Header                                                               */
+/* ------------------------------------------------------------------ */
+.mockups-page__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 1rem;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+
+.mockups-page__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+  -webkit-app-region: no-drag;
+}
+.mockups-page__back:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.mockups-page__title-group {
+  flex: 1;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.mockups-page__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mockups-page__subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Header — style guide button                                          */
+/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/* Form title bar — heading + action buttons in one row                 */
+/* ------------------------------------------------------------------ */
+.scr-form__title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-bottom: 4px;
+}
+
+.scr-form__title-bar .scr-form__heading {
+  margin-bottom: 0;
+}
+
+.scr-form__title-bar .scr-form__btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.scr-form__actions--split {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scr-form__actions--split .scr-form__btns {
+  margin-left: 0;
+}
+
+/* Smaller model select variant for toolbars */
+.scr-model-select--sm {
+  font-size: 11px;
+  padding: 3px 6px;
+  height: 26px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Header — style guide button                                          */
+/* ------------------------------------------------------------------ */
+.mockups-page__style-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Dot indicator */
+.scr-style-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.4;
+  flex-shrink: 0;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.scr-style-dot--active {
+  background: #22c55e;
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Design template editor — always-split layout                         */
+/* ------------------------------------------------------------------ */
+.scr-ds-editor {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* Left column: two stacked template textareas */
+.scr-ds-templates {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.scr-ds-tpl-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  padding: 2px;
+  transition: border-color 0.15s;
+}
+
+.scr-ds-tpl-col--active {
+  border-color: var(--accent);
+}
+
+.scr-ds-tpl-col textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+}
+
+.scr-ds-tpl-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  padding: 0 2px;
+}
+
+.scr-ds-tpl-label--light {
+  color: #d97706;
+}
+
+.scr-ds-tpl-label--dark {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Preview panel                                                        */
+/* ------------------------------------------------------------------ */
+.scr-ds-preview-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.scr-ds-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.scr-ds-preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+/* Theme toggle buttons */
+.scr-ds-theme-btns {
+  display: flex;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.scr-ds-theme-btn {
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+
+.scr-ds-theme-btn:hover {
+  color: var(--text-primary);
+}
+
+.scr-ds-theme-btn--active {
+  background: var(--accent);
+  color: #fff;
+}
+
+[data-theme="light"] .scr-ds-theme-btn--active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Refresh button pushed to the right */
+.scr-ds-preview-bar .scr-btn {
+  margin-left: auto;
+}
+
+/* The iframe itself */
+.scr-ds-preview-frame {
+  flex: 1;
+  border: none;
+  min-height: 0;
+  display: block;
+}
+
+/* ------------------------------------------------------------------ */
+/* Body — reuse scr-dialog__body layout                                 */
+/* ------------------------------------------------------------------ */
+.mockups-page__body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Split viewer — edit pane (left) + preview pane (right)               */
+/* ------------------------------------------------------------------ */
+.scr-viewer__split {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.scr-viewer__edit-pane {
+  flex: 0 0 50%;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Draggable divider */
+.scr-viewer__divider {
+  width: 5px;
+  flex-shrink: 0;
+  background: var(--border);
+  cursor: col-resize;
+  position: relative;
+  transition: background 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.scr-viewer__divider:hover,
+.scr-viewer__divider--dragging {
+  background: var(--accent);
+}
+
+.scr-viewer__divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1px;
+  height: 32px;
+  border-left: 2px dotted rgba(255,255,255,0.3);
+}
+
+.scr-viewer__edit-pane .scr-form {
+  flex: 1;
+  padding: 16px;
+}
+
+.scr-viewer__preview-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scr-viewer__preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.scr-viewer__preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex: 1;
+}

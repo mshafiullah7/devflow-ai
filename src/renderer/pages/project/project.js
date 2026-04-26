@@ -2,10 +2,7 @@ import { FeatureList } from './components/feature-list/feature-list.js';
 import { UserStoryList } from './components/user-story-list/user-story-list.js';
 import { TerminalController } from './components/terminal/terminal-controller.js';
 import { GitController } from './components/git/git-controller.js';
-import { StatsModal } from './components/stats/stats-modal.js';
 import { QuickCommandsModal } from './components/quick-commands/quick-commands-modal.js';
-import { DocumentsModal } from './components/documents/documents-modal.js';
-import { ScreensModal } from './components/screens/screens-modal.js';
 import { ModelConfigsModal } from './components/model-configs/model-configs-modal.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
@@ -49,18 +46,6 @@ export class ProjectPage {
       this._git.refreshStatus();
       this._git.startPoll();
     }
-
-    this._statsModal = new StatsModal({ projectId: this.projectId });
-    this._statsModal.mount();
-
-    this._docsModal = new DocumentsModal({ projectId: this.projectId });
-    this._docsModal.mount();
-
-    this._screensModal = new ScreensModal({
-      projectId:  this.projectId,
-      getProject: () => this._project,
-    });
-    this._screensModal.mount();
 
     this._qcmdModal = new QuickCommandsModal({
       onRunCommand: (cmd) => this._terminal.applyQuickCommand(cmd),
@@ -117,34 +102,6 @@ export class ProjectPage {
                 <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
                   stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
-            </button>
-          </div>
-          <div class="project-page__header-actions">
-            <button class="project-page__docs-btn" id="btnScreens" title="Project Mockups">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
-                <path d="M4 6h5M4 9h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                <circle cx="12" cy="6" r="1.5" fill="currentColor" opacity=".6"/>
-              </svg>
-              Project Mockups
-            </button>
-            <button class="project-page__docs-btn" id="btnDocuments" title="Project Documents">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"
-                  stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-                <path d="M9 2v3h3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-                <path d="M5.5 7.5h5M5.5 10h5M5.5 12.5h3"
-                  stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-              Project Documents
-            </button>
-            <button class="project-page__stats-btn" id="btnStatistics" title="View statistics">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="8" width="3" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/>
-                <rect x="6" y="4" width="3" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/>
-                <rect x="11" y="1" width="3" height="14" rx="1" stroke="currentColor" stroke-width="1.3"/>
-              </svg>
-              Statistics
             </button>
           </div>
         </header>
@@ -347,18 +304,6 @@ export class ProjectPage {
     document.getElementById('btnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
 
-    document.getElementById('btnStatistics')
-      .addEventListener('click', () => this._statsModal.show());
-
-    document.getElementById('btnScreens')
-      .addEventListener('click', async () => {
-        await window.app.screensDir(this._project?.name);
-        this._screensModal.show();
-      });
-
-    document.getElementById('btnDocuments')
-      .addEventListener('click', () => this._docsModal.show());
-
     document.getElementById('btnConsoleMenu')
       .addEventListener('click', (e) => {
         e.stopPropagation();
@@ -532,14 +477,6 @@ export class ProjectPage {
     const icon          = toggleBtn.querySelector('.console-toggle-icon');
 
     let savedFlex = console_el.style.flex || '0 0 25%';
-
-    // Collapsed by default
-    console_el.classList.add('project-console--collapsed');
-    resizeHandle.style.display = 'none';
-    toggleBtn.title = 'Expand console';
-    toggleBtn.setAttribute('aria-label', 'Expand console');
-    toggleBtn.querySelector('.console-toggle-icon').innerHTML =
-      '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
 
     toggleBtn.addEventListener('click', () => {
       const isCollapsed = console_el.classList.toggle('project-console--collapsed');

@@ -8,6 +8,14 @@ router.register('project-home', async () => {
   const { ProjectHomePage } = await import('./pages/project-home/project-home.js');
   return ProjectHomePage;
 });
+router.register('mockups', async () => {
+  const { MockupsPage } = await import('./pages/mockups/mockups-page.js');
+  return MockupsPage;
+});
+router.register('documents', async () => {
+  const { DocumentsPage } = await import('./pages/documents/documents-page.js');
+  return DocumentsPage;
+});
 router.register('project', async () => {
   const { ProjectPage } = await import('./pages/project/project.js');
   return ProjectPage;

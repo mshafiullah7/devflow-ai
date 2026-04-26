@@ -1,0 +1,164 @@
+.documents-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.documents-page button {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+}
+
+/* ------------------------------------------------------------------ */
+/* Header                                                               */
+/* ------------------------------------------------------------------ */
+.documents-page__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 1rem;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+
+.documents-page__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+  -webkit-app-region: no-drag;
+}
+.documents-page__back:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.documents-page__title-group {
+  flex: 1;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.documents-page__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.documents-page__subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Body — sidebar + panel                                               */
+/* ------------------------------------------------------------------ */
+.documents-page__body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Override modal-specific sizing so sidebar/panel fill the page */
+.documents-page__body .doc-sidebar {
+  height: 100%;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.documents-page__body .doc-panel {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border-radius: 0;
+}
+
+.documents-page__body .doc-editor {
+  height: 100%;
+  border-radius: 0;
+  border: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Preview — tighter spacing                                            */
+/* ------------------------------------------------------------------ */
+.documents-page__body .doc-editor__pane--preview {
+  line-height: 1.5;
+  padding: 14px 18px;
+}
+
+.documents-page__body .doc-editor__pane--preview h1,
+.documents-page__body .doc-editor__pane--preview h2,
+.documents-page__body .doc-editor__pane--preview h3,
+.documents-page__body .doc-editor__pane--preview h4,
+.documents-page__body .doc-editor__pane--preview h5,
+.documents-page__body .doc-editor__pane--preview h6 {
+  margin: 0.5em 0 0.25em;
+  line-height: 1.25;
+}
+
+.documents-page__body .doc-editor__pane--preview p  { margin: 0.25em 0; }
+.documents-page__body .doc-editor__pane--preview br { margin: 0.25em 0; }
+
+.documents-page__body .doc-editor__pane--preview ul,
+.documents-page__body .doc-editor__pane--preview ol { margin: 0.25em 0; }
+
+.documents-page__body .doc-editor__pane--preview li { margin: 0.1em 0; }
+
+.documents-page__body .doc-editor__pane--preview pre { margin: 0.4em 0; }
+
+.documents-page__body .doc-editor__pane--preview blockquote { margin: 0.3em 0; }
+
+/* ------------------------------------------------------------------ */
+/* Markdown table                                                        */
+/* ------------------------------------------------------------------ */
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 12px 0;
+}
+
+.md-table th,
+.md-table td {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-table thead tr {
+  background: var(--surface);
+}
+
+.md-table th {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.md-table td {
+  color: var(--text-secondary);
+}
+
+.md-table tbody tr:hover {
+  background: var(--surface-hover, var(--surface));
+}

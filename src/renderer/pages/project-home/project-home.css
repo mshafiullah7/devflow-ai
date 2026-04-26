@@ -19,7 +19,7 @@
   gap: 12px;
   padding: 0 1rem;
   height: 52px;
-  background: var(--surface-header);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
 }
@@ -89,6 +89,83 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Stats row                                                            */
+/* ------------------------------------------------------------------ */
+.project-home__stats {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+  max-width: 780px;
+  margin-bottom: 0.5rem;
+}
+
+.ph-stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 100px;
+  box-shadow: var(--card-shadow);
+}
+
+.ph-stat-card--wide {
+  flex: 1;
+  min-width: 0;
+}
+
+.ph-stat-card__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.ph-stat-card__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.ph-stat-card__label--top {
+  margin-bottom: 8px;
+}
+
+.ph-stat-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.ph-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ph-stat-pill__count {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.ph-stat-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ------------------------------------------------------------------ */
 /* Card grid                                                            */
 /* ------------------------------------------------------------------ */
 .project-home__cards {
@@ -151,6 +228,21 @@
   color: var(--text-primary);
 }
 
+.ph-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: auto;
+}
+
+.ph-card__count {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+
 .ph-card__desc {
   font-size: 12px;
   color: var(--text-muted);
@@ -158,10 +250,9 @@
 }
 
 .ph-card__arrow {
-  margin-top: auto;
-  align-self: flex-end;
   color: var(--text-muted);
   transition: color 0.15s, transform 0.15s;
+  flex-shrink: 0;
 }
 
 .ph-card:hover .ph-card__arrow {

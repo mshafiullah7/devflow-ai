@@ -35,15 +35,24 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:projects:update', (_e, { id, name, description, is_active }) => {
+  ipcMain.handle('db:projects:update', (_e, { id, name, description, is_active, design_template, project_path }) => {
     db.prepare(
       `UPDATE projects
           SET name = coalesce(?, name),
               description = coalesce(?, description),
               is_active = coalesce(?, is_active),
+              design_template = CASE WHEN ? IS NOT NULL THEN ? ELSE design_template END,
+              project_path = CASE WHEN ? IS NOT NULL THEN ? ELSE project_path END,
               updated_at = datetime('now')
         WHERE id = ?`
-    ).run(name ?? null, description ?? null, is_active ?? null, id);
+    ).run(
+      name ?? null,
+      description ?? null,
+      is_active ?? null,
+      design_template ?? null, design_template ?? null,
+      project_path ?? null, project_path ?? null,
+      id
+    );
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
   });
 
