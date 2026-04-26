@@ -80,6 +80,7 @@ export class MockupsPage {
     this.container        = container;
     this.router           = router;
     this._projectId       = params.projectId;
+    this._screenTitle     = params.screenTitle || null;
     this._project         = null;
     this._screens         = [];
     this._activeId        = null;
@@ -102,8 +103,17 @@ export class MockupsPage {
     ]);
 
     this._designTemplate = this._project?.design_template || '';
-    this._activeId       = this._screens[0]?.id ?? null;
     this._activeTab      = 'preview';
+
+    if (this._screenTitle) {
+      const needle = this._screenTitle.toLowerCase();
+      const match  = this._screens.find(s => s.title.toLowerCase() === needle)
+                  || this._screens.find(s => s.title.toLowerCase().includes(needle))
+                  || this._screens.find(s => needle.includes(s.title.toLowerCase()));
+      this._activeId = match?.id ?? null;
+    } else {
+      this._activeId = this._screens[0]?.id ?? null;
+    }
 
     const defCli = this._modelConfigs.find(c => c.is_default && c.type !== 'anthropic')
                 || this._modelConfigs.find(c => c.type !== 'anthropic')
@@ -114,7 +124,7 @@ export class MockupsPage {
     this._bindShellEvents();
 
     if (this._activeId) this._selectScreen(this._activeId);
-    else                this._showNewForm();
+    else                this._showNewForm({ title: this._screenTitle || '' });
   }
 
   unmount() {
@@ -168,7 +178,7 @@ export class MockupsPage {
             <div class="mockups-page__title">${escHtml(name)}</div>
             <div class="mockups-page__subtitle">Project Mockups</div>
           </div>
-          <button class="mockups-page__style-btn scr-btn scr-btn--sm${this._hasAnyTemplate() ? ' scr-btn--ds-active' : ''}" id="scrStyleGuideBtn" title="Edit project style guide">
+          <button class="mockups-page__style-btn scr-btn scr-btn--sm${this._hasAnyTemplate() ? ' scr-btn--ds-active' : ''}" id="scrStyleGuideBtn" title="Open Project Style Guide page">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
               <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
@@ -235,12 +245,7 @@ export class MockupsPage {
 
     this.container.querySelector('#scrStyleGuideBtn')
       .addEventListener('click', () => {
-        const restore = () => {
-          this._updateStyleGuideBtn();
-          if (this._activeId) this._selectScreen(this._activeId);
-          else                this._showNewForm();
-        };
-        this._showDesignSystemPanel(restore);
+        this.router.navigate('style-guide', { projectId: this._projectId, from: 'mockups' });
       });
 
     this._bindSidebarItems();
@@ -414,7 +419,7 @@ export class MockupsPage {
                 <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
                 <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               </svg>
-              Run in Terminal
+              Create Mockup
             </button>
           </div>
           <div class="scr-form__btns">
@@ -553,9 +558,10 @@ export class MockupsPage {
     const prompt     = buildScreenPrompt(desc, stack, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
     const cmd        = buildPsCommand(prompt, model);
 
-    const cwd = project?.project_path || undefined;
-    await window.db.terminal.openExternal({ command: cmd, cwd });
-    await this._saveToHistory(desc);
+    this._showPromptPreviewModal(prompt, async () => {
+      await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
+      await this._saveToHistory(desc);
+    });
   }
 
   async _chooseFile() {
@@ -667,7 +673,7 @@ export class MockupsPage {
                       <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
                       <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                     </svg>
-                    Run in Terminal
+                    Create Mockup
                   </button>
                 </div>
                 <div class="scr-form__btns">
@@ -700,7 +706,7 @@ export class MockupsPage {
             <div class="scr-viewer__content" id="scrViewerContent">
               ${mobile
                 ? `<pre class="scr-viewer__code-block"><code>${escHtml(screen.html_content)}</code></pre>`
-                : `<iframe class="scr-viewer__iframe" id="scrPreviewFrame" sandbox="allow-scripts allow-same-origin"></iframe>`
+                : `<iframe class="scr-viewer__iframe" id="scrPreviewFrame"></iframe>`
               }
             </div>
           </div>
@@ -791,10 +797,24 @@ export class MockupsPage {
     });
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {
-      const fresh = await window.db.screenDesigns.get(screen.id);
-      if (fresh) {
-        screen.html_content = fresh.html_content;
-        this._loadPreview(fresh.html_content);
+      const title       = main.querySelector('#scrTitle').value.trim() || screen.title;
+      const safeTitle   = title.replace(/[^a-z0-9_\-]/gi, '_');
+      const projectName = this._project?.name;
+      const safeProject = (projectName || '').replace(/[^a-z0-9_\-]/gi, '_');
+      const rootDir     = await window.app.screensDir();
+      const screensDir  = safeProject ? `${rootDir}\\${safeProject}` : rootDir;
+      const filePath    = `${screensDir}\\${safeTitle}.html`;
+      const fileContent = await window.shell.readFile(filePath);
+      if (fileContent) {
+        await window.db.screenDesigns.update({ id: screen.id, html_content: fileContent });
+        screen.html_content = fileContent;
+        this._loadPreview(fileContent);
+      } else {
+        const fresh = await window.db.screenDesigns.get(screen.id);
+        if (fresh) {
+          screen.html_content = fresh.html_content;
+          this._loadPreview(fresh.html_content);
+        }
       }
     });
 
@@ -826,8 +846,10 @@ export class MockupsPage {
       const outputFile = `${screensDir}\\${safeTitle}.html`;
       const prompt     = buildScreenPrompt(desc, stack, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
       const cmd        = buildPsCommand(prompt, model);
-      await window.db.terminal.openExternal({ command: cmd, cwd: project?.project_path || undefined });
-      await this._saveToHistory(desc);
+      this._showPromptPreviewModal(prompt, async () => {
+        await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
+        await this._saveToHistory(desc);
+      });
     });
 
     main.querySelector('#scrChooseFileBtn').addEventListener('click', async () => {
@@ -1460,6 +1482,40 @@ Spacing:
       if (project) project.design_template = tpl;
       onBack();
     });
+  }
+
+  // ----------------------------------------------------------------
+  // Prompt Preview modal
+  // ----------------------------------------------------------------
+  _showPromptPreviewModal(prompt, onRun) {
+    const dlg = document.createElement('div');
+    dlg.className = 'scr-extract-overlay';
+    dlg.innerHTML = `
+      <div class="scr-prompt-preview-dialog">
+        <div class="scr-extract-dialog__header">
+          <span>Prompt Preview</span>
+          <button class="scr-extract-dialog__close">&times;</button>
+        </div>
+        <div class="scr-prompt-preview-dialog__body">
+          <pre class="scr-prompt-preview-dialog__pre">${escHtml(prompt)}</pre>
+        </div>
+        <div class="scr-extract-dialog__footer">
+          <button class="scr-btn scr-btn--secondary" id="promptPreviewClose">Close</button>
+          <button class="scr-btn scr-btn--primary"   id="promptPreviewRun">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
+            </svg>
+            Run in Terminal
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dlg);
+    const close = () => dlg.remove();
+    dlg.querySelector('.scr-extract-dialog__close').addEventListener('click', close);
+    dlg.querySelector('#promptPreviewClose').addEventListener('click', close);
+    dlg.querySelector('#promptPreviewRun').addEventListener('click', () => { close(); onRun(); });
   }
 
   // ----------------------------------------------------------------

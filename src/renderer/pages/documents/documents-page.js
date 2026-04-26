@@ -6,6 +6,7 @@ export class DocumentsPage {
     this.container     = container;
     this.router        = router;
     this._projectId    = params.projectId;
+    this._docTitle     = params.docTitle || null;
     this._project      = null;
     this._docs         = [];
     this._activeId     = null;
@@ -24,7 +25,18 @@ export class DocumentsPage {
       window.db.documents.list(this._projectId),
     ]);
 
-    this._activeId = this._docs[0]?.id ?? null;
+    if (this._docTitle) {
+      const match = this._docs.find(d => d.title.toLowerCase() === this._docTitle.toLowerCase());
+      if (match) {
+        this._activeId = match.id;
+      } else {
+        const created = await window.db.documents.create({ project_id: this._projectId, title: this._docTitle, content: '' });
+        this._docs.push(created);
+        this._activeId = created.id;
+      }
+    } else {
+      this._activeId = this._docs[0]?.id ?? null;
+    }
 
     this.container.innerHTML = this._pageTemplate();
     this._bindShellEvents();
@@ -654,7 +666,7 @@ export class DocumentsPage {
       if (inTable) flushTable();
 
       const hm = line.match(/^(#{1,6})\s+(.*)/);
-      if (hm) { closeList(); out.push(`<h${hm[1].length}>${esc(hm[2])}</h${hm[1].length}>`); lastBlock = 'heading'; continue; }
+      if (hm) { closeList(); out.push(`<h${hm[1].length}>${this._inlineMd(esc(hm[2]))}</h${hm[1].length}>`); lastBlock = 'heading'; continue; }
       if (/^[-*_]{3,}\s*$/.test(line)) { closeList(); out.push('<hr>'); lastBlock = 'hr'; continue; }
       const ulm = line.match(/^[-*+]\s+(.*)/);
       if (ulm) { if (inOl) { out.push('</ol>'); inOl = false; } if (!inUl) { out.push('<ul>'); inUl = true; } out.push(`<li>${this._inlineMd(esc(ulm[1]))}</li>`); lastBlock = 'list'; continue; }

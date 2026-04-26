@@ -1,0 +1,133 @@
+/* ------------------------------------------------------------------ */
+/* Style Guide Page                                                     */
+/* ------------------------------------------------------------------ */
+.sg-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* Header */
+.sg-page__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 1rem;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+
+.sg-page__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+  -webkit-app-region: no-drag;
+}
+.sg-page__back:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.sg-page__title-group {
+  flex: 1;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.sg-page__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sg-page__subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.sg-page__badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  -webkit-app-region: no-drag;
+}
+.sg-page__badge--active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+/* Body */
+.sg-page__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px 20px 12px;
+  gap: 12px;
+}
+
+.sg-page__hint {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Editor — side-by-side textareas + preview */
+.sg-page__editor {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.sg-page__editor .scr-ds-templates {
+  flex: 1;
+  min-width: 0;
+}
+
+.sg-page__editor .scr-ds-preview-panel {
+  flex: 0 0 50%;
+}
+
+.sg-page__textarea {
+  flex: 1;
+  resize: none;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Actions bar */
+.sg-page__actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

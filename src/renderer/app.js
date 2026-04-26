@@ -20,5 +20,13 @@ router.register('project', async () => {
   const { ProjectPage } = await import('./pages/project/project.js');
   return ProjectPage;
 });
+router.register('test-cases', async () => {
+  const { TestCasesPage } = await import('./pages/test-cases/test-cases-page.js');
+  return TestCasesPage;
+});
+router.register('style-guide', async () => {
+  const { StyleGuidePage } = await import('./pages/style-guide/style-guide-page.js');
+  return StyleGuidePage;
+});
 
 router.navigate('launcher');

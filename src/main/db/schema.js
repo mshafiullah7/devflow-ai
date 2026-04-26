@@ -181,6 +181,26 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- TEST CASES
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS test_cases (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_story_id   INTEGER REFERENCES user_stories(id) ON DELETE SET NULL,
+      feature_id      INTEGER REFERENCES features(id) ON DELETE SET NULL,
+      project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      title           TEXT    NOT NULL,
+      description     TEXT,
+      test_steps      TEXT,
+      expected_result TEXT,
+      actual_result   TEXT,
+      status          TEXT    NOT NULL DEFAULT 'not_run',
+      priority        TEXT    NOT NULL DEFAULT 'medium',
+      is_active       INTEGER NOT NULL DEFAULT 1,
+      created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (

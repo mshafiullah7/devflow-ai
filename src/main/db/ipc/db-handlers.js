@@ -279,6 +279,108 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // test_cases
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:test_cases:list', (_e, { project_id, feature_id, user_story_id, status } = {}) => {
+    let sql = `
+      SELECT tc.*,
+             us.title AS story_title,
+             f.name   AS feature_name
+        FROM test_cases tc
+        LEFT JOIN user_stories us ON tc.user_story_id = us.id
+        LEFT JOIN features f      ON tc.feature_id = f.id
+       WHERE tc.is_active = 1`;
+    const params = [];
+    if (project_id)    { sql += ' AND tc.project_id = ?';      params.push(project_id); }
+    if (feature_id)    { sql += ' AND tc.feature_id = ?';      params.push(feature_id); }
+    if (user_story_id) { sql += ' AND tc.user_story_id = ?';   params.push(user_story_id); }
+    if (status)        { sql += ' AND tc.status = ?';          params.push(status); }
+    sql += ' ORDER BY tc.created_at DESC';
+    return db.prepare(sql).all(...params);
+  });
+
+  ipcMain.handle('db:test_cases:get', (_e, id) => {
+    return db.prepare('SELECT * FROM test_cases WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:test_cases:create', (_e, { project_id, feature_id, user_story_id, title, description, test_steps, expected_result, actual_result, status, priority }) => {
+    const result = db.prepare(`
+      INSERT INTO test_cases (project_id, feature_id, user_story_id, title, description, test_steps, expected_result, actual_result, status, priority)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      project_id,
+      feature_id      ?? null,
+      user_story_id   ?? null,
+      title,
+      description     ?? null,
+      test_steps      ?? null,
+      expected_result ?? null,
+      actual_result   ?? null,
+      status   ?? 'not_run',
+      priority ?? 'medium'
+    );
+    return db.prepare(`
+      SELECT tc.*, us.title AS story_title, f.name AS feature_name
+        FROM test_cases tc
+        LEFT JOIN user_stories us ON tc.user_story_id = us.id
+        LEFT JOIN features f      ON tc.feature_id = f.id
+       WHERE tc.id = ?
+    `).get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:test_cases:update', (_e, { id, feature_id, user_story_id, title, description, test_steps, expected_result, actual_result, status, priority, is_active }) => {
+    db.prepare(`
+      UPDATE test_cases
+         SET feature_id      = CASE WHEN ? IS NOT NULL THEN ? ELSE feature_id END,
+             user_story_id   = CASE WHEN ? IS NOT NULL THEN ? ELSE user_story_id END,
+             title           = coalesce(?, title),
+             description     = coalesce(?, description),
+             test_steps      = coalesce(?, test_steps),
+             expected_result = coalesce(?, expected_result),
+             actual_result   = ?,
+             status          = coalesce(?, status),
+             priority        = coalesce(?, priority),
+             is_active       = coalesce(?, is_active),
+             updated_at      = datetime('now')
+       WHERE id = ?
+    `).run(
+      feature_id    ?? null, feature_id    ?? null,
+      user_story_id ?? null, user_story_id ?? null,
+      title           ?? null,
+      description     ?? null,
+      test_steps      ?? null,
+      expected_result ?? null,
+      actual_result   ?? null,
+      status   ?? null,
+      priority ?? null,
+      is_active ?? null,
+      id
+    );
+    return db.prepare(`
+      SELECT tc.*, us.title AS story_title, f.name AS feature_name
+        FROM test_cases tc
+        LEFT JOIN user_stories us ON tc.user_story_id = us.id
+        LEFT JOIN features f      ON tc.feature_id = f.id
+       WHERE tc.id = ?
+    `).get(id);
+  });
+
+  ipcMain.handle('db:test_cases:delete', (_e, id) => {
+    db.prepare(`UPDATE test_cases SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
+    return { success: true };
+  });
+
+  ipcMain.handle('db:test_cases:coverage', (_e, project_id) => {
+    const total = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1`).get(project_id)?.n ?? 0;
+    const pass  = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND status = 'pass'`).get(project_id)?.n ?? 0;
+    const fail  = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND status = 'fail'`).get(project_id)?.n ?? 0;
+    const blocked = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND status = 'blocked'`).get(project_id)?.n ?? 0;
+    const not_run = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND status = 'not_run'`).get(project_id)?.n ?? 0;
+    const stories_covered = db.prepare(`SELECT COUNT(DISTINCT user_story_id) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND user_story_id IS NOT NULL`).get(project_id)?.n ?? 0;
+    return { total, pass, fail, blocked, not_run, stories_covered };
+  });
+
+  // ----------------------------------------------------------------
   // quick_commands
   // ----------------------------------------------------------------
   ipcMain.handle('db:quick_commands:list', () => {

@@ -698,6 +698,41 @@
 .scr-extract-dialog__confirm:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ------------------------------------------------------------------ */
+/* Prompt Preview modal                                                 */
+/* ------------------------------------------------------------------ */
+.scr-prompt-preview-dialog {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  width: 660px;
+  max-width: 92vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.scr-prompt-preview-dialog__body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.scr-prompt-preview-dialog__pre {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  font-family: var(--font-mono, 'Consolas', 'Menlo', monospace);
+}
+
+/* ------------------------------------------------------------------ */
 /* Prompt History (below description textarea in new-screen form)       */
 /* ------------------------------------------------------------------ */
 .scr-ph-container { margin-top: 6px; }

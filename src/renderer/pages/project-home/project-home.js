@@ -13,21 +13,23 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, stories, features, statuses, documents, mockups] = await Promise.all([
+    const [project, stories, features, statuses, documents, mockups, tcCoverage] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.userStories.list({ project_id: this.projectId }),
       window.db.features.list(this.projectId),
       window.db.status.list(),
       window.db.documents.list(this.projectId),
       window.db.screenDesigns.list(this.projectId),
+      window.db.testCases.coverage(this.projectId),
     ]);
 
-    this._project   = project;
-    this._stories   = stories;
-    this._features  = features;
-    this._statuses  = statuses;
-    this._documents = documents;
-    this._mockups   = mockups;
+    this._project    = project;
+    this._stories    = stories;
+    this._features   = features;
+    this._statuses   = statuses;
+    this._documents  = documents;
+    this._mockups    = mockups;
+    this._tcCoverage = tcCoverage;
 
     this.container.innerHTML = this._template();
     this._bindEvents();
@@ -83,6 +85,58 @@ export class ProjectHomePage {
       </div>`;
   }
 
+  _quickLinksHtml() {
+    const docs = this._documents || [];
+    const hasDoc  = title => docs.some(d => d.title.toLowerCase() === title.toLowerCase());
+    const hasStyle = !!((() => { try { const p = JSON.parse(this._project?.design_template || ''); return p?.light || p?.dark; } catch { return this._project?.design_template; } })());
+
+    const links = [
+      {
+        id:   'phlOverview',
+        name: 'Project Overview',
+        desc: 'High-level project summary document',
+        has:  hasDoc('Project Overview'),
+        icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
+      },
+      {
+        id:   'phlStyleGuide',
+        name: 'Project Style Guide',
+        desc: 'Design tokens, colours and components',
+        has:  hasStyle,
+        icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,
+      },
+      {
+        id:   'phlArchitecture',
+        name: 'Architecture Overview',
+        desc: 'System design and component structure',
+        has:  hasDoc('Architecture Overview'),
+        icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>`,
+      },
+      {
+        id:   'phlTechStack',
+        name: 'Tech Stack',
+        desc: 'Languages, frameworks and tools used',
+        has:  hasDoc('Tech Stack'),
+        icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+      },
+    ];
+
+    return `
+      <div class="project-home__stats">
+        ${links.map(l => `
+          <button class="ph-stat-card ph-stat-card--link" id="${l.id}">
+            <div class="ph-qlink__top">
+              <div class="ph-qlink__name">${escHtml(l.name)}</div>
+              <span class="ph-qlink__badge ${l.has ? 'ph-qlink__badge--set' : ''}">
+                ${l.has ? 'Set' : 'Not set'}
+              </span>
+            </div>
+            <div class="ph-qlink__desc">${escHtml(l.desc)}</div>
+          </button>
+        `).join('')}
+      </div>`;
+  }
+
   _template() {
     const name = this._project?.name ?? 'Project';
     return `
@@ -102,6 +156,10 @@ export class ProjectHomePage {
         <div class="project-home__body">
           <div class="project-home__section-label">Overview</div>
           ${this._statsHtml()}
+
+          <div class="project-home__section-label" style="margin-top:2rem;">Quick Links</div>
+          ${this._quickLinksHtml()}
+
           <div class="project-home__section-label" style="margin-top:2rem;">Project Areas</div>
           <div class="project-home__cards">
 
@@ -165,6 +223,24 @@ export class ProjectHomePage {
               </div>
             </button>
 
+            <button class="ph-card" id="cardTestCases">
+              <div class="ph-card__icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4m0-6h4m0 0h4m-4 0v6m0 0H9m4 0h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-4"/>
+                </svg>
+              </div>
+              <div class="ph-card__body">
+                <div class="ph-card__name">Test Cases</div>
+                <div class="ph-card__desc">Test cases linked to stories with pass/fail tracking.</div>
+              </div>
+              <div class="ph-card__footer">
+                <span class="ph-card__count">${this._tcCoverage?.total ?? 0}</span>
+                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </div>
+            </button>
+
           </div>
         </div>
       </div>
@@ -183,5 +259,20 @@ export class ProjectHomePage {
 
     this.container.querySelector('#cardUserStories')
       .addEventListener('click', () => this.router.navigate('project', { projectId: this.projectId }));
+
+    this.container.querySelector('#cardTestCases')
+      .addEventListener('click', () => this.router.navigate('test-cases', { projectId: this.projectId }));
+
+    this.container.querySelector('#phlOverview')
+      .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId, docTitle: 'Project Overview' }));
+
+    this.container.querySelector('#phlStyleGuide')
+      .addEventListener('click', () => this.router.navigate('style-guide', { projectId: this.projectId, from: 'project-home' }));
+
+    this.container.querySelector('#phlArchitecture')
+      .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId, docTitle: 'Architecture Overview' }));
+
+    this.container.querySelector('#phlTechStack')
+      .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId, docTitle: 'Tech Stack' }));
   }
 }

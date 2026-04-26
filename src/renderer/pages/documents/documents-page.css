@@ -128,6 +128,10 @@
 
 .documents-page__body .doc-editor__pane--preview blockquote { margin: 0.3em 0; }
 
+.documents-page__body .doc-editor__pane--preview strong { font-weight: 700; }
+.documents-page__body .doc-editor__pane--preview em     { font-style: italic; }
+.documents-page__body .doc-editor__pane--preview del    { text-decoration: line-through; opacity: 0.7; }
+
 /* ------------------------------------------------------------------ */
 /* Markdown table                                                        */
 /* ------------------------------------------------------------------ */
