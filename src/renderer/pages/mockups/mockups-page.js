@@ -421,6 +421,12 @@ export class MockupsPage {
               </svg>
               Create Mockup
             </button>
+            <button class="scr-btn scr-btn--secondary" id="scrEditBtn">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+              Edits
+            </button>
           </div>
           <div class="scr-form__btns">
             <button class="scr-btn scr-btn--accent" id="scrSaveBtn">
@@ -445,6 +451,7 @@ export class MockupsPage {
 
     main.querySelector('#scrModelSelect').style.display = 'none';
     main.querySelector('#scrRunBtn').style.display      = 'none';
+    main.querySelector('#scrEditBtn').style.display     = 'none';
 
     main.querySelector('#scrModelSelect')?.addEventListener('change', (e) => {
       this._selectedModelId = Number(e.target.value) || null;
@@ -453,10 +460,13 @@ export class MockupsPage {
       await this._saveAndView();
       const sel = main.querySelector('#scrModelSelect');
       const btn = main.querySelector('#scrRunBtn');
+      const edt = main.querySelector('#scrEditBtn');
       if (sel) sel.style.display = '';
       if (btn) btn.style.display = '';
+      if (edt) edt.style.display = '';
     });
     main.querySelector('#scrRunBtn').addEventListener('click', () => this._runInTerminal());
+    main.querySelector('#scrEditBtn').addEventListener('click', () => this._openEdits());
     main.querySelector('#scrChooseFileBtn').addEventListener('click', () => this._chooseFile());
     this._loadPromptHistory();
   }
@@ -675,6 +685,12 @@ export class MockupsPage {
                     </svg>
                     Create Mockup
                   </button>
+                  <button class="scr-btn scr-btn--secondary" id="scrEditBtn">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                    </svg>
+                    Edits
+                  </button>
                 </div>
                 <div class="scr-form__btns">
                   <button class="scr-btn scr-btn--accent" id="scrSaveBtn">
@@ -721,7 +737,27 @@ export class MockupsPage {
   _loadPreview(html) {
     const frame = this.container.querySelector('#scrPreviewFrame');
     if (!frame) return;
-    frame.srcdoc = html;
+    // Inject a guard that prevents any anchor from navigating outside the iframe.
+    // onclick handlers on the elements still fire normally — only the default
+    // link-navigation action is cancelled.
+    const guard = `<script>
+(function(){
+  document.addEventListener('click', function(e){
+    var a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();
+    var href = (a.getAttribute('href') || '').trim();
+    if (href.startsWith('#') && href.length > 1) {
+      var el = document.getElementById(href.slice(1)) || document.querySelector('[name="' + href.slice(1) + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, true);
+})();
+<\/script>`;
+    const guarded = html.includes('</head>')
+      ? html.replace('</head>', guard + '</head>')
+      : guard + html;
+    frame.srcdoc = guarded;
   }
 
   _bindViewerEvents(screen) {
@@ -851,6 +887,8 @@ export class MockupsPage {
         await this._saveToHistory(desc);
       });
     });
+
+    main.querySelector('#scrEditBtn').addEventListener('click', () => this._openEdits(screen.title));
 
     main.querySelector('#scrChooseFileBtn').addEventListener('click', async () => {
       const result = await window.db.dialog.openFile({
@@ -1482,6 +1520,38 @@ Spacing:
       if (project) project.design_template = tpl;
       onBack();
     });
+  }
+
+  // ----------------------------------------------------------------
+  // Edits — open the selected CLI with the screen file as context
+  // ----------------------------------------------------------------
+  async _openEdits(titleOverride) {
+    const main  = this.container.querySelector('#scrMain');
+    const title = titleOverride
+      || main?.querySelector('#scrTitle')?.value.trim()
+      || '';
+
+    if (!title) {
+      alert('Save the screen first so a file exists to edit.');
+      return;
+    }
+
+    const model = this._getSelectedModel();
+    if (!model || model.type === 'anthropic' || !model.executable) {
+      alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
+      return;
+    }
+
+    const safeTitle   = title.replace(/[^a-z0-9_\-]/gi, '_');
+    const projectName = this._project?.name;
+    const safeProject = (projectName || '').replace(/[^a-z0-9_\-]/gi, '_');
+    const rootDir     = await window.app.screensDir();
+    const screensDir  = safeProject ? `${rootDir}\\${safeProject}` : rootDir;
+    const fileName    = `${safeTitle}.html`;
+    const exe         = model.executable;
+    const cmd         = `${exe} "${fileName}"`;
+
+    await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
   }
 
   // ----------------------------------------------------------------

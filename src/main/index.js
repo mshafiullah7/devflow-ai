@@ -23,6 +23,10 @@ const createWindow = () => {
   });
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+
+  mainWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
+  });
 };
 
 app.whenReady().then(() => {
