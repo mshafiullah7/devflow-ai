@@ -16,7 +16,6 @@ export class DocumentsPage {
   }
 
   async mount() {
-    injectCss('pages/project/components/documents/documents-modal.css');
     injectCss('pages/documents/documents-page.css');
     applyStoredTheme();
 
@@ -47,7 +46,6 @@ export class DocumentsPage {
 
   unmount() {
     removeCss('pages/documents/documents-page.css');
-    removeCss('pages/project/components/documents/documents-modal.css');
   }
 
   // ----------------------------------------------------------------

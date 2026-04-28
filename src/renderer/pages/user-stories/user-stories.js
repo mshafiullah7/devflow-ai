@@ -1,5 +1,5 @@
-import { FeatureList } from './components/feature-list/feature-list.js';
-import { UserStoryList } from './components/user-story-list/user-story-list.js';
+import { FeatureList } from '../../components/feature-list/feature-list.js';
+import { UserStoryList } from '../../components/user-story-list/user-story-list.js';
 import { TerminalController } from './components/terminal/terminal-controller.js';
 import { GitController } from './components/git/git-controller.js';
 import { QuickCommandsModal } from './components/quick-commands/quick-commands-modal.js';
@@ -20,7 +20,7 @@ export class ProjectPage {
   // Lifecycle
   // ----------------------------------------------------------------
   async mount() {
-    injectCss('pages/project/project.css');
+    injectCss('pages/user-stories/user-stories.css');
     applyStoredTheme();
 
     this._project = await window.db.projects.get(this.projectId);
@@ -66,9 +66,10 @@ export class ProjectPage {
   }
 
   unmount() {
-    removeCss('pages/project/project.css');
+    removeCss('pages/user-stories/user-stories.css');
     this._terminal?.unmount();
     this._git?.stopPoll();
+    this._closeConsolePopup?.();
   }
 
   // ----------------------------------------------------------------
@@ -90,7 +91,7 @@ export class ProjectPage {
           </button>
           <div class="project-page__title-group">
             <h1 class="project-page__title">${name}</h1>
-            ${desc ? `<p class="project-page__desc">${desc}</p>` : ''}
+            <p class="project-page__desc">User Stories</p>
           </div>
           <div class="project-page__model-group">
             <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
@@ -212,6 +213,12 @@ export class ProjectPage {
                   </svg>
                   <span class="project-console__git-badge" id="gitBadge" hidden></span>
                 </button>
+                <button class="project-console__popup-btn" id="btnConsolePopup" title="Expand console">
+                  <svg class="console-popup-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 6V2H6M10 2H14V6M14 10V14H10M6 14H2V10"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
                 <div class="project-console__menu-wrap">
                   <button class="project-console__menu-btn" id="btnConsoleMenu" title="More options">
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -275,6 +282,7 @@ export class ProjectPage {
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this.projectId }));
 
     this._initConsoleToggle();
+    this._initConsolePopup();
 
     document.getElementById('menuClearConsole')
       .addEventListener('click', () => {
@@ -494,6 +502,53 @@ export class ProjectPage {
         toggleBtn.setAttribute('aria-label', 'Collapse console');
         icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
       }
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Console popup overlay
+  // ----------------------------------------------------------------
+  _initConsolePopup() {
+    const consoleEl    = document.getElementById('projectConsole');
+    const resizeHandle = document.querySelector('.project-panel__resize[data-resize="console"]');
+    const btn          = document.getElementById('btnConsolePopup');
+    const icon         = btn.querySelector('.console-popup-icon');
+    let backdrop       = null;
+
+    const setIcon = (d) => {
+      icon.innerHTML = `<path d="${d}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    };
+
+    const close = () => {
+      consoleEl.classList.remove('project-console--popup');
+      if (resizeHandle) resizeHandle.style.display = '';
+      btn.title = 'Expand console';
+      setIcon('M2 6V2H6M10 2H14V6M14 10V14H10M6 14H2V10');
+      if (backdrop) { backdrop.remove(); backdrop = null; }
+    };
+
+    const open = () => {
+      if (consoleEl.classList.contains('project-console--collapsed')) {
+        document.getElementById('btnConsoleToggle').click();
+      }
+      consoleEl.classList.add('project-console--popup');
+      if (resizeHandle) resizeHandle.style.display = 'none';
+      btn.title = 'Restore console';
+      setIcon('M6 2V6H2M14 2V6H10M14 14V10H10M2 14V10H6');
+      backdrop = document.createElement('div');
+      backdrop.className = 'project-console__backdrop';
+      backdrop.addEventListener('click', close);
+      document.body.appendChild(backdrop);
+    };
+
+    this._closeConsolePopup = close;
+
+    btn.addEventListener('click', () => {
+      consoleEl.classList.contains('project-console--popup') ? close() : open();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && consoleEl.classList.contains('project-console--popup')) close();
     });
   }
 

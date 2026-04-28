@@ -13,7 +13,7 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, stories, features, statuses, documents, mockups, tcCoverage] = await Promise.all([
+    const [project, stories, features, statuses, documents, mockups, tcCoverage, issueCount] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.userStories.list({ project_id: this.projectId }),
       window.db.features.list(this.projectId),
@@ -21,6 +21,7 @@ export class ProjectHomePage {
       window.db.documents.list(this.projectId),
       window.db.screenDesigns.list(this.projectId),
       window.db.testCases.coverage(this.projectId),
+      window.db.issues.count(this.projectId),
     ]);
 
     this._project    = project;
@@ -30,6 +31,7 @@ export class ProjectHomePage {
     this._documents  = documents;
     this._mockups    = mockups;
     this._tcCoverage = tcCoverage;
+    this._issueCount = issueCount;
 
     this.container.innerHTML = this._template();
     this._bindEvents();
@@ -241,6 +243,26 @@ export class ProjectHomePage {
               </div>
             </button>
 
+            <button class="ph-card" id="cardIssues">
+              <div class="ph-card__icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              </div>
+              <div class="ph-card__body">
+                <div class="ph-card__name">Issues</div>
+                <div class="ph-card__desc">Track bugs and issues linked to user stories.</div>
+              </div>
+              <div class="ph-card__footer">
+                <span class="ph-card__count">${this._issueCount?.total ?? 0}</span>
+                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </div>
+            </button>
+
           </div>
         </div>
       </div>
@@ -258,10 +280,13 @@ export class ProjectHomePage {
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId }));
 
     this.container.querySelector('#cardUserStories')
-      .addEventListener('click', () => this.router.navigate('project', { projectId: this.projectId }));
+      .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this.projectId }));
 
     this.container.querySelector('#cardTestCases')
       .addEventListener('click', () => this.router.navigate('test-cases', { projectId: this.projectId }));
+
+    this.container.querySelector('#cardIssues')
+      .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
 
     this.container.querySelector('#phlOverview')
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId, docTitle: 'Project Overview' }));

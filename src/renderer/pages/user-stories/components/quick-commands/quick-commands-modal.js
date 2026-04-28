@@ -9,7 +9,7 @@ export class QuickCommandsModal {
   // Lifecycle
   // ----------------------------------------------------------------
   mount() {
-    injectCss('pages/project/components/quick-commands/quick-commands.css');
+    injectCss('pages/user-stories/components/quick-commands/quick-commands.css');
   }
 
   // ----------------------------------------------------------------

@@ -16,8 +16,8 @@ router.register('documents', async () => {
   const { DocumentsPage } = await import('./pages/documents/documents-page.js');
   return DocumentsPage;
 });
-router.register('project', async () => {
-  const { ProjectPage } = await import('./pages/project/project.js');
+router.register('user-stories', async () => {
+  const { ProjectPage } = await import('./pages/user-stories/user-stories.js');
   return ProjectPage;
 });
 router.register('test-cases', async () => {
@@ -27,6 +27,10 @@ router.register('test-cases', async () => {
 router.register('style-guide', async () => {
   const { StyleGuidePage } = await import('./pages/style-guide/style-guide-page.js');
   return StyleGuidePage;
+});
+router.register('issues', async () => {
+  const { IssuesPage } = await import('./pages/issues/issues-page.js');
+  return IssuesPage;
 });
 
 router.navigate('launcher');

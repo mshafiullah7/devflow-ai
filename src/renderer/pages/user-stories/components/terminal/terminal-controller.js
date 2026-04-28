@@ -89,7 +89,7 @@ export class TerminalController {
   // Lifecycle
   // ----------------------------------------------------------------
   mount() {
-    injectCss('pages/project/components/terminal/console.css');
+    injectCss('pages/user-stories/components/terminal/console.css');
     this._initListeners();
   }
 

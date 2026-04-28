@@ -1,4 +1,4 @@
-import { FeatureList } from '../project/components/feature-list/feature-list.js';
+import { FeatureList } from '../../components/feature-list/feature-list.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
@@ -30,9 +30,9 @@ export class TestCasesPage {
   }
 
   async mount() {
-    injectCss('pages/project/project.css');
-    injectCss('pages/project/components/feature-list/feature-list.css');
-    injectCss('pages/project/components/user-story-list/user-story-list.css');
+    injectCss('pages/user-stories/user-stories.css');
+    injectCss('components/feature-list/feature-list.css');
+    injectCss('components/user-story-list/user-story-list.css');
     injectCss('pages/test-cases/test-cases-page.css');
     applyStoredTheme();
 
@@ -46,9 +46,9 @@ export class TestCasesPage {
 
   unmount() {
     removeCss('pages/test-cases/test-cases-page.css');
-    removeCss('pages/project/components/user-story-list/user-story-list.css');
-    removeCss('pages/project/components/feature-list/feature-list.css');
-    removeCss('pages/project/project.css');
+    removeCss('components/user-story-list/user-story-list.css');
+    removeCss('components/feature-list/feature-list.css');
+    removeCss('pages/user-stories/user-stories.css');
   }
 
   // ----------------------------------------------------------------

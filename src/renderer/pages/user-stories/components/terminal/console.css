@@ -615,3 +615,45 @@
   transition: color 0.15s, border-color 0.15s;
 }
 .qcmd-inline-prompt__cancel:hover { color: #ef4444; border-color: #ef4444; }
+
+/* ------------------------------------------------------------------ */
+/* Console popup / maximized overlay                                    */
+/* ------------------------------------------------------------------ */
+.project-console--popup {
+  position: fixed !important;
+  inset: 5vh 4vw !important;
+  flex: none !important;
+  width: auto !important;
+  min-width: 0 !important;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  z-index: 901;
+}
+
+.project-console__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 900;
+}
+
+.project-console__popup-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.project-console__popup-btn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}

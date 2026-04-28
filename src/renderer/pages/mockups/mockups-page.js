@@ -92,7 +92,7 @@ export class MockupsPage {
   }
 
   async mount() {
-    injectCss('pages/project/components/screens/screens-modal.css?v=3');
+    injectCss('styles/screens.css');
     injectCss('pages/mockups/mockups-page.css');
     applyStoredTheme();
 
@@ -129,7 +129,7 @@ export class MockupsPage {
 
   unmount() {
     removeCss('pages/mockups/mockups-page.css');
-    removeCss('pages/project/components/screens/screens-modal.css?v=3');
+    removeCss('styles/screens.css');
   }
 
   _getProject()      { return this._project; }

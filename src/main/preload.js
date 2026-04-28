@@ -98,6 +98,14 @@ contextBridge.exposeInMainWorld('db', {
     delete:   (id)      => invoke('db:test_cases:delete', id),
     coverage: (project_id) => invoke('db:test_cases:coverage', project_id),
   },
+  issues: {
+    list:   (filters)    => invoke('db:issues:list', filters),
+    get:    (id)         => invoke('db:issues:get', id),
+    create: (data)       => invoke('db:issues:create', data),
+    update: (data)       => invoke('db:issues:update', data),
+    delete: (id)         => invoke('db:issues:delete', id),
+    count:  (project_id) => invoke('db:issues:count', project_id),
+  },
   dialog: {
     openFolder:   ()     => invoke('dialog:openFolder'),
     openJsonFile: ()     => invoke('dialog:openJsonFile'),

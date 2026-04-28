@@ -35,7 +35,7 @@ export class UserStoryDetail {
   // Public API
   // ----------------------------------------------------------------
   async mount() {
-    injectCss('pages/project/components/user-story-detail/user-story-detail.css');
+    injectCss('pages/user-stories/components/user-story-detail/user-story-detail.css');
   }
 
   /** Update context when a new feature is selected */

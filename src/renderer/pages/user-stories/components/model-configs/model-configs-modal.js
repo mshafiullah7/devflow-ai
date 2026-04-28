@@ -9,7 +9,7 @@ export class ModelConfigsModal {
   // Lifecycle
   // ----------------------------------------------------------------
   mount() {
-    injectCss('pages/project/components/model-configs/model-configs-modal.css');
+    injectCss('pages/user-stories/components/model-configs/model-configs-modal.css');
   }
 
   // ----------------------------------------------------------------

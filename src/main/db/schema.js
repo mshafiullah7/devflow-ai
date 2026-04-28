@@ -201,6 +201,26 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- ISSUES
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS issues (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_story_id       INTEGER REFERENCES user_stories(id) ON DELETE SET NULL,
+      feature_id          INTEGER REFERENCES features(id) ON DELETE SET NULL,
+      project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      title               TEXT    NOT NULL,
+      description         TEXT,
+      steps_to_reproduce  TEXT,
+      expected_behavior   TEXT,
+      actual_behavior     TEXT,
+      severity            TEXT    NOT NULL DEFAULT 'medium',
+      status              TEXT    NOT NULL DEFAULT 'open',
+      is_active           INTEGER NOT NULL DEFAULT 1,
+      created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (

@@ -381,6 +381,106 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // issues
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:issues:list', (_e, { project_id, feature_id, user_story_id, status, severity } = {}) => {
+    let sql = `
+      SELECT i.*,
+             us.title AS story_title,
+             f.name   AS feature_name
+        FROM issues i
+        LEFT JOIN user_stories us ON i.user_story_id = us.id
+        LEFT JOIN features f      ON i.feature_id = f.id
+       WHERE i.is_active = 1`;
+    const params = [];
+    if (project_id)    { sql += ' AND i.project_id = ?';     params.push(project_id); }
+    if (feature_id)    { sql += ' AND i.feature_id = ?';     params.push(feature_id); }
+    if (user_story_id) { sql += ' AND i.user_story_id = ?';  params.push(user_story_id); }
+    if (status)        { sql += ' AND i.status = ?';         params.push(status); }
+    if (severity)      { sql += ' AND i.severity = ?';       params.push(severity); }
+    sql += ' ORDER BY i.created_at DESC';
+    return db.prepare(sql).all(...params);
+  });
+
+  ipcMain.handle('db:issues:get', (_e, id) => {
+    return db.prepare('SELECT * FROM issues WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:issues:create', (_e, { project_id, feature_id, user_story_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status }) => {
+    const result = db.prepare(`
+      INSERT INTO issues (project_id, feature_id, user_story_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      project_id,
+      feature_id      ?? null,
+      user_story_id   ?? null,
+      title,
+      description          ?? null,
+      steps_to_reproduce   ?? null,
+      expected_behavior    ?? null,
+      actual_behavior      ?? null,
+      severity ?? 'medium',
+      status   ?? 'open'
+    );
+    return db.prepare(`
+      SELECT i.*, us.title AS story_title, f.name AS feature_name
+        FROM issues i
+        LEFT JOIN user_stories us ON i.user_story_id = us.id
+        LEFT JOIN features f      ON i.feature_id = f.id
+       WHERE i.id = ?
+    `).get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:issues:update', (_e, { id, feature_id, user_story_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active }) => {
+    db.prepare(`
+      UPDATE issues
+         SET feature_id         = CASE WHEN ? IS NOT NULL THEN ? ELSE feature_id END,
+             user_story_id      = CASE WHEN ? IS NOT NULL THEN ? ELSE user_story_id END,
+             title              = coalesce(?, title),
+             description        = coalesce(?, description),
+             steps_to_reproduce = coalesce(?, steps_to_reproduce),
+             expected_behavior  = coalesce(?, expected_behavior),
+             actual_behavior    = ?,
+             severity           = coalesce(?, severity),
+             status             = coalesce(?, status),
+             is_active          = coalesce(?, is_active),
+             updated_at         = datetime('now')
+       WHERE id = ?
+    `).run(
+      feature_id    ?? null, feature_id    ?? null,
+      user_story_id ?? null, user_story_id ?? null,
+      title               ?? null,
+      description         ?? null,
+      steps_to_reproduce  ?? null,
+      expected_behavior   ?? null,
+      actual_behavior     ?? null,
+      severity  ?? null,
+      status    ?? null,
+      is_active ?? null,
+      id
+    );
+    return db.prepare(`
+      SELECT i.*, us.title AS story_title, f.name AS feature_name
+        FROM issues i
+        LEFT JOIN user_stories us ON i.user_story_id = us.id
+        LEFT JOIN features f      ON i.feature_id = f.id
+       WHERE i.id = ?
+    `).get(id);
+  });
+
+  ipcMain.handle('db:issues:delete', (_e, id) => {
+    db.prepare(`UPDATE issues SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
+    return { success: true };
+  });
+
+  ipcMain.handle('db:issues:count', (_e, project_id) => {
+    const total    = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1`).get(project_id)?.n ?? 0;
+    const open     = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'open'`).get(project_id)?.n ?? 0;
+    const resolved = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'resolved'`).get(project_id)?.n ?? 0;
+    return { total, open, resolved };
+  });
+
+  // ----------------------------------------------------------------
   // quick_commands
   // ----------------------------------------------------------------
   ipcMain.handle('db:quick_commands:list', () => {

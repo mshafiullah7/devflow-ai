@@ -1,4 +1,4 @@
-import { escHtml, injectCss, formatDate } from '../../../../shared/helpers.js';
+import { escHtml, injectCss, formatDate } from '../../shared/helpers.js';
 
 /**
  * FeatureList — self-contained component that manages the Features panel.
@@ -23,7 +23,7 @@ export class FeatureList {
   // Public API
   // ----------------------------------------------------------------
   async mount() {
-    injectCss('pages/project/components/feature-list/feature-list.css');
+    injectCss('components/feature-list/feature-list.css');
     this._statuses = await window.db.status.list();
     this._addBtn.addEventListener('click', () => this._openModal(null));
     await this._load();

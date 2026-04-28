@@ -10,7 +10,7 @@ export class GitController {
   // Lifecycle
   // ----------------------------------------------------------------
   mount() {
-    injectCss('pages/project/components/git/git-diff.css');
+    injectCss('pages/user-stories/components/git/git-diff.css');
   }
 
   startPoll() {

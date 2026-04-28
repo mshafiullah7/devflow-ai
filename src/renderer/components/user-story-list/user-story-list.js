@@ -1,5 +1,5 @@
-import { escHtml, injectCss, formatDate } from '../../../../shared/helpers.js';
-import { UserStoryDetail } from '../user-story-detail/user-story-detail.js';
+import { escHtml, injectCss, formatDate } from '../../shared/helpers.js';
+import { UserStoryDetail } from '../../pages/user-stories/components/user-story-detail/user-story-detail.js';
 
 /**
  * UserStoryList — manages the story card list panel.
@@ -44,7 +44,7 @@ export class UserStoryList {
   // Public API
   // ----------------------------------------------------------------
   async mount() {
-    injectCss('pages/project/components/user-story-list/user-story-list.css');
+    injectCss('components/user-story-list/user-story-list.css');
     await this._detail.mount();
 
     this._statuses = await window.db.status.list();
