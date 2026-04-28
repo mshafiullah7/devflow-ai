@@ -1,9 +1,9 @@
 import { FeatureList } from '../../components/feature-list/feature-list.js';
 import { UserStoryList } from '../../components/user-story-list/user-story-list.js';
 import { TerminalController } from './components/terminal/terminal-controller.js';
-import { GitController } from './components/git/git-controller.js';
-import { QuickCommandsModal } from './components/quick-commands/quick-commands-modal.js';
-import { ModelConfigsModal } from './components/model-configs/model-configs-modal.js';
+import { GitController } from '../../components/git/git-controller.js';
+import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
+import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
@@ -105,6 +105,24 @@ export class ProjectPage {
               </svg>
             </button>
           </div>
+          <button class="project-page__git-btn" id="btnConsoleGit" title="Git changes" hidden style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="project-page__git-badge" id="gitBadge" hidden></span>
+          </button>
+          <button class="project-page__qcmd-btn" id="btnHeaderQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
         </header>
 
         <!-- ── Body (columns + console) ────────────────────────────── -->
@@ -203,16 +221,6 @@ export class ProjectPage {
                     <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
                   </svg>
                 </button>
-                <button class="project-console__git" id="btnConsoleGit" title="Git status / diff" hidden>
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                    <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                    <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                    <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-                    <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  </svg>
-                  <span class="project-console__git-badge" id="gitBadge" hidden></span>
-                </button>
                 <button class="project-console__popup-btn" id="btnConsolePopup" title="Expand console">
                   <svg class="console-popup-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
                     <path d="M2 6V2H6M10 2H14V6M14 10V14H10M6 14H2V10"
@@ -228,14 +236,6 @@ export class ProjectPage {
                     </svg>
                   </button>
                   <div class="project-console__menu-dropdown" id="consoleMenuDropdown" hidden>
-                    <button class="console-menu__item" id="menuQuickCommands">
-                      <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                        <path d="M5 2h7l4 4v12a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                        <path d="M12 2v4h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                        <path d="M7 9h6M7 12h6M7 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                      </svg>
-                      Quick Commands
-                    </button>
                     <button class="console-menu__item" id="menuClearConsole">
                       <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                         <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -319,11 +319,8 @@ export class ProjectPage {
         if (dd) dd.hidden = !dd.hidden;
       });
 
-    document.getElementById('menuQuickCommands')
-      .addEventListener('click', () => {
-        document.getElementById('consoleMenuDropdown').hidden = true;
-        this._qcmdModal.show();
-      });
+    document.getElementById('btnHeaderQcmd')
+      .addEventListener('click', () => this._qcmdModal.show());
 
     document.getElementById('btnCmdPicker')
       .addEventListener('click', (e) => { e.stopPropagation(); this._terminal.toggleCmdPickerDropdown(); });

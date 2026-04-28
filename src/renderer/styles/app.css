@@ -377,3 +377,159 @@ html, body {
   color: var(--text-muted);
   flex-shrink: 0;
 }
+
+/* ------------------------------------------------------------------ */
+/* Shared: AI model select + config button (used in all page headers)  */
+/* ------------------------------------------------------------------ */
+.project-page__model-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.project-page__model-cfg-btn {
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  border-radius: 4px;
+  color: #eab308;
+  cursor: pointer;
+  height: 26px;
+  width: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  outline: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.project-page__model-cfg-btn:hover {
+  background: rgba(234, 179, 8, 0.16);
+  border-color: #eab308;
+}
+
+.project-page__model-select {
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  border-radius: 4px;
+  color: #eab308;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 2px 6px;
+  height: 26px;
+  cursor: pointer;
+  outline: none;
+  align-self: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.15), 0 0 6px rgba(234, 179, 8, 0.2);
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.project-page__model-select:hover,
+.project-page__model-select:focus {
+  border-color: #eab308;
+  background: rgba(234, 179, 8, 0.12);
+  color: var(--text, #e5e7eb);
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
+}
+.project-page__model-select option:disabled {
+  color: var(--text-muted, #6b7280);
+  font-style: italic;
+}
+.project-page__model-select option {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .project-page__model-cfg-btn {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--accent);
+}
+[data-theme="light"] .project-page__model-cfg-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+[data-theme="light"] .project-page__model-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  box-shadow: none;
+}
+[data-theme="light"] .project-page__model-select:hover,
+[data-theme="light"] .project-page__model-select:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  box-shadow: var(--form-focus-shadow);
+}
+[data-theme="light"] .project-page__model-select option {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared: Git button + badge in page header                           */
+/* ------------------------------------------------------------------ */
+.project-page__git-btn {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.project-page__git-btn:hover {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.1);
+  border-color: #f97316;
+}
+
+.project-page__git-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: #f97316;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 7px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared: Quick Commands button in page header                        */
+/* ------------------------------------------------------------------ */
+.project-page__qcmd-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.project-page__qcmd-btn:hover {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
+  border-color: #a78bfa;
+}

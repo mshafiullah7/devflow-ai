@@ -1,4 +1,4 @@
-import { escHtml, injectCss } from '../../../../shared/helpers.js';
+import { escHtml, injectCss } from '../../shared/helpers.js';
 
 export class QuickCommandsModal {
   constructor({ onRunCommand }) {
@@ -9,7 +9,7 @@ export class QuickCommandsModal {
   // Lifecycle
   // ----------------------------------------------------------------
   mount() {
-    injectCss('pages/user-stories/components/quick-commands/quick-commands.css');
+    injectCss('components/quick-commands/quick-commands.css');
   }
 
   // ----------------------------------------------------------------

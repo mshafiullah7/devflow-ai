@@ -1,4 +1,4 @@
-import { escHtml, injectCss } from '../../../../shared/helpers.js';
+import { escHtml, injectCss } from '../../shared/helpers.js';
 
 export class GitController {
   constructor({ getTermCwd }) {
@@ -10,7 +10,7 @@ export class GitController {
   // Lifecycle
   // ----------------------------------------------------------------
   mount() {
-    injectCss('pages/user-stories/components/git/git-diff.css');
+    injectCss('components/git/git-diff.css');
   }
 
   startPoll() {

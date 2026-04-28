@@ -1,4 +1,4 @@
-import { escHtml, injectCss } from '../../../../shared/helpers.js';
+import { escHtml, injectCss } from '../../shared/helpers.js';
 
 export class ModelConfigsModal {
   constructor({ onConfigsChanged }) {
@@ -9,7 +9,7 @@ export class ModelConfigsModal {
   // Lifecycle
   // ----------------------------------------------------------------
   mount() {
-    injectCss('pages/user-stories/components/model-configs/model-configs-modal.css');
+    injectCss('components/model-configs/model-configs-modal.css');
   }
 
   // ----------------------------------------------------------------

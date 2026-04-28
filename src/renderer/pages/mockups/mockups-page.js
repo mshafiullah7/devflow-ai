@@ -1,5 +1,7 @@
 import { escHtml, injectCss, removeCss, timeAgo } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
+import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 
 const TECH_STACKS = [
   { value: 'html',           label: 'Plain HTML / CSS',     mobile: false },
@@ -105,6 +107,12 @@ export class MockupsPage {
     this._designTemplate = this._project?.design_template || '';
     this._activeTab      = 'preview';
 
+    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._reloadModelDropdown() });
+    this._modelConfigsModal.mount();
+
+    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
+    this._qcmdModal.mount();
+
     if (this._screenTitle) {
       const needle = this._screenTitle.toLowerCase();
       const match  = this._screens.find(s => s.title.toLowerCase() === needle)
@@ -122,6 +130,7 @@ export class MockupsPage {
 
     this.container.innerHTML = this._pageTemplate();
     this._bindShellEvents();
+    await this._reloadModelDropdown();
 
     if (this._activeId) this._selectScreen(this._activeId);
     else                this._showNewForm({ title: this._screenTitle || '' });
@@ -178,6 +187,35 @@ export class MockupsPage {
             <div class="mockups-page__title">${escHtml(name)}</div>
             <div class="mockups-page__subtitle">Project Mockups</div>
           </div>
+          <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
+            <select class="project-page__model-select" id="mockupsModelSelect" title="AI Model">
+              <option value="">Loading…</option>
+            </select>
+            <button class="project-page__model-cfg-btn" id="mockupsBtnModelConfigs" title="Configure AI models">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
+                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <button class="project-page__git-btn" id="mockupsBtnGit" title="Git (opens User Stories)" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="project-page__qcmd-btn" id="mockupsBtnQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
           <button class="mockups-page__style-btn scr-btn scr-btn--sm${this._hasAnyTemplate() ? ' scr-btn--ds-active' : ''}" id="scrStyleGuideBtn" title="Open Project Style Guide page">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
@@ -236,6 +274,19 @@ export class MockupsPage {
     });
   }
 
+  async _reloadModelDropdown() {
+    const select = this.container.querySelector('#mockupsModelSelect');
+    if (!select) return;
+    this._modelConfigs = await window.db.modelConfigs.list();
+    const prevId = select.value ? Number(select.value) : this._selectedModelId;
+    select.innerHTML = this._modelConfigs.length === 0
+      ? `<option value="">No models configured</option>`
+      : this._modelConfigs.map(c => `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`).join('');
+    const def    = this._modelConfigs.find(c => c.is_default) || this._modelConfigs[0];
+    const target = this._modelConfigs.find(c => c.id === prevId) || def;
+    if (target) { select.value = target.id; this._selectedModelId = target.id; }
+  }
+
   _bindShellEvents() {
     this.container.querySelector('#btnBack')
       .addEventListener('click', () => this._goBack());
@@ -247,6 +298,18 @@ export class MockupsPage {
       .addEventListener('click', () => {
         this.router.navigate('style-guide', { projectId: this._projectId, from: 'mockups' });
       });
+
+    this.container.querySelector('#mockupsBtnModelConfigs')
+      .addEventListener('click', () => this._modelConfigsModal.show());
+
+    this.container.querySelector('#mockupsModelSelect')
+      .addEventListener('change', (e) => { this._selectedModelId = Number(e.target.value) || null; });
+
+    this.container.querySelector('#mockupsBtnGit')
+      .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this._projectId }));
+
+    this.container.querySelector('#mockupsBtnQcmd')
+      .addEventListener('click', () => this._qcmdModal.show());
 
     this._bindSidebarItems();
   }

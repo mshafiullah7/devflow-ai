@@ -1,18 +1,21 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
+import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 
 export class DocumentsPage {
   constructor(container, params, router) {
-    this.container     = container;
-    this.router        = router;
-    this._projectId    = params.projectId;
-    this._docTitle     = params.docTitle || null;
-    this._project      = null;
-    this._docs         = [];
-    this._activeId     = null;
-    this._dirty        = false;
-    this._attachments  = [];
-    this._drawioFiles  = new Map();
+    this.container      = container;
+    this.router         = router;
+    this._projectId     = params.projectId;
+    this._docTitle      = params.docTitle || null;
+    this._project       = null;
+    this._docs          = [];
+    this._activeId      = null;
+    this._dirty         = false;
+    this._attachments   = [];
+    this._drawioFiles   = new Map();
+    this._aiModelConfig = null;
   }
 
   async mount() {
@@ -38,6 +41,14 @@ export class DocumentsPage {
     }
 
     this.container.innerHTML = this._pageTemplate();
+
+    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._reloadModelDropdown() });
+    this._modelConfigsModal.mount();
+    await this._reloadModelDropdown();
+
+    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
+    this._qcmdModal.mount();
+
     this._bindShellEvents();
 
     if (this._activeId) this._selectDoc(this._activeId, false);
@@ -65,6 +76,35 @@ export class DocumentsPage {
             <div class="documents-page__title">${escHtml(name)}</div>
             <div class="documents-page__subtitle">Project Documents</div>
           </div>
+          <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
+            <select class="project-page__model-select" id="docModelSelect" title="AI Model">
+              <option value="">Loading…</option>
+            </select>
+            <button class="project-page__model-cfg-btn" id="docBtnModelConfigs" title="Configure AI models">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
+                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <button class="project-page__git-btn" id="docBtnGit" title="Git (opens User Stories)" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="project-page__qcmd-btn" id="docBtnQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
         </header>
 
         <div class="documents-page__body">
@@ -85,9 +125,37 @@ export class DocumentsPage {
     `;
   }
 
+  async _reloadModelDropdown() {
+    const select = this.container.querySelector('#docModelSelect');
+    if (!select) return;
+    const configs = await window.db.modelConfigs.list();
+    const prevId  = select.value ? Number(select.value) : null;
+    select.innerHTML = configs.length === 0
+      ? `<option value="">No models configured</option>`
+      : configs.map(c => `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`).join('');
+    const def    = configs.find(c => c.is_default) || configs[0];
+    const target = configs.find(c => c.id === prevId) || def;
+    if (target) { select.value = target.id; this._aiModelConfig = target; }
+  }
+
   _bindShellEvents() {
     this.container.querySelector('#btnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
+
+    this.container.querySelector('#docBtnModelConfigs')
+      .addEventListener('click', () => this._modelConfigsModal.show());
+
+    this.container.querySelector('#docModelSelect')
+      .addEventListener('change', (e) => {
+        const id = Number(e.target.value);
+        window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
+      });
+
+    this.container.querySelector('#docBtnGit')
+      .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this._projectId }));
+
+    this.container.querySelector('#docBtnQcmd')
+      .addEventListener('click', () => this._qcmdModal.show());
 
     this.container.querySelector('#docAddBtn')
       .addEventListener('click', () => this._addDoc());
