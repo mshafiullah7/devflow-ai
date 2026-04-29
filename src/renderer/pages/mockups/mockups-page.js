@@ -46,7 +46,7 @@ function buildExtractPrompt(techStack, screenTitle, htmlFilePath, outputFile) {
   const save = outputFile ? `\nWhen done, write the complete JSON array to: ${outputFile}` : '';
   return `You are an expert product manager and UI developer. Analyze the ${tech} UI screen design provided below and extract user stories.
 
-Screen: "${screenTitle}"
+Screen: ${screenTitle}
 Tech stack: ${tech}
 
 Screen content at: ${htmlFilePath}
@@ -56,16 +56,16 @@ Extract every distinct user action, form, state, or interaction visible in this 
 IMPORTANT: Output ONLY a raw JSON array — no markdown fences, no explanation, no extra text. Start with [ and end with ].
 
 Each object MUST use EXACTLY these four field names — no other field names are accepted:
-- "title": short action-oriented title (string)
-- "description": "As a user, I want to [action] so that [benefit]." (string)
-- "acceptance_criteria": all criteria as ONE string, each criterion on its own line starting with "- " (string, NOT an array)
-- "prompt": detailed implementation prompt referencing exact design details from the UI — colours, typography, spacing, layout, component styles (string)`;
+- title: short action-oriented title (string)
+- description: As a user, I want to [action] so that [benefit]. (string)
+- acceptance_criteria: all criteria as ONE string, each criterion on its own line starting with -  (string, NOT an array)
+- prompt: detailed implementation prompt referencing exact design details from the UI — colours, typography, spacing, layout, component styles (string)`;
 }
 
 function buildExtractPsCommand(instruction, model) {
   const exe      = model.executable || 'claude';
   const safeInst = instruction.replace(/'/g, "''");
-  return `$p = @'\n${safeInst}\n'@\n${exe} $p`;
+  return `$p = @'\n${safeInst}\n'@\n$p | ${exe} --print`;
 }
 
 function buildPsCommand(prompt, model) {
@@ -468,14 +468,6 @@ export class MockupsPage {
 
         <div class="scr-form__actions scr-form__actions--split">
           <div class="scr-form__btns">
-            <select class="scr-model-select" id="scrModelSelect">
-              ${this._modelConfigs.length === 0
-                ? `<option value="">No models configured</option>`
-                : this._modelConfigs.map(c =>
-                    `<option value="${c.id}"${c.id === this._selectedModelId ? ' selected' : ''}>${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
-                  ).join('')
-              }
-            </select>
             <button class="scr-btn scr-btn--primary" id="scrRunBtn">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
@@ -512,24 +504,18 @@ export class MockupsPage {
       </div>
     `;
 
-    main.querySelector('#scrModelSelect').style.display = 'none';
-    main.querySelector('#scrRunBtn').style.display      = 'none';
-    main.querySelector('#scrEditBtn').style.display     = 'none';
+    main.querySelector('#scrRunBtn').style.display  = 'none';
+    main.querySelector('#scrEditBtn').style.display = 'none';
 
-    main.querySelector('#scrModelSelect')?.addEventListener('change', (e) => {
-      this._selectedModelId = Number(e.target.value) || null;
-    });
     main.querySelector('#scrSaveBtn').addEventListener('click', async () => {
       await this._saveAndView();
-      const sel = main.querySelector('#scrModelSelect');
       const btn = main.querySelector('#scrRunBtn');
       const edt = main.querySelector('#scrEditBtn');
-      if (sel) sel.style.display = '';
       if (btn) btn.style.display = '';
       if (edt) edt.style.display = '';
     });
     main.querySelector('#scrRunBtn').addEventListener('click', () => this._runInTerminal());
-    main.querySelector('#scrEditBtn').addEventListener('click', () => this._openEdits());
+    main.querySelector('#scrEditBtn').addEventListener('click', () => this._openEdits(null, this._editingId));
     main.querySelector('#scrChooseFileBtn').addEventListener('click', () => this._chooseFile());
     this._loadPromptHistory();
   }
@@ -732,14 +718,6 @@ export class MockupsPage {
               </div>
               <div class="scr-form__actions scr-form__actions--split">
                 <div class="scr-form__btns">
-                  <select class="scr-model-select" id="scrModelSelect">
-                    ${this._modelConfigs.length === 0
-                      ? `<option value="">No models configured</option>`
-                      : this._modelConfigs.map(c =>
-                          `<option value="${c.id}"${c.id === this._selectedModelId ? ' selected' : ''}>${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
-                        ).join('')
-                    }
-                  </select>
                   <button class="scr-btn scr-btn--primary" id="scrRunBtn">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                       <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
@@ -862,12 +840,7 @@ export class MockupsPage {
       document.addEventListener('mouseup',  onUp);
     });
 
-    main.querySelector('#scrModelSelect').style.display = '';
-    main.querySelector('#scrRunBtn').style.display      = '';
-
-    main.querySelector('#scrModelSelect')?.addEventListener('change', (e) => {
-      this._selectedModelId = Number(e.target.value) || null;
-    });
+    main.querySelector('#scrRunBtn').style.display = '';
 
     main.querySelector('#scrSaveBtn').addEventListener('click', async () => {
       const title = main.querySelector('#scrTitle').value.trim();
@@ -951,7 +924,7 @@ export class MockupsPage {
       });
     });
 
-    main.querySelector('#scrEditBtn').addEventListener('click', () => this._openEdits(screen.title));
+    main.querySelector('#scrEditBtn').addEventListener('click', () => this._openEdits(screen.title, screen.id));
 
     main.querySelector('#scrChooseFileBtn').addEventListener('click', async () => {
       const result = await window.db.dialog.openFile({
@@ -1588,11 +1561,9 @@ Spacing:
   // ----------------------------------------------------------------
   // Edits — open the selected CLI with the screen file as context
   // ----------------------------------------------------------------
-  async _openEdits(titleOverride) {
+  async _openEdits(titleOverride, screenId) {
     const main  = this.container.querySelector('#scrMain');
-    const title = titleOverride
-      || main?.querySelector('#scrTitle')?.value.trim()
-      || '';
+    const title = titleOverride || main?.querySelector('#scrTitle')?.value.trim() || '';
 
     if (!title) {
       alert('Save the screen first so a file exists to edit.');
@@ -1610,11 +1581,20 @@ Spacing:
     const safeProject = (projectName || '').replace(/[^a-z0-9_\-]/gi, '_');
     const rootDir     = await window.app.screensDir();
     const screensDir  = safeProject ? `${rootDir}\\${safeProject}` : rootDir;
-    const fileName    = `${safeTitle}.html`;
-    const exe         = model.executable;
-    const cmd         = `${exe} "${fileName}"`;
+    const filePath    = `${screensDir}\\${safeTitle}.html`;
 
-    await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
+    const existing = await window.shell.readFile(filePath);
+    if (!existing && screenId) {
+      const screen = await window.db.screenDesigns.get(screenId);
+      if (screen?.html_content) {
+        await window.shell.writeFile(filePath, screen.html_content);
+      }
+    }
+
+    const cmd = `${model.executable} "${filePath}"`;
+    this._showPromptPreviewModal(cmd, async () => {
+      await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
+    });
   }
 
   // ----------------------------------------------------------------
@@ -1655,7 +1635,28 @@ Spacing:
   // Extract Stories dialog
   // ----------------------------------------------------------------
   async _showExtractDialog(screen) {
-    const features = await window.db.features.list(this._projectId);
+    let m = this._getSelectedModel();
+    if (!m || m.type === 'anthropic' || !m.executable) {
+      m = this._modelConfigs.find(c => c.type !== 'anthropic' && c.executable);
+    }
+    if (!m) {
+      alert('No CLI model configured. Add a CLI model in Model Settings first.');
+      return;
+    }
+
+    const project    = this._getProject();
+    const screensDir = await window.app.screensDir(project?.name);
+    const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
+    const outputFile = `${screensDir}\\${safeTitle}_stories.json`;
+
+    const htmlFilePath = await window.app.prepareScreenRef({
+      screensDir,
+      safeTitle,
+      htmlContent: screen.html_content,
+    });
+
+    const instruction = buildExtractPrompt(screen.tech_stack, screen.title, htmlFilePath, outputFile);
+    const cmd         = buildExtractPsCommand(instruction, m);
 
     const dlg = document.createElement('div');
     dlg.className = 'scr-extract-overlay';
@@ -1666,47 +1667,19 @@ Spacing:
           <button class="scr-extract-dialog__close">&times;</button>
         </div>
         <div class="scr-extract-dialog__body">
-
-          ${features.length === 0
-            ? `<p class="scr-extract-dialog__warn">No features found. Create a feature in the project panel first.</p>`
-            : `<div class="scr-form__row">
-                <label class="scr-form__label">Target Feature *</label>
-                <select class="scr-form__select" id="extFeatureSelect">
-                  ${features.map(f => `<option value="${f.id}">${escHtml(f.name)}</option>`).join('')}
-                </select>
-               </div>`
-          }
-
+          <div class="scr-cmd-preview">
+            <div class="scr-cmd-preview__label">Command:</div>
+            <pre class="scr-cmd-preview__code">${escHtml(cmd)}</pre>
+          </div>
           <div class="scr-form__row" style="margin-top:12px">
-            <label class="scr-form__label">Step 1 — Run the extraction prompt in the terminal</label>
-            <select class="scr-model-select" id="extModelSelect" style="margin-bottom:6px">
-              ${this._modelConfigs.map(c =>
-                `<option value="${c.id}"${c.id === this._selectedModelId ? ' selected' : ''}>${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
-              ).join('')}
-            </select>
-            <button class="scr-btn scr-btn--primary" id="extRunBtn" ${features.length === 0 ? 'disabled' : ''}>
+            <button class="scr-btn scr-btn--primary" id="extRunBtn">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
                 <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
               </svg>
               Run in Terminal
             </button>
-            <span class="scr-form__hint">This opens a terminal window. The AI will output a JSON array — save it to a .json file.</span>
-          </div>
-
-          <div class="scr-cmd-preview" id="extCmdPreview" hidden>
-            <div class="scr-cmd-preview__label">Command:</div>
-            <pre class="scr-cmd-preview__code" id="extCmdCode"></pre>
-          </div>
-
-          <div class="scr-form__row" style="margin-top:12px">
-            <label class="scr-form__label">Step 2 — Load the generated JSON file</label>
-            <button class="scr-btn scr-btn--secondary" id="extLoadBtn" ${features.length === 0 ? 'disabled' : ''}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              </svg>
-              Choose JSON File
-            </button>
+            <span class="scr-form__hint">Opens a terminal window. The AI will write the stories JSON to the output path shown above.</span>
           </div>
         </div>
         <div class="scr-extract-dialog__footer">
@@ -1719,81 +1692,8 @@ Spacing:
     dlg.querySelector('.scr-extract-dialog__close').addEventListener('click', () => dlg.remove());
     dlg.querySelector('#extCancelBtn').addEventListener('click',            () => dlg.remove());
 
-    const runBtn  = dlg.querySelector('#extRunBtn');
-    const loadBtn = dlg.querySelector('#extLoadBtn');
-
-    if (runBtn) {
-      runBtn.addEventListener('click', async () => {
-        const selId = Number(dlg.querySelector('#extModelSelect')?.value) || this._selectedModelId;
-        const m = this._modelConfigs.find(c => c.id === selId) || this._getSelectedModel();
-        if (!m || m.type === 'anthropic' || !m.executable) {
-          alert('Please select a CLI model from the dropdown.');
-          return;
-        }
-        const project    = this._getProject();
-        const screensDir = await window.app.screensDir(project?.name);
-        const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
-        const outputFile = `${screensDir}\\${safeTitle}_stories.json`;
-
-        const htmlFilePath = await window.app.prepareScreenRef({
-          screensDir,
-          safeTitle,
-          htmlContent: screen.html_content,
-        });
-
-        const instruction = buildExtractPrompt(screen.tech_stack, screen.title, htmlFilePath, outputFile);
-        const cmd         = buildExtractPsCommand(instruction, m);
-
-        dlg.querySelector('#extCmdCode').textContent = cmd;
-        dlg.querySelector('#extCmdPreview').hidden = false;
-
-        await window.db.terminal.openExternal({ command: cmd, cwd: project?.project_path || undefined });
-      });
-    }
-
-    if (loadBtn) {
-      loadBtn.addEventListener('click', async () => {
-        const featureSelect = dlg.querySelector('#extFeatureSelect');
-        const featureId     = featureSelect ? Number(featureSelect.value) : null;
-        if (!featureId) { alert('Please select a feature first.'); return; }
-
-        const result = await window.db.dialog.openFile({ title: 'Choose Stories JSON File', extensions: ['json'] });
-        if (!result) return;
-
-        let stories;
-        try {
-          let text = result.content.trim();
-          const md = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-          if (md) text = md[1].trim();
-          stories = JSON.parse(text);
-        } catch (err) {
-          alert(`Could not parse JSON file: ${err.message}\n\nMake sure the file contains a valid JSON array of stories.`);
-          return;
-        }
-
-        loadBtn.disabled    = true;
-        loadBtn.textContent = 'Creating…';
-
-        let created = 0;
-        for (const story of stories) {
-          const ac = Array.isArray(story.acceptance_criteria)
-            ? story.acceptance_criteria.map(c => `- ${c}`).join('\n')
-            : (story.acceptance_criteria || '');
-
-          await window.db.userStories.create({
-            feature_id:          featureId,
-            project_id:          this._projectId,
-            title:               story.title || 'Untitled',
-            description:         story.description || story.story || '',
-            acceptance_criteria: ac,
-            prompt:              story.prompt || story.implementation_prompt || '',
-          });
-          created++;
-        }
-
-        dlg.remove();
-        alert(`${created} user ${created === 1 ? 'story' : 'stories'} created successfully.`);
-      });
-    }
+    dlg.querySelector('#extRunBtn').addEventListener('click', async () => {
+      await window.db.terminal.openExternal({ command: cmd, cwd: project?.project_path || undefined });
+    });
   }
 }

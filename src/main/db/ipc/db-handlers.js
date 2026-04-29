@@ -716,6 +716,14 @@ function registerDbHandlers() {
     try { return fs.readFileSync(filepath, 'utf8'); }
     catch { return null; }
   });
+
+  ipcMain.handle('shell:writeFile', (_e, { filepath, content }) => {
+    try {
+      fs.mkdirSync(path.dirname(filepath), { recursive: true });
+      fs.writeFileSync(filepath, content, 'utf8');
+      return true;
+    } catch { return false; }
+  });
 }
 
 module.exports = { registerDbHandlers };

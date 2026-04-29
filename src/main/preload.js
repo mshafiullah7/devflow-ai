@@ -138,6 +138,7 @@ contextBridge.exposeInMainWorld('app', {
 
 
 contextBridge.exposeInMainWorld('shell', {
-  openDrawio: (data)     => invoke('shell:openDrawio', data),
-  readFile:   (filepath) => invoke('shell:readFile', filepath),
+  openDrawio: (data)              => invoke('shell:openDrawio', data),
+  readFile:   (filepath)          => invoke('shell:readFile', filepath),
+  writeFile:  (filepath, content) => invoke('shell:writeFile', { filepath, content }),
 });
