@@ -1,0 +1,625 @@
+/* ------------------------------------------------------------------ */
+/* Console panel                                                        */
+/* ------------------------------------------------------------------ */
+.project-console {
+  flex: 0 0 20%;
+  min-width: 180px;
+  max-width: 100%;          /* never push past viewport */
+  min-width: 0;             /* let flex shrink below content width */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;         /* clip any overflowing content */
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+}
+
+/* Collapsed console — slim vertical strip */
+.project-console--collapsed {
+  flex: 0 0 36px !important;
+  min-width: 36px !important;
+}
+.project-console--collapsed .project-console__output,
+.project-console--collapsed .project-console__input-row {
+  display: none;
+}
+
+/* Collapsed titlebar becomes a full-height vertical column */
+.project-console--collapsed .project-console__titlebar {
+  height: 100%;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 6px 0;
+  gap: 4px;
+  border-bottom: none;
+  border-right: none;
+  overflow: hidden;
+}
+
+/* Hide the console icon + "Console" text when collapsed */
+.project-console--collapsed .project-console__title > svg,
+.project-console--collapsed .project-console__title-text {
+  display: none;
+}
+/* The title div itself becomes a column to stack collapse-btn vertically */
+.project-console--collapsed .project-console__title {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* Stack action buttons vertically */
+.project-console--collapsed .project-console__actions {
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Keep the menu dropdown opening to the left when collapsed */
+.project-console--collapsed .project-console__menu-dropdown {
+  top: 0;
+  right: calc(100% + 6px);
+  left: auto;
+}
+
+/* Collapse toggle button in titlebar */
+.project-console__collapse-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.project-console__collapse-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.project-console__titlebar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 40px;
+  background: var(--surface-header);
+  border-bottom: 1px solid var(--border);
+}
+
+.project-console__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.project-console__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-console__output {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-gutter: stable;   /* reserve scrollbar space so it never causes a layout shift */
+  padding: 10px 14px;
+  font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--console-text);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.project-console__hint {
+  color: var(--text-muted);
+  font-style: italic;
+  flex-shrink: 0;
+}
+
+.project-console__menu-wrap {
+  position: relative;
+}
+.project-console__menu-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.project-console__menu-btn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+.project-console__menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 170px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  z-index: 300;
+  padding: 4px 0;
+}
+.console-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 7px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.console-menu__item:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.project-console__git {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.project-console__git:hover {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.1);
+  border-color: #f97316;
+}
+
+.project-console__git-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: #f97316;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 7px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+[data-theme="light"] .project-console__titlebar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Terminal output lines */
+.project-console__line {
+  white-space: pre;
+  word-break: normal;
+  line-height: 1.5;
+  flex-shrink: 0;
+  min-width: max-content;
+}
+.project-console__line--prompt {
+  margin-top: 6px;
+}
+.project-console__line--output {
+  color: var(--console-output);
+}
+.project-console__line--error {
+  color: #f87171;
+}
+.project-console__line--warn {
+  color: #fbbf24;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.project-console__ps-prompt {
+  color: var(--console-prompt);
+  user-select: none;
+  margin-right: 4px;
+}
+.project-console__ps-cmd {
+  color: var(--console-input);
+}
+
+/* Terminal input row */
+.project-console__input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 14px 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.project-console__ps-label {
+  font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
+  font-size: 12px;
+  color: var(--console-prompt);
+  word-break: break-all;
+  user-select: none;
+}
+/* Input + stop button side by side */
+.project-console__input-cmd-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+/* Wrap textarea + picker button together */
+.project-console__input-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+.project-console__input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: hidden;   /* grows via JS; no inner scrollbar */
+  min-height: 20px;
+  max-height: 100px;    /* ~5 lines */
+  line-height: 1.5;
+  font-family: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
+  font-size: 12px;
+  color: var(--console-input);
+  caret-color: var(--console-caret);
+  padding: 0;
+  padding-right: 22px; /* room for picker icon */
+}
+/* Picker button inside the input wrap */
+.project-console__cmd-picker-btn {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  background: transparent;
+  border: none;
+  padding: 2px 3px;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0.55;
+  line-height: 1;
+  border-radius: 3px;
+  transition: opacity 0.15s, color 0.15s;
+}
+.project-console__cmd-picker-btn:hover {
+  opacity: 1;
+  color: var(--console-prompt);
+}
+/* Dropdown */
+.project-console__cmd-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 260px;
+  max-width: 400px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  z-index: 200;
+}
+/* AI mode toggle row at top of cmd picker */
+.cmd-picker__ai-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.cmd-picker__ai-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.cmd-picker__switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.cmd-picker__switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.cmd-picker__switch-track {
+  display: block;
+  width: 30px;
+  height: 16px;
+  background: var(--border);
+  border-radius: 8px;
+  transition: background 0.2s;
+  position: relative;
+}
+.cmd-picker__switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.cmd-picker__switch input:checked + .cmd-picker__switch-track {
+  background: var(--console-prompt, #6366f1);
+}
+.cmd-picker__switch input:checked + .cmd-picker__switch-track::after {
+  transform: translateX(14px);
+}
+
+.cmd-picker__empty {
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.cmd-picker__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+}
+.cmd-picker__item:last-child { border-bottom: none; }
+.cmd-picker__item:hover { background: var(--surface-hover); }
+.cmd-picker__cmd {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--console-input);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.cmd-picker__desc {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.project-console__input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.project-console__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-console__stop {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid #f87171;
+  border-radius: 4px;
+  color: #f87171;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.project-console__stop:hover {
+  background: #f87171;
+  color: var(--bg);
+}
+
+/* Running spinner */
+@keyframes terminal-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes terminal-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.project-console__spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--console-prompt);
+  font-size: 11px;
+}
+.project-console__spinner::before {
+  content: '';
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--console-bg);
+  border-top-color: var(--console-prompt);
+  border-radius: 50%;
+  animation: terminal-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.project-console__spinner::after {
+  content: 'running…';
+  animation: terminal-pulse 1.4s ease-in-out infinite;
+}
+
+/* Streaming output block */
+.project-console__stream-block {
+  white-space: pre;
+  word-break: normal;
+  line-height: 1.5;
+  color: var(--console-output);
+  flex-shrink: 0;
+  margin-bottom: 2px;
+  min-width: max-content;
+}
+.project-console__stderr {
+  color: #f87171;
+}
+.project-console__user-echo {
+  color: #7eb8f7;
+  font-style: italic;
+  padding: 2px 0;
+  flex-shrink: 0;
+}
+.project-console__conv-hint {
+  color: #888;
+  font-size: 0.8em;
+  padding: 4px 0 2px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* {{input}} inline prompt (used by TerminalController)                */
+/* ------------------------------------------------------------------ */
+.qcmd-inline-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.qcmd-inline-prompt__box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  min-width: 320px;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.qcmd-inline-prompt__label {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+}
+.qcmd-inline-prompt__label code {
+  background: rgba(167,139,250,0.12);
+  color: #a78bfa;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+.qcmd-inline-prompt__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.qcmd-inline-prompt__input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary, #e2e4f0);
+  font-size: 13px;
+  padding: 6px 9px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.qcmd-inline-prompt__input:focus { border-color: #6366f1; }
+.qcmd-inline-prompt__ok {
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.qcmd-inline-prompt__ok:hover { background: #4f46e5; }
+.qcmd-inline-prompt__cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 5px 9px;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s;
+}
+.qcmd-inline-prompt__cancel:hover { color: #ef4444; border-color: #ef4444; }
+
+/* ------------------------------------------------------------------ */
+/* Console popup / maximized overlay                                    */
+/* ------------------------------------------------------------------ */
+.project-console--popup {
+  position: fixed !important;
+  inset: 5vh 4vw !important;
+  flex: none !important;
+  width: auto !important;
+  min-width: 0 !important;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  z-index: 901;
+}
+
+.project-console__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 900;
+}
+
+.project-console__popup-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.project-console__popup-btn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}

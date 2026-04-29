@@ -1,11 +1,32 @@
 import { FeatureList } from '../../components/feature-list/feature-list.js';
 import { UserStoryList } from '../../components/user-story-list/user-story-list.js';
-import { TerminalController } from './components/terminal/terminal-controller.js';
 import { GitController } from '../../components/git/git-controller.js';
 import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+
+const TC_STATUS = {
+  not_run: { label: 'Not Run', cls: 'rs-badge--not-run' },
+  pass:    { label: 'Pass',    cls: 'rs-badge--pass'    },
+  fail:    { label: 'Fail',    cls: 'rs-badge--fail'    },
+  blocked: { label: 'Blocked', cls: 'rs-badge--blocked' },
+};
+
+const IS_STATUS = {
+  open:        { label: 'Open',        cls: 'rs-badge--open'        },
+  in_progress: { label: 'In Progress', cls: 'rs-badge--in-progress' },
+  resolved:    { label: 'Resolved',    cls: 'rs-badge--resolved'    },
+  closed:      { label: 'Closed',      cls: 'rs-badge--closed'      },
+  wont_fix:    { label: "Won't Fix",   cls: 'rs-badge--wont-fix'    },
+};
+
+const IS_SEVERITY = {
+  critical: { label: 'Critical', cls: 'rs-severity--critical' },
+  high:     { label: 'High',     cls: 'rs-severity--high'     },
+  medium:   { label: 'Medium',   cls: 'rs-severity--medium'   },
+  low:      { label: 'Low',      cls: 'rs-severity--low'      },
+};
 
 export class ProjectPage {
   constructor(container, params, router) {
@@ -13,7 +34,8 @@ export class ProjectPage {
     this.router    = router;
     this.projectId = params.projectId;
     this._project       = null;
-    this._aiModelConfig = null;  // full model_configs row
+    this._aiModelConfig = null;
+    this._activeStoryId = null;
   }
 
   // ----------------------------------------------------------------
@@ -26,31 +48,16 @@ export class ProjectPage {
     this._project = await window.db.projects.get(this.projectId);
     this.container.innerHTML = this._template();
 
-    // Init controllers — restore last used project path if available
-    const homedir     = await window.db.terminal.homedir();
-    const initialCwd  = this._project?.project_path || homedir;
-    this._terminal = new TerminalController({ initialCwd });
-    this._terminal.mount();
-
-    this._git = new GitController({ getTermCwd: () => this._terminal.cwd });
+    this._git = new GitController({ getTermCwd: () => this._project?.project_path || '' });
     this._git.mount();
 
-    this._terminal.setCommandDoneCallback(() => {
-      if (this._terminal.folderSelected) this._git.refreshStatus();
-    });
-
-    // If a saved path exists, activate folder mode and restore prompt label
     if (this._project?.project_path) {
-      this._terminal.folderSelected = true;
-      this._terminal._updatePromptLabel();
       this._git.refreshStatus();
       this._git.startPoll();
       this._setHeaderFolderPath(this._project.project_path);
     }
 
-    this._qcmdModal = new QuickCommandsModal({
-      onRunCommand: (cmd) => this._terminal.applyQuickCommand(cmd),
-    });
+    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => {} });
     this._qcmdModal.mount();
 
     this._modelConfigsModal = new ModelConfigsModal({
@@ -58,19 +65,18 @@ export class ProjectPage {
     });
     this._modelConfigsModal.mount();
 
-
     await this._reloadModelDropdown();
     this._bindEvents();
     this._initResizable();
     this._initFeatureToggle();
+    this._initRelatedToggle();
+    this._initRelatedInnerResize();
     await this._mountComponents();
   }
 
   unmount() {
     removeCss('pages/user-stories/user-stories.css');
-    this._terminal?.unmount();
     this._git?.stopPoll();
-    this._closeConsolePopup?.();
   }
 
   // ----------------------------------------------------------------
@@ -139,7 +145,7 @@ export class ProjectPage {
           </button>
         </header>
 
-        <!-- ── Body (columns + console) ────────────────────────────── -->
+        <!-- ── Body (columns + related panel) ──────────────────────── -->
         <div class="project-page__body">
 
           <!-- ── Three-column workspace ───────────────────────────── -->
@@ -210,73 +216,52 @@ export class ProjectPage {
 
           </div><!-- /.project-page__workspace -->
 
-          <!-- resize handle for console -->
-          <div class="project-panel__resize" data-resize="console"></div>
+          <!-- resize handle for related panel -->
+          <div class="project-panel__resize" data-resize="related"></div>
 
-          <!-- 4. Console (collapsible) -->
-          <div class="project-console" id="projectConsole">
-            <div class="project-console__titlebar">
-              <div class="project-console__title">
-                <button class="project-console__collapse-btn" id="btnConsoleToggle" aria-label="Collapse console" title="Collapse console">
-                  <svg class="console-toggle-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <!-- 4. Related panel (test cases top, issues bottom) -->
+          <div class="project-related" id="projectRelated">
+            <div class="project-related__titlebar">
+              <div class="project-related__title">
+                <button class="project-related__collapse-btn" id="btnRelatedToggle"
+                  aria-label="Collapse panel" title="Collapse panel">
+                  <svg class="related-toggle-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
                     <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <rect x="1" y="2" width="14" height="12" rx="3" stroke="currentColor" stroke-width="1.4"/>
-                  <path d="M4 6l3 2-3 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M9 10h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  <path d="M6.5 8a2.5 2.5 0 0 1 2.5-2.5H12A2.5 2.5 0 1 1 12 11H9A2.5 2.5 0 0 1 6.5 8z" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M9.5 8a2.5 2.5 0 0 1-2.5 2.5H4A2.5 2.5 0 1 1 4 5h3A2.5 2.5 0 0 1 9.5 8z" stroke="currentColor" stroke-width="1.4"/>
                 </svg>
-                <span class="project-console__title-text">Console</span>
-              </div>
-              <div class="project-console__actions">
-                <button class="project-console__popup-btn" id="btnConsolePopup" title="Expand console">
-                  <svg class="console-popup-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 6V2H6M10 2H14V6M14 10V14H10M6 14H2V10"
-                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-                <div class="project-console__menu-wrap">
-                  <button class="project-console__menu-btn" id="btnConsoleMenu" title="More options">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                      <circle cx="8" cy="3" r="1.2" fill="currentColor"/>
-                      <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
-                      <circle cx="8" cy="13" r="1.2" fill="currentColor"/>
-                    </svg>
-                  </button>
-                  <div class="project-console__menu-dropdown" id="consoleMenuDropdown" hidden>
-                    <button class="console-menu__item" id="menuClearConsole">
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                        <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                      </svg>
-                      Clear Console
-                    </button>
-                  </div>
-                </div>
+                <span class="project-related__title-text">Related</span>
               </div>
             </div>
-            <div class="project-console__output" id="consoleOutput">
-              <span class="project-console__hint">Select a folder or type a command to start…</span>
-            </div>
-            <div class="project-console__input-row">
-              <span class="project-console__ps-label" id="consolePromptLabel">PS ~&gt;</span>
-              <div class="project-console__input-cmd-row">
-                <div class="project-console__input-wrap">
-                  <textarea class="project-console__input" id="consoleInput" rows="1"
-                    spellcheck="false" autocomplete="off" autocorrect="off"
-                    placeholder="Enter command… (Shift+Enter for new line)"></textarea>
-                  <button class="project-console__cmd-picker-btn" id="btnCmdPicker" title="Pick a saved command">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                      <path d="M11 10l2 2 2-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                  <div class="project-console__cmd-dropdown" id="cmdPickerDropdown" hidden></div>
-                </div>
-                <button class="project-console__stop" id="btnConsoleStop" title="Stop running command" hidden>&#9632; Stop</button>
+
+            <!-- Top section: Test Cases -->
+            <div class="project-related__section" id="relatedTestsSection">
+              <div class="project-related__section-hd">
+                <span class="project-related__section-label">Test Cases</span>
+                <span class="project-related__section-count" id="relatedTestsCount" hidden></span>
+              </div>
+              <div class="project-related__section-body" id="relatedTestsList">
+                <div class="project-related__empty">Select a story</div>
               </div>
             </div>
-          </div><!-- /.project-console -->
+
+            <!-- Inner resize handle -->
+            <div class="project-related__inner-resize" id="relatedInnerResize"></div>
+
+            <!-- Bottom section: Issues -->
+            <div class="project-related__section" id="relatedIssuesSection">
+              <div class="project-related__section-hd">
+                <span class="project-related__section-label">Issues</span>
+                <span class="project-related__section-count" id="relatedIssuesCount" hidden></span>
+              </div>
+              <div class="project-related__section-body" id="relatedIssuesList">
+                <div class="project-related__empty">Select a story</div>
+              </div>
+            </div>
+          </div><!-- /.project-related -->
 
         </div><!-- /.project-page__body -->
       </div><!-- /.project-page -->
@@ -290,25 +275,13 @@ export class ProjectPage {
     document.getElementById('btnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this.projectId }));
 
-    this._initConsoleToggle();
-    this._initConsolePopup();
-
-    document.getElementById('menuClearConsole')
-      .addEventListener('click', () => {
-        document.getElementById('consoleMenuDropdown').hidden = true;
-        const out = document.getElementById('consoleOutput');
-        out.innerHTML = '<span class="project-console__hint">Select a folder or type a command to start…</span>';
-      });
-
     document.getElementById('btnConsoleFolder')
       .addEventListener('click', async () => {
         const folderPath = await window.db.dialog.openFolder();
         if (!folderPath) return;
-        this._terminal.folderSelected = true;
-        await this._terminal.runCommand(`cd "${folderPath}"`);
-        document.getElementById('consoleInput').focus();
         await window.db.projects.setPath({ id: this.projectId, project_path: folderPath });
-        await this._git.refreshStatus();
+        if (this._project) this._project.project_path = folderPath;
+        this._git.refreshStatus();
         this._git.startPoll();
         this._setHeaderFolderPath(folderPath);
       });
@@ -322,62 +295,12 @@ export class ProjectPage {
     document.getElementById('btnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
 
-    document.getElementById('btnConsoleMenu')
-      .addEventListener('click', (e) => {
-        e.stopPropagation();
-        const dd = document.getElementById('consoleMenuDropdown');
-        if (dd) dd.hidden = !dd.hidden;
-      });
-
     document.getElementById('btnHeaderQcmd')
       .addEventListener('click', () => this._qcmdModal.show());
-
-    document.getElementById('btnCmdPicker')
-      .addEventListener('click', (e) => { e.stopPropagation(); this._terminal.toggleCmdPickerDropdown(); });
-
-    document.addEventListener('click', () => {
-      const dd = document.getElementById('cmdPickerDropdown');
-      if (dd) dd.hidden = true;
-      const md = document.getElementById('consoleMenuDropdown');
-      if (md) md.hidden = true;
-    });
 
     document.getElementById('btnConsoleGit')
       .addEventListener('click', () =>
         this.router.navigate('git-changes', { projectId: this.projectId, from: 'user-stories' }));
-
-    const consoleInput = document.getElementById('consoleInput');
-    const autoResize = (el) => {
-      el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 100) + 'px';
-    };
-    consoleInput.addEventListener('input', () => autoResize(consoleInput));
-    consoleInput.addEventListener('keydown', async (e) => {
-      if (e.key !== 'Enter' || e.shiftKey) return;
-      e.preventDefault();
-      let cmd = consoleInput.value;
-      if (!cmd.trim()) return;
-      consoleInput.value = '';
-      consoleInput.style.height = 'auto';
-      // If a process is running, forward input to its stdin (interactive mode)
-      if (this._terminal.isRunning) {
-        if (cmd.trim() === '/q') {
-          window.db.terminal.killActive();
-          this._terminal.printOutput('Conversation ended.', { isError: false });
-          this._terminal.clearConversationHint();
-          return;
-        }
-        this._terminal.printUserEcho(cmd.trim());
-        window.db.terminal.sendInput(cmd + '\n');
-        return;
-      }
-      cmd = cmd.trim();
-      if (this._terminal.aiMode && !/^\/p\s/i.test(cmd)) cmd = `/p ${cmd}`;
-      await this._terminal.runCommand(cmd);
-    });
-
-    document.getElementById('btnConsoleStop')
-      .addEventListener('click', () => window.db.terminal.killActive());
   }
 
   // ----------------------------------------------------------------
@@ -391,24 +314,16 @@ export class ProjectPage {
       detailEl:             document.getElementById('storyDetail'),
       projectId:            this.projectId,
       getModel:             () => this._aiModelConfig,
-      onSelect:             (_story) => {},
+      onSelect:             (story) => { this._refreshRelated(story?.id || null); },
       onRunCommand:         (cmd) => {
-        document.getElementById('projectConsole').hidden = false;
-        if (!this._terminal.folderSelected) { this._terminal.warnNoFolder(); return; }
-        this._terminal.runCommand(cmd);
+        if (!this._project?.project_path) return;
+        window.db.terminal.openExternal({ command: cmd, cwd: this._project.project_path });
       },
       onRunCommandExternal: (cmd) => {
-        if (!this._terminal.folderSelected) {
-          document.getElementById('projectConsole').hidden = false;
-          this._terminal.warnNoFolder();
-          return;
-        }
-        window.db.terminal.openExternal({ command: cmd, cwd: this._terminal.cwd });
+        if (!this._project?.project_path) return;
+        window.db.terminal.openExternal({ command: cmd, cwd: this._project.project_path });
       },
-      onPrintOutput: (text, opts) => {
-        document.getElementById('projectConsole').hidden = false;
-        this._terminal.printOutput(text, opts);
-      },
+      onPrintOutput: () => {},
     });
     await this._storyList.mount();
 
@@ -419,6 +334,179 @@ export class ProjectPage {
       onSelect:  (feature) => this._storyList.load(feature.id),
     });
     await this._featureList.mount();
+  }
+
+  // ----------------------------------------------------------------
+  // Related panel — data loading
+  // ----------------------------------------------------------------
+  async _refreshRelated(storyId) {
+    this._activeStoryId = storyId || null;
+
+    const testsEl       = document.getElementById('relatedTestsList');
+    const issuesEl      = document.getElementById('relatedIssuesList');
+    const testsCountEl  = document.getElementById('relatedTestsCount');
+    const issuesCountEl = document.getElementById('relatedIssuesCount');
+    if (!testsEl || !issuesEl) return;
+
+    if (!storyId) {
+      testsEl.innerHTML  = '<div class="project-related__empty">Select a story</div>';
+      issuesEl.innerHTML = '<div class="project-related__empty">Select a story</div>';
+      testsCountEl.hidden  = true;
+      issuesCountEl.hidden = true;
+      return;
+    }
+
+    const [testCases, issues] = await Promise.all([
+      window.db.testCases.list({ project_id: this.projectId, user_story_id: storyId }),
+      window.db.issues.list({ project_id: this.projectId, user_story_id: storyId }),
+    ]);
+
+    this._renderRelatedTestCases(testCases);
+    this._renderRelatedIssues(issues);
+
+    testsCountEl.textContent = testCases.length;
+    testsCountEl.hidden = testCases.length === 0;
+    issuesCountEl.textContent = issues.length;
+    issuesCountEl.hidden = issues.length === 0;
+  }
+
+  _renderRelatedTestCases(items) {
+    const el = document.getElementById('relatedTestsList');
+    if (!el) return;
+
+    if (items.length === 0) {
+      el.innerHTML = '<div class="project-related__empty">No test cases for this story</div>';
+      return;
+    }
+
+    el.innerHTML = items.map((tc, i) => {
+      const sm = TC_STATUS[tc.status] || TC_STATUS.not_run;
+      return `
+        <div class="related-item" data-id="${tc.id}"
+          data-story="${tc.user_story_id}" data-feature="${tc.feature_id || ''}">
+          <div class="related-item__header">
+            <span class="related-item__seq">#${i + 1}</span>
+            <span class="related-item__title">${escHtml(tc.title)}</span>
+          </div>
+          <div class="related-item__footer">
+            <span class="rs-badge ${sm.cls}">${sm.label}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    el.querySelectorAll('.related-item').forEach(item => {
+      item.addEventListener('click', () => {
+        this.router.navigate('test-cases', {
+          projectId: this.projectId,
+          featureId: parseInt(item.dataset.feature) || undefined,
+          storyId:   parseInt(item.dataset.story),
+          itemId:    parseInt(item.dataset.id),
+        });
+      });
+    });
+  }
+
+  _renderRelatedIssues(items) {
+    const el = document.getElementById('relatedIssuesList');
+    if (!el) return;
+
+    if (items.length === 0) {
+      el.innerHTML = '<div class="project-related__empty">No issues for this story</div>';
+      return;
+    }
+
+    el.innerHTML = items.map((issue, i) => {
+      const sm = IS_STATUS[issue.status]     || IS_STATUS.open;
+      const sv = IS_SEVERITY[issue.severity] || IS_SEVERITY.medium;
+      return `
+        <div class="related-item" data-id="${issue.id}"
+          data-story="${issue.user_story_id}" data-feature="${issue.feature_id || ''}">
+          <div class="related-item__header">
+            <span class="related-item__seq">#${i + 1}</span>
+            <span class="related-item__title">${escHtml(issue.title)}</span>
+          </div>
+          <div class="related-item__footer">
+            <span class="rs-badge ${sm.cls}">${sm.label}</span>
+            <span class="rs-badge ${sv.cls}">${sv.label}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    el.querySelectorAll('.related-item').forEach(item => {
+      item.addEventListener('click', () => {
+        this.router.navigate('issues', {
+          projectId: this.projectId,
+          featureId: parseInt(item.dataset.feature) || undefined,
+          storyId:   parseInt(item.dataset.story),
+          itemId:    parseInt(item.dataset.id),
+        });
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Related panel — collapse/expand
+  // ----------------------------------------------------------------
+  _initRelatedToggle() {
+    const panel        = document.getElementById('projectRelated');
+    const resizeHandle = document.querySelector('.project-panel__resize[data-resize="related"]');
+    const toggleBtn    = document.getElementById('btnRelatedToggle');
+    const icon         = toggleBtn.querySelector('.related-toggle-icon');
+
+    let savedFlex = panel.style.flex || '0 0 22%';
+
+    toggleBtn.addEventListener('click', () => {
+      const isCollapsed = panel.classList.toggle('project-related--collapsed');
+
+      if (isCollapsed) {
+        savedFlex = panel.style.flex || '0 0 22%';
+        resizeHandle.style.display = 'none';
+        toggleBtn.title = 'Expand panel';
+        toggleBtn.setAttribute('aria-label', 'Expand panel');
+        icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+      } else {
+        panel.style.flex = savedFlex;
+        resizeHandle.style.display = '';
+        toggleBtn.title = 'Collapse panel';
+        toggleBtn.setAttribute('aria-label', 'Collapse panel');
+        icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+      }
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Related panel — inner resize between test cases and issues
+  // ----------------------------------------------------------------
+  _initRelatedInnerResize() {
+    const handle      = document.getElementById('relatedInnerResize');
+    const topSection  = document.getElementById('relatedTestsSection');
+    if (!handle || !topSection) return;
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const startY  = e.clientY;
+      const startH  = topSection.getBoundingClientRect().height;
+      const parentH = topSection.parentElement.getBoundingClientRect().height;
+
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor     = 'row-resize';
+
+      const onMove = (ev) => {
+        const delta  = ev.clientY - startY;
+        const newPct = Math.max(20, Math.min(80, ((startH + delta) / parentH) * 100));
+        topSection.style.flex = `0 0 ${newPct}%`;
+      };
+
+      const onUp = () => {
+        document.body.style.userSelect = '';
+        document.body.style.cursor     = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
   }
 
   // ----------------------------------------------------------------
@@ -436,7 +524,7 @@ export class ProjectPage {
   // Model dropdown helpers
   // ----------------------------------------------------------------
   async _reloadModelDropdown() {
-    const select  = document.getElementById('aiModelSelect');
+    const select = document.getElementById('aiModelSelect');
     if (!select) return;
 
     const configs = await window.db.modelConfigs.list();
@@ -448,7 +536,6 @@ export class ProjectPage {
           `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
         ).join('');
 
-    // Restore previous selection, or pick default, or pick first
     const defaultCfg = configs.find(c => c.is_default) || configs[0];
     const target     = configs.find(c => c.id === prevId) || defaultCfg;
     if (target) {
@@ -495,90 +582,13 @@ export class ProjectPage {
   }
 
   // ----------------------------------------------------------------
-  // Console panel collapse/expand
-  // ----------------------------------------------------------------
-  _initConsoleToggle() {
-    const console_el    = document.getElementById('projectConsole');
-    const resizeHandle  = document.querySelector('.project-panel__resize[data-resize="console"]');
-    const toggleBtn     = document.getElementById('btnConsoleToggle');
-    const icon          = toggleBtn.querySelector('.console-toggle-icon');
-
-    let savedFlex = console_el.style.flex || '0 0 25%';
-
-    toggleBtn.addEventListener('click', () => {
-      const isCollapsed = console_el.classList.toggle('project-console--collapsed');
-
-      if (isCollapsed) {
-        savedFlex = console_el.style.flex || '0 0 32%';
-        resizeHandle.style.display = 'none';
-        toggleBtn.title = 'Expand console';
-        toggleBtn.setAttribute('aria-label', 'Expand console');
-        icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
-      } else {
-        console_el.style.flex = savedFlex;
-        resizeHandle.style.display = '';
-        toggleBtn.title = 'Collapse console';
-        toggleBtn.setAttribute('aria-label', 'Collapse console');
-        icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
-      }
-    });
-  }
-
-  // ----------------------------------------------------------------
-  // Console popup overlay
-  // ----------------------------------------------------------------
-  _initConsolePopup() {
-    const consoleEl    = document.getElementById('projectConsole');
-    const resizeHandle = document.querySelector('.project-panel__resize[data-resize="console"]');
-    const btn          = document.getElementById('btnConsolePopup');
-    const icon         = btn.querySelector('.console-popup-icon');
-    let backdrop       = null;
-
-    const setIcon = (d) => {
-      icon.innerHTML = `<path d="${d}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-    };
-
-    const close = () => {
-      consoleEl.classList.remove('project-console--popup');
-      if (resizeHandle) resizeHandle.style.display = '';
-      btn.title = 'Expand console';
-      setIcon('M2 6V2H6M10 2H14V6M14 10V14H10M6 14H2V10');
-      if (backdrop) { backdrop.remove(); backdrop = null; }
-    };
-
-    const open = () => {
-      if (consoleEl.classList.contains('project-console--collapsed')) {
-        document.getElementById('btnConsoleToggle').click();
-      }
-      consoleEl.classList.add('project-console--popup');
-      if (resizeHandle) resizeHandle.style.display = 'none';
-      btn.title = 'Restore console';
-      setIcon('M6 2V6H2M14 2V6H10M14 14V10H10M2 14V10H6');
-      backdrop = document.createElement('div');
-      backdrop.className = 'project-console__backdrop';
-      backdrop.addEventListener('click', close);
-      document.body.appendChild(backdrop);
-    };
-
-    this._closeConsolePopup = close;
-
-    btn.addEventListener('click', () => {
-      consoleEl.classList.contains('project-console--popup') ? close() : open();
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && consoleEl.classList.contains('project-console--popup')) close();
-    });
-  }
-
-  // ----------------------------------------------------------------
   // Resizable panels
   // ----------------------------------------------------------------
   _initResizable() {
     const PANEL_MAP = {
       features: { el: document.getElementById('panelFeatures'),  min: 120, dir:  1 },
       stories:  { el: document.getElementById('panelStories'),   min: 120, dir:  1 },
-      console:  { el: document.getElementById('projectConsole'), min: 180, dir: -1 },
+      related:  { el: document.getElementById('projectRelated'), min: 160, dir: -1 },
     };
 
     document.querySelectorAll('.project-panel__resize').forEach(handle => {

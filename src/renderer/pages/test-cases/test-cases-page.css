@@ -71,6 +71,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 10px 8px;
+  margin-bottom: 6px;
   cursor: pointer;
   box-shadow: var(--card-shadow);
   transition: border-color 0.12s, background 0.12s;

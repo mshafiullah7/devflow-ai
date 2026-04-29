@@ -33,6 +33,10 @@ export class IssuesPage {
     this._activeId      = null;
     this._filterStatus  = '';
     this._aiModelConfig = null;
+    // deep-link params: navigate directly to a specific item
+    this._deepFeatureId = params.featureId ?? null;
+    this._deepStoryId   = params.storyId   ?? null;
+    this._deepItemId    = params.itemId    ?? null;
   }
 
   async mount() {
@@ -337,6 +341,11 @@ export class IssuesPage {
     });
     await this._featureList.mount();
 
+    if (this._deepFeatureId) {
+      const card = this.container.querySelector(`#isFeatureList .fl-card[data-id="${this._deepFeatureId}"]`);
+      this._deepFeatureId = null;
+      if (card) { card.click(); return; }
+    }
     const firstCard = this.container.querySelector('#isFeatureList .fl-card');
     if (firstCard) firstCard.click();
   }
@@ -358,7 +367,12 @@ export class IssuesPage {
     this._stories = await window.db.userStories.list({ feature_id: featureId });
     this._renderStories();
     if (this._stories.length > 0) {
-      await this._selectStory(this._stories[0].id);
+      const deepId = this._deepStoryId;
+      this._deepStoryId = null;
+      const targetId = (deepId && this._stories.some(s => s.id === deepId))
+        ? deepId
+        : this._stories[0].id;
+      await this._selectStory(targetId);
     }
   }
 
@@ -417,6 +431,11 @@ export class IssuesPage {
     if (this._activeId && !this._issues.find(i => i.id === this._activeId)) {
       this._activeId = null;
       this._showEmptyDetail();
+    }
+
+    if (this._deepItemId) {
+      const issue = this._issues.find(i => i.id === this._deepItemId);
+      if (issue) { this._deepItemId = null; this._selectIssue(issue.id); }
     }
   }
 

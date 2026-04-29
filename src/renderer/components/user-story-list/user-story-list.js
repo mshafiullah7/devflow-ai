@@ -203,6 +203,7 @@ export class UserStoryList {
           .forEach(el => el.classList.remove('usl-card--active'));
         card.classList.add('usl-card--active');
         this._detail.showEditForm(s);
+        this._onSelect(s);
       });
 
       card.querySelector('.usl-card__action--delete').addEventListener('click', (e) => {
