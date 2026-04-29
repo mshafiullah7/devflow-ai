@@ -32,5 +32,9 @@ router.register('issues', async () => {
   const { IssuesPage } = await import('./pages/issues/issues-page.js');
   return IssuesPage;
 });
+router.register('git-changes', async () => {
+  const { GitChangesPage } = await import('./pages/git-changes/git-changes-page.js');
+  return GitChangesPage;
+});
 
 router.navigate('launcher');

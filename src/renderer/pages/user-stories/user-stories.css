@@ -45,13 +45,14 @@
 }
 
 .project-page__title-group {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-width: 0;
   -webkit-app-region: no-drag;
 }
+
 
 .project-page__title {
   font-size: 14px;

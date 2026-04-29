@@ -45,7 +45,7 @@
 }
 
 .project-home__title-group {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
   -webkit-app-region: no-drag;
 }

@@ -45,6 +45,7 @@ export class ProjectPage {
       this._terminal._updatePromptLabel();
       this._git.refreshStatus();
       this._git.startPoll();
+      this._setHeaderFolderPath(this._project.project_path);
     }
 
     this._qcmdModal = new QuickCommandsModal({
@@ -93,6 +94,13 @@ export class ProjectPage {
             <h1 class="project-page__title">${name}</h1>
             <p class="project-page__desc">User Stories</p>
           </div>
+          <div class="project-page__folder-display" id="headerFolderDisplay">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+            <span class="project-page__folder-text" id="headerFolderText"></span>
+          </div>
           <div class="project-page__model-group">
             <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
               <option value="">Loading…</option>
@@ -105,6 +113,12 @@ export class ProjectPage {
               </svg>
             </button>
           </div>
+          <button class="project-page__folder-btn" id="btnConsoleFolder" title="Select folder" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </button>
           <button class="project-page__git-btn" id="btnConsoleGit" title="Git changes" hidden style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
               <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -216,11 +230,6 @@ export class ProjectPage {
                 <span class="project-console__title-text">Console</span>
               </div>
               <div class="project-console__actions">
-                <button class="project-console__folder" id="btnConsoleFolder" title="Select folder">
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                    <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-                  </svg>
-                </button>
                 <button class="project-console__popup-btn" id="btnConsolePopup" title="Expand console">
                   <svg class="console-popup-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
                     <path d="M2 6V2H6M10 2H14V6M14 10V14H10M6 14H2V10"
@@ -301,6 +310,7 @@ export class ProjectPage {
         await window.db.projects.setPath({ id: this.projectId, project_path: folderPath });
         await this._git.refreshStatus();
         this._git.startPoll();
+        this._setHeaderFolderPath(folderPath);
       });
 
     document.getElementById('aiModelSelect')
@@ -333,7 +343,8 @@ export class ProjectPage {
     });
 
     document.getElementById('btnConsoleGit')
-      .addEventListener('click', () => this._git.showDiffModal());
+      .addEventListener('click', () =>
+        this.router.navigate('git-changes', { projectId: this.projectId, from: 'user-stories' }));
 
     const consoleInput = document.getElementById('consoleInput');
     const autoResize = (el) => {
@@ -408,6 +419,17 @@ export class ProjectPage {
       onSelect:  (feature) => this._storyList.load(feature.id),
     });
     await this._featureList.mount();
+  }
+
+  // ----------------------------------------------------------------
+  // Header folder path display
+  // ----------------------------------------------------------------
+  _setHeaderFolderPath(folderPath) {
+    const text    = document.getElementById('headerFolderText');
+    const display = document.getElementById('headerFolderDisplay');
+    if (!text || !display) return;
+    text.textContent = folderPath;
+    display.classList.add('project-page__folder-display--active');
   }
 
   // ----------------------------------------------------------------

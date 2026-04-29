@@ -533,3 +533,66 @@ html, body {
   background: rgba(167, 139, 250, 0.1);
   border-color: #a78bfa;
 }
+
+/* ------------------------------------------------------------------ */
+/* Shared: Select Folder button + centered path display in page header */
+/* ------------------------------------------------------------------ */
+.project-page__folder-btn {
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  border-radius: 4px;
+  color: #eab308;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.15), 0 0 6px rgba(234, 179, 8, 0.2);
+  transition: color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.project-page__folder-btn:hover {
+  color: #fde047;
+  background: rgba(234, 179, 8, 0.15);
+  border-color: #eab308;
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
+}
+[data-theme="light"] .project-page__folder-btn {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(180, 130, 0, 0.45);
+  color: #92660a;
+  box-shadow: none;
+}
+[data-theme="light"] .project-page__folder-btn:hover {
+  color: #78520a;
+  background: rgba(234, 179, 8, 0.18);
+  border-color: #b45309;
+  box-shadow: none;
+}
+
+.project-page__folder-display {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  -webkit-app-region: no-drag;
+  opacity: 0;
+  pointer-events: none;
+}
+.project-page__folder-display--active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.project-page__folder-text {
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+}

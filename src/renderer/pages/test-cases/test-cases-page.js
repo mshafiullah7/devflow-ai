@@ -3,6 +3,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
+import { GitController } from '../../components/git/git-controller.js';
 
 const STATUS_META = {
   not_run: { label: 'Not Run',  cls: 'tc-status--not-run' },
@@ -49,7 +50,20 @@ export class TestCasesPage {
     this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
     this._qcmdModal.mount();
 
+    this._git = new GitController({
+      getTermCwd:           () => this._project?.project_path || '',
+      gitBtnId:             'tcBtnGit',
+      gitBadgeId:           'tcGitBadge',
+      controlBtnVisibility: false,
+    });
+    this._git.mount();
+
     this._bindHeaderEvents();
+    if (this._project?.project_path) {
+      this._setHeaderFolderPath(this._project.project_path);
+      this._git.refreshStatus();
+      this._git.startPoll();
+    }
     this._initFeatureToggle();
     this._initResizable();
     await this._mountFeatureList();
@@ -60,6 +74,7 @@ export class TestCasesPage {
     removeCss('components/user-story-list/user-story-list.css');
     removeCss('components/feature-list/feature-list.css');
     removeCss('pages/user-stories/user-stories.css');
+    this._git?.stopPoll();
   }
 
   // ----------------------------------------------------------------
@@ -81,6 +96,13 @@ export class TestCasesPage {
             <h1 class="project-page__title">${name}</h1>
             <p class="project-page__desc">Test Cases</p>
           </div>
+          <div class="project-page__folder-display" id="headerFolderDisplay">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+            <span class="project-page__folder-text" id="headerFolderText"></span>
+          </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
             <select class="tc-header-select" id="tcStatusFilter" title="Filter by status">
               <option value="">All Statuses</option>
@@ -101,6 +123,12 @@ export class TestCasesPage {
                 </svg>
               </button>
             </div>
+            <button class="project-page__folder-btn" id="tcBtnFolder" title="Select folder">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              </svg>
+            </button>
             <button class="project-page__git-btn" id="tcBtnGit" title="Git (opens User Stories)">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -109,6 +137,7 @@ export class TestCasesPage {
                 <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
+              <span class="project-page__git-badge" id="tcGitBadge" hidden></span>
             </button>
             <button class="project-page__qcmd-btn" id="tcBtnQcmd" title="Quick Commands">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
@@ -213,6 +242,14 @@ export class TestCasesPage {
     if (target) { select.value = target.id; this._aiModelConfig = target; }
   }
 
+  _setHeaderFolderPath(folderPath) {
+    const text    = this.container.querySelector('#headerFolderText');
+    const display = this.container.querySelector('#headerFolderDisplay');
+    if (!text || !display) return;
+    text.textContent = folderPath;
+    display.classList.add('project-page__folder-display--active');
+  }
+
   _bindHeaderEvents() {
     this.container.querySelector('#tcBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
@@ -226,8 +263,20 @@ export class TestCasesPage {
         window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
       });
 
+    this.container.querySelector('#tcBtnFolder')
+      .addEventListener('click', async () => {
+        const folderPath = await window.db.dialog.openFolder();
+        if (!folderPath) return;
+        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
+        if (this._project) this._project.project_path = folderPath;
+        this._setHeaderFolderPath(folderPath);
+        this._git.refreshStatus();
+        this._git.startPoll();
+      });
+
     this.container.querySelector('#tcBtnGit')
-      .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this._projectId }));
+      .addEventListener('click', () =>
+        this.router.navigate('git-changes', { projectId: this._projectId, from: 'test-cases' }));
 
     this.container.querySelector('#tcBtnQcmd')
       .addEventListener('click', () => this._qcmdModal.show());

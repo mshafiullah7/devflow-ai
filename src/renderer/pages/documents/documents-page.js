@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
+import { GitController } from '../../components/git/git-controller.js';
 
 export class DocumentsPage {
   constructor(container, params, router) {
@@ -49,7 +50,20 @@ export class DocumentsPage {
     this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
     this._qcmdModal.mount();
 
+    this._git = new GitController({
+      getTermCwd: () => this._project?.project_path || '',
+      gitBtnId:   'docBtnGit',
+      gitBadgeId: 'docGitBadge',
+    });
+    this._git.mount();
+
     this._bindShellEvents();
+
+    if (this._project?.project_path) {
+      this._setHeaderFolderPath(this._project.project_path);
+      this._git.refreshStatus();
+      this._git.startPoll();
+    }
 
     if (this._activeId) this._selectDoc(this._activeId, false);
     else                this._showEmpty();
@@ -57,6 +71,7 @@ export class DocumentsPage {
 
   unmount() {
     removeCss('pages/documents/documents-page.css');
+    this._git?.stopPoll();
   }
 
   // ----------------------------------------------------------------
@@ -76,6 +91,13 @@ export class DocumentsPage {
             <div class="documents-page__title">${escHtml(name)}</div>
             <div class="documents-page__subtitle">Project Documents</div>
           </div>
+          <div class="project-page__folder-display" id="headerFolderDisplay">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+            <span class="project-page__folder-text" id="headerFolderText"></span>
+          </div>
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <select class="project-page__model-select" id="docModelSelect" title="AI Model">
               <option value="">Loading…</option>
@@ -88,6 +110,12 @@ export class DocumentsPage {
               </svg>
             </button>
           </div>
+          <button class="project-page__folder-btn" id="docBtnFolder" title="Select folder" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </button>
           <button class="project-page__git-btn" id="docBtnGit" title="Git (opens User Stories)" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
               <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -96,6 +124,7 @@ export class DocumentsPage {
               <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
+            <span class="project-page__git-badge" id="docGitBadge" hidden></span>
           </button>
           <button class="project-page__qcmd-btn" id="docBtnQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
@@ -138,6 +167,14 @@ export class DocumentsPage {
     if (target) { select.value = target.id; this._aiModelConfig = target; }
   }
 
+  _setHeaderFolderPath(folderPath) {
+    const text    = this.container.querySelector('#headerFolderText');
+    const display = this.container.querySelector('#headerFolderDisplay');
+    if (!text || !display) return;
+    text.textContent = folderPath;
+    display.classList.add('project-page__folder-display--active');
+  }
+
   _bindShellEvents() {
     this.container.querySelector('#btnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
@@ -151,8 +188,20 @@ export class DocumentsPage {
         window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
       });
 
+    this.container.querySelector('#docBtnFolder')
+      .addEventListener('click', async () => {
+        const folderPath = await window.db.dialog.openFolder();
+        if (!folderPath) return;
+        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
+        if (this._project) this._project.project_path = folderPath;
+        this._setHeaderFolderPath(folderPath);
+        this._git.refreshStatus();
+        this._git.startPoll();
+      });
+
     this.container.querySelector('#docBtnGit')
-      .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this._projectId }));
+      .addEventListener('click', () =>
+        this.router.navigate('git-changes', { projectId: this._projectId, from: 'documents' }));
 
     this.container.querySelector('#docBtnQcmd')
       .addEventListener('click', () => this._qcmdModal.show());

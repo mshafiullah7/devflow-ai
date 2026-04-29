@@ -1,0 +1,285 @@
+import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
+import { applyStoredTheme } from '../../shared/theme-manager.js';
+
+export class GitChangesPage {
+  constructor(container, params, router) {
+    this.container  = container;
+    this.router     = router;
+    this._projectId = params.projectId;
+    this._from      = params.from || 'project-home';
+    this._project   = null;
+    this._files     = [];
+    this._activeIdx = 0;
+  }
+
+  // ----------------------------------------------------------------
+  // Lifecycle
+  // ----------------------------------------------------------------
+  async mount() {
+    injectCss('components/git/git-diff.css');
+    injectCss('pages/git-changes/git-changes-page.css');
+    applyStoredTheme();
+
+    this._project = await window.db.projects.get(this._projectId);
+    this.container.innerHTML = this._template();
+    this._bindEvents();
+    await this._loadStatus();
+  }
+
+  unmount() {
+    removeCss('pages/git-changes/git-changes-page.css');
+    removeCss('components/git/git-diff.css');
+  }
+
+  // ----------------------------------------------------------------
+  // Template
+  // ----------------------------------------------------------------
+  _template() {
+    const name = this._project ? escHtml(this._project.name) : 'Project';
+    return `
+      <div class="git-page">
+        <header class="git-page__header">
+          <button class="git-page__back" id="gitPageBack" aria-label="Back">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+              <path d="M12 4l-6 6 6 6" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="git-page__title-group">
+            <h1 class="git-page__title">${name}</h1>
+            <p class="git-page__subtitle">Git Changes</p>
+          </div>
+          <div class="git-page__center">
+            <div class="git-page__status-label" id="gitStatusLabel">Loading…</div>
+          </div>
+          <button class="git-page__refresh" id="gitPageRefresh" title="Refresh">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+              <path d="M4 4a8 8 0 1 1 0 12" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round"/>
+              <path d="M4 2v4h4" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </header>
+
+        <div class="git-page__body">
+          <aside class="git-page__files" id="gitFileList">
+            <div class="git-page__files-loading">Loading changes…</div>
+          </aside>
+
+          <div class="git-page__diff-wrap">
+            <div class="git-diff-view" id="gitDiffView">
+              <div class="git-diff-loading">Select a file to view its diff.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ----------------------------------------------------------------
+  // Events
+  // ----------------------------------------------------------------
+  _bindEvents() {
+    this.container.querySelector('#gitPageBack')
+      .addEventListener('click', () =>
+        this.router.navigate(this._from, { projectId: this._projectId }));
+
+    this.container.querySelector('#gitPageRefresh')
+      .addEventListener('click', () => this._loadStatus());
+  }
+
+  // ----------------------------------------------------------------
+  // Git status
+  // ----------------------------------------------------------------
+  async _loadStatus() {
+    const cwd = this._project?.project_path || '';
+    const label = this.container.querySelector('#gitStatusLabel');
+    const fileList = this.container.querySelector('#gitFileList');
+
+    if (!cwd) {
+      if (label) label.textContent = 'No folder selected';
+      if (fileList) fileList.innerHTML = `
+        <div class="git-page__empty">
+          <p>No project folder selected.</p>
+          <p>Select a folder from the header to enable Git tracking.</p>
+        </div>`;
+      return;
+    }
+
+    try {
+      const result = await window.db.terminal.exec({
+        command: 'git status --short 2>&1',
+        cwd,
+      });
+      this._files = this._parseGitStatus(result.stdout || '');
+
+      if (label) {
+        label.textContent = this._files.length === 0
+          ? 'No changes'
+          : `${this._files.length} changed file${this._files.length !== 1 ? 's' : ''}`;
+      }
+
+      this._renderFileList();
+
+      if (this._files.length > 0) {
+        this._activeIdx = 0;
+        await this._loadDiff(this._files[0]);
+      } else {
+        const view = this.container.querySelector('#gitDiffView');
+        if (view) view.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
+      }
+    } catch {
+      if (label) label.textContent = 'Not a git repository';
+      if (fileList) fileList.innerHTML = `
+        <div class="git-page__empty">
+          <p>Not a git repository.</p>
+          <p>Initialise git in the selected folder to track changes.</p>
+        </div>`;
+    }
+  }
+
+  _renderFileList() {
+    const fileList = this.container.querySelector('#gitFileList');
+    if (!fileList) return;
+
+    if (this._files.length === 0) {
+      fileList.innerHTML = '<div class="git-page__empty">No changed files.</div>';
+      return;
+    }
+
+    fileList.innerHTML = this._files.map((f, i) => `
+      <div class="git-diff-file${i === this._activeIdx ? ' git-diff-file--active' : ''}"
+           data-idx="${i}">
+        <span class="git-diff-file__status git-diff-file__status--${f.statusType}">
+          ${f.statusType}
+        </span>
+        <span class="git-diff-file__name" title="${escHtml(f.file)}">${escHtml(f.file)}</span>
+      </div>
+    `).join('');
+
+    fileList.querySelectorAll('.git-diff-file').forEach(el => {
+      el.addEventListener('click', async () => {
+        const idx = parseInt(el.dataset.idx);
+        this._activeIdx = idx;
+        fileList.querySelectorAll('.git-diff-file')
+          .forEach(f => f.classList.remove('git-diff-file--active'));
+        el.classList.add('git-diff-file--active');
+        await this._loadDiff(this._files[idx]);
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Diff loading
+  // ----------------------------------------------------------------
+  async _loadDiff(fileInfo) {
+    const view = this.container.querySelector('#gitDiffView');
+    if (!view) return;
+    view.innerHTML = '<div class="git-diff-loading">Loading diff…</div>';
+
+    const cwd = this._project?.project_path || '';
+    try {
+      let diffText = '';
+      if (fileInfo.statusType === 'U') {
+        const r = await window.db.terminal.exec({
+          command: `Get-Content -Raw -Encoding UTF8 "${fileInfo.file}" 2>&1`,
+          cwd,
+        });
+        const content    = (r.stdout || '').replace(/\r\n/g, '\n');
+        const addedLines = content.split('\n').map(l => `+${l}`).join('\n');
+        diffText = `@@ -0,0 +1 @@\n${addedLines}`;
+      } else {
+        const r1 = await window.db.terminal.exec({
+          command: `git diff HEAD -- "${fileInfo.file}" 2>&1`,
+          cwd,
+        });
+        diffText = (r1.stdout || '').trim();
+        if (!diffText) {
+          const r2 = await window.db.terminal.exec({
+            command: `git diff --cached -- "${fileInfo.file}" 2>&1`,
+            cwd,
+          });
+          diffText = (r2.stdout || '').trim();
+        }
+      }
+      view.innerHTML = this._renderDiff(diffText, fileInfo.file);
+    } catch {
+      view.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Parsing & rendering
+  // ----------------------------------------------------------------
+  _parseGitStatus(output) {
+    return output.split('\n')
+      .filter(l => l.trim())
+      .map(line => {
+        const xy   = line.substring(0, 2);
+        const file = line.substring(3).trim().replace(/^"(.*)"$/, '$1');
+        let statusType;
+        if (xy.includes('?'))      statusType = 'U';
+        else if (xy.includes('A')) statusType = 'A';
+        else if (xy.includes('D')) statusType = 'D';
+        else if (xy.includes('R')) statusType = 'R';
+        else                       statusType = 'M';
+        return { xy, statusType, file };
+      });
+  }
+
+  _renderDiff(diffText, filename) {
+    const esc  = escHtml;
+    let html   = `<div class="git-diff-filename">${esc(filename)}</div>`;
+
+    if (!diffText || !diffText.trim()) {
+      return html + '<div class="git-diff-empty">No diff available.</div>';
+    }
+
+    html += '<table class="git-diff-table"><tbody>';
+
+    let oldLine = 0, newLine = 0;
+    for (const raw of diffText.split('\n')) {
+      if (/^(diff --git|index |--- |\+\+\+ |Binary |new file|deleted file|old mode|new mode|rename )/.test(raw)) continue;
+
+      if (raw.startsWith('@@')) {
+        const m = raw.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)/);
+        if (m) {
+          oldLine = parseInt(m[1]);
+          newLine = parseInt(m[2]);
+          const ctx = m[3] ? esc(m[3].trim()) : '';
+          html += `<tr class="gd-row gd-row--hunk">
+            <td class="gd-ln"></td><td class="gd-ln"></td>
+            <td class="gd-code">${esc(raw)}${ctx ? ` <span class="gd-hunk-ctx">${ctx}</span>` : ''}</td>
+          </tr>`;
+        }
+        continue;
+      }
+
+      if (raw.startsWith('-')) {
+        html += `<tr class="gd-row gd-row--del">
+          <td class="gd-ln gd-ln--del">${oldLine++}</td><td class="gd-ln"></td>
+          <td class="gd-code gd-code--del"><span class="gd-sign">&#x2212;</span>${esc(raw.slice(1))}</td>
+        </tr>`;
+      } else if (raw.startsWith('+')) {
+        html += `<tr class="gd-row gd-row--add">
+          <td class="gd-ln"></td><td class="gd-ln gd-ln--add">${newLine++}</td>
+          <td class="gd-code gd-code--add"><span class="gd-sign">+</span>${esc(raw.slice(1))}</td>
+        </tr>`;
+      } else if (raw.startsWith(' ')) {
+        html += `<tr class="gd-row gd-row--ctx">
+          <td class="gd-ln">${oldLine++}</td><td class="gd-ln">${newLine++}</td>
+          <td class="gd-code">${esc(raw.slice(1))}</td>
+        </tr>`;
+      } else if (raw.startsWith('\\')) {
+        html += `<tr class="gd-row gd-row--meta">
+          <td class="gd-ln"></td><td class="gd-ln"></td>
+          <td class="gd-code gd-code--meta">${esc(raw)}</td>
+        </tr>`;
+      }
+    }
+
+    html += '</tbody></table>';
+    return html;
+  }
+}

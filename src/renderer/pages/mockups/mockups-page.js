@@ -114,7 +114,11 @@ export class MockupsPage {
     this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
     this._qcmdModal.mount();
 
-    this._git = new GitController({ getTermCwd: () => this._project?.project_path || '' });
+    this._git = new GitController({
+      getTermCwd: () => this._project?.project_path || '',
+      gitBtnId:   'mockupsBtnGit',
+      gitBadgeId: 'mockupsGitBadge',
+    });
     this._git.mount();
 
     if (this._screenTitle) {
@@ -136,6 +140,12 @@ export class MockupsPage {
     this._bindShellEvents();
     await this._reloadModelDropdown();
 
+    if (this._project?.project_path) {
+      this._setHeaderFolderPath(this._project.project_path);
+      this._git.refreshStatus();
+      this._git.startPoll();
+    }
+
     if (this._activeId) this._selectScreen(this._activeId);
     else                this._showNewForm({ title: this._screenTitle || '' });
   }
@@ -143,6 +153,7 @@ export class MockupsPage {
   unmount() {
     removeCss('pages/mockups/mockups-page.css');
     removeCss('styles/screens.css');
+    this._git?.stopPoll();
   }
 
   _getProject()      { return this._project; }
@@ -191,6 +202,13 @@ export class MockupsPage {
             <div class="mockups-page__title">${escHtml(name)}</div>
             <div class="mockups-page__subtitle">Project Mockups</div>
           </div>
+          <div class="project-page__folder-display" id="headerFolderDisplay">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+            <span class="project-page__folder-text" id="headerFolderText"></span>
+          </div>
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <select class="project-page__model-select" id="mockupsModelSelect" title="AI Model">
               <option value="">Loading…</option>
@@ -203,7 +221,13 @@ export class MockupsPage {
               </svg>
             </button>
           </div>
-          <button class="project-page__git-btn" id="mockupsBtnGit" title="Git (opens User Stories)" style="-webkit-app-region:no-drag;">
+          <button class="project-page__folder-btn" id="mockupsBtnFolder" title="Select folder" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="project-page__git-btn" id="mockupsBtnGit" title="Git changes" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
               <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
               <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -211,6 +235,7 @@ export class MockupsPage {
               <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
+            <span class="project-page__git-badge" id="mockupsGitBadge" hidden></span>
           </button>
           <button class="project-page__qcmd-btn" id="mockupsBtnQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
@@ -291,6 +316,14 @@ export class MockupsPage {
     if (target) { select.value = target.id; this._selectedModelId = target.id; }
   }
 
+  _setHeaderFolderPath(folderPath) {
+    const text    = this.container.querySelector('#headerFolderText');
+    const display = this.container.querySelector('#headerFolderDisplay');
+    if (!text || !display) return;
+    text.textContent = folderPath;
+    display.classList.add('project-page__folder-display--active');
+  }
+
   _bindShellEvents() {
     this.container.querySelector('#btnBack')
       .addEventListener('click', () => this._goBack());
@@ -309,8 +342,20 @@ export class MockupsPage {
     this.container.querySelector('#mockupsModelSelect')
       .addEventListener('change', (e) => { this._selectedModelId = Number(e.target.value) || null; });
 
+    this.container.querySelector('#mockupsBtnFolder')
+      .addEventListener('click', async () => {
+        const folderPath = await window.db.dialog.openFolder();
+        if (!folderPath) return;
+        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
+        if (this._project) this._project.project_path = folderPath;
+        this._setHeaderFolderPath(folderPath);
+        this._git.refreshStatus();
+        this._git.startPoll();
+      });
+
     this.container.querySelector('#mockupsBtnGit')
-      .addEventListener('click', () => this._git.showDiffModal());
+      .addEventListener('click', () =>
+        this.router.navigate('git-changes', { projectId: this._projectId, from: 'mockups' }));
 
     this.container.querySelector('#mockupsBtnQcmd')
       .addEventListener('click', () => this._qcmdModal.show());

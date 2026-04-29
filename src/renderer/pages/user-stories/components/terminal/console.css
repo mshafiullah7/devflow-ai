@@ -222,43 +222,9 @@
   pointer-events: none;
 }
 
-.project-console__folder {
-  background: rgba(234, 179, 8, 0.06);
-  border: 1px solid rgba(234, 179, 8, 0.5);
-  border-radius: 4px;
-  color: #eab308;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 22px;
-  padding: 0;
-  cursor: pointer;
-  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.15), 0 0 6px rgba(234, 179, 8, 0.2);
-  transition: color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
-}
-.project-console__folder:hover {
-  color: #fde047;
-  background: rgba(234, 179, 8, 0.15);
-  border-color: #eab308;
-  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
-}
 [data-theme="light"] .project-console__titlebar {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-}
-
-[data-theme="light"] .project-console__folder {
-  background: rgba(234, 179, 8, 0.08);
-  border-color: rgba(180, 130, 0, 0.45);
-  color: #92660a;
-  box-shadow: none;
-}
-[data-theme="light"] .project-console__folder:hover {
-  color: #78520a;
-  background: rgba(234, 179, 8, 0.18);
-  border-color: #b45309;
-  box-shadow: none;
 }
 
 /* Terminal output lines */
