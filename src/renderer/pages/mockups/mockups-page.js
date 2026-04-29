@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss, timeAgo } from '../../shared/helpers.js'
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
+import { GitController } from '../../components/git/git-controller.js';
 
 const TECH_STACKS = [
   { value: 'html',           label: 'Plain HTML / CSS',     mobile: false },
@@ -65,7 +66,7 @@ Each object MUST use EXACTLY these four field names — no other field names are
 function buildExtractPsCommand(instruction, model) {
   const exe      = model.executable || 'claude';
   const safeInst = instruction.replace(/'/g, "''");
-  return `$p = @'\n${safeInst}\n'@\n$p | ${exe} --print`;
+  return `$p = @'\n${safeInst}\n'@\n${exe} $p`;
 }
 
 function buildPsCommand(prompt, model) {
@@ -112,6 +113,9 @@ export class MockupsPage {
 
     this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
     this._qcmdModal.mount();
+
+    this._git = new GitController({ getTermCwd: () => this._project?.project_path || '' });
+    this._git.mount();
 
     if (this._screenTitle) {
       const needle = this._screenTitle.toLowerCase();
@@ -306,7 +310,7 @@ export class MockupsPage {
       .addEventListener('change', (e) => { this._selectedModelId = Number(e.target.value) || null; });
 
     this.container.querySelector('#mockupsBtnGit')
-      .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this._projectId }));
+      .addEventListener('click', () => this._git.showDiffModal());
 
     this.container.querySelector('#mockupsBtnQcmd')
       .addEventListener('click', () => this._qcmdModal.show());
