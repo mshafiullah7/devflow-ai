@@ -47,7 +47,7 @@ Each object MUST use EXACTLY these four field names — no other field names are
 - prompt: detailed implementation prompt referencing exact design details from the UI — colours, typography, spacing, layout, component styles (string)`;
 }
 
-function buildEditPrompt(instruction, existingHtml, projectDescription) {
+function buildEditPromptInline(instruction, existingHtml, projectDescription) {
   const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
   return `You are an expert UI/UX developer. Modify the existing HTML screen below based on the instruction provided.
 Rules:
@@ -571,9 +571,33 @@ export class MockupsPage {
 
     const project = this._getProject();
     const hasHtml = !!screen.html_content;
-    const prompt  = hasHtml
-      ? buildEditPrompt(desc, screen.html_content, project?.description || '')
-      : buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt());
+
+    // For edit: pass structured payload so main process can write HTML to temp file (CLI)
+    // or embed inline (API/Ollama). For create: full prompt string as before.
+    let generateArg;
+    let previewText;
+
+    if (hasHtml) {
+      const isCli = !model.type || model.type === 'cli';
+      generateArg = {
+        editPayload: {
+          instruction:        desc,
+          htmlContent:        screen.html_content,
+          projectDescription: project?.description || '',
+        },
+        model,
+      };
+      if (isCli) {
+        previewText = `[Edit via temp file — HTML will be written to a temp file on disk]\n\nInstruction:\n${desc}\n\nExisting HTML: ${screen.html_content.length} chars (passed via temp file)`;
+      } else {
+        // For API/Ollama show the inline prompt for transparency
+        previewText = buildEditPromptInline(desc, screen.html_content, project?.description || '');
+      }
+    } else {
+      const prompt = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt());
+      generateArg  = { prompt, model };
+      previewText  = prompt;
+    }
 
     const messagesEl = main.querySelector('#scrChatMessages');
     messagesEl.querySelector('.scr-chat-empty')?.remove();
@@ -596,7 +620,7 @@ export class MockupsPage {
           </svg>
           <span>${hasHtml ? 'Edit Prompt' : 'Create Prompt'}</span>
         </div>
-        <pre class="scr-chat-prompt-bubble__pre">${escHtml(prompt)}</pre>
+        <pre class="scr-chat-prompt-bubble__pre">${escHtml(previewText)}</pre>
         <div class="scr-chat-prompt-bubble__actions">
           <button class="scr-chat-approve-btn">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -615,6 +639,7 @@ export class MockupsPage {
     previewBubble.querySelector('.scr-chat-dismiss-btn').addEventListener('click', () => previewBubble.remove());
 
     previewBubble.querySelector('.scr-chat-approve-btn').addEventListener('click', () => {
+      this._saveToHistory(desc);
       previewBubble.innerHTML = `
         <div class="scr-chat-msg__generating">
           <span class="scr-chat-stream-dot"></span>
@@ -679,8 +704,113 @@ export class MockupsPage {
         previewBubble.innerHTML = `<div class="scr-chat-msg__cancelled">Cancelled</div>`;
       });
 
-      window.app.chat.generate({ prompt, model });
+      window.app.chat.generate(generateArg);
     });
+  }
+
+  async _loadInitialHistory(screenId, main) {
+    const items = await window.db.screenPromptHistory.list({
+      project_id:       this._projectId,
+      screen_design_id: screenId,
+    });
+    if (!items.length) return;
+
+    const recent     = items.slice(0, 2);
+    const messagesEl = main.querySelector('#scrChatMessages');
+    const chatInput  = main.querySelector('#scrDescription');
+    const resize     = () => { chatInput.style.height = 'auto'; chatInput.style.height = chatInput.scrollHeight + 'px'; };
+
+    const group = document.createElement('div');
+    group.className = 'scr-chat-history-group scr-chat-history-group--initial';
+    group.innerHTML = `
+      <div class="scr-chat-history-label">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Last ${recent.length} prompt${recent.length > 1 ? 's' : ''}
+      </div>
+      <div class="scr-chat-history-list">
+        ${recent.map((h, i) => `
+          <div class="scr-chat-history-item" data-idx="${i}">
+            <span class="scr-chat-history-item__text">${escHtml(h.prompt.length > 100 ? h.prompt.slice(0, 100) + '…' : h.prompt)}</span>
+            <span class="scr-chat-history-item__time">${timeAgo(h.executed_at)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    group.querySelectorAll('.scr-chat-history-item').forEach(el => {
+      el.addEventListener('click', () => {
+        chatInput.value = recent[Number(el.dataset.idx)].prompt;
+        resize();
+        chatInput.focus();
+      });
+    });
+
+    messagesEl.querySelector('.scr-chat-empty')?.remove();
+    messagesEl.appendChild(group);
+  }
+
+  async _showHistoryInChat(main) {
+    if (!this._activeId) return;
+    const messagesEl = main.querySelector('#scrChatMessages');
+    const chatInput  = main.querySelector('#scrDescription');
+    const resize     = () => { chatInput.style.height = 'auto'; chatInput.style.height = chatInput.scrollHeight + 'px'; };
+
+    // Replace any existing history group so it toggles cleanly
+    const existing = messagesEl.querySelector('.scr-chat-history-group');
+    if (existing) { existing.remove(); return; }
+
+    const items = await window.db.screenPromptHistory.list({
+      project_id:       this._projectId,
+      screen_design_id: this._activeId,
+    });
+
+    const group = document.createElement('div');
+    group.className = 'scr-chat-history-group';
+
+    if (!items.length) {
+      group.innerHTML = `
+        <div class="scr-chat-history-label">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Recent prompts
+        </div>
+        <p class="scr-chat-history-empty">No prompts run for this screen yet.</p>
+      `;
+    } else {
+      group.innerHTML = `
+        <div class="scr-chat-history-label">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Recent prompts
+        </div>
+        <div class="scr-chat-history-list">
+          ${items.map((h, i) => `
+            <div class="scr-chat-history-item" data-idx="${i}">
+              <span class="scr-chat-history-item__text">${escHtml(h.prompt.length > 100 ? h.prompt.slice(0, 100) + '…' : h.prompt)}</span>
+              <span class="scr-chat-history-item__time">${timeAgo(h.executed_at)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      group.querySelectorAll('.scr-chat-history-item').forEach(el => {
+        el.addEventListener('click', () => {
+          chatInput.value = items[Number(el.dataset.idx)].prompt;
+          resize();
+          chatInput.focus();
+          group.remove();
+        });
+      });
+    }
+
+    messagesEl.querySelector('.scr-chat-empty')?.remove();
+    messagesEl.appendChild(group);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   _showEditScreenModal(screen) {
@@ -975,7 +1105,13 @@ export class MockupsPage {
                 </svg>
                 <span class="scr-chat-header-label">Chat</span>
                 <span class="scr-viewer__model-name" id="scrModelName">${escHtml(this._getSelectedModel()?.label || 'No model selected')}</span>
-                <button class="scr-chat-load-desc" id="scrLoadDescBtn" title="Load saved description" style="margin-left:auto">
+                <button class="scr-chat-load-desc" id="scrChatHistoryBtn" title="Recent prompts" style="margin-left:auto">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+                    <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button class="scr-chat-load-desc" id="scrLoadDescBtn" title="Load saved description">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                     <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
                     <path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -1049,6 +1185,9 @@ export class MockupsPage {
         this._runChatGeneration(screen, chatInput, main);
       }
     });
+
+    // Recent prompts history
+    main.querySelector('#scrChatHistoryBtn').addEventListener('click', () => this._showHistoryInChat(main));
 
     // Load saved description into composer
     main.querySelector('#scrLoadDescBtn').addEventListener('click', () => {
@@ -1173,6 +1312,8 @@ export class MockupsPage {
       if (this._activeId) this._selectScreen(this._activeId);
       else                this._showEmptyState();
     });
+
+    this._loadInitialHistory(screen.id, main);
   }
 
   // ----------------------------------------------------------------

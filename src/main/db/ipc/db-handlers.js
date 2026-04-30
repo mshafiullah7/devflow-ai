@@ -663,7 +663,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   ipcMain.handle('db:screen_designs:list', (_e, project_id) => {
     return db
-      .prepare('SELECT * FROM screen_designs WHERE project_id = ? AND is_active = 1 ORDER BY created_at ASC')
+      .prepare('SELECT * FROM screen_designs WHERE project_id = ? AND is_active = 1 ORDER BY created_at DESC')
       .all(project_id);
   });
 

@@ -609,6 +609,69 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Chat history group                                                   */
+/* ------------------------------------------------------------------ */
+.scr-chat-history-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scr-chat-history-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.scr-chat-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scr-chat-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.scr-chat-history-item:hover { background: var(--surface-hover); border-color: var(--accent); }
+
+.scr-chat-history-item__text {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scr-chat-history-item__time {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.scr-chat-history-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 2px;
+  font-style: italic;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
 /* Prompt preview bubble                                                */
 /* ------------------------------------------------------------------ */
 .scr-chat-prompt-bubble {

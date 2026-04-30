@@ -8,6 +8,40 @@ const fs                   = require('node:fs');
 const os                   = require('node:os');
 const path                 = require('node:path');
 
+function buildEditPromptWithRef(instruction, htmlFilePath, projectDescription) {
+  const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
+  return `You are an expert UI/UX developer. Modify the existing HTML screen based on the instruction provided.
+Rules:
+- Output ONLY the complete modified HTML starting with <!DOCTYPE html>
+- All CSS goes inside a <style> tag
+- Preserve the overall design language; only apply the requested changes
+- No explanation, no markdown — raw HTML only
+- Do NOT use any tools, write any files, or save anything — print the raw HTML directly to stdout${ctx}
+
+Modification instruction:
+${instruction}
+
+Read the existing HTML from this file path (use the file content as the base):
+${htmlFilePath}`;
+}
+
+function buildEditPromptInline(instruction, existingHtml, projectDescription) {
+  const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
+  return `You are an expert UI/UX developer. Modify the existing HTML screen below based on the instruction provided.
+Rules:
+- Output ONLY the complete modified HTML starting with <!DOCTYPE html>
+- All CSS goes inside a <style> tag
+- Preserve the overall design language; only apply the requested changes
+- No explanation, no markdown — raw HTML only
+- Do NOT use any tools, write any files, or save anything — print the raw HTML directly to stdout${ctx}
+
+Modification instruction:
+${instruction}
+
+Existing HTML:
+${existingHtml}`;
+}
+
 let _activeProc = null;
 let _cancelled  = false;
 
@@ -47,12 +81,16 @@ function extractHtml(text) {
 // ----------------------------------------------------------------
 // Anthropic SSE streaming
 // ----------------------------------------------------------------
-function runAnthropic(wc, prompt, model) {
+function runAnthropic(wc, prompt, editPayload, model) {
+  const content = editPayload
+    ? buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription)
+    : prompt;
+
   const body = JSON.stringify({
     model:      model.model_name || 'claude-sonnet-4-6',
     max_tokens: model.max_tokens || 8096,
     stream:     true,
-    messages:   [{ role: 'user', content: prompt }],
+    messages:   [{ role: 'user', content }],
   });
 
   const req = https.request({
@@ -96,11 +134,15 @@ function runAnthropic(wc, prompt, model) {
 // ----------------------------------------------------------------
 // Ollama NDJSON streaming  (/api/chat)
 // ----------------------------------------------------------------
-function runOllama(wc, prompt, model) {
+function runOllama(wc, prompt, editPayload, model) {
+  const content = editPayload
+    ? buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription)
+    : prompt;
+
   const baseUrl = (model.base_url || 'http://localhost:11434').replace(/\/$/, '');
   const body    = JSON.stringify({
     model:    model.model_name,
-    messages: [{ role: 'user', content: prompt }],
+    messages: [{ role: 'user', content }],
     stream:   true,
   });
 
@@ -148,18 +190,35 @@ function runOllama(wc, prompt, model) {
 // ----------------------------------------------------------------
 // CLI — hidden PowerShell spawn, prompt via temp file
 // ----------------------------------------------------------------
-function runCli(wc, prompt, model) {
-  const exe = model.executable || 'claude';
-
-  // Always include --dangerously-skip-permissions and --print for chat
+function runCli(wc, prompt, editPayload, model) {
+  const exe       = model.executable || 'claude';
   const baseFlags = '--dangerously-skip-permissions --print';
+  const ts        = Date.now();
+
+  let promptText;
+  let htmlTmpFile = null;
+
+  if (editPayload) {
+    // Write the existing HTML to its own temp file so Claude reads it from disk
+    htmlTmpFile = path.join(os.tmpdir(), `ai-sdlc-html-${ts}.html`);
+    try {
+      fs.writeFileSync(htmlTmpFile, editPayload.htmlContent, 'utf8');
+    } catch (err) {
+      send(wc, 'chat:done', { html: null, raw: '', error: `Failed to write HTML temp file: ${err.message}` });
+      return;
+    }
+    promptText = buildEditPromptWithRef(editPayload.instruction, htmlTmpFile, editPayload.projectDescription);
+  } else {
+    promptText = prompt;
+  }
 
   // Write prompt to a temp file — avoids PowerShell here-string length
-  // limits and breakage on '@ sequences inside the HTML content
-  const tmpFile = path.join(os.tmpdir(), `ai-sdlc-chat-${Date.now()}.txt`);
+  // limits and breakage on '@ sequences inside the content
+  const tmpFile = path.join(os.tmpdir(), `ai-sdlc-chat-${ts}.txt`);
   try {
-    fs.writeFileSync(tmpFile, prompt, 'utf8');
+    fs.writeFileSync(tmpFile, promptText, 'utf8');
   } catch (err) {
+    if (htmlTmpFile) { try { fs.unlinkSync(htmlTmpFile); } catch (_) {} }
     send(wc, 'chat:done', { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
     return;
   }
@@ -173,7 +232,10 @@ function runCli(wc, prompt, model) {
 
   let accumulated = '';
 
-  const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch (_) {} };
+  const cleanup = () => {
+    try { fs.unlinkSync(tmpFile); } catch (_) {}
+    if (htmlTmpFile) { try { fs.unlinkSync(htmlTmpFile); } catch (_) {} }
+  };
 
   _activeProc = spawn(
     'powershell.exe',
@@ -213,17 +275,17 @@ function runCli(wc, prompt, model) {
 function registerChatHandlers() {
   ipcMain.handle('chat:cancel', () => killActive());
 
-  ipcMain.handle('chat:generate', (event, { prompt, model }) => {
+  ipcMain.handle('chat:generate', (event, { prompt, editPayload, model }) => {
     if (_activeProc) killActive();
     _cancelled = false;
     const wc   = event.sender;
 
     if (model.type === 'anthropic') {
-      runAnthropic(wc, prompt, model);
+      runAnthropic(wc, prompt, editPayload, model);
     } else if (model.type === 'ollama') {
-      runOllama(wc, prompt, model);
+      runOllama(wc, prompt, editPayload, model);
     } else {
-      runCli(wc, prompt, model);
+      runCli(wc, prompt, editPayload, model);
     }
 
     return { started: true };
