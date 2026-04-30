@@ -4,6 +4,9 @@ const { ipcMain }          = require('electron');
 const { spawn, execSync }  = require('child_process');
 const http                 = require('node:http');
 const https                = require('node:https');
+const fs                   = require('node:fs');
+const os                   = require('node:os');
+const path                 = require('node:path');
 
 let _activeProc = null;
 let _cancelled  = false;
@@ -24,9 +27,21 @@ function send(wc, ch, payload) {
   if (!wc.isDestroyed()) wc.send(ch, payload);
 }
 
+function stripAnsi(str) {
+  return str
+    .replace(/\x1B\[[0-9;]*[mGKHFJA-Za-z]/g, '')
+    .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '');
+}
+
 function extractHtml(text) {
-  const m = text.match(/<!DOCTYPE\s+html[\s\S]*?<\/html>/i);
-  return m ? m[0].trim() : null;
+  const clean = stripAnsi(text);
+  // Direct match — greedy so it captures the entire document
+  const direct = clean.match(/<!DOCTYPE\s+html[\s\S]*<\/html>/i);
+  if (direct) return direct[0].trim();
+  // Fallback: model wrapped output in a markdown code fence
+  const fenced = clean.match(/```(?:html)?\s*\n(<!DOCTYPE\s+html[\s\S]*<\/html>)\s*\n```/i);
+  if (fenced) return fenced[1].trim();
+  return null;
 }
 
 // ----------------------------------------------------------------
@@ -65,15 +80,15 @@ function runAnthropic(wc, prompt, model) {
           }
           if (data.type === 'message_stop') {
             const html = extractHtml(accumulated);
-            send(wc, 'chat:done', { html, error: html ? null : 'Could not extract HTML from response' });
+            send(wc, 'chat:done', { html, raw: accumulated, error: html ? null : 'Could not extract HTML from response' });
           }
         } catch (_) {}
       }
     });
-    res.on('error', (err) => send(wc, 'chat:done', { html: null, error: err.message }));
+    res.on('error', (err) => send(wc, 'chat:done', { html: null, raw: '', error: err.message }));
   });
 
-  req.on('error', (err) => send(wc, 'chat:done', { html: null, error: err.message }));
+  req.on('error', (err) => send(wc, 'chat:done', { html: null, raw: '', error: err.message }));
   req.write(body);
   req.end();
 }
@@ -116,34 +131,49 @@ function runOllama(wc, prompt, model) {
           }
           if (data.done) {
             const html = extractHtml(accumulated);
-            send(wc, 'chat:done', { html, error: html ? null : 'Could not extract HTML from response' });
+            send(wc, 'chat:done', { html, raw: accumulated, error: html ? null : 'Could not extract HTML from response' });
           }
         } catch (_) {}
       }
     });
-    res.on('error', (err) => send(wc, 'chat:done', { html: null, error: err.message }));
+    res.on('error', (err) => send(wc, 'chat:done', { html: null, raw: '', error: err.message }));
   });
 
-  req.on('error', (err) => send(wc, 'chat:done', { html: null, error: err.message }));
+  req.on('error', (err) => send(wc, 'chat:done', { html: null, raw: '', error: err.message }));
   req.write(body);
   req.end();
   _activeProc = req;
 }
 
 // ----------------------------------------------------------------
-// CLI — hidden PowerShell spawn, stdout captured
+// CLI — hidden PowerShell spawn, prompt via temp file
 // ----------------------------------------------------------------
 function runCli(wc, prompt, model) {
-  const exe   = model.executable || 'claude';
-  const flags = model.flags || '--dangerously-skip-permissions --print';
-  const safe  = prompt.replace(/'/g, "''");
+  const exe = model.executable || 'claude';
+
+  // Always include --dangerously-skip-permissions and --print for chat
+  const baseFlags = '--dangerously-skip-permissions --print';
+
+  // Write prompt to a temp file — avoids PowerShell here-string length
+  // limits and breakage on '@ sequences inside the HTML content
+  const tmpFile = path.join(os.tmpdir(), `ai-sdlc-chat-${Date.now()}.txt`);
+  try {
+    fs.writeFileSync(tmpFile, prompt, 'utf8');
+  } catch (err) {
+    send(wc, 'chat:done', { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
+    return;
+  }
+
+  const safeTmp = tmpFile.replace(/'/g, "''");
   const psCmd = [
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null;',
-    `$p = @'\n${safe}\n'@`,
-    `${exe} ${flags} $p`,
+    `$p = Get-Content -Path '${safeTmp}' -Raw`,
+    `${exe} ${baseFlags} $p`,
   ].join('\n');
 
   let accumulated = '';
+
+  const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch (_) {} };
 
   _activeProc = spawn(
     'powershell.exe',
@@ -159,17 +189,20 @@ function runCli(wc, prompt, model) {
   _activeProc.stderr.on('data', () => {});
 
   _activeProc.on('close', (code) => {
+    cleanup();
     if (_cancelled) return;
     const html = extractHtml(accumulated);
     send(wc, 'chat:done', {
       html,
+      raw:   accumulated,
       error: html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response'),
     });
     _activeProc = null;
   });
 
   _activeProc.on('error', (err) => {
-    send(wc, 'chat:done', { html: null, error: err.message });
+    cleanup();
+    send(wc, 'chat:done', { html: null, raw: accumulated, error: err.message });
     _activeProc = null;
   });
 }

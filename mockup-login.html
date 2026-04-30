@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DevFlow AI — Sign In</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #fdf8f0;
+    --surface:   #fffdf7;
+    --primary:   #1e3a5f;
+    --primary-h: #16304f;
+    --text:      #0a0804;
+    --text-sec:  #2a2218;
+    --border:    #4a3f2f;
+    --danger:    #ef4444;
+    --shadow:    0 8px 32px rgba(30,58,95,.12), 0 2px 8px rgba(30,58,95,.08);
+    --radius-card: 12px;
+    --radius-btn:  8px;
+    --radius-inp:  8px;
+    --font: 'Segoe UI', system-ui, sans-serif;
+    --transition: .22s cubic-bezier(.4,0,.2,1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --primary:   #6366f1;
+      --primary-h: #4f52d6;
+      --text:      #f1f5f9;
+      --text-sec:  #94a3b8;
+      --border:    #2a2d3e;
+      --shadow:    0 8px 32px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.3);
+    }
+  }
+
+  body {
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--bg);
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 40% at 15% 10%, rgba(30,58,95,.13) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 50% at 85% 90%, rgba(30,58,95,.08) 0%, transparent 70%);
+    z-index: 0;
+  }
+  @media (prefers-color-scheme: dark) {
+    body::before {
+      background:
+        radial-gradient(ellipse 60% 40% at 15% 10%, rgba(99,102,241,.18) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 50% at 85% 90%, rgba(99,102,241,.12) 0%, transparent 70%);
+    }
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 400px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .brand {
+    background: var(--primary);
+    padding: 28px 32px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .brand-icon {
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,.18);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-icon svg { fill: #fff; width: 20px; height: 20px; }
+  .brand-name { font-size: 18px; font-weight: 600; color: #fff; letter-spacing: -.3px; }
+  .brand-tagline { font-size: 12px; color: rgba(255,255,255,.65); padding-left: 2px; }
+
+  .auth-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .auth-tab {
+    flex: 1;
+    padding: 14px 0;
+    text-align: center;
+    font-weight: 500;
+    font-size: 13.5px;
+    color: var(--text-sec);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: color var(--transition), border-bottom-color var(--transition);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    user-select: none;
+    font-family: var(--font);
+  }
+  .auth-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .auth-tab:hover:not(.active) { color: var(--text); }
+
+  .form-wrap { padding: 24px 28px 28px; }
+  .form-panel { display: none; }
+  .form-panel.active { display: block; }
+
+  .method-pills {
+    display: flex;
+    gap: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+  .method-pill {
+    flex: 1;
+    padding: 7px 0;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-sec);
+    cursor: pointer;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+    user-select: none;
+    font-family: var(--font);
+  }
+  .method-pill.active {
+    background: var(--surface);
+    color: var(--primary);
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+    border: 1px solid var(--border);
+  }
+  .method-pill:hover:not(.active) { color: var(--text); }
+
+  .method-panel { display: none; }
+  .method-panel.active { display: block; }
+
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-sec);
+    margin-bottom: 6px;
+    letter-spacing: .01em;
+  }
+  .input-wrap { position: relative; }
+  .input-wrap .icon {
+    position: absolute;
+    left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--text-sec);
+    display: flex;
+    pointer-events: none;
+  }
+  .input-wrap .icon svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  input[type="text"],
+  input[type="tel"],
+  input[type="email"],
+  input[type="password"] {
+    width: 100%;
+    padding: 10px 12px 10px 38px;
+    border-radius: var(--radius-inp);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    -webkit-appearance: none;
+  }
+  input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(30,58,95,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    input:focus { box-shadow: 0 0 0 3px rgba(99,102,241,.18); }
+  }
+  input::placeholder { color: var(--text-sec); opacity: .55; }
+
+  .phone-row { display: flex; gap: 8px; }
+  .phone-prefix {
+    width: 80px; flex-shrink: 0;
+    padding: 10px 8px;
+    border-radius: var(--radius-inp);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    outline: none;
+    text-align: center;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .phone-prefix:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(30,58,95,.12);
+  }
+  .phone-row .input-wrap { flex: 1; }
+
+  .pwd-toggle {
+    position: absolute;
+    right: 12px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    color: var(--text-sec);
+    display: flex; align-items: center;
+    padding: 2px;
+  }
+  .pwd-toggle svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  .otp-group { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .otp-group input { flex: 1; }
+  .otp-send-btn {
+    flex-shrink: 0;
+    padding: 10px 14px;
+    border-radius: var(--radius-btn);
+    border: 1px solid var(--primary);
+    background: transparent;
+    color: var(--primary);
+    font-family: var(--font);
+    font-size: 12.5px; font-weight: 500;
+    cursor: pointer; white-space: nowrap;
+    transition: background var(--transition), color var(--transition);
+  }
+  .otp-send-btn:hover { background: var(--primary); color: #fff; }
+  .otp-send-btn:disabled { opacity: .6; cursor: default; }
+
+  .helpers {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px; margin-top: -4px;
+  }
+  .checkbox-row { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  .checkbox-row input[type="checkbox"] {
+    width: 15px; height: 15px; accent-color: var(--primary); padding: 0; flex-shrink: 0;
+  }
+  .checkbox-row span { font-size: 12.5px; color: var(--text-sec); }
+  .link-btn {
+    background: none; border: none; color: var(--primary);
+    font-family: var(--font); font-size: 12.5px; font-weight: 500;
+    cursor: pointer; text-decoration: none; padding: 0;
+  }
+  .link-btn:hover { text-decoration: underline; }
+
+  .btn-primary {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    padding: 11px 18px;
+    border-radius: var(--radius-btn);
+    border: none;
+    background: var(--primary);
+    color: #fff;
+    font-family: var(--font);
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+    letter-spacing: .01em;
+    margin-bottom: 4px;
+  }
+  .btn-primary:hover  { background: var(--primary-h); box-shadow: 0 4px 14px rgba(30,58,95,.28); }
+  .btn-primary:active { transform: scale(.98); }
+  .btn-primary svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2; }
+
+  .divider {
+    display: flex; align-items: center; gap: 10px;
+    margin: 20px 0; color: var(--text-sec); font-size: 12px;
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .socials { display: flex; gap: 10px; }
+  .btn-social {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9px 12px;
+    border-radius: var(--radius-btn);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 12.5px; font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+  }
+  .btn-social:hover { border-color: var(--primary); background: var(--surface); }
+
+  .card-footer {
+    border-top: 1px solid var(--border);
+    padding: 14px 28px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-sec);
+  }
+
+  .name-row { display: flex; gap: 10px; }
+  .name-row .field { flex: 1; }
+
+  .terms-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 18px; }
+  .terms-row input[type="checkbox"] {
+    margin-top: 2px; width: 15px; height: 15px;
+    accent-color: var(--primary); flex-shrink: 0; padding: 0;
+  }
+  .terms-row p { font-size: 12px; color: var(--text-sec); line-height: 1.6; }
+  .terms-row a { color: var(--primary); text-decoration: none; font-weight: 500; }
+  .terms-row a:hover { text-decoration: underline; }
+
+  .strength-bar { display: flex; gap: 4px; margin-top: 7px; }
+  .strength-seg {
+    height: 3px; flex: 1; border-radius: 99px;
+    background: var(--border); transition: background var(--transition);
+  }
+  .strength-seg.w { background: var(--danger); }
+  .strength-seg.m { background: #f59e0b; }
+  .strength-seg.s { background: #22c55e; }
+  .strength-label { font-size: 11px; color: var(--text-sec); margin-top: 4px; }
+
+  .info-chip {
+    display: flex; gap: 8px; align-items: flex-start;
+    background: rgba(30,58,95,.07);
+    border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 16px; font-size: 12px; color: var(--text-sec); line-height: 1.5;
+  }
+  @media (prefers-color-scheme: dark) {
+    .info-chip { background: rgba(99,102,241,.1); }
+  }
+  .info-chip svg { flex-shrink: 0; width: 15px; height: 15px; stroke: var(--primary); fill: none; stroke-width: 2; margin-top: 1px; }
+
+  @media (max-width: 440px) {
+    .card { border-left: none; border-right: none; border-radius: 0; max-width: 100%; }
+    body { padding: 0; align-items: flex-start; }
+    .form-wrap { padding: 20px 20px 28px; }
+    .brand { padding: 22px 20px 18px; }
+    .card-footer { padding: 14px 20px; }
+    .auth-tabs .auth-tab { font-size: 13px; }
+    .name-row { flex-direction: column; gap: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <div class="brand">
+    <div class="brand-logo">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <span class="brand-name">DevFlow AI</span>
+    </div>
+    <span class="brand-tagline">Intelligent software development lifecycle</span>
+  </div>
+
+  <div class="auth-tabs" role="tablist">
+    <button class="auth-tab active" role="tab" onclick="switchAuth('login', this)">Sign In</button>
+    <button class="auth-tab" role="tab" onclick="switchAuth('register', this)">Create Account</button>
+  </div>
+
+  <div class="form-wrap">
+
+    <!-- ── LOGIN ── -->
+    <div class="form-panel active" id="panel-login">
+      <div class="method-pills" role="tablist">
+        <button class="method-pill active" role="tab" onclick="switchMethod('login','pwd',this)">Username &amp; Password</button>
+        <button class="method-pill" role="tab" onclick="switchMethod('login','phone',this)">Phone / OTP</button>
+      </div>
+
+      <!-- Username + Password -->
+      <div class="method-panel active" id="login-pwd">
+        <div class="field">
+          <label for="l-username">Username or Email</label>
+          <div class="input-wrap">
+            <span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+            <input type="text" id="l-username" placeholder="john.doe or john@example.com" autocomplete="username" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="l-password">Password</label>
+          <div class="input-wrap">
+            <span class="icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <input type="password" id="l-password" placeholder="Enter your password" autocomplete="current-password" />
+            <button class="pwd-toggle" type="button" aria-label="Toggle password" onclick="togglePwd('l-password',this)">
+              <svg viewBox="0 0 24 24" id="eye-l-password"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="helpers">
+          <label class="checkbox-row"><input type="checkbox" /><span>Remember me</span></label>
+          <button class="link-btn" type="button">Forgot password?</button>
+        </div>
+        <button class="btn-primary" type="button">
+          <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Sign In
+        </button>
+      </div>
+
+      <!-- Phone / OTP -->
+      <div class="method-panel" id="login-phone">
+        <div class="info-chip">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          We'll send a one-time code to your registered mobile number.
+        </div>
+        <div class="field">
+          <label>Phone Number</label>
+          <div class="phone-row">
+            <select class="phone-prefix" aria-label="Country code">
+              <option>+1</option><option>+44</option><option selected>+92</option>
+              <option>+91</option><option>+971</option><option>+61</option>
+            </select>
+            <div class="input-wrap">
+              <span class="icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3.09 5.18 2 2 0 0 1 5.09 3h3a2 2 0 0 1 2 1.72c.127.96.36 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.09 10.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
+              <input type="tel" id="l-phone" placeholder="300 1234567" autocomplete="tel" />
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="l-otp">One-Time Code</label>
+          <div class="otp-group">
+            <div class="input-wrap" style="flex:1">
+              <span class="icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+              <input type="text" id="l-otp" placeholder="6-digit code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+            </div>
+            <button class="otp-send-btn" type="button" onclick="sendOtp(this)">Send OTP</button>
+          </div>
+        </div>
+        <div class="helpers">
+          <label class="checkbox-row"><input type="checkbox" /><span>Remember this device</span></label>
+          <button class="link-btn" type="button">Use password</button>
+        </div>
+        <button class="btn-primary" type="button">
+          <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Verify &amp; Sign In
+        </button>
+      </div>
+
+      <div class="divider">or continue with</div>
+      <div class="socials">
+        <button class="btn-social" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Google
+        </button>
+        <button class="btn-social" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub
+        </button>
+      </div>
+    </div>
+
+    <!-- ── REGISTER ── -->
+    <div class="form-panel" id="panel-register">
+      <div class="method-pills" role="tablist">
+        <button class="method-pill active" role="tab" onclick="switchMethod('register','creds',this)">Credentials</button>
+        <button class="method-pill" role="tab" onclick="switchMethod('register','phone',this)">Phone Number</button>
+      </div>
+
+      <!-- Credentials register -->
+      <div class="method-panel active" id="register-creds">
+        <div class="name-row">
+          <div class="field">
+            <label for="r-fname">First Name</label>
+            <div class="input-wrap">
+              <span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+              <input type="text" id="r-fname" placeholder="John" autocomplete="given-name" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="r-lname">Last Name</label>
+            <div class="input-wrap">
+              <span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+              <input type="text" id="r-lname" placeholder="Doe" autocomplete="family-name" />
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="r-email">Email Address</label>
+          <div class="input-wrap">
+            <span class="icon"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg></span>
+            <input type="email" id="r-email" placeholder="john@example.com" autocomplete="email" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="r-username">Username</label>
+          <div class="input-wrap">
+            <span class="icon"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <input type="text" id="r-username" placeholder="john.doe" autocomplete="username" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="r-password">Password</label>
+          <div class="input-wrap">
+            <span class="icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <input type="password" id="r-password" placeholder="Min. 8 characters" autocomplete="new-password" oninput="checkStrength(this)" />
+            <button class="pwd-toggle" type="button" aria-label="Toggle password" onclick="togglePwd('r-password',this)">
+              <svg viewBox="0 0 24 24" id="eye-r-password"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="strength-bar">
+            <div class="strength-seg" id="seg1"></div>
+            <div class="strength-seg" id="seg2"></div>
+            <div class="strength-seg" id="seg3"></div>
+            <div class="strength-seg" id="seg4"></div>
+          </div>
+          <div class="strength-label" id="strength-label"></div>
+        </div>
+        <div class="field">
+          <label for="r-confirm">Confirm Password</label>
+          <div class="input-wrap">
+            <span class="icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <input type="password" id="r-confirm" placeholder="Repeat password" autocomplete="new-password" />
+            <button class="pwd-toggle" type="button" aria-label="Toggle confirm" onclick="togglePwd('r-confirm',this)">
+              <svg viewBox="0 0 24 24" id="eye-r-confirm"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="terms-row">
+          <input type="checkbox" id="r-terms" />
+          <p>I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a> of DevFlow AI.</p>
+        </div>
+        <button class="btn-primary" type="button">
+          <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Create Account
+        </button>
+      </div>
+
+      <!-- Phone register -->
+      <div class="method-panel" id="register-phone">
+        <div class="name-row">
+          <div class="field">
+            <label for="rp-fname">First Name</label>
+            <div class="input-wrap">
+              <span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+              <input type="text" id="rp-fname" placeholder="John" autocomplete="given-name" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="rp-lname">Last Name</label>
+            <div class="input-wrap">
+              <span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+              <input type="text" id="rp-lname" placeholder="Doe" autocomplete="family-name" />
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Phone Number</label>
+          <div class="phone-row">
+            <select class="phone-prefix" aria-label="Country code">
+              <option>+1</option><option>+44</option><option selected>+92</option>
+              <option>+91</option><option>+971</option><option>+61</option>
+            </select>
+            <div class="input-wrap">
+              <span class="icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3.09 5.18 2 2 0 0 1 5.09 3h3a2 2 0 0 1 2 1.72c.127.96.36 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.09 10.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
+              <input type="tel" id="rp-phone" placeholder="300 1234567" autocomplete="tel" />
+            </div>
+          </div>
+        </div>
+        <div class="info-chip">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          A verification code will be sent to confirm your identity.
+        </div>
+        <div class="field">
+          <label for="rp-otp">Verification Code</label>
+          <div class="otp-group">
+            <div class="input-wrap" style="flex:1">
+              <span class="icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+              <input type="text" id="rp-otp" placeholder="6-digit code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+            </div>
+            <button class="otp-send-btn" type="button" onclick="sendOtp(this)">Send OTP</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="rp-username">Choose Username</label>
+          <div class="input-wrap">
+            <span class="icon"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <input type="text" id="rp-username" placeholder="john.doe" autocomplete="username" />
+          </div>
+        </div>
+        <div class="terms-row">
+          <input type="checkbox" id="rp-terms" />
+          <p>I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a> of DevFlow AI.</p>
+        </div>
+        <button class="btn-primary" type="button">
+          <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Register with Phone
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card-footer" id="card-footer-text">
+    Don't have an account?
+    <button class="link-btn" type="button" onclick="switchAuth('register', document.querySelectorAll('.auth-tab')[1])">Register free</button>
+  </div>
+
+</div>
+
+<script>
+  function switchAuth(which, tab) {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.form-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + which).classList.add('active');
+    const footer = document.getElementById('card-footer-text');
+    if (which === 'login') {
+      footer.innerHTML = "Don't have an account? <button class='link-btn' type='button' onclick=\"switchAuth('register', document.querySelectorAll('.auth-tab')[1])\">Register free</button>";
+    } else {
+      footer.innerHTML = "Already have an account? <button class='link-btn' type='button' onclick=\"switchAuth('login', document.querySelectorAll('.auth-tab')[0])\">Sign in</button>";
+    }
+  }
+
+  function switchMethod(panel, method, pill) {
+    pill.parentElement.querySelectorAll('.method-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    const prefix = panel === 'login' ? 'login-' : 'register-';
+    document.querySelectorAll('#panel-' + panel + ' .method-panel').forEach(mp => mp.classList.remove('active'));
+    document.getElementById(prefix + method).classList.add('active');
+  }
+
+  function togglePwd(id, btn) {
+    const inp = document.getElementById(id);
+    const eye = document.getElementById('eye-' + id);
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      eye.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+    } else {
+      inp.type = 'password';
+      eye.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+    }
+  }
+
+  function checkStrength(inp) {
+    const val = inp.value;
+    let score = 0;
+    if (val.length >= 8) score++;
+    if (/[A-Z]/.test(val)) score++;
+    if (/[0-9]/.test(val)) score++;
+    if (/[^A-Za-z0-9]/.test(val)) score++;
+    const cls = ['', 'w', 'w', 'm', 's'];
+    const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+    ['seg1','seg2','seg3','seg4'].forEach((s, i) => {
+      const el = document.getElementById(s);
+      el.className = 'strength-seg' + (i < score ? ' ' + cls[score] : '');
+    });
+    document.getElementById('strength-label').textContent = val.length ? labels[score] : '';
+  }
+
+  function sendOtp(btn) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    let t = 60;
+    btn.textContent = t + 's';
+    const iv = setInterval(() => {
+      t--;
+      if (t <= 0) {
+        clearInterval(iv);
+        btn.disabled = false;
+        btn.textContent = 'Resend';
+      } else {
+        btn.textContent = t + 's';
+      }
+    }, 1000);
+  }
+</script>
+</body>
+</html>

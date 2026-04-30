@@ -8,7 +8,9 @@ const TECH = 'Plain HTML / CSS';
 
 function buildScreenPrompt(description, projectDescription, outputFile, designTemplate) {
   const ctx    = projectDescription ? `\nProject context: ${projectDescription}` : '';
-  const save   = outputFile ? `\nWhen done, save the complete output to: ${outputFile}` : '';
+  const save   = outputFile
+    ? `\nWhen done, save the complete output to: ${outputFile}`
+    : `\nDo NOT use any tools, write any files, or save anything — print the raw HTML directly to stdout.`;
   const design = designTemplate
     ? `\n\nDESIGN SYSTEM — you MUST follow this for every element (colours, fonts, spacing, components):\n${designTemplate}`
     : '';
@@ -43,6 +45,23 @@ Each object MUST use EXACTLY these four field names — no other field names are
 - description: As a user, I want to [action] so that [benefit]. (string)
 - acceptance_criteria: all criteria as ONE string, each criterion on its own line starting with -  (string, NOT an array)
 - prompt: detailed implementation prompt referencing exact design details from the UI — colours, typography, spacing, layout, component styles (string)`;
+}
+
+function buildEditPrompt(instruction, existingHtml, projectDescription) {
+  const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
+  return `You are an expert UI/UX developer. Modify the existing HTML screen below based on the instruction provided.
+Rules:
+- Output ONLY the complete modified HTML starting with <!DOCTYPE html>
+- All CSS goes inside a <style> tag
+- Preserve the overall design language; only apply the requested changes
+- No explanation, no markdown — raw HTML only
+- Do NOT use any tools, write any files, or save anything — print the raw HTML directly to stdout${ctx}
+
+Modification instruction:
+${instruction}
+
+Existing HTML:
+${existingHtml}`;
 }
 
 function buildExtractPsCommand(instruction, model) {
@@ -540,23 +559,24 @@ export class MockupsPage {
     });
   }
 
-  async _runChatGeneration(screen, chatInput, main) {
+  _runChatGeneration(screen, chatInput, main) {
     const desc = chatInput.value.trim();
     if (!desc) { chatInput.focus(); return; }
 
     const model = this._getSelectedModel();
     if (!model) { alert('No model selected.'); return; }
 
-    // Clear composer
     chatInput.value = '';
     chatInput.style.height = 'auto';
 
     const project = this._getProject();
-    const prompt  = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt());
+    const hasHtml = !!screen.html_content;
+    const prompt  = hasHtml
+      ? buildEditPrompt(desc, screen.html_content, project?.description || '')
+      : buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt());
 
     const messagesEl = main.querySelector('#scrChatMessages');
-    const emptyEl    = messagesEl.querySelector('.scr-chat-empty');
-    if (emptyEl) emptyEl.remove();
+    messagesEl.querySelector('.scr-chat-empty')?.remove();
 
     // User bubble
     const userBubble = document.createElement('div');
@@ -564,56 +584,103 @@ export class MockupsPage {
     userBubble.innerHTML = `<div class="scr-chat-msg__text">${escHtml(desc)}</div>`;
     messagesEl.appendChild(userBubble);
 
-    // Assistant streaming bubble
-    const asstBubble = document.createElement('div');
-    asstBubble.className = 'scr-chat-msg scr-chat-msg--assistant';
-    asstBubble.innerHTML = `
-      <div class="scr-chat-msg__generating">
-        <span class="scr-chat-stream-dot"></span>
-        <span class="scr-chat-msg__gen-label">Generating…</span>
-        <button class="scr-chat-cancel-btn">Cancel</button>
-      </div>
-    `;
-    messagesEl.appendChild(asstBubble);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-
-    window.app.chat.offAll();
-
-    let charCount = 0;
-    window.app.chat.onToken(({ text }) => {
-      charCount += text.length;
-      const lbl = asstBubble.querySelector('.scr-chat-msg__gen-label');
-      if (lbl) lbl.textContent = `Generating… (${charCount} chars)`;
-    });
-
-    window.app.chat.onDone(async ({ html, error }) => {
-      window.app.chat.offAll();
-      if (error || !html) {
-        asstBubble.innerHTML = `<div class="scr-chat-msg__error">${escHtml(error || 'No HTML in response')}</div>`;
-      } else {
-        await window.db.screenDesigns.update({ id: screen.id, html_content: html, model_used: model.label || '' });
-        screen.html_content = html;
-        this._loadPreview(html);
-        asstBubble.innerHTML = `
-          <div class="scr-chat-msg__done">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+    // Prompt preview bubble
+    const previewBubble = document.createElement('div');
+    previewBubble.className = 'scr-chat-msg scr-chat-msg--assistant';
+    previewBubble.innerHTML = `
+      <div class="scr-chat-prompt-bubble">
+        <div class="scr-chat-prompt-bubble__header">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M4 6h5M4 9h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span>${hasHtml ? 'Edit Prompt' : 'Create Prompt'}</span>
+        </div>
+        <pre class="scr-chat-prompt-bubble__pre">${escHtml(prompt)}</pre>
+        <div class="scr-chat-prompt-bubble__actions">
+          <button class="scr-chat-approve-btn">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.3"/>
               <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Preview updated
+            Run
+          </button>
+          <button class="scr-chat-dismiss-btn">Dismiss</button>
+        </div>
+      </div>
+    `;
+    messagesEl.appendChild(previewBubble);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    previewBubble.querySelector('.scr-chat-dismiss-btn').addEventListener('click', () => previewBubble.remove());
+
+    previewBubble.querySelector('.scr-chat-approve-btn').addEventListener('click', () => {
+      previewBubble.innerHTML = `
+        <div class="scr-chat-msg__generating">
+          <span class="scr-chat-stream-dot"></span>
+          <div class="scr-chat-msg__gen-info">
+            <span class="scr-chat-msg__gen-label">Generating…</span>
+            <span class="scr-chat-msg__gen-hint">This may take 5 minutes or more</span>
           </div>
-        `;
-      }
+          <button class="scr-chat-cancel-btn">Cancel</button>
+        </div>
+      `;
       messagesEl.scrollTop = messagesEl.scrollHeight;
-    });
 
-    asstBubble.querySelector('.scr-chat-cancel-btn').addEventListener('click', () => {
-      window.app.chat.cancel();
       window.app.chat.offAll();
-      asstBubble.innerHTML = `<div class="scr-chat-msg__cancelled">Cancelled</div>`;
-    });
 
-    await window.app.chat.generate({ prompt, model });
+      let charCount = 0;
+      window.app.chat.onToken(({ text }) => {
+        charCount += text.length;
+        const lbl = previewBubble.querySelector('.scr-chat-msg__gen-label');
+        if (lbl) lbl.textContent = `Generating… (${charCount} chars)`;
+      });
+
+      window.app.chat.onDone(async ({ html, raw, error }) => {
+        window.app.chat.offAll();
+        const rawText = raw || '';
+
+        if (html && !error) {
+          await window.db.screenDesigns.update({ id: screen.id, html_content: html, model_used: model.label || '' });
+          screen.html_content = html;
+          this._loadPreview(html);
+          previewBubble.innerHTML = `
+            <div class="scr-chat-response-bubble scr-chat-response-bubble--ok">
+              <div class="scr-chat-response-bubble__header">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Preview updated
+              </div>
+              <pre class="scr-chat-response-bubble__pre">${escHtml(rawText)}</pre>
+            </div>
+          `;
+        } else {
+          previewBubble.innerHTML = `
+            <div class="scr-chat-response-bubble scr-chat-response-bubble--err">
+              <div class="scr-chat-response-bubble__header">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2L14 13H2L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                  <path d="M8 7v3M8 11.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+                ${escHtml(error || 'No HTML in response')}
+              </div>
+              <pre class="scr-chat-response-bubble__pre">${escHtml(rawText || '(no output received)')}</pre>
+            </div>
+          `;
+        }
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
+
+      previewBubble.querySelector('.scr-chat-cancel-btn').addEventListener('click', () => {
+        window.app.chat.cancel();
+        window.app.chat.offAll();
+        previewBubble.innerHTML = `<div class="scr-chat-msg__cancelled">Cancelled</div>`;
+      });
+
+      window.app.chat.generate({ prompt, model });
+    });
   }
 
   _showEditScreenModal(screen) {
