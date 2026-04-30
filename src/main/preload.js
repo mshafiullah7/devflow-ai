@@ -78,10 +78,10 @@ contextBridge.exposeInMainWorld('db', {
     delete:     (id)          => invoke('db:attachments:delete', id),
   },
   screenPromptHistory: {
-    list:      (project_id) => invoke('db:screen_prompt_history:list', project_id),
-    create:    (data)       => invoke('db:screen_prompt_history:create', data),
-    delete:    (id)         => invoke('db:screen_prompt_history:delete', id),
-    deleteAll: (project_id) => invoke('db:screen_prompt_history:deleteAll', project_id),
+    list:      (data) => invoke('db:screen_prompt_history:list', data),
+    create:    (data) => invoke('db:screen_prompt_history:create', data),
+    delete:    (id)   => invoke('db:screen_prompt_history:delete', id),
+    deleteAll: (data) => invoke('db:screen_prompt_history:deleteAll', data),
   },
   screenDesigns: {
     list:   (project_id) => invoke('db:screen_designs:list', project_id),

@@ -129,7 +129,7 @@ export class MockupsPage {
     }
 
     if (this._activeId) this._selectScreen(this._activeId);
-    else                this._showNewForm({ title: this._screenTitle || '' });
+    else                this._showEmptyState();
   }
 
   unmount() {
@@ -310,7 +310,7 @@ export class MockupsPage {
       .addEventListener('click', () => this._goBack());
 
     this.container.querySelector('#scrNewBtn')
-      .addEventListener('click', () => this._showNewForm());
+      .addEventListener('click', () => this._showNewScreenModal());
 
     this.container.querySelector('#scrStyleGuideBtn')
       .addEventListener('click', () => {
@@ -321,7 +321,11 @@ export class MockupsPage {
       .addEventListener('click', () => this._modelConfigsModal.show());
 
     this.container.querySelector('#mockupsModelSelect')
-      .addEventListener('change', (e) => { this._selectedModelId = Number(e.target.value) || null; });
+      .addEventListener('change', (e) => {
+        this._selectedModelId = Number(e.target.value) || null;
+        const nameEl = this.container.querySelector('#scrModelName');
+        if (nameEl) nameEl.textContent = this._getSelectedModel()?.label || 'No model selected';
+      });
 
     this.container.querySelector('#mockupsBtnFolder')
       .addEventListener('click', async () => {
@@ -435,15 +439,6 @@ export class MockupsPage {
     return screen;
   }
 
-  async _saveAndView() {
-    const screen = await this._saveForm();
-    if (!screen) return;
-    this._screens  = await window.db.screenDesigns.list(this._projectId);
-    this._activeId = screen.id;
-    this._refreshSidebar();
-    this._showScreenViewer(screen);
-  }
-
   async _saveAsDraft(dlg) {
     const btn = dlg.querySelector('#unsavedDraft');
     btn.disabled    = true;
@@ -454,107 +449,107 @@ export class MockupsPage {
   }
 
   // ----------------------------------------------------------------
-  // New Screen form
+  // Empty state (no screens yet)
   // ----------------------------------------------------------------
-  _showNewForm(prefill = {}) {
+  _showEmptyState() {
     this._activeId  = null;
-    this._editingId = prefill.editId ?? null;
+    this._editingId = null;
     this._setActiveItem(null);
-
     const main = this.container.querySelector('#scrMain');
     main.innerHTML = `
-      <div class="scr-form">
-        <div class="scr-form__title-bar">
-          <h2 class="scr-form__heading">${this._editingId ? 'Edit Screen Design' : 'New Screen Design'}</h2>
-          <div class="scr-form__btns">
-            <button class="scr-btn scr-btn--secondary" id="scrChooseFileBtn">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              </svg>
-              Choose File
-            </button>
+      <div class="scr-empty-state">
+        <svg width="48" height="48" viewBox="0 0 16 16" fill="none" opacity="0.25">
+          <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.1"/>
+          <path d="M4 6h8M4 9h5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+        <p class="scr-empty-state__title">No screens yet</p>
+        <p class="scr-empty-state__sub">Click <strong>New Screen</strong> in the sidebar to create your first mockup.</p>
+      </div>
+    `;
+  }
+
+  // ----------------------------------------------------------------
+  // New Screen modal
+  // ----------------------------------------------------------------
+  _showNewScreenModal() {
+    const dlg = document.createElement('div');
+    dlg.className = 'scr-overlay';
+    dlg.innerHTML = `
+      <div class="scr-ns-dialog">
+        <div class="scr-ns-dialog__header">
+          <span class="scr-ns-dialog__title">New Screen</span>
+          <button class="scr-dialog__close" id="scrNsClose">&times;</button>
+        </div>
+        <div class="scr-ns-dialog__body">
+          <div class="scr-form__row">
+            <label class="scr-form__label">Title *</label>
+            <input class="scr-form__input" id="scrNsTitle" type="text"
+              placeholder="e.g. Login Screen, Dashboard, Product List…" autocomplete="off"/>
+          </div>
+          <div class="scr-form__row scr-form__row--grow">
+            <label class="scr-form__label">Description</label>
+            <textarea class="scr-form__textarea scr-ns-dialog__desc" id="scrNsDesc"
+              placeholder="Describe what this screen should contain…"></textarea>
           </div>
         </div>
-
-        <div class="scr-form__row">
-          <label class="scr-form__label">Title *</label>
-          <input class="scr-form__input" id="scrTitle" type="text"
-            placeholder="e.g. Login Screen, Dashboard, Product List…"
-            value="${escHtml(prefill.title || '')}" autocomplete="off"/>
+        <div class="scr-ns-dialog__footer">
+          <button class="scr-btn scr-btn--secondary" id="scrNsCancel">Cancel</button>
+          <button class="scr-btn scr-btn--primary" id="scrNsSave">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+              <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+            Save & Open
+          </button>
         </div>
-
-        <div class="scr-form__row scr-form__row--grow">
-          <label class="scr-form__label">Describe the screen *</label>
-          <textarea class="scr-form__textarea" id="scrDescription"
-            placeholder="Describe what this screen should contain: purpose, sections, components, user actions, visual style, etc.">${escHtml(prefill.description || '')}</textarea>
-        </div>
-
-        <div class="scr-form__actions scr-form__actions--split">
-          <div class="scr-form__btns">
-            <button class="scr-btn scr-btn--primary" id="scrRunBtn">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
-                <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-              Create Mockup
-            </button>
-            <button class="scr-btn scr-btn--secondary" id="scrEditBtn">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              </svg>
-              Edits
-            </button>
-          </div>
-          <div class="scr-form__btns">
-            <button class="scr-btn scr-btn--accent" id="scrSaveBtn">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-                <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-              </svg>
-              Save
-            </button>
-          </div>
-        </div>
-
-        <div class="scr-cmd-preview" id="scrCmdPreview" hidden>
-          <div class="scr-cmd-preview__label">Command sent to terminal:</div>
-          <pre class="scr-cmd-preview__code" id="scrCmdCode"></pre>
-        </div>
-
-        <div class="scr-ph-container" id="scrPromptHistory"></div>
       </div>
     `;
 
-    main.querySelector('#scrRunBtn').style.display  = 'none';
-    main.querySelector('#scrEditBtn').style.display = 'none';
+    document.body.appendChild(dlg);
+    dlg.querySelector('#scrNsTitle').focus();
 
-    main.querySelector('#scrSaveBtn').addEventListener('click', async () => {
-      await this._saveAndView();
-      const btn = main.querySelector('#scrRunBtn');
-      const edt = main.querySelector('#scrEditBtn');
-      if (btn) btn.style.display = '';
-      if (edt) edt.style.display = '';
+    const close = () => dlg.remove();
+    dlg.querySelector('#scrNsClose').addEventListener('click', close);
+    dlg.querySelector('#scrNsCancel').addEventListener('click', close);
+    dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
+
+    dlg.querySelector('#scrNsSave').addEventListener('click', async () => {
+      const title = dlg.querySelector('#scrNsTitle').value.trim();
+      const desc  = dlg.querySelector('#scrNsDesc').value.trim();
+      if (!title) { dlg.querySelector('#scrNsTitle').focus(); return; }
+
+      const screen = await window.db.screenDesigns.create({
+        project_id:   this._projectId,
+        title,
+        description:  desc,
+        tech_stack:   'html',
+        html_content: '',
+        prompt_used:  desc,
+        model_used:   this._getSelectedModel()?.label || '',
+      });
+
+      close();
+      this._screens   = await window.db.screenDesigns.list(this._projectId);
+      this._activeId  = screen.id;
+      this._editingId = screen.id;
+      this._refreshSidebar();
+      this._showScreenViewer(screen);
     });
-    main.querySelector('#scrRunBtn').addEventListener('click', () => this._runInTerminal());
-    main.querySelector('#scrEditBtn').addEventListener('click', () => this._openEdits(null, this._editingId));
-    main.querySelector('#scrChooseFileBtn').addEventListener('click', () => this._chooseFile());
-    this._loadPromptHistory();
   }
 
   async _saveToHistory(prompt) {
-    if (!prompt) return;
-    const existing = await window.db.screenPromptHistory.list(this._projectId);
+    if (!prompt || !this._activeId) return;
+    const existing = await window.db.screenPromptHistory.list({ project_id: this._projectId, screen_design_id: this._activeId });
     if (existing.some(e => e.prompt === prompt)) return;
-    await window.db.screenPromptHistory.create({ project_id: this._projectId, prompt });
+    await window.db.screenPromptHistory.create({ project_id: this._projectId, screen_design_id: this._activeId, prompt });
     this._loadPromptHistory();
   }
 
   async _loadPromptHistory() {
     const container = this.container.querySelector('#scrPromptHistory');
     if (!container) return;
-    const items = await window.db.screenPromptHistory.list(this._projectId);
+    const items = await window.db.screenPromptHistory.list({ project_id: this._projectId, screen_design_id: this._activeId });
     if (items.length === 0) { container.innerHTML = ''; return; }
 
     const descEl = () => this.container.querySelector('#scrDescription');
@@ -609,7 +604,7 @@ export class MockupsPage {
     });
 
     container.querySelector('.scr-ph-delete-all').addEventListener('click', async () => {
-      await window.db.screenPromptHistory.deleteAll(this._projectId);
+      await window.db.screenPromptHistory.deleteAll({ project_id: this._projectId, screen_design_id: this._activeId });
       this._loadPromptHistory();
     });
   }
@@ -696,6 +691,20 @@ export class MockupsPage {
             <span class="scr-viewer__tech-badge">${TECH}</span>
           </div>
           <div class="scr-viewer__actions">
+            <button class="scr-btn scr-btn--sm scr-btn--primary" id="scrRunBtn">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
+                <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+              Create Mockup
+            </button>
+            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrEditBtn">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+              Edits
+            </button>
             <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrChooseFileBtn">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
@@ -718,51 +727,6 @@ export class MockupsPage {
         </div>
 
         <div class="scr-viewer__split" id="scrSplit">
-          <div class="scr-viewer__edit-pane" id="scrEditPane">
-            <div class="scr-form">
-              <div class="scr-form__row">
-                <label class="scr-form__label">Title *</label>
-                <input class="scr-form__input" id="scrTitle" type="text"
-                  value="${escHtml(screen.title)}" autocomplete="off"/>
-              </div>
-              <div class="scr-form__row scr-form__row--grow">
-                <label class="scr-form__label">Description</label>
-                <textarea class="scr-form__textarea" id="scrDescription"
-                  placeholder="Describe what this screen should contain…">${escHtml(screen.description || screen.prompt_used || '')}</textarea>
-              </div>
-              <div class="scr-form__actions scr-form__actions--split">
-                <div class="scr-form__btns">
-                  <button class="scr-btn scr-btn--primary" id="scrRunBtn">
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-                      <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
-                      <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                    </svg>
-                    Create Mockup
-                  </button>
-                  <button class="scr-btn scr-btn--secondary" id="scrEditBtn">
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                    </svg>
-                    Edits
-                  </button>
-                </div>
-                <div class="scr-form__btns">
-                  <button class="scr-btn scr-btn--accent" id="scrSaveBtn">
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                      <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-                      <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-                    </svg>
-                    Save
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="scr-viewer__divider" id="scrDivider"></div>
-
           <div class="scr-viewer__preview-pane">
             <div class="scr-viewer__preview-bar">
               <span class="scr-viewer__preview-label">Preview</span>
@@ -776,6 +740,41 @@ export class MockupsPage {
             </div>
             <div class="scr-viewer__content" id="scrViewerContent">
               <iframe class="scr-viewer__iframe" id="scrPreviewFrame"></iframe>
+            </div>
+          </div>
+
+          <div class="scr-viewer__divider" id="scrDivider"></div>
+
+          <div class="scr-viewer__edit-pane" id="scrEditPane">
+            <div class="scr-form">
+              <div class="scr-viewer__model-row">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M5.5 8.5l1.5 1.5L10.5 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="scr-viewer__model-name" id="scrModelName">${escHtml(this._getSelectedModel()?.label || 'No model selected')}</span>
+              </div>
+              <div class="scr-form__row">
+                <label class="scr-form__label">Title *</label>
+                <input class="scr-form__input" id="scrTitle" type="text"
+                  value="${escHtml(screen.title)}" autocomplete="off"/>
+              </div>
+              <div class="scr-form__row scr-form__row--grow">
+                <label class="scr-form__label">Description</label>
+                <textarea class="scr-form__textarea" id="scrDescription"
+                  placeholder="Describe what this screen should contain…">${escHtml(screen.description || screen.prompt_used || '')}</textarea>
+              </div>
+              <div class="scr-ph-container" id="scrPromptHistory"></div>
+              <div class="scr-form__actions">
+                <button class="scr-btn scr-btn--accent" id="scrSaveBtn">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                    <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+                    <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+                  </svg>
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -833,7 +832,7 @@ export class MockupsPage {
       document.body.style.userSelect = 'none';
 
       const onMove = (mv) => {
-        const newWidth = Math.min(Math.max(startWidth + mv.clientX - startX, 200), totalWidth - 200);
+        const newWidth = Math.min(Math.max(startWidth - (mv.clientX - startX), 200), totalWidth - 200);
         editPane.style.flex = `0 0 ${newWidth}px`;
       };
 
@@ -850,8 +849,6 @@ export class MockupsPage {
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup',  onUp);
     });
-
-    main.querySelector('#scrRunBtn').style.display = '';
 
     main.querySelector('#scrSaveBtn').addEventListener('click', async () => {
       const title = main.querySelector('#scrTitle').value.trim();
@@ -953,8 +950,10 @@ export class MockupsPage {
       this._activeId = this._screens[0]?.id ?? null;
       this._refreshSidebar();
       if (this._activeId) this._selectScreen(this._activeId);
-      else                this._showNewForm();
+      else                this._showEmptyState();
     });
+
+    this._loadPromptHistory();
   }
 
   // ----------------------------------------------------------------

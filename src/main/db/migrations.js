@@ -143,13 +143,19 @@ function runMigrations(db) {
   if (!sphCheck) {
     db.exec(`
       CREATE TABLE screen_prompt_history (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-        prompt      TEXT    NOT NULL,
-        is_active   INTEGER NOT NULL DEFAULT 1,
-        executed_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id        INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        screen_design_id  INTEGER REFERENCES screen_designs(id) ON DELETE CASCADE,
+        prompt            TEXT    NOT NULL,
+        is_active         INTEGER NOT NULL DEFAULT 1,
+        executed_at       TEXT    NOT NULL DEFAULT (datetime('now'))
       )
     `);
+  } else {
+    const sphCols = db.prepare("PRAGMA table_info(screen_prompt_history)").all().map(c => c.name);
+    if (!sphCols.includes('screen_design_id')) {
+      db.exec('ALTER TABLE screen_prompt_history ADD COLUMN screen_design_id INTEGER REFERENCES screen_designs(id) ON DELETE CASCADE');
+    }
   }
 
   // Add issues table for existing databases

@@ -305,7 +305,7 @@
 }
 
 .scr-viewer__edit-pane {
-  flex: 0 0 50%;
+  flex: 0 0 30%;
   min-width: 200px;
   display: flex;
   flex-direction: column;

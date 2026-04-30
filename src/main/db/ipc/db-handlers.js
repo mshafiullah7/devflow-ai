@@ -225,16 +225,16 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // screen_prompt_history
   // ----------------------------------------------------------------
-  ipcMain.handle('db:screen_prompt_history:list', (_e, project_id) => {
+  ipcMain.handle('db:screen_prompt_history:list', (_e, { project_id, screen_design_id }) => {
     return db
-      .prepare('SELECT * FROM screen_prompt_history WHERE project_id = ? AND is_active = 1 ORDER BY executed_at DESC LIMIT 20')
-      .all(project_id);
+      .prepare('SELECT * FROM screen_prompt_history WHERE project_id = ? AND screen_design_id = ? AND is_active = 1 ORDER BY executed_at DESC LIMIT 20')
+      .all(project_id, screen_design_id);
   });
 
-  ipcMain.handle('db:screen_prompt_history:create', (_e, { project_id, prompt }) => {
+  ipcMain.handle('db:screen_prompt_history:create', (_e, { project_id, screen_design_id, prompt }) => {
     const result = db
-      .prepare('INSERT INTO screen_prompt_history (project_id, prompt) VALUES (?, ?)')
-      .run(project_id, prompt);
+      .prepare('INSERT INTO screen_prompt_history (project_id, screen_design_id, prompt) VALUES (?, ?, ?)')
+      .run(project_id, screen_design_id, prompt);
     return db.prepare('SELECT * FROM screen_prompt_history WHERE id = ?').get(result.lastInsertRowid);
   });
 
@@ -243,8 +243,8 @@ function registerDbHandlers() {
     return { success: true };
   });
 
-  ipcMain.handle('db:screen_prompt_history:deleteAll', (_e, project_id) => {
-    db.prepare('UPDATE screen_prompt_history SET is_active = 0 WHERE project_id = ?').run(project_id);
+  ipcMain.handle('db:screen_prompt_history:deleteAll', (_e, { project_id, screen_design_id }) => {
+    db.prepare('UPDATE screen_prompt_history SET is_active = 0 WHERE project_id = ? AND screen_design_id = ?').run(project_id, screen_design_id);
     return { success: true };
   });
 
