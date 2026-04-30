@@ -134,6 +134,16 @@ contextBridge.exposeInMainWorld('app', {
   agentCliPath:     () => invoke('app:agent-cli-path'),
   screensDir:       (projectName) => invoke('app:screens-dir', projectName),
   prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),
+  chat: {
+    generate: (data) => ipcRenderer.invoke('chat:generate', data),
+    cancel:   ()     => ipcRenderer.invoke('chat:cancel'),
+    onToken:  (cb)   => ipcRenderer.on('chat:token', (_e, p) => cb(p)),
+    onDone:   (cb)   => ipcRenderer.on('chat:done',  (_e, p) => cb(p)),
+    offAll:   ()     => {
+      ipcRenderer.removeAllListeners('chat:token');
+      ipcRenderer.removeAllListeners('chat:done');
+    },
+  },
 });
 
 

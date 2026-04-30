@@ -136,6 +136,8 @@ export class MockupsPage {
     removeCss('pages/mockups/mockups-page.css');
     removeCss('styles/screens.css');
     this._git?.stopPoll();
+    window.app.chat.offAll();
+    window.app.chat.cancel();
   }
 
   _getProject()      { return this._project; }
@@ -538,6 +540,152 @@ export class MockupsPage {
     });
   }
 
+  async _runChatGeneration(screen, chatInput, main) {
+    const desc = chatInput.value.trim();
+    if (!desc) { chatInput.focus(); return; }
+
+    const model = this._getSelectedModel();
+    if (!model) { alert('No model selected.'); return; }
+
+    // Clear composer
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+
+    const project = this._getProject();
+    const prompt  = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt());
+
+    const messagesEl = main.querySelector('#scrChatMessages');
+    const emptyEl    = messagesEl.querySelector('.scr-chat-empty');
+    if (emptyEl) emptyEl.remove();
+
+    // User bubble
+    const userBubble = document.createElement('div');
+    userBubble.className = 'scr-chat-msg scr-chat-msg--user';
+    userBubble.innerHTML = `<div class="scr-chat-msg__text">${escHtml(desc)}</div>`;
+    messagesEl.appendChild(userBubble);
+
+    // Assistant streaming bubble
+    const asstBubble = document.createElement('div');
+    asstBubble.className = 'scr-chat-msg scr-chat-msg--assistant';
+    asstBubble.innerHTML = `
+      <div class="scr-chat-msg__generating">
+        <span class="scr-chat-stream-dot"></span>
+        <span class="scr-chat-msg__gen-label">Generating…</span>
+        <button class="scr-chat-cancel-btn">Cancel</button>
+      </div>
+    `;
+    messagesEl.appendChild(asstBubble);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    window.app.chat.offAll();
+
+    let charCount = 0;
+    window.app.chat.onToken(({ text }) => {
+      charCount += text.length;
+      const lbl = asstBubble.querySelector('.scr-chat-msg__gen-label');
+      if (lbl) lbl.textContent = `Generating… (${charCount} chars)`;
+    });
+
+    window.app.chat.onDone(async ({ html, error }) => {
+      window.app.chat.offAll();
+      if (error || !html) {
+        asstBubble.innerHTML = `<div class="scr-chat-msg__error">${escHtml(error || 'No HTML in response')}</div>`;
+      } else {
+        await window.db.screenDesigns.update({ id: screen.id, html_content: html, model_used: model.label || '' });
+        screen.html_content = html;
+        this._loadPreview(html);
+        asstBubble.innerHTML = `
+          <div class="scr-chat-msg__done">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Preview updated
+          </div>
+        `;
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+
+    asstBubble.querySelector('.scr-chat-cancel-btn').addEventListener('click', () => {
+      window.app.chat.cancel();
+      window.app.chat.offAll();
+      asstBubble.innerHTML = `<div class="scr-chat-msg__cancelled">Cancelled</div>`;
+    });
+
+    await window.app.chat.generate({ prompt, model });
+  }
+
+  _showEditScreenModal(screen) {
+    const dlg = document.createElement('div');
+    dlg.className = 'scr-overlay';
+    dlg.innerHTML = `
+      <div class="scr-ns-dialog">
+        <div class="scr-ns-dialog__header">
+          <span class="scr-ns-dialog__title">Edit Screen</span>
+          <button class="scr-dialog__close" id="scrEditClose">&times;</button>
+        </div>
+        <div class="scr-ns-dialog__body">
+          <div class="scr-form__row">
+            <label class="scr-form__label">Title *</label>
+            <input class="scr-form__input" id="scrEditTitle" type="text"
+              value="${escHtml(screen.title)}" autocomplete="off"/>
+          </div>
+          <div class="scr-form__row scr-form__row--grow">
+            <label class="scr-form__label">Description</label>
+            <textarea class="scr-form__textarea scr-ns-dialog__desc" id="scrEditDesc">${escHtml(screen.description || screen.prompt_used || '')}</textarea>
+          </div>
+        </div>
+        <div class="scr-ns-dialog__footer">
+          <button class="scr-btn scr-btn--secondary" id="scrEditCancel">Cancel</button>
+          <button class="scr-btn scr-btn--primary" id="scrEditSave">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+              <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+            Save
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(dlg);
+    dlg.querySelector('#scrEditTitle').focus();
+
+    const close = () => dlg.remove();
+    dlg.querySelector('#scrEditClose').addEventListener('click', close);
+    dlg.querySelector('#scrEditCancel').addEventListener('click', close);
+    dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
+
+    dlg.querySelector('#scrEditSave').addEventListener('click', async () => {
+      const title = dlg.querySelector('#scrEditTitle').value.trim();
+      const desc  = dlg.querySelector('#scrEditDesc').value.trim();
+      if (!title) { dlg.querySelector('#scrEditTitle').focus(); return; }
+
+      await window.db.screenDesigns.update({
+        id:          screen.id,
+        title,
+        description: desc,
+        tech_stack:  'html',
+        prompt_used: desc,
+        model_used:  this._getSelectedModel()?.label || '',
+      });
+      screen.title       = title;
+      screen.description = desc;
+
+      const titleEl = this.container.querySelector('.scr-viewer__title');
+      if (titleEl) titleEl.textContent = title;
+
+      const descEl = this.container.querySelector('#scrDescription');
+      if (descEl) descEl.value = desc;
+
+      this._screens = await window.db.screenDesigns.list(this._projectId);
+      this._refreshSidebar();
+      close();
+    });
+  }
+
   async _saveToHistory(prompt) {
     if (!prompt || !this._activeId) return;
     const existing = await window.db.screenPromptHistory.list({ project_id: this._projectId, screen_design_id: this._activeId });
@@ -689,6 +837,12 @@ export class MockupsPage {
           <div class="scr-viewer__meta">
             <span class="scr-viewer__title">${escHtml(screen.title)}</span>
             <span class="scr-viewer__tech-badge">${TECH}</span>
+            <button class="scr-btn scr-btn--sm" id="scrEditDetailsBtn" title="Edit title & description">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+              Edit Details
+            </button>
           </div>
           <div class="scr-viewer__actions">
             <button class="scr-btn scr-btn--sm scr-btn--primary" id="scrRunBtn">
@@ -746,34 +900,32 @@ export class MockupsPage {
           <div class="scr-viewer__divider" id="scrDivider"></div>
 
           <div class="scr-viewer__edit-pane" id="scrEditPane">
-            <div class="scr-form">
-              <div class="scr-viewer__model-row">
+            <div class="scr-chat-pane">
+              <div class="scr-chat-header">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
                   <path d="M5.5 8.5l1.5 1.5L10.5 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
+                <span class="scr-chat-header-label">Chat</span>
                 <span class="scr-viewer__model-name" id="scrModelName">${escHtml(this._getSelectedModel()?.label || 'No model selected')}</span>
-              </div>
-              <div class="scr-form__row">
-                <label class="scr-form__label">Title *</label>
-                <input class="scr-form__input" id="scrTitle" type="text"
-                  value="${escHtml(screen.title)}" autocomplete="off"/>
-              </div>
-              <div class="scr-form__row scr-form__row--grow">
-                <label class="scr-form__label">Description</label>
-                <textarea class="scr-form__textarea" id="scrDescription"
-                  placeholder="Describe what this screen should contain…">${escHtml(screen.description || screen.prompt_used || '')}</textarea>
-              </div>
-              <div class="scr-ph-container" id="scrPromptHistory"></div>
-              <div class="scr-form__actions">
-                <button class="scr-btn scr-btn--accent" id="scrSaveBtn">
+                <button class="scr-chat-load-desc" id="scrLoadDescBtn" title="Load saved description" style="margin-left:auto">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                    <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-                    <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+                    <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                    <path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                   </svg>
-                  Save
                 </button>
+              </div>
+              <div class="scr-chat-messages" id="scrChatMessages">
+                <div class="scr-chat-empty">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" opacity="0.25">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  </svg>
+                  <p>Describe what you'd like to build and click <strong>Create Mockup</strong>.</p>
+                </div>
+              </div>
+              <div class="scr-chat-composer">
+                <textarea class="scr-chat-input" id="scrDescription"
+                  placeholder="Describe the screen…"></textarea>
               </div>
             </div>
           </div>
@@ -814,6 +966,32 @@ export class MockupsPage {
   _bindViewerEvents(screen) {
     const main = this.container.querySelector('#scrMain');
 
+    // Auto-resize chat composer
+    const chatInput = main.querySelector('#scrDescription');
+    const resizeChatInput = () => {
+      chatInput.style.height = 'auto';
+      chatInput.style.height = chatInput.scrollHeight + 'px';
+    };
+    chatInput.addEventListener('input', resizeChatInput);
+    resizeChatInput();
+
+    // Enter to send (Shift+Enter inserts newline)
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this._runChatGeneration(screen, chatInput, main);
+      }
+    });
+
+    // Load saved description into composer
+    main.querySelector('#scrLoadDescBtn').addEventListener('click', () => {
+      const saved = screen.description || screen.prompt_used || '';
+      if (!saved) return;
+      chatInput.value = saved;
+      resizeChatInput();
+      chatInput.focus();
+    });
+
     // Draggable divider
     const divider  = main.querySelector('#scrDivider');
     const splitEl  = main.querySelector('#scrSplit');
@@ -850,30 +1028,10 @@ export class MockupsPage {
       document.addEventListener('mouseup',  onUp);
     });
 
-    main.querySelector('#scrSaveBtn').addEventListener('click', async () => {
-      const title = main.querySelector('#scrTitle').value.trim();
-      const desc  = main.querySelector('#scrDescription').value.trim();
-      if (!title) { main.querySelector('#scrTitle').focus(); return; }
-
-      await window.db.screenDesigns.update({
-        id:          screen.id,
-        title,
-        description: desc,
-        tech_stack:  'html',
-        prompt_used: desc,
-        model_used:  this._getSelectedModel()?.label || '',
-      });
-      screen.title       = title;
-      screen.description = desc;
-      this._screens = await window.db.screenDesigns.list(this._projectId);
-      this._refreshSidebar();
-
-      const titleEl = main.querySelector('.scr-viewer__title');
-      if (titleEl) titleEl.textContent = title;
-    });
+    main.querySelector('#scrEditDetailsBtn').addEventListener('click', () => this._showEditScreenModal(screen));
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {
-      const title       = main.querySelector('#scrTitle').value.trim() || screen.title;
+      const title       = screen.title;
       const safeTitle   = title.replace(/[^a-z0-9_\-]/gi, '_');
       const projectName = this._project?.name;
       const safeProject = (projectName || '').replace(/[^a-z0-9_\-]/gi, '_');
@@ -895,10 +1053,9 @@ export class MockupsPage {
     });
 
     main.querySelector('#scrRunBtn').addEventListener('click', async () => {
-      const title = main.querySelector('#scrTitle').value.trim();
+      const title = screen.title;
       const desc  = main.querySelector('#scrDescription').value.trim();
 
-      if (!title) { main.querySelector('#scrTitle').focus(); return; }
       if (!desc)  { main.querySelector('#scrDescription').focus(); return; }
 
       const model = this._getSelectedModel();
@@ -908,12 +1065,9 @@ export class MockupsPage {
       }
 
       await window.db.screenDesigns.update({
-        id: screen.id, title, description: desc, tech_stack: 'html',
-        prompt_used: desc, model_used: model.label || '',
+        id: screen.id, description: desc, prompt_used: desc, model_used: model.label || '',
       });
-      screen.title = title; screen.description = desc;
-      this._screens = await window.db.screenDesigns.list(this._projectId);
-      this._refreshSidebar();
+      screen.description = desc;
 
       const project    = this._getProject();
       const screensDir = await window.app.screensDir(project?.name);
@@ -952,8 +1106,6 @@ export class MockupsPage {
       if (this._activeId) this._selectScreen(this._activeId);
       else                this._showEmptyState();
     });
-
-    this._loadPromptHistory();
   }
 
   // ----------------------------------------------------------------
