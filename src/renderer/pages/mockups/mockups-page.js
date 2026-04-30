@@ -4,33 +4,16 @@ import { ModelConfigsModal } from '../../components/model-configs/model-configs-
 import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 import { GitController } from '../../components/git/git-controller.js';
 
-const TECH_STACKS = [
-  { value: 'html',           label: 'Plain HTML / CSS',     mobile: false },
-  { value: 'react-tailwind', label: 'React + Tailwind CSS', mobile: false },
-  { value: 'vue-tailwind',   label: 'Vue 3 + Tailwind CSS', mobile: false },
-  { value: 'flutter',        label: 'Flutter (Dart)',        mobile: true  },
-  { value: 'react-native',   label: 'React Native',          mobile: true  },
-];
+const TECH = 'Plain HTML / CSS';
 
-const TECH_LABELS = Object.fromEntries(TECH_STACKS.map(t => [t.value, t.label]));
-
-function techLabel(value) { return TECH_LABELS[value] || value; }
-function isMobile(value)  { return TECH_STACKS.find(t => t.value === value)?.mobile ?? false; }
-
-function buildScreenPrompt(description, techStack, projectDescription, outputFile, designTemplate) {
-  const tech   = TECH_LABELS[techStack] || techStack;
-  const mobile = isMobile(techStack);
+function buildScreenPrompt(description, projectDescription, outputFile, designTemplate) {
   const ctx    = projectDescription ? `\nProject context: ${projectDescription}` : '';
   const save   = outputFile ? `\nWhen done, save the complete output to: ${outputFile}` : '';
   const design = designTemplate
     ? `\n\nDESIGN SYSTEM — you MUST follow this for every element (colours, fonts, spacing, components):\n${designTemplate}`
     : '';
 
-  if (mobile) {
-    return `You are an expert mobile UI developer. Generate complete, production-quality ${tech} code for the screen described below. Output ONLY the code — no explanation, no markdown fences.${ctx}${design}${save}\n\nScreen to design:\n${description}`;
-  }
-
-  return `You are an expert UI/UX developer. Generate a complete, self-contained HTML file for the screen described below using ${tech}.
+  return `You are an expert UI/UX developer. Generate a complete, self-contained HTML file for the screen described below using ${TECH}.
 Rules:
 - Output ONLY valid HTML starting with <!DOCTYPE html>
 - All CSS goes inside a <style> tag; CDN links (e.g. Tailwind CDN) are allowed
@@ -42,13 +25,12 @@ Screen to design:
 ${description}`;
 }
 
-function buildExtractPrompt(techStack, screenTitle, htmlFilePath, outputFile) {
-  const tech = TECH_LABELS[techStack] || techStack;
+function buildExtractPrompt(screenTitle, htmlFilePath, outputFile) {
   const save = outputFile ? `\nWhen done, write the complete JSON array to: ${outputFile}` : '';
-  return `You are an expert product manager and UI developer. Analyze the ${tech} UI screen design provided below and extract user stories.
+  return `You are an expert product manager and UI developer. Analyze the ${TECH} UI screen design provided below and extract user stories.
 
 Screen: ${screenTitle}
-Tech stack: ${tech}
+Tech stack: ${TECH}
 
 Screen content at: ${htmlFilePath}
 ${save}
@@ -285,7 +267,6 @@ export class MockupsPage {
             <span class="scr-sidebar__item-id">#${s.id}</span>
             <span class="scr-sidebar__item-title">${escHtml(s.title)}</span>
           </div>
-          <span class="scr-sidebar__item-tech">${escHtml(techLabel(s.tech_stack))}</span>
         </div>
       </div>
     `).join('');
@@ -426,7 +407,7 @@ export class MockupsPage {
     const main  = this.container.querySelector('#scrMain');
     const title = main?.querySelector('#scrTitle')?.value.trim() || '';
     const desc  = main?.querySelector('#scrDescription')?.value.trim() || '';
-    const stack = main?.querySelector('#scrTechStack')?.value || 'html';
+    const stack = 'html';
 
     if (!title) { main?.querySelector('#scrTitle')?.focus(); return null; }
 
@@ -500,13 +481,6 @@ export class MockupsPage {
           <input class="scr-form__input" id="scrTitle" type="text"
             placeholder="e.g. Login Screen, Dashboard, Product List…"
             value="${escHtml(prefill.title || '')}" autocomplete="off"/>
-        </div>
-
-        <div class="scr-form__row">
-          <label class="scr-form__label">Tech Stack</label>
-          <select class="scr-form__select" id="scrTechStack">
-            ${TECH_STACKS.map(t => `<option value="${t.value}"${prefill.tech_stack === t.value ? ' selected' : ''}>${t.label}</option>`).join('')}
-          </select>
         </div>
 
         <div class="scr-form__row scr-form__row--grow">
@@ -644,8 +618,6 @@ export class MockupsPage {
     const main  = this.container.querySelector('#scrMain');
     const title = main.querySelector('#scrTitle').value.trim();
     const desc  = main.querySelector('#scrDescription').value.trim();
-    const stack = main.querySelector('#scrTechStack').value;
-
     if (!title) { main.querySelector('#scrTitle').focus(); return; }
     if (!desc)  { main.querySelector('#scrDescription').focus(); return; }
 
@@ -663,7 +635,7 @@ export class MockupsPage {
     const screensDir = await window.app.screensDir(project?.name);
     const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
     const outputFile = `${screensDir}\\${safeTitle}.html`;
-    const prompt     = buildScreenPrompt(desc, stack, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
+    const prompt     = buildScreenPrompt(desc, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
     const cmd        = buildPsCommand(prompt, model);
 
     this._showPromptPreviewModal(prompt, async () => {
@@ -715,14 +687,13 @@ export class MockupsPage {
 
   _showScreenViewer(screen) {
     const main   = this.container.querySelector('#scrMain');
-    const mobile = isMobile(screen.tech_stack);
 
     main.innerHTML = `
       <div class="scr-viewer">
         <div class="scr-viewer__toolbar">
           <div class="scr-viewer__meta">
             <span class="scr-viewer__title">${escHtml(screen.title)}</span>
-            <span class="scr-viewer__tech-badge">${escHtml(techLabel(screen.tech_stack))}</span>
+            <span class="scr-viewer__tech-badge">${TECH}</span>
           </div>
           <div class="scr-viewer__actions">
             <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrChooseFileBtn">
@@ -753,12 +724,6 @@ export class MockupsPage {
                 <label class="scr-form__label">Title *</label>
                 <input class="scr-form__input" id="scrTitle" type="text"
                   value="${escHtml(screen.title)}" autocomplete="off"/>
-              </div>
-              <div class="scr-form__row">
-                <label class="scr-form__label">Tech Stack</label>
-                <select class="scr-form__select" id="scrTechStack">
-                  ${TECH_STACKS.map(t => `<option value="${t.value}"${screen.tech_stack === t.value ? ' selected' : ''}>${t.label}</option>`).join('')}
-                </select>
               </div>
               <div class="scr-form__row scr-form__row--grow">
                 <label class="scr-form__label">Description</label>
@@ -810,17 +775,14 @@ export class MockupsPage {
               </button>
             </div>
             <div class="scr-viewer__content" id="scrViewerContent">
-              ${mobile
-                ? `<pre class="scr-viewer__code-block"><code>${escHtml(screen.html_content)}</code></pre>`
-                : `<iframe class="scr-viewer__iframe" id="scrPreviewFrame"></iframe>`
-              }
+              <iframe class="scr-viewer__iframe" id="scrPreviewFrame"></iframe>
             </div>
           </div>
         </div>
       </div>
     `;
 
-    if (!mobile) this._loadPreview(screen.html_content);
+    this._loadPreview(screen.html_content);
     this._bindViewerEvents(screen);
   }
 
@@ -894,27 +856,23 @@ export class MockupsPage {
     main.querySelector('#scrSaveBtn').addEventListener('click', async () => {
       const title = main.querySelector('#scrTitle').value.trim();
       const desc  = main.querySelector('#scrDescription').value.trim();
-      const stack = main.querySelector('#scrTechStack').value;
       if (!title) { main.querySelector('#scrTitle').focus(); return; }
 
       await window.db.screenDesigns.update({
         id:          screen.id,
         title,
         description: desc,
-        tech_stack:  stack,
+        tech_stack:  'html',
         prompt_used: desc,
         model_used:  this._getSelectedModel()?.label || '',
       });
-      screen.title      = title;
-      screen.tech_stack = stack;
+      screen.title       = title;
       screen.description = desc;
       this._screens = await window.db.screenDesigns.list(this._projectId);
       this._refreshSidebar();
 
       const titleEl = main.querySelector('.scr-viewer__title');
-      const badgeEl = main.querySelector('.scr-viewer__tech-badge');
       if (titleEl) titleEl.textContent = title;
-      if (badgeEl) badgeEl.textContent = techLabel(stack);
     });
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {
@@ -942,7 +900,6 @@ export class MockupsPage {
     main.querySelector('#scrRunBtn').addEventListener('click', async () => {
       const title = main.querySelector('#scrTitle').value.trim();
       const desc  = main.querySelector('#scrDescription').value.trim();
-      const stack = main.querySelector('#scrTechStack').value;
 
       if (!title) { main.querySelector('#scrTitle').focus(); return; }
       if (!desc)  { main.querySelector('#scrDescription').focus(); return; }
@@ -954,10 +911,10 @@ export class MockupsPage {
       }
 
       await window.db.screenDesigns.update({
-        id: screen.id, title, description: desc, tech_stack: stack,
+        id: screen.id, title, description: desc, tech_stack: 'html',
         prompt_used: desc, model_used: model.label || '',
       });
-      screen.title = title; screen.tech_stack = stack; screen.description = desc;
+      screen.title = title; screen.description = desc;
       this._screens = await window.db.screenDesigns.list(this._projectId);
       this._refreshSidebar();
 
@@ -965,7 +922,7 @@ export class MockupsPage {
       const screensDir = await window.app.screensDir(project?.name);
       const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
       const outputFile = `${screensDir}\\${safeTitle}.html`;
-      const prompt     = buildScreenPrompt(desc, stack, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
+      const prompt     = buildScreenPrompt(desc, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
       const cmd        = buildPsCommand(prompt, model);
       this._showPromptPreviewModal(prompt, async () => {
         await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
@@ -1704,7 +1661,7 @@ Spacing:
       htmlContent: screen.html_content,
     });
 
-    const instruction = buildExtractPrompt(screen.tech_stack, screen.title, htmlFilePath, outputFile);
+    const instruction = buildExtractPrompt(screen.title, htmlFilePath, outputFile);
     const cmd         = buildExtractPsCommand(instruction, m);
 
     const dlg = document.createElement('div');
