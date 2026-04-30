@@ -271,6 +271,7 @@ export class DocumentsPage {
   // Editor
   // ----------------------------------------------------------------
   async _selectDoc(id, switchToEdit = false) {
+    this.container.querySelector('.doc-ai-card')?.remove();
     this._activeId = id;
     const doc = this._docs.find(d => d.id === id);
     if (!doc) return;
@@ -293,6 +294,13 @@ export class DocumentsPage {
             <button class="doc-editor__tab${initialTab === 'edit' ? ' doc-editor__tab--active' : ''}" data-tab="edit">Edit</button>
             <button class="doc-editor__tab${initialTab === 'preview' ? ' doc-editor__tab--active' : ''}" data-tab="preview">Preview</button>
           </div>
+          <button class="doc-editor__ai-btn" id="docAiBtn" title="AI Edit">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1v3M8 12v3M1 8h3M12 8h3M3.05 3.05l2.12 2.12M10.83 10.83l2.12 2.12M3.05 12.95l2.12-2.12M10.83 5.17l2.12-2.12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <circle cx="8" cy="8" r="2" fill="currentColor"/>
+            </svg>
+            AI
+          </button>
           <button class="doc-editor__save" id="docSaveBtn"${initialTab === 'preview' ? ' disabled' : ''}>Save</button>
         </div>
 
@@ -438,6 +446,8 @@ export class DocumentsPage {
       panel.querySelector('#docAttachBody').classList.toggle('doc-attach-bar__body--open');
       panel.querySelector('.doc-attach-bar__chevron').classList.toggle('doc-attach-bar__chevron--open');
     });
+
+    panel.querySelector('#docAiBtn').addEventListener('click', () => this._toggleAiCard(doc));
 
     saveBtn.addEventListener('click', save);
     panel.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } });
@@ -709,6 +719,275 @@ export class DocumentsPage {
     this._refreshList();
     if (this._activeId) await this._selectDoc(this._activeId);
     else                this._showEmpty();
+  }
+
+  // ----------------------------------------------------------------
+  // AI Edit card
+  // ----------------------------------------------------------------
+  _toggleAiCard(doc) {
+    const existing = this.container.querySelector('.doc-ai-card');
+    if (existing) { existing.remove(); return; }
+    this._showAiCard(doc);
+  }
+
+  _showAiCard(doc) {
+    const card = document.createElement('div');
+    card.className = 'doc-ai-card';
+    card.innerHTML = `
+      <div class="doc-ai-card__header">
+        <span class="doc-ai-card__title">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1v3M8 12v3M1 8h3M12 8h3M3.05 3.05l2.12 2.12M10.83 10.83l2.12 2.12M3.05 12.95l2.12-2.12M10.83 5.17l2.12-2.12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <circle cx="8" cy="8" r="2" fill="currentColor"/>
+          </svg>
+          AI Edit
+        </span>
+        <button class="doc-ai-card__close" id="docAiClose" aria-label="Close">
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="doc-ai-card__output" id="docAiOutput" hidden></div>
+      <div class="doc-ai-card__body">
+        <textarea class="doc-ai-card__input" id="docAiInput"
+          placeholder="Describe the changes to make to this document…" rows="1" maxlength="4000"></textarea>
+        <div class="doc-ai-card__footer">
+          <span class="doc-ai-card__shortcut">Ctrl+Enter to apply</span>
+          <button class="doc-ai-card__send" id="docAiSend">Apply</button>
+        </div>
+      </div>
+    `;
+
+    this.container.querySelector('.documents-page__body').appendChild(card);
+
+    card.querySelector('#docAiClose').addEventListener('click', () => card.remove());
+
+    const inputEl = card.querySelector('#docAiInput');
+    inputEl.addEventListener('input', () => {
+      inputEl.style.height = 'auto';
+      const capped = Math.min(inputEl.scrollHeight, 160);
+      inputEl.style.height = capped + 'px';
+      inputEl.style.overflowY = inputEl.scrollHeight > 160 ? 'auto' : 'hidden';
+    });
+
+    const submit = () => {
+      const instruction = card.querySelector('#docAiInput').value.trim();
+      if (!instruction) { card.querySelector('#docAiInput').focus(); return; }
+      this._runAiEdit(doc, instruction, card);
+    };
+
+    card.querySelector('#docAiSend').addEventListener('click', submit);
+    card.querySelector('#docAiInput').addEventListener('keydown', e => {
+      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+
+    card.querySelector('#docAiInput').focus();
+  }
+
+  async _runAiEdit(doc, instruction, card) {
+    const cfg      = this._aiModelConfig;
+    const outputEl = card.querySelector('#docAiOutput');
+    const sendBtn  = card.querySelector('#docAiSend');
+    const inputEl  = card.querySelector('#docAiInput');
+
+    if (!cfg) {
+      outputEl.removeAttribute('hidden');
+      outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--error">No model selected — choose one in the header.</span>';
+      return;
+    }
+
+    sendBtn.disabled = true;
+    inputEl.disabled = true;
+    outputEl.removeAttribute('hidden');
+
+    const contentTA      = this.container.querySelector('#docContentTA');
+    const currentContent = contentTA?.value ?? doc.content ?? '';
+
+    // Fetch attachment contents so the AI can read diagrams for context
+    const attachContextParts = [];
+    if (this._attachments.length > 0) {
+      outputEl.innerHTML = '<span class="doc-ai-card__status">Reading attachments…</span>';
+      for (const att of this._attachments) {
+        try {
+          const full = await window.db.attachments.getContent(att.id);
+          if (full?.content) {
+            const typeLabel = att.type === 'drawio' ? 'draw.io XML' : 'SVG';
+            attachContextParts.push(`### ${escHtml(att.name)} (${typeLabel})\n${full.content}`);
+          }
+        } catch { /* skip attachment if fetch fails */ }
+      }
+    }
+
+    const promptParts = [
+      'You are a technical document writer. Update the document based on the user\'s instruction.',
+      'Diagram attachments (SVG or draw.io XML) are provided below as read-only context.',
+      'Extract technical information from them — component names, relationships, data flows, entities, architecture patterns — and use that information to write accurate document content.',
+      'Do NOT reproduce or reference the raw XML/SVG in the output.',
+      '',
+      '## Document title',
+      doc.title,
+      '',
+      '## Current document content',
+      currentContent || '(empty)',
+    ];
+
+    if (attachContextParts.length > 0) {
+      promptParts.push(
+        '',
+        '## Diagram attachments (read for context only)',
+        ...attachContextParts,
+      );
+    }
+
+    promptParts.push(
+      '',
+      '## User instruction',
+      instruction,
+      '',
+      'Return ONLY the updated document content in Markdown. No explanations, no preamble, no code fences wrapping the entire output.',
+    );
+
+    const prompt = promptParts.join('\n');
+
+    outputEl.innerHTML = '<span class="doc-ai-card__status">Generating…</span>';
+
+    try {
+      if (cfg.type === 'api') {
+        await this._runAiEditApi(cfg, prompt, outputEl, contentTA);
+      } else {
+        await this._runAiEditCli(cfg, prompt, outputEl, contentTA, card);
+      }
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.disabled = false;
+    }
+  }
+
+  async _runAiEditApi(cfg, prompt, outputEl, contentTA) {
+    const baseUrl = (cfg.base_url || '').replace(/\/$/, '');
+    if (!baseUrl) {
+      outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--error">base_url not configured for this model.</span>';
+      return;
+    }
+
+    const body = { model: cfg.model_name || 'default', messages: [{ role: 'user', content: prompt }], stream: true };
+    if (cfg.max_tokens) body.max_tokens = cfg.max_tokens;
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (cfg.api_key) headers['Authorization'] = `Bearer ${cfg.api_key}`;
+
+    let res;
+    try {
+      res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
+    } catch (err) {
+      outputEl.innerHTML = `<span class="doc-ai-card__status doc-ai-card__status--error">Request failed: ${escHtml(err.message)}</span>`;
+      return;
+    }
+
+    if (!res.ok) {
+      const errText = await res.text();
+      outputEl.innerHTML = `<span class="doc-ai-card__status doc-ai-card__status--error">HTTP ${res.status}: ${escHtml(errText.slice(0, 200))}</span>`;
+      return;
+    }
+
+    outputEl.textContent = '';
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer    = '';
+    let fullText  = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(data);
+          const delta = chunk.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullText += delta;
+            outputEl.textContent = fullText;
+            outputEl.scrollTop = outputEl.scrollHeight;
+          }
+        } catch { /* skip malformed SSE chunk */ }
+      }
+    }
+
+    if (fullText.trim()) {
+      if (contentTA) { contentTA.value = fullText.trim(); this._dirty = true; }
+      const activeDoc = this._docs.find(d => d.id === this._activeId);
+      if (activeDoc) activeDoc.content = fullText.trim();
+      this._refreshPreviewIfActive();
+      outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--success">✓ Applied — review and save</span>';
+    } else {
+      outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--error">No content returned by model.</span>';
+    }
+  }
+
+  async _runAiEditCli(cfg, prompt, outputEl, contentTA, card) {
+    const exe        = cfg.executable || 'claude';
+    const flags      = cfg.flags ? ` ${cfg.flags}` : '';
+    const cwd        = this._project?.project_path || '';
+    const safePrompt = prompt.replace(/'/g, "''");
+    const command    = cfg.input_mode === 'heredoc'
+      ? `$p = @'\n${safePrompt}\n'@\n${exe}${flags} $p`
+      : `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}`;
+
+    outputEl.textContent = '';
+
+    return new Promise(resolve => {
+      let fullOutput = '';
+
+      window.db.terminal.removeListeners();
+      window.db.terminal.onData(({ text }) => {
+        fullOutput += text;
+        outputEl.textContent = fullOutput;
+        outputEl.scrollTop = outputEl.scrollHeight;
+      });
+      window.db.terminal.onDone(({ exitCode }) => {
+        window.db.terminal.removeListeners();
+        if (exitCode === 0 && fullOutput.trim()) {
+          if (contentTA) { contentTA.value = fullOutput.trim(); this._dirty = true; }
+          const activeDoc = this._docs.find(d => d.id === this._activeId);
+          if (activeDoc) activeDoc.content = fullOutput.trim();
+          this._refreshPreviewIfActive();
+          outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--success">✓ Applied — review and save</span>';
+        } else {
+          outputEl.innerHTML += `\n<span class="doc-ai-card__status doc-ai-card__status--error">Exit code ${exitCode}</span>`;
+        }
+        resolve();
+      });
+
+      window.db.terminal.execStart({ command, cwd }).catch(err => {
+        window.db.terminal.removeListeners();
+        outputEl.innerHTML = `<span class="doc-ai-card__status doc-ai-card__status--error">CLI error: ${escHtml(err.message)}</span>`;
+        resolve();
+      });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Preview refresh (called after AI applies content)
+  // ----------------------------------------------------------------
+  _refreshPreviewIfActive() {
+    const panel = this.container.querySelector('#docPanel');
+    if (!panel) return;
+    const previewPane = panel.querySelector('[data-pane="preview"]');
+    const contentTA   = panel.querySelector('#docContentTA');
+    if (!previewPane || !contentTA) return;
+    if (!previewPane.classList.contains('doc-editor__pane--hidden')) {
+      previewPane.innerHTML = this._renderMarkdown(contentTA.value);
+      this._bindAttachLinks(panel);
+      const saveBtn = panel.querySelector('#docSaveBtn');
+      if (saveBtn) saveBtn.disabled = false;
+    }
   }
 
   // ----------------------------------------------------------------
