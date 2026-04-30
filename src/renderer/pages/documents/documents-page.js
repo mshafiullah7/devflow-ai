@@ -326,9 +326,9 @@ export class DocumentsPage {
           </div>
           <div class="doc-attach-bar__body" id="docAttachBody">
             <div class="doc-attach-list" id="docAttachList">
-              ${this._renderAttachList()}
+              ${this._renderAttachList(initialTab === 'preview')}
             </div>
-            <div class="doc-attach-actions">
+            <div class="doc-attach-actions" id="docAttachActions"${initialTab === 'preview' ? ' hidden' : ''}>
               <button class="doc-attach-add-btn" id="docAddSvg">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -353,9 +353,11 @@ export class DocumentsPage {
     if (initialTab === 'preview') this._bindAttachLinks(panel);
   }
 
-  _renderAttachList() {
+  _renderAttachList(isPreview = false) {
     if (this._attachments.length === 0) {
-      return '<span class="doc-attach-empty">No attachments yet — add SVG or draw.io files below</span>';
+      return isPreview
+        ? '<span class="doc-attach-empty">No attachments — add from Edit mode</span>'
+        : '<span class="doc-attach-empty">No attachments yet — add SVG or draw.io files below</span>';
     }
     return this._attachments.map(a => `
       <div class="doc-attach-item" data-attach-id="${a.id}">
@@ -363,13 +365,19 @@ export class DocumentsPage {
         <span class="doc-attach-item__name">${escHtml(a.name)}</span>
         <span class="doc-attach-item__ref">attach:${a.id}</span>
         <div class="doc-attach-item__actions">
+          ${a.type === 'svg' ? `
           <button class="doc-attach-item__btn" data-view="${a.id}" title="View">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.4"/>
               <circle cx="8" cy="8" r="2" fill="currentColor"/>
             </svg>
           </button>
-          ${a.type === 'drawio' ? `
+          <button class="doc-attach-item__btn" data-replace-svg="${a.id}" title="Replace from file">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M2 9a6 6 0 1 0 1-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M2 4v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>` : `
           <button class="doc-attach-item__btn" data-drawio="${a.id}" title="Open in draw.io">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -381,7 +389,7 @@ export class DocumentsPage {
               <path d="M2 8a6 6 0 0110.5-4M14 8a6 6 0 01-10.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               <path d="M12 2v3h3M1 11v3h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-          </button>` : ''}
+          </button>`}
           <button class="doc-attach-item__btn doc-attach-item__btn--del" data-del-attach="${a.id}" title="Delete">
             <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
               <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -427,6 +435,8 @@ export class DocumentsPage {
         tabs.forEach(t => t.classList.remove('doc-editor__tab--active'));
         tab.classList.add('doc-editor__tab--active');
         const aiBtn  = panel.querySelector('#docAiBtn');
+        const attachActions = panel.querySelector('#docAttachActions');
+        const attachList    = panel.querySelector('#docAttachList');
         if (tab.dataset.tab === 'preview') {
           if (this._dirty) await save();
           previewPane.innerHTML = this._renderMarkdown(contentTA.value);
@@ -437,6 +447,9 @@ export class DocumentsPage {
           if (aiBtn) aiBtn.hidden = true;
           const aiCard = this.container.querySelector('.doc-ai-card');
           if (aiCard) aiCard.hidden = true;
+          if (attachActions) attachActions.hidden = true;
+          if (attachList) attachList.innerHTML = this._renderAttachList(true);
+          this._bindAttachListEvents(panel, doc.id);
         } else {
           previewPane.classList.add('doc-editor__pane--hidden');
           editPane.classList.remove('doc-editor__pane--hidden');
@@ -445,6 +458,9 @@ export class DocumentsPage {
           const existingCard = this.container.querySelector('.doc-ai-card');
           if (existingCard) existingCard.hidden = false;
           else this._showAiCard(doc);
+          if (attachActions) attachActions.hidden = false;
+          if (attachList) attachList.innerHTML = this._renderAttachList(false);
+          this._bindAttachListEvents(panel, doc.id);
           contentTA.focus();
         }
       });
@@ -506,6 +522,23 @@ export class DocumentsPage {
         }
         return;
       }
+      const replaceSvgBtn = e.target.closest('[data-replace-svg]');
+      if (replaceSvgBtn) {
+        const id     = Number(replaceSvgBtn.dataset.replaceSvg);
+        const picker = document.createElement('input');
+        picker.type   = 'file';
+        picker.accept = '.svg,image/svg+xml';
+        picker.addEventListener('change', async () => {
+          const file = picker.files[0];
+          if (!file) return;
+          const content = await file.text();
+          const att = this._attachments.find(a => a.id === id);
+          await window.db.attachments.update({ id, name: att?.name, content });
+          this._showToast('✓ SVG replaced from file');
+        });
+        picker.click();
+        return;
+      }
       const delBtn = e.target.closest('[data-del-attach]');
       if (delBtn) {
         const id = Number(delBtn.dataset.delAttach);
@@ -518,9 +551,11 @@ export class DocumentsPage {
   }
 
   _refreshAttachList(panel) {
-    const list  = panel.querySelector('#docAttachList');
-    const count = panel.querySelector('#docAttachCount');
-    if (list)  list.innerHTML = this._renderAttachList();
+    const list       = panel.querySelector('#docAttachList');
+    const count      = panel.querySelector('#docAttachCount');
+    const isPreview  = !panel.querySelector('[data-pane="edit"]') ||
+                       panel.querySelector('[data-pane="edit"]').classList.contains('doc-editor__pane--hidden');
+    if (list)  list.innerHTML = this._renderAttachList(isPreview);
     if (count) count.textContent = this._attachments.length;
     if (list) this._bindAttachListEvents(panel, this._activeId);
   }
@@ -536,6 +571,8 @@ export class DocumentsPage {
       ? '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">\n  <!-- paste your SVG code here -->\n</svg>'
       : '<!-- Paste your draw.io XML here -->\n<mxfile ...>';
 
+    const accept = type === 'svg' ? '.svg,image/svg+xml' : '.drawio,.xml';
+
     const formEl = document.createElement('div');
     formEl.className = 'doc-attach-form-overlay';
     formEl.innerHTML = `
@@ -547,11 +584,20 @@ export class DocumentsPage {
         <div class="doc-attach-form__body">
           <label class="doc-attach-form__label">Name</label>
           <input class="doc-attach-form__input" id="attachName" placeholder="e.g. Architecture Diagram" autocomplete="off"/>
-          <label class="doc-attach-form__label" style="margin-top:10px">${label} Code</label>
+          <div class="doc-attach-form__label-row" style="margin-top:10px">
+            <label class="doc-attach-form__label" style="margin:0">${label} Code</label>
+            <button class="doc-attach-form__file-btn" id="attachFileBrowse" type="button">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 6a2 2 0 012-2h3l2 2h5a1 1 0 011 1v5a1 1 0 01-1 1H4a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              </svg>
+              Browse file
+            </button>
+            <input type="file" id="attachFilePicker" accept="${accept}" style="display:none"/>
+          </div>
           <textarea class="doc-attach-form__textarea" id="attachContent" placeholder="${escHtml(ph)}" spellcheck="false"></textarea>
           ${type === 'svg'
-            ? '<p class="doc-attach-form__hint">Paste SVG code from Figma, draw.io export, Excalidraw, or hand-written SVG.</p>'
-            : '<p class="doc-attach-form__hint">Paste draw.io XML. Use File → Export → XML in draw.io desktop, or copy from a .drawio file.</p>'}
+            ? '<p class="doc-attach-form__hint">Paste SVG code, or drag &amp; drop / browse a .svg file.</p>'
+            : '<p class="doc-attach-form__hint">Paste draw.io XML, or drag &amp; drop / browse a .drawio or .xml file.</p>'}
         </div>
         <div class="doc-attach-form__footer">
           <button class="doc-attach-form__btn doc-attach-form__btn--cancel" id="attachFormCancel">Cancel</button>
@@ -564,7 +610,36 @@ export class DocumentsPage {
 
     const nameInput    = formEl.querySelector('#attachName');
     const contentInput = formEl.querySelector('#attachContent');
+    const filePicker   = formEl.querySelector('#attachFilePicker');
     const close        = () => formEl.remove();
+
+    const loadFile = file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        contentInput.value = e.target.result;
+        if (!nameInput.value.trim()) {
+          nameInput.value = file.name.replace(/\.[^.]+$/, '');
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    formEl.querySelector('#attachFileBrowse').addEventListener('click', () => filePicker.click());
+    filePicker.addEventListener('change', () => { if (filePicker.files[0]) loadFile(filePicker.files[0]); });
+
+    contentInput.addEventListener('dragover', e => {
+      e.preventDefault();
+      contentInput.classList.add('doc-attach-form__textarea--drag-over');
+    });
+    contentInput.addEventListener('dragleave', () => {
+      contentInput.classList.remove('doc-attach-form__textarea--drag-over');
+    });
+    contentInput.addEventListener('drop', e => {
+      e.preventDefault();
+      contentInput.classList.remove('doc-attach-form__textarea--drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) loadFile(file);
+    });
 
     formEl.querySelector('#attachFormClose').addEventListener('click', close);
     formEl.querySelector('#attachFormCancel').addEventListener('click', close);

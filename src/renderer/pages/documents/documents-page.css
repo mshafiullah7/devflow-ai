@@ -970,6 +970,34 @@
 }
 .doc-attach-form__input:focus { border-color: var(--accent); }
 
+.doc-attach-form__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.doc-attach-form__file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.doc-attach-form__file-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
 .doc-attach-form__textarea {
   flex: 1;
   min-height: 240px;
@@ -987,6 +1015,10 @@
   transition: border-color 0.12s;
 }
 .doc-attach-form__textarea:focus { border-color: var(--accent); }
+.doc-attach-form__textarea--drag-over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
 
 .doc-attach-form__hint {
   font-size: 11px;
