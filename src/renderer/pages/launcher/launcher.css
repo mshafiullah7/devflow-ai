@@ -144,7 +144,7 @@
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: var(--accent);
+  background: var(--card-icon-bg, var(--accent));
   color: #fff;
   display: flex;
   align-items: center;
@@ -152,6 +152,11 @@
   font-size: 15px;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+[data-theme="light"] .project-card__icon {
+  background: rgba(30,58,95,0.10);
+  color: #1e3a5f;
 }
 
 .project-card__info {

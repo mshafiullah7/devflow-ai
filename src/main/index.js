@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, session } = require('electron');
 const path = require('node:path');
 const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
@@ -29,7 +29,8 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await session.defaultSession.clearCache();
   Menu.setApplicationMenu(null);
   registerHandlers();
   ipcMain.handle('app:agent-cli-path', () =>
