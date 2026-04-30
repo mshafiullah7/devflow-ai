@@ -294,7 +294,7 @@ export class DocumentsPage {
             <button class="doc-editor__tab${initialTab === 'edit' ? ' doc-editor__tab--active' : ''}" data-tab="edit">Edit</button>
             <button class="doc-editor__tab${initialTab === 'preview' ? ' doc-editor__tab--active' : ''}" data-tab="preview">Preview</button>
           </div>
-          <button class="doc-editor__ai-btn" id="docAiBtn" title="AI Edit">
+          <button class="doc-editor__ai-btn" id="docAiBtn" title="AI Edit"${initialTab === 'preview' ? ' hidden' : ''}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M8 1v3M8 12v3M1 8h3M12 8h3M3.05 3.05l2.12 2.12M10.83 10.83l2.12 2.12M3.05 12.95l2.12-2.12M10.83 5.17l2.12-2.12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               <circle cx="8" cy="8" r="2" fill="currentColor"/>
@@ -426,6 +426,7 @@ export class DocumentsPage {
       tab.addEventListener('click', async () => {
         tabs.forEach(t => t.classList.remove('doc-editor__tab--active'));
         tab.classList.add('doc-editor__tab--active');
+        const aiBtn  = panel.querySelector('#docAiBtn');
         if (tab.dataset.tab === 'preview') {
           if (this._dirty) await save();
           previewPane.innerHTML = this._renderMarkdown(contentTA.value);
@@ -433,10 +434,14 @@ export class DocumentsPage {
           previewPane.classList.remove('doc-editor__pane--hidden');
           this._bindAttachLinks(panel);
           saveBtn.disabled = true;
+          if (aiBtn) aiBtn.hidden = true;
+          this.container.querySelector('.doc-ai-card')?.remove();
         } else {
           previewPane.classList.add('doc-editor__pane--hidden');
           editPane.classList.remove('doc-editor__pane--hidden');
           saveBtn.disabled = false;
+          if (aiBtn) aiBtn.hidden = false;
+          if (!this.container.querySelector('.doc-ai-card')) this._showAiCard(doc);
           contentTA.focus();
         }
       });
@@ -742,26 +747,34 @@ export class DocumentsPage {
           </svg>
           AI Edit
         </span>
-        <button class="doc-ai-card__close" id="docAiClose" aria-label="Close">
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-            <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <div class="doc-ai-card__header-actions">
+          <button class="doc-ai-card__icon-btn" id="docAiClear" title="Clear conversation">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M2 13h12M10.5 3L5 8.5l-2 4.5 4.5-2 5.5-5.5-2-2z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="doc-ai-card__icon-btn" id="docAiClose" aria-label="Close">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="doc-ai-card__messages" id="docAiMessages">
+        <p class="doc-ai-card__welcome">Describe what changes to make. The AI has full context of the document and any attached diagrams.</p>
+      </div>
+      <div class="doc-ai-card__compose">
+        <textarea class="doc-ai-card__input" id="docAiInput" rows="2" maxlength="4000"
+          placeholder="e.g. Add a deployment section based on the architecture diagram"></textarea>
+        <button class="doc-ai-card__send" id="docAiSend" title="Send (Enter) — Alt+Enter for new line">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M14 2L2 8l4 2 2 4 6-12z" fill="currentColor"/>
           </svg>
         </button>
-      </div>
-      <div class="doc-ai-card__output" id="docAiOutput" hidden></div>
-      <div class="doc-ai-card__body">
-        <textarea class="doc-ai-card__input" id="docAiInput"
-          placeholder="Describe the changes to make to this document…" rows="1" maxlength="4000"></textarea>
-        <div class="doc-ai-card__footer">
-          <span class="doc-ai-card__shortcut">Ctrl+Enter to apply</span>
-          <button class="doc-ai-card__send" id="docAiSend">Apply</button>
-        </div>
       </div>
     `;
 
     this.container.querySelector('.documents-page__body').appendChild(card);
-
-    card.querySelector('#docAiClose').addEventListener('click', () => card.remove());
 
     const inputEl = card.querySelector('#docAiInput');
     inputEl.addEventListener('input', () => {
@@ -771,53 +784,118 @@ export class DocumentsPage {
       inputEl.style.overflowY = inputEl.scrollHeight > 160 ? 'auto' : 'hidden';
     });
 
+    card.querySelector('#docAiClose').addEventListener('click', () => card.remove());
+    card.querySelector('#docAiClear').addEventListener('click', () => {
+      card.querySelector('#docAiMessages').innerHTML =
+        '<p class="doc-ai-card__welcome">Conversation cleared.</p>';
+    });
+
     const submit = () => {
-      const instruction = card.querySelector('#docAiInput').value.trim();
-      if (!instruction) { card.querySelector('#docAiInput').focus(); return; }
+      const instruction = inputEl.value.trim();
+      if (!instruction) { inputEl.focus(); return; }
       this._runAiEdit(doc, instruction, card);
+      inputEl.value = '';
+      inputEl.style.height = '';
+      inputEl.style.overflowY = '';
     };
 
     card.querySelector('#docAiSend').addEventListener('click', submit);
-    card.querySelector('#docAiInput').addEventListener('keydown', e => {
-      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); submit(); }
+    inputEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); submit(); }
     });
 
-    card.querySelector('#docAiInput').focus();
+    inputEl.focus();
+  }
+
+  _appendChatMsg(msgsEl, role, text, isError = false) {
+    msgsEl.querySelector('.doc-ai-card__welcome')?.remove();
+    const el = document.createElement('div');
+    el.className = `doc-ai-msg doc-ai-msg--${role}`;
+    el.innerHTML = `<div class="doc-ai-msg__bubble${isError ? ' doc-ai-msg__bubble--error' : ''}">${escHtml(text)}</div>`;
+    msgsEl.appendChild(el);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+    return el;
+  }
+
+  _updateChatMsg(msgEl, text, state = '') {
+    const bubble = msgEl?.querySelector('.doc-ai-msg__bubble');
+    if (!bubble) return;
+    bubble.textContent = text;
+    bubble.className = 'doc-ai-msg__bubble' + (state ? ` doc-ai-msg__bubble--${state}` : '');
+    msgEl.closest('.doc-ai-card__messages')?.scrollTo({ top: 99999, behavior: 'smooth' });
+  }
+
+  _setChatMsgApplied(msgEl, fullText, prevContent) {
+    const bubble = msgEl?.querySelector('.doc-ai-msg__bubble');
+    if (!bubble) return;
+    const previewLines = fullText.trim()
+      .split('\n').map(l => l.trim()).filter(l => l.length > 0).slice(0, 3);
+    let preview = previewLines.join('\n');
+    if (preview.length > 200) preview = preview.slice(0, 200) + '…';
+    bubble.className = 'doc-ai-msg__bubble doc-ai-msg__bubble--success';
+    bubble.innerHTML = `
+      <span class="doc-ai-msg__preview">${escHtml(preview)}</span>
+      <div class="doc-ai-msg__status-row">
+        <span class="doc-ai-msg__applied">✓ Applied — review and save</span>
+        <button class="doc-ai-msg__revert-btn" title="Revert to previous content">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <path d="M2 9a6 6 0 1 0 1-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M2 4v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    `;
+    bubble.querySelector('.doc-ai-msg__revert-btn').addEventListener('click', () => {
+      const contentTA = this.container.querySelector('#docContentTA');
+      if (contentTA) {
+        contentTA.value = prevContent;
+        this._dirty = true;
+        const activeDoc = this._docs.find(d => d.id === this._activeId);
+        if (activeDoc) activeDoc.content = prevContent;
+        this._refreshPreviewIfActive();
+      }
+      const row = bubble.querySelector('.doc-ai-msg__status-row');
+      if (row) row.innerHTML = '<span class="doc-ai-msg__reverted">↩ Reverted — review and save</span>';
+    });
+    msgEl.closest('.doc-ai-card__messages')?.scrollTo({ top: 99999, behavior: 'smooth' });
   }
 
   async _runAiEdit(doc, instruction, card) {
-    const cfg      = this._aiModelConfig;
-    const outputEl = card.querySelector('#docAiOutput');
-    const sendBtn  = card.querySelector('#docAiSend');
-    const inputEl  = card.querySelector('#docAiInput');
+    const cfg     = this._aiModelConfig;
+    const msgsEl  = card.querySelector('#docAiMessages');
+    const sendBtn = card.querySelector('#docAiSend');
+    const inputEl = card.querySelector('#docAiInput');
+
+    this._appendChatMsg(msgsEl, 'user', instruction);
 
     if (!cfg) {
-      outputEl.removeAttribute('hidden');
-      outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--error">No model selected — choose one in the header.</span>';
+      this._appendChatMsg(msgsEl, 'ai', 'No model selected — choose one in the header.', true);
       return;
     }
 
     sendBtn.disabled = true;
     inputEl.disabled = true;
-    outputEl.removeAttribute('hidden');
 
     const contentTA      = this.container.querySelector('#docContentTA');
     const currentContent = contentTA?.value ?? doc.content ?? '';
 
+    const aiMsgEl = this._appendChatMsg(msgsEl, 'ai', 'Reading attachments…');
+
     // Fetch attachment contents so the AI can read diagrams for context
     const attachContextParts = [];
     if (this._attachments.length > 0) {
-      outputEl.innerHTML = '<span class="doc-ai-card__status">Reading attachments…</span>';
       for (const att of this._attachments) {
         try {
           const full = await window.db.attachments.getContent(att.id);
           if (full?.content) {
             const typeLabel = att.type === 'drawio' ? 'draw.io XML' : 'SVG';
-            attachContextParts.push(`### ${escHtml(att.name)} (${typeLabel})\n${full.content}`);
+            attachContextParts.push(`### ${att.name} (${typeLabel})\n${full.content}`);
           }
-        } catch { /* skip attachment if fetch fails */ }
+        } catch { /* skip */ }
       }
     }
+
+    this._updateChatMsg(aiMsgEl, 'Generating…', 'thinking');
 
     const promptParts = [
       'You are a technical document writer. Update the document based on the user\'s instruction.',
@@ -833,11 +911,7 @@ export class DocumentsPage {
     ];
 
     if (attachContextParts.length > 0) {
-      promptParts.push(
-        '',
-        '## Diagram attachments (read for context only)',
-        ...attachContextParts,
-      );
+      promptParts.push('', '## Diagram attachments (read for context only)', ...attachContextParts);
     }
 
     promptParts.push(
@@ -850,24 +924,25 @@ export class DocumentsPage {
 
     const prompt = promptParts.join('\n');
 
-    outputEl.innerHTML = '<span class="doc-ai-card__status">Generating…</span>';
+    const prevContent = contentTA?.value ?? '';
 
     try {
       if (cfg.type === 'api') {
-        await this._runAiEditApi(cfg, prompt, outputEl, contentTA);
+        await this._runAiEditApi(cfg, prompt, aiMsgEl, contentTA, prevContent);
       } else {
-        await this._runAiEditCli(cfg, prompt, outputEl, contentTA, card);
+        await this._runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent);
       }
     } finally {
       sendBtn.disabled = false;
       inputEl.disabled = false;
+      inputEl.focus();
     }
   }
 
-  async _runAiEditApi(cfg, prompt, outputEl, contentTA) {
+  async _runAiEditApi(cfg, prompt, aiMsgEl, contentTA, prevContent) {
     const baseUrl = (cfg.base_url || '').replace(/\/$/, '');
     if (!baseUrl) {
-      outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--error">base_url not configured for this model.</span>';
+      this._updateChatMsg(aiMsgEl, 'base_url not configured for this model.', 'error');
       return;
     }
 
@@ -881,22 +956,21 @@ export class DocumentsPage {
     try {
       res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
     } catch (err) {
-      outputEl.innerHTML = `<span class="doc-ai-card__status doc-ai-card__status--error">Request failed: ${escHtml(err.message)}</span>`;
+      this._updateChatMsg(aiMsgEl, `Request failed: ${err.message}`, 'error');
       return;
     }
 
     if (!res.ok) {
       const errText = await res.text();
-      outputEl.innerHTML = `<span class="doc-ai-card__status doc-ai-card__status--error">HTTP ${res.status}: ${escHtml(errText.slice(0, 200))}</span>`;
+      this._updateChatMsg(aiMsgEl, `HTTP ${res.status}: ${errText.slice(0, 200)}`, 'error');
       return;
     }
-
-    outputEl.textContent = '';
 
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer    = '';
     let fullText  = '';
+    let charCount = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -912,9 +986,9 @@ export class DocumentsPage {
           const chunk = JSON.parse(data);
           const delta = chunk.choices?.[0]?.delta?.content;
           if (delta) {
-            fullText += delta;
-            outputEl.textContent = fullText;
-            outputEl.scrollTop = outputEl.scrollHeight;
+            fullText  += delta;
+            charCount += delta.length;
+            this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
           }
         } catch { /* skip malformed SSE chunk */ }
       }
@@ -925,13 +999,13 @@ export class DocumentsPage {
       const activeDoc = this._docs.find(d => d.id === this._activeId);
       if (activeDoc) activeDoc.content = fullText.trim();
       this._refreshPreviewIfActive();
-      outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--success">✓ Applied — review and save</span>';
+      this._setChatMsgApplied(aiMsgEl, fullText, prevContent);
     } else {
-      outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--error">No content returned by model.</span>';
+      this._updateChatMsg(aiMsgEl, 'No content returned by model.', 'error');
     }
   }
 
-  async _runAiEditCli(cfg, prompt, outputEl, contentTA, card) {
+  async _runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent) {
     const exe        = cfg.executable || 'claude';
     const flags      = cfg.flags ? ` ${cfg.flags}` : '';
     const cwd        = this._project?.project_path || '';
@@ -940,16 +1014,13 @@ export class DocumentsPage {
       ? `$p = @'\n${safePrompt}\n'@\n${exe}${flags} $p`
       : `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}`;
 
-    outputEl.textContent = '';
-
     return new Promise(resolve => {
       let fullOutput = '';
 
       window.db.terminal.removeListeners();
       window.db.terminal.onData(({ text }) => {
         fullOutput += text;
-        outputEl.textContent = fullOutput;
-        outputEl.scrollTop = outputEl.scrollHeight;
+        this._updateChatMsg(aiMsgEl, `Generating… ${fullOutput.length} chars`, 'thinking');
       });
       window.db.terminal.onDone(({ exitCode }) => {
         window.db.terminal.removeListeners();
@@ -958,16 +1029,16 @@ export class DocumentsPage {
           const activeDoc = this._docs.find(d => d.id === this._activeId);
           if (activeDoc) activeDoc.content = fullOutput.trim();
           this._refreshPreviewIfActive();
-          outputEl.innerHTML = '<span class="doc-ai-card__status doc-ai-card__status--success">✓ Applied — review and save</span>';
+          this._setChatMsgApplied(aiMsgEl, fullOutput, prevContent);
         } else {
-          outputEl.innerHTML += `\n<span class="doc-ai-card__status doc-ai-card__status--error">Exit code ${exitCode}</span>`;
+          this._updateChatMsg(aiMsgEl, `Failed — exit code ${exitCode}`, 'error');
         }
         resolve();
       });
 
       window.db.terminal.execStart({ command, cwd }).catch(err => {
         window.db.terminal.removeListeners();
-        outputEl.innerHTML = `<span class="doc-ai-card__status doc-ai-card__status--error">CLI error: ${escHtml(err.message)}</span>`;
+        this._updateChatMsg(aiMsgEl, `CLI error: ${err.message}`, 'error');
         resolve();
       });
     });
