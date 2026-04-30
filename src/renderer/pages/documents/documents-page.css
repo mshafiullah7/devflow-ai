@@ -1318,6 +1318,7 @@
 
 .doc-ai-msg__bubble--success {
   border-color: rgba(74, 222, 128, 0.25);
+  white-space: normal;
 }
 
 .doc-ai-msg__preview {
