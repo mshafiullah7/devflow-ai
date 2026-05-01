@@ -1,51 +1,15 @@
-.eus-page {
+/* Panel widths — mirrors user-stories proportions */
+#eusDocuments { flex: 0 0 15%; min-width: 140px; }
+#eusExtracted { flex: 0 0 25%; min-width: 120px; }
+
+/* Sources panel: column layout, no top padding on list area */
+.eus-sources-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  background: var(--color-bg);
-  color: var(--color-text);
+  overflow: hidden;
 }
 
-.eus-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.eus-back-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  cursor: pointer;
-}
-
-.eus-back-btn:hover {
-  background: var(--color-bg-alt);
-  color: var(--color-text);
-}
-
-.eus-title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.eus-body {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.eus-placeholder {
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
+/* Each sub-section starts at equal 1/3 height */
+.eus-sources-panel .project-related__section {
+  flex: 1 1 33%;
 }
