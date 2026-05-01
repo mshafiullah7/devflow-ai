@@ -559,31 +559,52 @@ export class ExtractUserStoriesPage {
           <span class="eus-gen-title">Generate User Stories</span>
           <button class="eus-gen-close" aria-label="Close">&times;</button>
         </div>
+        <div class="eus-gen-sources">
+          <div class="eus-gen-source-row">
+            <span class="eus-gen-source-label">Feature</span>
+            <span class="eus-gen-source-value">${escHtml(feature?.name || '')}</span>
+          </div>
+          <div class="eus-gen-source-row">
+            <span class="eus-gen-source-label">Mockup</span>
+            <span class="eus-gen-source-value">${escHtml(mockup?.title || '')}</span>
+          </div>
+          <div class="eus-gen-source-row">
+            <span class="eus-gen-source-label">Documents</span>
+            <span class="eus-gen-source-value">${docs.map(d => escHtml(d.title)).join(', ')}</span>
+          </div>
+        </div>
         <div class="eus-gen-body">
-          <div class="eus-gen-sources">
-            <div class="eus-gen-source-row">
-              <span class="eus-gen-source-label">Feature</span>
-              <span class="eus-gen-source-value">${escHtml(feature?.name || '')}</span>
+          <div class="eus-gen-mockup-pane">
+            <div class="eus-gen-pane-header">
+              <span class="eus-gen-pane-title">Mockup</span>
             </div>
-            <div class="eus-gen-source-row">
-              <span class="eus-gen-source-label">Mockup</span>
-              <span class="eus-gen-source-value">${escHtml(mockup?.title || '')}</span>
-            </div>
-            <div class="eus-gen-source-row">
-              <span class="eus-gen-source-label">Documents</span>
-              <span class="eus-gen-source-value">${docs.map(d => escHtml(d.title)).join(', ')}</span>
+            <div class="eus-gen-mockup-wrap">
+              ${mockup?.html_content
+                ? `<iframe class="eus-gen-mockup-frame" sandbox="allow-scripts" title="${escHtml(mockup.title)}"></iframe>`
+                : `<div class="eus-gen-pane-empty">No mockup content</div>`}
             </div>
           </div>
-          <div class="eus-gen-placeholder">
-            <p>Generation will appear here…</p>
+          <div class="eus-gen-prompt-pane">
+            <div class="eus-gen-pane-header">
+              <span class="eus-gen-pane-title">Generated Prompt</span>
+            </div>
+            <div class="eus-gen-prompt-body">
+              <div class="eus-gen-pane-empty">Generated prompt will appear here…</div>
+            </div>
           </div>
         </div>
         <div class="eus-gen-footer">
+          <button class="eus-gen-btn eus-gen-btn--run">Run</button>
           <button class="eus-gen-btn eus-gen-btn--close">Close</button>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
+
+    if (mockup?.html_content) {
+      overlay.querySelector('.eus-gen-mockup-frame').srcdoc = mockup.html_content;
+    }
+
     const close = () => overlay.remove();
     overlay.querySelector('.eus-gen-close').addEventListener('click', close);
     overlay.querySelector('.eus-gen-btn--close').addEventListener('click', close);
