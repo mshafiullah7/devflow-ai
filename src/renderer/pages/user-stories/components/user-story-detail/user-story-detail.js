@@ -111,7 +111,7 @@ export class UserStoryDetail {
 
           <div class="usl-prompts-section">
             <div class="usl-prompts-section__header">
-              <span class="usl-prompts-section__title">Additional Prompts</span>
+              <span class="usl-prompts-section__title">Prompts</span>
               <button class="usl-prompts-section__add-btn" id="uslAddPromptBtn" type="button" title="Add prompt">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                 Add
@@ -238,7 +238,7 @@ export class UserStoryDetail {
 
           <div class="usl-prompts-section">
             <div class="usl-prompts-section__header">
-              <span class="usl-prompts-section__title">Additional Prompts</span>
+              <span class="usl-prompts-section__title">Prompts</span>
               <button class="usl-prompts-section__add-btn" id="uslEditPromptBtn" type="button" title="Add prompt">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                 Add
