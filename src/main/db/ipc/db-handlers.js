@@ -721,6 +721,17 @@ function registerDbHandlers() {
       return true;
     } catch { return false; }
   });
+
+  ipcMain.handle('app:writeTempFiles', (_e, files) => {
+    const dir = path.join(os.tmpdir(), 'electron-ai-sdlc');
+    fs.mkdirSync(dir, { recursive: true });
+    const ts = Date.now();
+    return files.map(({ name, content }) => {
+      const filepath = path.join(dir, `${name}-${ts}`);
+      fs.writeFileSync(filepath, content, 'utf8');
+      return filepath;
+    });
+  });
 }
 
 module.exports = { registerDbHandlers };

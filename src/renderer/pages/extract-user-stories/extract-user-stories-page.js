@@ -605,10 +605,168 @@ export class ExtractUserStoriesPage {
       this._loadMockupPreview(overlay.querySelector('.eus-gen-mockup-frame'), mockup.html_content);
     }
 
-    const close = () => overlay.remove();
+    const close = () => {
+      window.app.chat.offAll();
+      overlay.remove();
+    };
     overlay.querySelector('.eus-gen-close').addEventListener('click', close);
     overlay.querySelector('.eus-gen-btn--close').addEventListener('click', close);
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('.eus-gen-btn--run')
+      .addEventListener('click', () => this._handleRun(overlay, feature, mockup, docs));
+  }
+
+  async _handleRun(overlay, feature, mockup, docs) {
+    const runBtn      = overlay.querySelector('.eus-gen-btn--run');
+    const promptBody  = overlay.querySelector('.eus-gen-prompt-body');
+    const isCli       = !this._aiModelConfig?.type || this._aiModelConfig.type === 'cli';
+
+    runBtn.disabled    = true;
+    runBtn.textContent = 'Generating…';
+
+    const docsFull = await Promise.all(docs.map(d => window.db.documents.get(d.id)));
+
+    let prompt;
+    if (isCli) {
+      const filesToWrite = [
+        { name: 'mockup.html', content: mockup.html_content || '' },
+        ...docsFull.map((d, i) => ({ name: `doc-${i}.md`, content: d?.content || '' })),
+      ];
+      const paths    = await window.app.writeTempFiles(filesToWrite);
+      const [mockupPath, ...docPaths] = paths;
+      const docRefs  = docsFull.map((d, i) => ({ title: d?.title || docs[i].title, path: docPaths[i] }));
+      prompt = this._buildUserStoriesPrompt(feature, mockupPath, docRefs, true);
+    } else {
+      const docRefs = docsFull.map(d => ({ title: d?.title || '', content: d?.content || '' }));
+      prompt = this._buildUserStoriesPrompt(feature, mockup.html_content || '', docRefs, false);
+    }
+
+    const preview = prompt.length > 400 ? prompt.slice(0, 400) + '…' : prompt;
+    promptBody.innerHTML = `
+      <div class="eus-gen-prompt-preview">${escHtml(preview)}</div>
+      <div class="eus-gen-counter" id="eusGenCounter">Generating… (0 chars)</div>
+    `;
+
+    let charCount = 0;
+    window.app.chat.offAll();
+    window.app.chat.onToken(({ text }) => {
+      charCount += text.length;
+      const counter = overlay.querySelector('#eusGenCounter');
+      if (counter) counter.textContent = `Generating… (${charCount} chars)`;
+    });
+    window.app.chat.onDone(({ raw, error }) => {
+      window.app.chat.offAll();
+      this._handleGenerateDone(overlay, runBtn, raw || '', error, feature.id);
+    });
+
+    window.app.chat.generate({ prompt, model: this._aiModelConfig });
+  }
+
+  async _handleGenerateDone(overlay, runBtn, raw, error, featureId) {
+    const promptBody = overlay.querySelector('.eus-gen-prompt-body');
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    let parsed = null;
+    if (jsonMatch) {
+      try { parsed = JSON.parse(jsonMatch[0]); } catch { /* handled below */ }
+    }
+
+    if (!parsed?.UserStories?.length) {
+      promptBody.innerHTML = `
+        <div class="eus-gen-error">${escHtml(error || 'Could not parse user stories from response.')}</div>
+        <pre class="eus-gen-raw">${escHtml(raw)}</pre>
+      `;
+      runBtn.disabled    = false;
+      runBtn.textContent = 'Retry';
+      return;
+    }
+
+    let saved = 0;
+    for (const s of parsed.UserStories) {
+      try {
+        const story = await window.db.userStories.create({
+          feature_id:          featureId,
+          project_id:          this._projectId,
+          title:               s.userStoryName || 'Untitled Story',
+          description:         s.description         || null,
+          acceptance_criteria: s.acceptanceCriteria  || null,
+          is_extracted:        1,
+        });
+        if (Array.isArray(s.prompts)) {
+          for (const p of s.prompts) {
+            await window.db.prompts.create({
+              user_story_id: story.id,
+              tag:           p.tag    || null,
+              prompt:        p.prompt || '',
+            });
+          }
+        }
+        saved++;
+      } catch { /* skip bad entries */ }
+    }
+
+    promptBody.innerHTML = `
+      <div class="eus-gen-success-badge">&#10003; ${saved} user ${saved === 1 ? 'story' : 'stories'} saved</div>
+      <pre class="eus-gen-raw">${escHtml(raw)}</pre>
+    `;
+    runBtn.disabled    = false;
+    runBtn.textContent = 'Re-run';
+
+    await this._loadExistingStories();
+  }
+
+  _buildUserStoriesPrompt(feature, mockupRef, docRefs, isCli) {
+    const featureCtx = feature.description
+      ? `Feature Description: ${feature.description}\n`
+      : '';
+
+    const mockupSection = isCli
+      ? `UI Mockup HTML file: ${mockupRef}`
+      : `UI Mockup HTML:\n${mockupRef}`;
+
+    const docsSection = isCli
+      ? docRefs.map(d => `- ${d.title}: ${d.path}`).join('\n')
+      : docRefs.map(d => `### ${d.title}\n${d.content}`).join('\n\n');
+
+    return `You are an expert product manager and software architect. Analyze the UI mockup and reference documents to extract user stories for the feature below.
+
+Feature: ${feature.name}
+${featureCtx}
+${mockupSection}
+
+Reference Documents:
+${docsSection}
+
+Extract ALL distinct user stories visible in the mockup for this feature.
+
+IMPORTANT: Output ONLY a raw JSON object — no markdown fences, no explanation. Start with { and end with }.
+
+Use EXACTLY this structure:
+{
+  "UserStories": [
+    {
+      "featureId": ${feature.id},
+      "userStoryName": "short action-oriented title",
+      "description": "As a user, I want to [action] so that [benefit].",
+      "acceptanceCriteria": "Given [context]\\nWhen [action]\\nThen [outcome]",
+      "prompts": [
+        {
+          "promptName": "descriptive name",
+          "prompt": "detailed implementation prompt referencing exact UI details (colours, layout, components, spacing)",
+          "tag": "UI | API | DB | Auth | Cache | or other single technical domain word"
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- featureId MUST be ${feature.id}
+- Each story needs at least one prompt
+- tag is a SINGLE word (UI, API, DB, Auth, Cache, Queue, Email…)
+- acceptanceCriteria follows Given / When / Then on separate lines
+- Do NOT write files — print the raw JSON directly to stdout`;
   }
 
   _loadMockupPreview(frame, html) {
