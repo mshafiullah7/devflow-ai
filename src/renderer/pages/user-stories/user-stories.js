@@ -202,6 +202,7 @@ export class ProjectPage {
             <section class="project-panel project-panel--detail" id="panelDetail">
               <div class="project-panel__header">
                 <span class="project-panel__title">Story Detail</span>
+                <div class="project-panel__header-actions" id="storyDetailHeaderActions"></div>
               </div>
               <div class="project-panel__content" id="storyDetail">
                 <div class="project-panel__empty">

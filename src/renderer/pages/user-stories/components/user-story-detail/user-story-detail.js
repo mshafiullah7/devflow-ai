@@ -47,6 +47,8 @@ export class UserStoryDetail {
   /** Show placeholder when no story is selected */
   showEmpty() {
     if (!this._detailEl) return;
+    const headerActions = document.getElementById('storyDetailHeaderActions');
+    if (headerActions) headerActions.innerHTML = '';
     this._detailEl.innerHTML = `
       <div class="usl-detail-empty">
         <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
@@ -61,6 +63,8 @@ export class UserStoryDetail {
   /** Render inline add form inside the detail panel */
   showAddForm() {
     if (!this._detailEl) return;
+    const headerActions = document.getElementById('storyDetailHeaderActions');
+    if (headerActions) headerActions.innerHTML = '';
 
     const backlog       = this._statuses.find(s => s.name === 'Backlog');
     const defaultStatus = backlog ? backlog.id : '';
@@ -221,6 +225,8 @@ export class UserStoryDetail {
   /** Render inline edit form inside the detail panel */
   showEditForm(story) {
     if (!this._detailEl) return;
+    const headerActions = document.getElementById('storyDetailHeaderActions');
+    if (headerActions) headerActions.innerHTML = '';
 
     const defaultStatus = story.status_id ?? '';
 
@@ -320,9 +326,6 @@ export class UserStoryDetail {
           </div>
 
         </div>
-        <div class="usl-add-form__footer">
-          <button class="usl-add-form__btn usl-add-form__btn--save">Save Changes</button>
-        </div>
       </div>
     `;
 
@@ -331,7 +334,11 @@ export class UserStoryDetail {
     const acEl     = this._detailEl.querySelector('#uslEditAC');
     const promptEl = this._detailEl.querySelector('#uslEditPrompt');
     const statusEl = this._detailEl.querySelector('#uslEditStatus');
-    const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className   = 'usl-add-form__btn usl-add-form__btn--save';
+    saveBtn.textContent = 'Save Changes';
+    if (headerActions) headerActions.appendChild(saveBtn);
 
     // Normalise literal \n sequences to real newlines (e.g. from JSON import)
     if (promptEl.value.includes('\\n')) {
