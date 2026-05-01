@@ -1,3 +1,46 @@
+/* Generate button — dark/midnight: matches model-select yellow style */
+.eus-generate-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  border-radius: 4px;
+  color: #eab308;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.15), 0 0 6px rgba(234, 179, 8, 0.2);
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  -webkit-app-region: no-drag;
+}
+.eus-generate-btn:hover {
+  background: rgba(234, 179, 8, 0.16);
+  border-color: #eab308;
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
+}
+.eus-generate-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* Light theme: neutral like model-select in light */
+[data-theme="light"] .eus-generate-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  box-shadow: none;
+}
+[data-theme="light"] .eus-generate-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  box-shadow: var(--form-focus-shadow);
+}
+
 /* Panel widths — mirrors user-stories proportions */
 #eusDocuments { flex: 0 0 15%; min-width: 140px; }
 #eusExtracted { flex: 0 0 25%; min-width: 120px; }

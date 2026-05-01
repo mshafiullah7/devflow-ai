@@ -92,6 +92,9 @@ export class ExtractUserStoriesPage {
             </svg>
             <span class="project-page__folder-text" id="headerFolderText"></span>
           </div>
+          <button class="eus-generate-btn" id="eusBtnGenerate" style="-webkit-app-region:no-drag;">
+            Generate User Stories
+          </button>
           <div class="project-page__model-group">
             <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
               <option value="">Loading…</option>
