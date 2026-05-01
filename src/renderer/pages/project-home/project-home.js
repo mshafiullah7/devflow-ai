@@ -276,6 +276,25 @@ export class ProjectHomePage {
               </div>
             </button>
 
+            <button class="ph-card" id="cardExtractStories">
+              <div class="ph-card__icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                  <path d="M2 17l10 5 10-5"/>
+                  <path d="M2 12l10 5 10-5"/>
+                </svg>
+              </div>
+              <div class="ph-card__body">
+                <div class="ph-card__name">Extract User Stories</div>
+                <div class="ph-card__desc">Extract and generate user stories from documents.</div>
+              </div>
+              <div class="ph-card__footer">
+                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </div>
+            </button>
+
             <button class="ph-card" id="cardUserStories">
               <div class="ph-card__icon">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -396,6 +415,9 @@ export class ProjectHomePage {
 
     this.container.querySelector('#cardDocuments')
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId }));
+
+    this.container.querySelector('#cardExtractStories')
+      .addEventListener('click', () => this.router.navigate('extract-user-stories', { projectId: this.projectId }));
 
     this.container.querySelector('#cardUserStories')
       .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this.projectId }));
