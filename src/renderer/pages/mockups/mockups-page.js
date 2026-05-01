@@ -346,6 +346,7 @@ export class MockupsPage {
         this._selectedModelId = Number(e.target.value) || null;
         const nameEl = this.container.querySelector('#scrModelName');
         if (nameEl) nameEl.textContent = this._getSelectedModel()?.label || 'No model selected';
+        this._updateMockupBtns();
       });
 
     this.container.querySelector('#mockupsBtnFolder')
@@ -367,6 +368,15 @@ export class MockupsPage {
       .addEventListener('click', () => this._qcmdModal.show());
 
     this._bindSidebarItems();
+  }
+
+  _updateMockupBtns() {
+    const model = this._getSelectedModel();
+    const isCli = model?.type === 'cli';
+    const runBtn  = this.container.querySelector('#scrRunBtn');
+    const editBtn = this.container.querySelector('#scrEditBtn');
+    if (runBtn)  runBtn.hidden = !isCli;
+    if (editBtn) editBtn.hidden = !isCli;
   }
 
   _updateStyleGuideBtn() {
@@ -1054,7 +1064,7 @@ export class MockupsPage {
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
-              Edits
+              Edit Mockup
             </button>
             <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrChooseFileBtn">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -1314,6 +1324,7 @@ export class MockupsPage {
     });
 
     this._loadInitialHistory(screen.id, main);
+    this._updateMockupBtns();
   }
 
   // ----------------------------------------------------------------
