@@ -514,7 +514,7 @@ export class ExtractUserStoriesPage {
     `).join('');
   }
 
-  _handleGenerate() {
+  async _handleGenerate() {
     const missing = [];
     if (!this._selectedFeatureId)        missing.push('Feature');
     if (!this._selectedMockupId)         missing.push('Mockup');
@@ -523,7 +523,7 @@ export class ExtractUserStoriesPage {
     if (missing.length) {
       this._showGenerateError(missing);
     } else {
-      this._showGenerateModal();
+      await this._showGenerateModal();
     }
   }
 
@@ -546,9 +546,9 @@ export class ExtractUserStoriesPage {
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   }
 
-  _showGenerateModal() {
+  async _showGenerateModal() {
     const feature = this._features.find(f => f.id === this._selectedFeatureId);
-    const mockup  = this._mockups.find(m => m.id === this._selectedMockupId);
+    const mockup  = await window.db.screenDesigns.get(this._selectedMockupId);
     const docs    = this._documents.filter(d => this._selectedDocumentIds.has(d.id));
 
     const overlay = document.createElement('div');
@@ -580,7 +580,7 @@ export class ExtractUserStoriesPage {
             </div>
             <div class="eus-gen-mockup-wrap">
               ${mockup?.html_content
-                ? `<iframe class="eus-gen-mockup-frame" sandbox="allow-scripts" title="${escHtml(mockup.title)}"></iframe>`
+                ? `<iframe class="eus-gen-mockup-frame" title="${escHtml(mockup.title)}"></iframe>`
                 : `<div class="eus-gen-pane-empty">No mockup content</div>`}
             </div>
           </div>
@@ -602,12 +602,33 @@ export class ExtractUserStoriesPage {
     document.body.appendChild(overlay);
 
     if (mockup?.html_content) {
-      overlay.querySelector('.eus-gen-mockup-frame').srcdoc = mockup.html_content;
+      this._loadMockupPreview(overlay.querySelector('.eus-gen-mockup-frame'), mockup.html_content);
     }
 
     const close = () => overlay.remove();
     overlay.querySelector('.eus-gen-close').addEventListener('click', close);
     overlay.querySelector('.eus-gen-btn--close').addEventListener('click', close);
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  }
+
+  _loadMockupPreview(frame, html) {
+    const guard = `<script>
+(function(){
+  document.addEventListener('click', function(e){
+    var a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();
+    var href = (a.getAttribute('href') || '').trim();
+    if (href.startsWith('#') && href.length > 1) {
+      var el = document.getElementById(href.slice(1)) || document.querySelector('[name="' + href.slice(1) + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, true);
+})();
+<\/script>`;
+    const guarded = html.includes('</head>')
+      ? html.replace('</head>', guard + '</head>')
+      : guard + html;
+    frame.srcdoc = guarded;
   }
 }
