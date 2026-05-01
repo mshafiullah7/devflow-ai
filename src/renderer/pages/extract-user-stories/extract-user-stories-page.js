@@ -330,6 +330,9 @@ export class ExtractUserStoriesPage {
     this.container.querySelector('#btnHeaderQcmd')
       .addEventListener('click', () => this._qcmdModal.show());
 
+    this.container.querySelector('#eusBtnGenerate')
+      .addEventListener('click', () => this._handleGenerate());
+
     this.container.querySelector('#eusMockupsList')
       .addEventListener('click', e => {
         const item = e.target.closest('.eus-src-item');
@@ -509,5 +512,81 @@ export class ExtractUserStoriesPage {
         </div>
       </div>
     `).join('');
+  }
+
+  _handleGenerate() {
+    const missing = [];
+    if (!this._selectedFeatureId)        missing.push('Feature');
+    if (!this._selectedMockupId)         missing.push('Mockup');
+    if (!this._selectedDocumentIds.size) missing.push('Document');
+
+    if (missing.length) {
+      this._showGenerateError(missing);
+    } else {
+      this._showGenerateModal();
+    }
+  }
+
+  _showGenerateError(missing) {
+    const overlay = document.createElement('div');
+    overlay.className = 'usl-confirm-overlay';
+    overlay.innerHTML = `
+      <div class="usl-confirm-dialog">
+        <p class="usl-confirm-msg">
+          Please select at least one <strong>${missing.join('</strong>, <strong>')}</strong> before generating.
+        </p>
+        <div class="usl-confirm-btns">
+          <button class="usl-confirm-btn usl-confirm-btn--ok">OK</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('.usl-confirm-btn--ok').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  }
+
+  _showGenerateModal() {
+    const feature = this._features.find(f => f.id === this._selectedFeatureId);
+    const mockup  = this._mockups.find(m => m.id === this._selectedMockupId);
+    const docs    = this._documents.filter(d => this._selectedDocumentIds.has(d.id));
+
+    const overlay = document.createElement('div');
+    overlay.className = 'eus-gen-overlay';
+    overlay.innerHTML = `
+      <div class="eus-gen-dialog">
+        <div class="eus-gen-header">
+          <span class="eus-gen-title">Generate User Stories</span>
+          <button class="eus-gen-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="eus-gen-body">
+          <div class="eus-gen-sources">
+            <div class="eus-gen-source-row">
+              <span class="eus-gen-source-label">Feature</span>
+              <span class="eus-gen-source-value">${escHtml(feature?.name || '')}</span>
+            </div>
+            <div class="eus-gen-source-row">
+              <span class="eus-gen-source-label">Mockup</span>
+              <span class="eus-gen-source-value">${escHtml(mockup?.title || '')}</span>
+            </div>
+            <div class="eus-gen-source-row">
+              <span class="eus-gen-source-label">Documents</span>
+              <span class="eus-gen-source-value">${docs.map(d => escHtml(d.title)).join(', ')}</span>
+            </div>
+          </div>
+          <div class="eus-gen-placeholder">
+            <p>Generation will appear here…</p>
+          </div>
+        </div>
+        <div class="eus-gen-footer">
+          <button class="eus-gen-btn eus-gen-btn--close">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('.eus-gen-close').addEventListener('click', close);
+    overlay.querySelector('.eus-gen-btn--close').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   }
 }
