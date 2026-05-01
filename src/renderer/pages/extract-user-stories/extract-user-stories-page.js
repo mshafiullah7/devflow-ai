@@ -378,6 +378,9 @@ export class ExtractUserStoriesPage {
 
   async _loadMockups() {
     this._mockups = await window.db.screenDesigns.list(this._projectId) ?? [];
+    if (this._mockups.length && !this._selectedMockupId) {
+      this._selectedMockupId = this._mockups[0].id;
+    }
     this._renderMockups();
   }
 
@@ -412,6 +415,9 @@ export class ExtractUserStoriesPage {
   async _loadFeatures() {
     this._features = await window.db.features.list(this._projectId) ?? [];
     this._renderFeatures();
+    if (this._features.length && !this._selectedFeatureId) {
+      await this._selectFeature(this._features[0].id);
+    }
   }
 
   _renderFeatures() {
