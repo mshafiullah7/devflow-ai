@@ -2,16 +2,24 @@
 #eusDocuments { flex: 0 0 15%; min-width: 140px; }
 #eusExtracted { flex: 0 0 25%; min-width: 120px; }
 
-/* Sources panel: column layout, no top padding on list area */
+/* Sources panel: 3 stacked sub-sections */
 .eus-sources-panel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-
-/* Each sub-section starts at equal 1/3 height */
 .eus-sources-panel .project-related__section {
   flex: 1 1 33%;
+}
+
+/* Stories panel: 2 stacked sub-sections */
+.eus-stories-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.eus-stories-panel .project-related__section {
+  flex: 1 1 50%;
 }
 
 /* Source list items */

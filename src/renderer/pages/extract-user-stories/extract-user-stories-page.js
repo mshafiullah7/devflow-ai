@@ -10,8 +10,9 @@ export class ExtractUserStoriesPage {
     this._selectedMockupId  = null;
     this._features           = [];
     this._selectedFeatureId  = null;
-    this._documents          = [];
+    this._documents           = [];
     this._selectedDocumentIds = new Set();
+    this._existingStories     = [];
   }
 
   async mount() {
@@ -99,21 +100,37 @@ export class ExtractUserStoriesPage {
 
             <div class="project-panel__resize" data-resize="eus-documents"></div>
 
-            <!-- 2. Extracted Stories -->
-            <aside class="project-panel" id="eusExtracted">
+            <!-- 2. Stories (Existing + Extracted) -->
+            <aside class="project-panel eus-stories-panel" id="eusExtracted">
               <div class="project-panel__header">
-                <span class="project-panel__title">Extracted Stories</span>
+                <span class="project-panel__title">User Stories</span>
                 <div class="project-panel__actions"></div>
               </div>
-              <div class="project-panel__list" id="eusStoryList">
-                <div class="project-panel__empty">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
-                    <path d="M9 11l3 3L22 4"/>
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                  </svg>
-                  <p>No stories extracted</p>
+
+              <!-- 2a. Existing User Stories -->
+              <div class="project-related__section" id="eusExistingSection">
+                <div class="project-related__section-hd">
+                  <span class="project-related__section-label">Existing User Stories</span>
+                  <span class="project-related__section-count" id="eusExistingCount">0</span>
+                </div>
+                <div class="project-related__section-body" id="eusExistingList">
+                  <div class="project-related__empty">No user stories</div>
                 </div>
               </div>
+
+              <div class="project-related__inner-resize"></div>
+
+              <!-- 2b. Extracted User Stories -->
+              <div class="project-related__section" id="eusExtractedSection">
+                <div class="project-related__section-hd">
+                  <span class="project-related__section-label">Extracted User Stories</span>
+                  <span class="project-related__section-count" id="eusExtractedCount">0</span>
+                </div>
+                <div class="project-related__section-body" id="eusExtractedList">
+                  <div class="project-related__empty">No stories extracted yet</div>
+                </div>
+              </div>
+
             </aside>
 
             <div class="project-panel__resize" data-resize="eus-extracted"></div>
@@ -256,9 +273,10 @@ export class ExtractUserStoriesPage {
     `).join('');
   }
 
-  _selectFeature(id) {
+  async _selectFeature(id) {
     this._selectedFeatureId = this._selectedFeatureId === id ? null : id;
     this._renderFeatures();
+    await this._loadExistingStories();
   }
 
   async _loadDocuments() {
@@ -304,5 +322,34 @@ export class ExtractUserStoriesPage {
       this._selectedDocumentIds.add(id);
     }
     this._renderDocuments();
+  }
+
+  async _loadExistingStories() {
+    const list = this.container.querySelector('#eusExistingList');
+    const count = this.container.querySelector('#eusExistingCount');
+
+    if (!this._selectedFeatureId) {
+      this._existingStories = [];
+      count.textContent = '0';
+      list.innerHTML = '<div class="project-related__empty">Select a feature</div>';
+      return;
+    }
+
+    this._existingStories = await window.db.userStories.list({ feature_id: this._selectedFeatureId }) ?? [];
+    count.textContent = this._existingStories.length;
+
+    if (!this._existingStories.length) {
+      list.innerHTML = '<div class="project-related__empty">No user stories</div>';
+      return;
+    }
+
+    list.innerHTML = this._existingStories.map(s => `
+      <div class="eus-src-item" data-id="${s.id}">
+        <div class="eus-src-item__info">
+          <span class="eus-src-item__id">#${s.id}</span>
+          <span class="eus-src-item__title">${escHtml(s.title)}</span>
+        </div>
+      </div>
+    `).join('');
   }
 }
