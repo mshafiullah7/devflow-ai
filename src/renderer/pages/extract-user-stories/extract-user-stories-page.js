@@ -457,6 +457,13 @@ export class ExtractUserStoriesPage {
     this._detail.setContext(this._selectedFeatureId, this._statuses);
     this._detail.showEmpty();
     await Promise.all([this._loadExistingStories(), this._loadExtractedStories()]);
+
+    if (this._existingStories.length) {
+      const first = this._existingStories[0];
+      const item  = this.container.querySelector(`#eusExistingList [data-id="${first.id}"]`);
+      if (item) this._highlightStory(item, '#eusExistingList');
+      this._detail.showEditForm(first);
+    }
   }
 
   _highlightStory(clickedItem, listSelector) {
