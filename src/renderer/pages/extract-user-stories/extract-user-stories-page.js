@@ -795,16 +795,45 @@ export class ExtractUserStoriesPage {
     const resultEl = document.createElement('div');
     resultEl.className = 'eus-gen-result';
 
+    const formatHint = `<details class="eus-gen-format-hint">
+  <summary>Expected JSON format</summary>
+  <pre class="eus-gen-raw" style="max-height:200px">${escHtml(`{
+  "UserStories": [
+    {
+      "featureId": 1,
+      "userStoryName": "Short action-oriented title",
+      "description": "As a user, I want to ... so that ...",
+      "acceptanceCriteria": "Given ...\\nWhen ...\\nThen ...",
+      "prompts": [
+        {
+          "promptName": "Descriptive name",
+          "prompt": "## Markdown prompt\\n\\nDetailed implementation prompt...",
+          "tag": "UI"
+        }
+      ]
+    }
+  ]
+}`)}</pre>
+</details>`;
+
     if (error && !raw) {
-      resultEl.innerHTML = `<div class="eus-gen-error">${escHtml(error)}</div>`;
+      resultEl.innerHTML = `<div class="eus-gen-error">${escHtml(error)}</div>${formatHint}`;
     } else {
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       let parsed = null;
-      if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { /* fallthrough */ } }
-      const hint = parsed?.UserStories?.length
-        ? `<div class="eus-gen-parse-ok">&#10003; ${parsed.UserStories.length} user ${parsed.UserStories.length === 1 ? 'story' : 'stories'} parsed — click <strong>Load to DB</strong> to save</div>`
-        : `<div class="eus-gen-error">${escHtml(error || 'Could not parse UserStories from response.')}</div>`;
-      resultEl.innerHTML = `${hint}<pre class="eus-gen-raw">${escHtml(raw)}</pre>`;
+      let parseError = null;
+      if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch (e) { parseError = e.message; } }
+
+      if (parsed?.UserStories?.length) {
+        resultEl.innerHTML = `<div class="eus-gen-parse-ok">&#10003; ${parsed.UserStories.length} user ${parsed.UserStories.length === 1 ? 'story' : 'stories'} parsed — click <strong>Load to DB</strong> to save</div><pre class="eus-gen-raw">${escHtml(raw)}</pre>`;
+      } else {
+        const reason = !jsonMatch
+          ? 'No JSON object found in the response.'
+          : parseError
+            ? `JSON parse error: ${parseError}`
+            : 'Parsed JSON is missing a "UserStories" array.';
+        resultEl.innerHTML = `<div class="eus-gen-error">${escHtml(reason)}</div>${formatHint}<pre class="eus-gen-raw">${escHtml(raw)}</pre>`;
+      }
     }
 
     if (promptTa) promptTa.after(resultEl);
