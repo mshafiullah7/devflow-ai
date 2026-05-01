@@ -675,13 +675,15 @@ export class ExtractUserStoriesPage {
 
     // Load JSON from Disk
     loadJsonBtn.addEventListener('click', async () => {
-      const filePath = await window.db.dialog.openFile({ filters: [{ name: 'JSON Files', extensions: ['json'] }] });
-      if (!filePath) return;
-      const content = await window.shell.readFile(filePath);
-      if (!content) return;
+      const result = await window.db.dialog.openFile({ title: 'Load User Stories JSON', extensions: ['json'] });
+      if (!result?.content) return;
+      const content = result.content;
       overlay._rawJson = content;
       this._showRawResult(overlay, content, null);
-      loadToDbBtn.disabled = false;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      let parsed = null;
+      if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { /* fallthrough */ } }
+      loadToDbBtn.disabled = !parsed?.UserStories?.length;
     });
 
     // Load to DB — saves whatever raw JSON is currently stored
@@ -836,7 +838,7 @@ export class ExtractUserStoriesPage {
     if (promptTa) promptTa.after(resultEl);
     else promptBody.appendChild(resultEl);
 
-    setTimeout(() => resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 30);
+    setTimeout(() => { promptBody.scrollTop = promptBody.scrollHeight; }, 30);
   }
 
   async _saveStoriesToDb(overlay, loadToDbBtn, featureId) {
