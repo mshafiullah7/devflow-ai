@@ -17,6 +17,7 @@ export class ExtractUserStoriesPage {
     this._documents           = [];
     this._selectedDocumentIds = new Set();
     this._existingStories     = [];
+    this._extractedStories    = [];
     this._statuses            = [];
     this._detail              = null;
     this._project             = null;
@@ -353,7 +354,17 @@ export class ExtractUserStoriesPage {
         if (!item) return;
         const story = this._existingStories.find(s => s.id === Number(item.dataset.id));
         if (!story) return;
-        this._highlightStory(item);
+        this._highlightStory(item, '#eusExistingList');
+        this._detail.showEditForm(story);
+      });
+
+    this.container.querySelector('#eusExtractedList')
+      .addEventListener('click', e => {
+        const item = e.target.closest('.eus-src-item');
+        if (!item) return;
+        const story = this._extractedStories.find(s => s.id === Number(item.dataset.id));
+        if (!story) return;
+        this._highlightStory(item, '#eusExtractedList');
         this._detail.showEditForm(story);
       });
 
@@ -431,11 +442,11 @@ export class ExtractUserStoriesPage {
     this._renderFeatures();
     this._detail.setContext(this._selectedFeatureId, this._statuses);
     this._detail.showEmpty();
-    await this._loadExistingStories();
+    await Promise.all([this._loadExistingStories(), this._loadExtractedStories()]);
   }
 
-  _highlightStory(clickedItem) {
-    this.container.querySelectorAll('#eusExistingList .eus-src-item').forEach(el => {
+  _highlightStory(clickedItem, listSelector) {
+    this.container.querySelectorAll(`${listSelector} .eus-src-item`).forEach(el => {
       el.classList.toggle('eus-src-item--active', el === clickedItem);
     });
   }
@@ -505,6 +516,36 @@ export class ExtractUserStoriesPage {
     }
 
     list.innerHTML = this._existingStories.map(s => `
+      <div class="eus-src-item" data-id="${s.id}">
+        <div class="eus-src-item__info">
+          <span class="eus-src-item__id">#${s.id}</span>
+          <span class="eus-src-item__title">${escHtml(s.title)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async _loadExtractedStories() {
+    const list = this.container.querySelector('#eusExtractedList');
+    const count = this.container.querySelector('#eusExtractedCount');
+
+    if (!this._selectedFeatureId) {
+      this._extractedStories = [];
+      count.textContent = '0';
+      list.innerHTML = '<div class="project-related__empty">Select a feature</div>';
+      return;
+    }
+
+    const all = await window.db.userStories.list({ feature_id: this._selectedFeatureId, include_extracted: true }) ?? [];
+    this._extractedStories = all.filter(s => s.is_extracted);
+    count.textContent = this._extractedStories.length;
+
+    if (!this._extractedStories.length) {
+      list.innerHTML = '<div class="project-related__empty">No stories extracted yet</div>';
+      return;
+    }
+
+    list.innerHTML = this._extractedStories.map(s => `
       <div class="eus-src-item" data-id="${s.id}">
         <div class="eus-src-item__info">
           <span class="eus-src-item__id">#${s.id}</span>
@@ -817,7 +858,7 @@ export class ExtractUserStoriesPage {
     loadToDbBtn.disabled    = true;
     loadToDbBtn.textContent = 'Saved';
 
-    await this._loadExistingStories();
+    await this._loadExtractedStories();
   }
 
   _buildUserStoriesPrompt(feature, mockupRef, docRefs, isCli) {
