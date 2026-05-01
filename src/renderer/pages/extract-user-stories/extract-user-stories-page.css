@@ -134,7 +134,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  width: 92vw;
+  width: 85vw;
   height: 82vh;
   display: flex;
   flex-direction: column;
