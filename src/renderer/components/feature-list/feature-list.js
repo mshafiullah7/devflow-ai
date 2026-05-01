@@ -68,6 +68,7 @@ export class FeatureList {
       card.dataset.id = f.id;
       card.innerHTML = `
         <div class="fl-card__header">
+          <span class="fl-card__id">#${f.id}</span>
           <span class="fl-card__name">${escHtml(f.name)}</span>
           <div class="fl-card__actions">
             <button class="fl-card__action fl-card__action--edit" title="Edit feature" aria-label="Edit feature">
@@ -112,6 +113,10 @@ export class FeatureList {
 
       this._listEl.appendChild(card);
     });
+
+    if (this._activeId === null && features.length > 0) {
+      this._listEl.querySelector('.fl-card')?.click();
+    }
   }
 
   // ----------------------------------------------------------------

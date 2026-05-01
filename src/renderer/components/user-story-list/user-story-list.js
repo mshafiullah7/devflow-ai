@@ -178,6 +178,7 @@ export class UserStoryList {
       card.dataset.id = s.id;
       card.innerHTML = `
         <div class="usl-card__header">
+          <span class="usl-card__id">#${s.id}</span>
           <span class="usl-card__title">${escHtml(s.title)}</span>
           <div class="usl-card__actions">
             <button class="usl-card__action usl-card__action--delete" title="Delete story" aria-label="Delete story">
@@ -212,6 +213,10 @@ export class UserStoryList {
 
       this._listEl.appendChild(card);
     });
+
+    if (this._activeId === null && stories.length > 0) {
+      this._listEl.querySelector('.usl-card')?.click();
+    }
   }
 
   // ----------------------------------------------------------------
