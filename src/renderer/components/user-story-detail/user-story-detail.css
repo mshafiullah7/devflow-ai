@@ -1210,3 +1210,12 @@
   background: var(--accent, #6366f1);
   color: #fff;
 }
+.usl-confirm-btn--danger {
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #f87171;
+}
+.usl-confirm-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+  color: #ef4444;
+}

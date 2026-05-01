@@ -488,6 +488,44 @@
   color: var(--text-primary);
 }
 
+/* Action buttons on extracted story items */
+.eus-src-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.eus-src-item:hover .eus-src-item__actions {
+  opacity: 1;
+}
+.eus-story-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.eus-story-action:hover {
+  background: var(--surface-hover);
+}
+.eus-story-action--promote:hover {
+  color: var(--accent);
+}
+.eus-story-action--delete:hover {
+  color: #f87171;
+}
+
 /* Checkbox for multi-select items */
 .eus-src-checkbox {
   flex-shrink: 0;

@@ -360,6 +360,14 @@ export class ExtractUserStoriesPage {
 
     this.container.querySelector('#eusExtractedList')
       .addEventListener('click', e => {
+        const btn = e.target.closest('[data-action]');
+        if (btn) {
+          const id = Number(btn.closest('.eus-src-item')?.dataset.id);
+          if (!id) return;
+          if (btn.dataset.action === 'delete')  this._deleteExtractedStory(id);
+          if (btn.dataset.action === 'promote') this._promoteToUserStory(id);
+          return;
+        }
         const item = e.target.closest('.eus-src-item');
         if (!item) return;
         const story = this._extractedStories.find(s => s.id === Number(item.dataset.id));
@@ -557,8 +565,56 @@ export class ExtractUserStoriesPage {
           <span class="eus-src-item__id">#${s.id}</span>
           <span class="eus-src-item__title">${escHtml(s.title)}</span>
         </div>
+        <div class="eus-src-item__actions">
+          <button class="eus-story-action eus-story-action--promote" data-action="promote" title="Move to User Stories">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M8 12V4M4 8l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="eus-story-action eus-story-action--delete" data-action="delete" title="Delete">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
     `).join('');
+  }
+
+  async _deleteExtractedStory(id) {
+    const ok = await this._confirmDialog('Delete this extracted user story and all its prompts? This cannot be undone.', 'Delete', true);
+    if (!ok) return;
+    const prompts = await window.db.prompts.list(id);
+    await Promise.all((prompts || []).map(p => window.db.prompts.delete(p.id)));
+    await window.db.userStories.delete(id);
+    this._detail.showEmpty();
+    await this._loadExtractedStories();
+  }
+
+  async _promoteToUserStory(id) {
+    await window.db.userStories.update({ id, is_extracted: 0 });
+    await Promise.all([this._loadExistingStories(), this._loadExtractedStories()]);
+  }
+
+  _confirmDialog(message, confirmLabel = 'OK', isDanger = false) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'usl-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="usl-confirm-dialog">
+          <p class="usl-confirm-msg">${escHtml(message)}</p>
+          <div class="usl-confirm-btns">
+            <button class="usl-confirm-btn usl-confirm-btn--cancel">Cancel</button>
+            <button class="usl-confirm-btn ${isDanger ? 'usl-confirm-btn--danger' : 'usl-confirm-btn--ok'}">${escHtml(confirmLabel)}</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const close = (val) => { overlay.remove(); resolve(val); };
+      overlay.querySelector('.usl-confirm-btn--cancel').addEventListener('click', () => close(false));
+      overlay.querySelector(isDanger ? '.usl-confirm-btn--danger' : '.usl-confirm-btn--ok').addEventListener('click', () => close(true));
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+    });
   }
 
   async _handleGenerate() {
