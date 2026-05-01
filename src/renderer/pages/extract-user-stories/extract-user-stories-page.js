@@ -770,14 +770,14 @@ Use EXACTLY this structure:
   "UserStories": [
     {
       "featureId": ${feature.id},
-      "userStoryName": "short action-oriented title",
-      "description": "As a user, I want to [action] so that [benefit].",
-      "acceptanceCriteria": "Given [context]\\nWhen [action]\\nThen [outcome]",
+      "userStoryName": 'short action-oriented title',
+      "description": 'As a user, I want to [action] so that [benefit].',
+      "acceptanceCriteria": 'Given [context]\nWhen [action]\nThen [outcome]',
       "prompts": [
         {
-          "promptName": "descriptive name",
-          "prompt": "detailed implementation prompt referencing exact UI details (colours, layout, components, spacing)",
-          "tag": "UI | API | DB | Auth | Cache | or other single technical domain word"
+          "promptName": 'descriptive name',
+          "prompt": 'detailed implementation prompt referencing exact UI details (colours, layout, components, spacing)',
+          "tag": 'UI or API or DB or Auth or Cache or other single technical domain word'
         }
       ]
     }
