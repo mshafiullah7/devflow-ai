@@ -1,11 +1,15 @@
-import { injectCss, removeCss } from '../../shared/helpers.js';
+import { injectCss, removeCss, escHtml } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
 export class ExtractUserStoriesPage {
   constructor(container, params, router) {
-    this.container  = container;
-    this.router     = router;
-    this._projectId = params.projectId;
+    this.container          = container;
+    this.router             = router;
+    this._projectId         = params.projectId;
+    this._mockups           = [];
+    this._selectedMockupId  = null;
+    this._features          = [];
+    this._selectedFeatureId = null;
   }
 
   async mount() {
@@ -14,6 +18,7 @@ export class ExtractUserStoriesPage {
     applyStoredTheme();
     this.container.innerHTML = this._template();
     this._bindEvents();
+    await Promise.all([this._loadMockups(), this._loadFeatures()]);
   }
 
   unmount() {
@@ -165,5 +170,85 @@ export class ExtractUserStoriesPage {
   _bindEvents() {
     this.container.querySelector('#eusBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
+
+    this.container.querySelector('#eusMockupsList')
+      .addEventListener('click', e => {
+        const item = e.target.closest('.eus-src-item');
+        if (!item) return;
+        this._selectMockup(Number(item.dataset.id));
+      });
+
+    this.container.querySelector('#eusFeaturesList')
+      .addEventListener('click', e => {
+        const item = e.target.closest('.eus-src-item');
+        if (!item) return;
+        this._selectFeature(Number(item.dataset.id));
+      });
+  }
+
+  async _loadMockups() {
+    this._mockups = await window.db.screenDesigns.list(this._projectId) ?? [];
+    this._renderMockups();
+  }
+
+  _renderMockups() {
+    const list = this.container.querySelector('#eusMockupsList');
+    const count = this.container.querySelector('#eusMockupsCount');
+    count.textContent = this._mockups.length;
+
+    if (!this._mockups.length) {
+      list.innerHTML = '<div class="project-related__empty">No mockups</div>';
+      return;
+    }
+
+    list.innerHTML = this._mockups.map(m => `
+      <div class="eus-src-item${m.id === this._selectedMockupId ? ' eus-src-item--active' : ''}" data-id="${m.id}">
+        <svg class="eus-src-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+        </svg>
+        <div class="eus-src-item__info">
+          <span class="eus-src-item__id">#${m.id}</span>
+          <span class="eus-src-item__title">${escHtml(m.title)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  _selectMockup(id) {
+    this._selectedMockupId = this._selectedMockupId === id ? null : id;
+    this._renderMockups();
+  }
+
+  async _loadFeatures() {
+    this._features = await window.db.features.list(this._projectId) ?? [];
+    this._renderFeatures();
+  }
+
+  _renderFeatures() {
+    const list = this.container.querySelector('#eusFeaturesList');
+    const count = this.container.querySelector('#eusFeaturesCount');
+    count.textContent = this._features.length;
+
+    if (!this._features.length) {
+      list.innerHTML = '<div class="project-related__empty">No features</div>';
+      return;
+    }
+
+    list.innerHTML = this._features.map(f => `
+      <div class="eus-src-item${f.id === this._selectedFeatureId ? ' eus-src-item--active' : ''}" data-id="${f.id}">
+        <svg class="eus-src-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <div class="eus-src-item__info">
+          <span class="eus-src-item__id">#${f.id}</span>
+          <span class="eus-src-item__title">${escHtml(f.name)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  _selectFeature(id) {
+    this._selectedFeatureId = this._selectedFeatureId === id ? null : id;
+    this._renderFeatures();
   }
 }
