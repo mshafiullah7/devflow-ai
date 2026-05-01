@@ -1,5 +1,6 @@
 import { injectCss, removeCss, escHtml } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+import { UserStoryDetail } from '../../components/user-story-detail/user-story-detail.js';
 
 export class ExtractUserStoriesPage {
   constructor(container, params, router) {
@@ -13,6 +14,8 @@ export class ExtractUserStoriesPage {
     this._documents           = [];
     this._selectedDocumentIds = new Set();
     this._existingStories     = [];
+    this._statuses            = [];
+    this._detail              = null;
   }
 
   async mount() {
@@ -20,6 +23,15 @@ export class ExtractUserStoriesPage {
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     applyStoredTheme();
     this.container.innerHTML = this._template();
+    this._detail = new UserStoryDetail({
+      detailEl:       this.container.querySelector('#eusDetailContent'),
+      headerActionsEl: this.container.querySelector('#eusDetailActions'),
+      projectId:      this._projectId,
+    });
+    await this._detail.mount();
+    this._detail.showEmpty();
+
+    this._statuses = await window.db.status.list();
     this._bindEvents();
     await Promise.all([this._loadMockups(), this._loadFeatures(), this._loadDocuments()]);
   }
@@ -204,6 +216,16 @@ export class ExtractUserStoriesPage {
         this._selectFeature(Number(item.dataset.id));
       });
 
+    this.container.querySelector('#eusExistingList')
+      .addEventListener('click', e => {
+        const item = e.target.closest('.eus-src-item');
+        if (!item) return;
+        const story = this._existingStories.find(s => s.id === Number(item.dataset.id));
+        if (!story) return;
+        this._highlightStory(item);
+        this._detail.showEditForm(story);
+      });
+
     this.container.querySelector('#eusDocumentsList')
       .addEventListener('click', e => {
         const item = e.target.closest('.eus-src-item');
@@ -276,7 +298,15 @@ export class ExtractUserStoriesPage {
   async _selectFeature(id) {
     this._selectedFeatureId = this._selectedFeatureId === id ? null : id;
     this._renderFeatures();
+    this._detail.setContext(this._selectedFeatureId, this._statuses);
+    this._detail.showEmpty();
     await this._loadExistingStories();
+  }
+
+  _highlightStory(clickedItem) {
+    this.container.querySelectorAll('#eusExistingList .eus-src-item').forEach(el => {
+      el.classList.toggle('eus-src-item--active', el === clickedItem);
+    });
   }
 
   async _loadDocuments() {

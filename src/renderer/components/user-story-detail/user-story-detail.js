@@ -1,24 +1,9 @@
-import { escHtml, injectCss } from '../../../../shared/helpers.js';
+import { escHtml, injectCss } from '../../shared/helpers.js';
 
-/**
- * UserStoryDetail — renders the detail panel for a selected user story.
- *
- * Responsibilities:
- *   - Empty state placeholder
- *   - Inline Add form
- *   - Inline Edit form (with status select, prompt history, expand overlay, run buttons)
- *
- * Usage:
- *   const detail = new UserStoryDetail({ detailEl, projectId, getModel, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled });
- *   await detail.mount();
- *   detail.setContext(featureId, statuses);
- *   detail.showEmpty();
- *   detail.showAddForm();
- *   detail.showEditForm(story);
- */
 export class UserStoryDetail {
-  constructor({ detailEl, projectId, getModel, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled }) {
+  constructor({ detailEl, projectId, getModel, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled, headerActionsEl }) {
     this._detailEl               = detailEl;
+    this._headerActionsEl        = headerActionsEl || null;
     this._projectId              = projectId;
     this._getModel               = getModel || (() => null);
     this._onRunCommandExternal   = onRunCommandExternal || (() => {});
@@ -34,7 +19,7 @@ export class UserStoryDetail {
   // Public API
   // ----------------------------------------------------------------
   async mount() {
-    injectCss('pages/user-stories/components/user-story-detail/user-story-detail.css');
+    injectCss('components/user-story-detail/user-story-detail.css');
   }
 
   /** Update context when a new feature is selected */
@@ -46,7 +31,7 @@ export class UserStoryDetail {
   /** Show placeholder when no story is selected */
   showEmpty() {
     if (!this._detailEl) return;
-    const headerActions = document.getElementById('storyDetailHeaderActions');
+    const headerActions = this._headerActionsEl || document.getElementById('storyDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '';
     this._detailEl.innerHTML = `
       <div class="usl-detail-empty">
@@ -62,7 +47,7 @@ export class UserStoryDetail {
   /** Render inline add form inside the detail panel */
   showAddForm() {
     if (!this._detailEl) return;
-    const headerActions = document.getElementById('storyDetailHeaderActions');
+    const headerActions = this._headerActionsEl || document.getElementById('storyDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '';
 
     const backlog       = this._statuses.find(s => s.name === 'Backlog');
@@ -183,7 +168,7 @@ export class UserStoryDetail {
   /** Render inline edit form inside the detail panel */
   showEditForm(story) {
     if (!this._detailEl) return;
-    const headerActions = document.getElementById('storyDetailHeaderActions');
+    const headerActions = this._headerActionsEl || document.getElementById('storyDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '';
 
     const defaultStatus = story.status_id ?? '';
@@ -585,11 +570,9 @@ export class UserStoryDetail {
   // Run button helpers
   // ----------------------------------------------------------------
 
-  // Returns a resolved config object, falling back to a legacy-compatible default.
   _resolvedConfig() {
     const cfg = this._getModel();
     if (!cfg) return { type: 'cli', executable: 'claude', flags: '--dangerously-skip-permissions --print', input_mode: 'pipe' };
-    // Legacy: if a plain string was passed (shouldn't happen post-refactor but guard anyway)
     if (typeof cfg === 'string') {
       const exe = cfg === 'gemini-cli' ? 'gemini' : 'claude';
       const flags = cfg === 'gemini-cli' ? '' : '--dangerously-skip-permissions --print';
@@ -755,7 +738,6 @@ export class UserStoryDetail {
     let codeLines  = [];
     let inUl       = false;
     let inOl       = false;
-    // track last pushed block type to suppress redundant <br>
     let lastBlock  = '';
 
     const closeList = () => {
@@ -770,7 +752,6 @@ export class UserStoryDetail {
       if (!inTable) return;
       inTable = false;
       if (tableLines.length < 2) {
-        // Not enough lines to form a proper table — emit as paragraphs
         tableLines.forEach(l => out.push(`<p>${this._inlineMarkdown(esc(l))}</p>`));
         tableLines = [];
         lastBlock = 'p';
@@ -807,7 +788,6 @@ export class UserStoryDetail {
     let svgLines = [];
 
     for (const line of lines) {
-      // SVG passthrough — collect raw lines between <svg and </svg>
       if (!inCode && !inSvg && line.trimStart().toLowerCase().startsWith('<svg')) {
         closeList();
         inSvg    = true;
@@ -827,7 +807,6 @@ export class UserStoryDetail {
         continue;
       }
 
-      // Fenced code blocks
       if (line.trimStart().startsWith('```')) {
         closeList();
         if (inCode) {
@@ -842,7 +821,6 @@ export class UserStoryDetail {
       }
       if (inCode) { codeLines.push(esc(line)); continue; }
 
-      // Headings
       const hm = line.match(/^(#{1,6})\s+(.*)/);
       if (hm) {
         closeList();
@@ -852,7 +830,6 @@ export class UserStoryDetail {
         continue;
       }
 
-      // Horizontal rule
       if (/^[-*_]{3,}\s*$/.test(line)) {
         closeList();
         out.push('<hr>');
@@ -860,7 +837,6 @@ export class UserStoryDetail {
         continue;
       }
 
-      // Unordered list
       const ulm = line.match(/^[-*+]\s+(.*)/);
       if (ulm) {
         if (inOl) { out.push('</ol>'); inOl = false; }
@@ -870,7 +846,6 @@ export class UserStoryDetail {
         continue;
       }
 
-      // Ordered list
       const olm = line.match(/^\d+\.\s+(.*)/);
       if (olm) {
         if (inUl) { out.push('</ul>'); inUl = false; }
@@ -880,7 +855,6 @@ export class UserStoryDetail {
         continue;
       }
 
-      // Blockquote
       const bqm = line.match(/^>\s?(.*)/);
       if (bqm) {
         closeList();
@@ -889,7 +863,6 @@ export class UserStoryDetail {
         continue;
       }
 
-      // Markdown table row
       if (line.trim().startsWith('|')) {
         closeList();
         inTable = true;
@@ -897,10 +870,8 @@ export class UserStoryDetail {
         continue;
       }
 
-      // Flush any open table when a non-table line is encountered
       if (inTable) flushTable();
 
-      // Blank line — only emit a spacer after plain paragraphs
       if (line.trim() === '') {
         closeList();
         if (lastBlock === 'p') { out.push('<br>'); lastBlock = 'br'; }

@@ -1,5 +1,5 @@
 import { escHtml, injectCss, formatDate } from '../../shared/helpers.js';
-import { UserStoryDetail } from '../../pages/user-stories/components/user-story-detail/user-story-detail.js';
+import { UserStoryDetail } from '../user-story-detail/user-story-detail.js';
 
 /**
  * UserStoryList — manages the story card list panel.
