@@ -488,6 +488,12 @@
   color: var(--text-primary);
 }
 
+/* Hide execution-only controls inside the detail panel on this page */
+#eusDetailContent .usl-pl-item__btn--mark-executed,
+#eusDetailContent .usl-pl-item__btn--run-ext {
+  display: none;
+}
+
 /* Action buttons on extracted story items */
 .eus-src-item__actions {
   display: flex;
