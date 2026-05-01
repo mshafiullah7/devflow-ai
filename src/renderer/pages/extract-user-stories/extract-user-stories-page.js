@@ -789,32 +789,29 @@ export class ExtractUserStoriesPage {
   }
 
   _showRawResult(overlay, raw, error) {
-    const promptTa = overlay.querySelector('#eusGenPromptTa');
+    const promptTa   = overlay.querySelector('#eusGenPromptTa');
+    const promptBody = overlay.querySelector('.eus-gen-prompt-body');
     overlay.querySelector('.eus-gen-result')?.remove();
 
     const resultEl = document.createElement('div');
     resultEl.className = 'eus-gen-result';
 
-    const formatHint = `<details class="eus-gen-format-hint">
-  <summary>Expected JSON format</summary>
-  <pre class="eus-gen-raw" style="max-height:200px">${escHtml(`{
+    const formatHint = `<div class="eus-gen-format-hint">
+  <span class="eus-gen-format-hint__label">JSON must follow this structure:</span>
+  <pre class="eus-gen-raw">${escHtml(`{
   "UserStories": [
     {
       "featureId": 1,
-      "userStoryName": "Short action-oriented title",
-      "description": "As a user, I want to ... so that ...",
-      "acceptanceCriteria": "Given ...\\nWhen ...\\nThen ...",
+      "userStoryName": "...",
+      "description": "...",
+      "acceptanceCriteria": "...",
       "prompts": [
-        {
-          "promptName": "Descriptive name",
-          "prompt": "## Markdown prompt\\n\\nDetailed implementation prompt...",
-          "tag": "UI"
-        }
+        { "tag": "UI", "prompt": "..." }
       ]
     }
   ]
 }`)}</pre>
-</details>`;
+</div>`;
 
     if (error && !raw) {
       resultEl.innerHTML = `<div class="eus-gen-error">${escHtml(error)}</div>${formatHint}`;
@@ -832,12 +829,14 @@ export class ExtractUserStoriesPage {
           : parseError
             ? `JSON parse error: ${parseError}`
             : 'Parsed JSON is missing a "UserStories" array.';
-        resultEl.innerHTML = `<div class="eus-gen-error">${escHtml(reason)}</div>${formatHint}<pre class="eus-gen-raw">${escHtml(raw)}</pre>`;
+        resultEl.innerHTML = `<div class="eus-gen-error">${escHtml(reason)}</div>${formatHint}${raw ? `<pre class="eus-gen-raw">${escHtml(raw)}</pre>` : ''}`;
       }
     }
 
     if (promptTa) promptTa.after(resultEl);
-    else overlay.querySelector('.eus-gen-prompt-body').appendChild(resultEl);
+    else promptBody.appendChild(resultEl);
+
+    setTimeout(() => resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 30);
   }
 
   async _saveStoriesToDb(overlay, loadToDbBtn, featureId) {

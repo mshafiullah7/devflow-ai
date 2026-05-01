@@ -385,21 +385,18 @@
   padding: 6px 16px 8px;
   background: rgba(239, 68, 68, 0.04);
 }
-.eus-gen-format-hint summary {
+.eus-gen-format-hint__label {
+  display: block;
   font-size: 11px;
   color: #f87171;
-  cursor: pointer;
-  user-select: none;
-  opacity: 0.8;
-}
-.eus-gen-format-hint summary:hover {
-  opacity: 1;
+  opacity: 0.85;
+  margin-bottom: 4px;
 }
 .eus-gen-format-hint pre.eus-gen-raw {
-  margin-top: 6px;
   padding: 8px 10px;
   border-top: none;
   font-size: 11px;
+  max-height: 180px;
 }
 
 .eus-gen-footer {
