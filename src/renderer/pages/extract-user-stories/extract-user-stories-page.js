@@ -594,6 +594,11 @@ export class ExtractUserStoriesPage {
   async _promoteToUserStory(id) {
     await window.db.userStories.update({ id, is_extracted: 0 });
     await Promise.all([this._loadExistingStories(), this._loadExtractedStories()]);
+    const story = this._existingStories.find(s => s.id === id);
+    if (!story) return;
+    const item = this.container.querySelector(`#eusExistingList [data-id="${id}"]`);
+    if (item) this._highlightStory(item, '#eusExistingList');
+    this._detail.showEditForm(story);
   }
 
   _confirmDialog(message, confirmLabel = 'OK', isDanger = false) {
