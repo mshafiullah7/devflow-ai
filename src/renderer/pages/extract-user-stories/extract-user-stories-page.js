@@ -8,8 +8,10 @@ export class ExtractUserStoriesPage {
     this._projectId         = params.projectId;
     this._mockups           = [];
     this._selectedMockupId  = null;
-    this._features          = [];
-    this._selectedFeatureId = null;
+    this._features           = [];
+    this._selectedFeatureId  = null;
+    this._documents          = [];
+    this._selectedDocumentIds = new Set();
   }
 
   async mount() {
@@ -18,7 +20,7 @@ export class ExtractUserStoriesPage {
     applyStoredTheme();
     this.container.innerHTML = this._template();
     this._bindEvents();
-    await Promise.all([this._loadMockups(), this._loadFeatures()]);
+    await Promise.all([this._loadMockups(), this._loadFeatures(), this._loadDocuments()]);
   }
 
   unmount() {
@@ -184,6 +186,13 @@ export class ExtractUserStoriesPage {
         if (!item) return;
         this._selectFeature(Number(item.dataset.id));
       });
+
+    this.container.querySelector('#eusDocumentsList')
+      .addEventListener('click', e => {
+        const item = e.target.closest('.eus-src-item');
+        if (!item) return;
+        this._toggleDocument(Number(item.dataset.id));
+      });
   }
 
   async _loadMockups() {
@@ -250,5 +259,50 @@ export class ExtractUserStoriesPage {
   _selectFeature(id) {
     this._selectedFeatureId = this._selectedFeatureId === id ? null : id;
     this._renderFeatures();
+  }
+
+  async _loadDocuments() {
+    this._documents = await window.db.documents.list(this._projectId) ?? [];
+    const defaultTitles = new Set(['Project Overview', 'Architecture Overview', 'Tech Stack']);
+    this._documents.forEach(d => {
+      if (defaultTitles.has(d.title)) this._selectedDocumentIds.add(d.id);
+    });
+    this._renderDocuments();
+  }
+
+  _renderDocuments() {
+    const list = this.container.querySelector('#eusDocumentsList');
+    const count = this.container.querySelector('#eusDocumentsCount');
+    count.textContent = this._documents.length;
+
+    if (!this._documents.length) {
+      list.innerHTML = '<div class="project-related__empty">No documents</div>';
+      return;
+    }
+
+    list.innerHTML = this._documents.map(d => {
+      const checked = this._selectedDocumentIds.has(d.id);
+      return `
+        <div class="eus-src-item${checked ? ' eus-src-item--active' : ''}" data-id="${d.id}">
+          <span class="eus-src-checkbox${checked ? ' eus-src-checkbox--checked' : ''}">
+            ${checked ? `<svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>` : ''}
+          </span>
+          <div class="eus-src-item__info">
+            <span class="eus-src-item__title">${escHtml(d.title)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  _toggleDocument(id) {
+    if (this._selectedDocumentIds.has(id)) {
+      this._selectedDocumentIds.delete(id);
+    } else {
+      this._selectedDocumentIds.add(id);
+    }
+    this._renderDocuments();
   }
 }

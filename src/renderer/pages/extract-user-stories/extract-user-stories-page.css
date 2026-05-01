@@ -62,3 +62,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Checkbox for multi-select items */
+.eus-src-checkbox {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.eus-src-checkbox--checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
