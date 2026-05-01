@@ -132,6 +132,12 @@ function runMigrations(db) {
     db.exec('ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0');
   }
 
+  // Add is_extracted to user_stories (marks AI-extracted stories not yet confirmed as final)
+  const usCols = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
+  if (!usCols.includes('is_extracted')) {
+    db.exec('ALTER TABLE user_stories ADD COLUMN is_extracted INTEGER NOT NULL DEFAULT 0');
+  }
+
   // Add screen_prompt_history table for existing databases
   const sphCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='screen_prompt_history'").get();
   if (!sphCheck) {

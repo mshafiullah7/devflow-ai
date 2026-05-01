@@ -129,12 +129,12 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // user_stories
   // ----------------------------------------------------------------
-  ipcMain.handle('db:user_stories:list', (_e, { feature_id, project_id } = {}) => {
+  ipcMain.handle('db:user_stories:list', (_e, { feature_id, project_id, include_extracted = false } = {}) => {
     const base = `
       SELECT us.*, sm.name AS status_name
       FROM user_stories us
       LEFT JOIN status_master sm ON us.status_id = sm.id
-      WHERE us.is_active = 1`;
+      WHERE us.is_active = 1${include_extracted ? '' : ' AND us.is_extracted = 0'}`;
     if (feature_id) {
       return db.prepare(base + ' AND us.feature_id = ? ORDER BY us.created_at DESC').all(feature_id);
     }
@@ -150,17 +150,17 @@ function registerDbHandlers() {
 
   ipcMain.handle(
     'db:user_stories:create',
-    (_e, { feature_id, project_id, title, description, acceptance_criteria, status_id }) => {
+    (_e, { feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted = 0 }) => {
       const result = db
         .prepare(
           `INSERT INTO user_stories
-            (feature_id, project_id, title, description, acceptance_criteria, status_id)
-           VALUES (?, ?, ?, ?, ?, ?)`
+            (feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           feature_id, project_id, title,
           description ?? null, acceptance_criteria ?? null,
-          status_id ?? null
+          status_id ?? null, is_extracted
         );
       return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(result.lastInsertRowid);
     }
