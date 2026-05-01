@@ -596,6 +596,7 @@ export class ExtractUserStoriesPage {
         </div>
         <div class="eus-gen-footer">
           <button class="eus-gen-btn eus-gen-btn--run" disabled>Run</button>
+          <button class="eus-gen-btn eus-gen-btn--cancel" id="eusGenCancelBtn" hidden>Cancel</button>
           <button class="eus-gen-btn eus-gen-btn--close">Close</button>
         </div>
       </div>
@@ -653,25 +654,46 @@ export class ExtractUserStoriesPage {
     const prompt    = promptTa?.value?.trim();
     if (!prompt) return;
 
+    const cancelBtn = overlay.querySelector('#eusGenCancelBtn');
+
     runBtn.disabled    = true;
     runBtn.textContent = 'Generating…';
     promptTa.disabled  = true;
+    cancelBtn.hidden   = false;
 
     const counter = document.createElement('div');
     counter.className = 'eus-gen-counter';
     counter.id        = 'eusGenCounter';
-    counter.textContent = 'Generating… (0 chars)';
+    counter.innerHTML = `
+      <span class="eus-gen-counter__chars">Generating… (0 chars)</span>
+      <span class="eus-gen-counter__hint">This may take up to 5 minutes or more depending on the model and content size.</span>
+    `;
     promptTa.after(counter);
+
+    const resetRunState = () => {
+      runBtn.disabled    = false;
+      runBtn.textContent = 'Re-run';
+      cancelBtn.hidden   = true;
+      promptTa.disabled  = false;
+      overlay.querySelector('#eusGenCounter')?.remove();
+    };
+
+    cancelBtn.onclick = () => {
+      window.app.chat.cancel();
+      window.app.chat.offAll();
+      resetRunState();
+    };
 
     let charCount = 0;
     window.app.chat.offAll();
     window.app.chat.onToken(({ text }) => {
       charCount += text.length;
-      const c = overlay.querySelector('#eusGenCounter');
+      const c = overlay.querySelector('.eus-gen-counter__chars');
       if (c) c.textContent = `Generating… (${charCount} chars)`;
     });
     window.app.chat.onDone(({ raw, error }) => {
       window.app.chat.offAll();
+      cancelBtn.hidden = true;
       this._handleGenerateDone(overlay, runBtn, promptTa, raw || '', error, featureId);
     });
 

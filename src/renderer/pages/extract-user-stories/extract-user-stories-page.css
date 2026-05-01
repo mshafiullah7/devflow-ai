@@ -313,24 +313,38 @@
 }
 
 .eus-gen-counter {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-style: italic;
-  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
   border-top: 1px solid var(--border);
+  background: rgba(234, 179, 8, 0.04);
+}
+
+.eus-gen-counter__chars {
+  font-size: 12px;
+  font-weight: 600;
+  color: #eab308;
+  font-style: italic;
+}
+
+.eus-gen-counter__hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .eus-gen-raw {
   width: 100%;
-  font-size: 11px;
+  font-size: 13px;
   font-family: 'Consolas', 'Courier New', monospace;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--text-secondary);
-  max-height: 260px;
+  color: var(--text-primary);
+  max-height: 340px;
   overflow-y: auto;
   border-top: 1px solid var(--border);
-  padding: 10px 16px;
+  padding: 12px 16px;
   box-sizing: border-box;
 }
 
@@ -388,6 +402,17 @@
 .eus-gen-btn--run:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.eus-gen-btn--cancel {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+.eus-gen-btn--cancel:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #ef4444;
 }
 
 .eus-gen-btn--close {
