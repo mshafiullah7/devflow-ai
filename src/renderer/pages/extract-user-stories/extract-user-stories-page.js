@@ -1,6 +1,9 @@
 import { injectCss, removeCss, escHtml } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { UserStoryDetail } from '../../components/user-story-detail/user-story-detail.js';
+import { GitController } from '../../components/git/git-controller.js';
+import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
+import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 
 export class ExtractUserStoriesPage {
   constructor(container, params, router) {
@@ -16,17 +19,42 @@ export class ExtractUserStoriesPage {
     this._existingStories     = [];
     this._statuses            = [];
     this._detail              = null;
+    this._project             = null;
+    this._aiModelConfig       = null;
+    this._git                 = null;
+    this._modelConfigsModal   = null;
+    this._qcmdModal           = null;
   }
 
   async mount() {
     injectCss('pages/user-stories/user-stories.css');
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     applyStoredTheme();
+
+    this._project = await window.db.projects.get(this._projectId);
     this.container.innerHTML = this._template();
+
+    this._git = new GitController({ getTermCwd: () => this._project?.project_path || '' });
+    this._git.mount();
+    if (this._project?.project_path) {
+      this._git.refreshStatus();
+      this._git.startPoll();
+      this._setHeaderFolderPath(this._project.project_path);
+    }
+
+    this._modelConfigsModal = new ModelConfigsModal({
+      onConfigsChanged: () => this._reloadModelDropdown(),
+    });
+    this._modelConfigsModal.mount();
+    await this._reloadModelDropdown();
+
+    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => {} });
+    this._qcmdModal.mount();
+
     this._detail = new UserStoryDetail({
-      detailEl:       this.container.querySelector('#eusDetailContent'),
+      detailEl:        this.container.querySelector('#eusDetailContent'),
       headerActionsEl: this.container.querySelector('#eusDetailActions'),
-      projectId:      this._projectId,
+      projectId:       this._projectId,
     });
     await this._detail.mount();
     this._detail.showEmpty();
@@ -39,6 +67,7 @@ export class ExtractUserStoriesPage {
   unmount() {
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('pages/user-stories/user-stories.css');
+    this._git?.stopPoll();
   }
 
   _template() {
@@ -56,6 +85,49 @@ export class ExtractUserStoriesPage {
             <h1 class="project-page__title">Extract User Stories</h1>
             <p class="project-page__desc">Generate user stories from project documents</p>
           </div>
+          <div class="project-page__folder-display" id="headerFolderDisplay">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+            <span class="project-page__folder-text" id="headerFolderText"></span>
+          </div>
+          <div class="project-page__model-group">
+            <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
+              <option value="">Loading…</option>
+            </select>
+            <button class="project-page__model-cfg-btn" id="btnModelConfigs" title="Configure AI models">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
+                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <button class="project-page__folder-btn" id="btnConsoleFolder" title="Select folder" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="project-page__git-btn" id="btnConsoleGit" title="Git changes" hidden style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="project-page__git-badge" id="gitBadge" hidden></span>
+          </button>
+          <button class="project-page__qcmd-btn" id="btnHeaderQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
         </header>
 
         <!-- Body -->
@@ -71,20 +143,7 @@ export class ExtractUserStoriesPage {
                 <div class="project-panel__actions"></div>
               </div>
 
-              <!-- 1a. Mockups -->
-              <div class="project-related__section" id="eusMockupsSection">
-                <div class="project-related__section-hd">
-                  <span class="project-related__section-label">Mockups</span>
-                  <span class="project-related__section-count" id="eusMockupsCount">0</span>
-                </div>
-                <div class="project-related__section-body" id="eusMockupsList">
-                  <div class="project-related__empty">No mockups</div>
-                </div>
-              </div>
-
-              <div class="project-related__inner-resize"></div>
-
-              <!-- 1b. Features -->
+              <!-- 1a. Features -->
               <div class="project-related__section" id="eusFeaturesSection">
                 <div class="project-related__section-hd">
                   <span class="project-related__section-label">Features</span>
@@ -92,6 +151,19 @@ export class ExtractUserStoriesPage {
                 </div>
                 <div class="project-related__section-body" id="eusFeaturesList">
                   <div class="project-related__empty">No features</div>
+                </div>
+              </div>
+
+              <div class="project-related__inner-resize"></div>
+
+              <!-- 1b. Mockups -->
+              <div class="project-related__section" id="eusMockupsSection">
+                <div class="project-related__section-hd">
+                  <span class="project-related__section-label">Mockups</span>
+                  <span class="project-related__section-count" id="eusMockupsCount">0</span>
+                </div>
+                <div class="project-related__section-body" id="eusMockupsList">
+                  <div class="project-related__empty">No mockups</div>
                 </div>
               </div>
 
@@ -198,9 +270,62 @@ export class ExtractUserStoriesPage {
     `;
   }
 
+  async _reloadModelDropdown() {
+    const select = this.container.querySelector('#aiModelSelect');
+    if (!select) return;
+    const configs  = await window.db.modelConfigs.list();
+    const prevId   = select.value ? Number(select.value) : null;
+    select.innerHTML = configs.length === 0
+      ? `<option value="">No models configured</option>`
+      : configs.map(c =>
+          `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
+        ).join('');
+    const defaultCfg = configs.find(c => c.is_default) || configs[0];
+    const target     = configs.find(c => c.id === prevId) || defaultCfg;
+    if (target) {
+      select.value        = target.id;
+      this._aiModelConfig = target;
+    }
+  }
+
+  _setHeaderFolderPath(folderPath) {
+    const text    = this.container.querySelector('#headerFolderText');
+    const display = this.container.querySelector('#headerFolderDisplay');
+    if (!text || !display) return;
+    text.textContent = folderPath;
+    display.classList.add('project-page__folder-display--active');
+  }
+
   _bindEvents() {
     this.container.querySelector('#eusBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
+
+    this.container.querySelector('#btnConsoleFolder')
+      .addEventListener('click', async () => {
+        const folderPath = await window.db.dialog.openFolder();
+        if (!folderPath) return;
+        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
+        if (this._project) this._project.project_path = folderPath;
+        this._git.refreshStatus();
+        this._git.startPoll();
+        this._setHeaderFolderPath(folderPath);
+      });
+
+    this.container.querySelector('#btnModelConfigs')
+      .addEventListener('click', () => this._modelConfigsModal.show());
+
+    this.container.querySelector('#aiModelSelect')
+      .addEventListener('change', e => {
+        const id = Number(e.target.value);
+        window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
+      });
+
+    this.container.querySelector('#btnConsoleGit')
+      .addEventListener('click', () =>
+        this.router.navigate('git-changes', { projectId: this._projectId, from: 'extract-user-stories' }));
+
+    this.container.querySelector('#btnHeaderQcmd')
+      .addEventListener('click', () => this._qcmdModal.show());
 
     this.container.querySelector('#eusMockupsList')
       .addEventListener('click', e => {
