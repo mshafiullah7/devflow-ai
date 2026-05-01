@@ -168,7 +168,7 @@ function registerDbHandlers() {
 
   ipcMain.handle(
     'db:user_stories:update',
-    (_e, { id, title, description, acceptance_criteria, status_id, is_active }) => {
+    (_e, { id, title, description, acceptance_criteria, status_id, is_active, is_extracted }) => {
       db.prepare(
         `UPDATE user_stories
             SET title = coalesce(?, title),
@@ -176,11 +176,12 @@ function registerDbHandlers() {
                 acceptance_criteria = coalesce(?, acceptance_criteria),
                 status_id = coalesce(?, status_id),
                 is_active = coalesce(?, is_active),
+                is_extracted = coalesce(?, is_extracted),
                 updated_at = datetime('now')
           WHERE id = ?`
       ).run(
         title ?? null, description ?? null, acceptance_criteria ?? null,
-        status_id ?? null, is_active ?? null, id
+        status_id ?? null, is_active ?? null, is_extracted ?? null, id
       );
       return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(id);
     }
