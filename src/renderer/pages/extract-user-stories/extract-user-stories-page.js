@@ -595,9 +595,19 @@ export class ExtractUserStoriesPage {
           </div>
         </div>
         <div class="eus-gen-footer">
-          <button class="eus-gen-btn eus-gen-btn--run" disabled>Run</button>
-          <button class="eus-gen-btn eus-gen-btn--cancel" id="eusGenCancelBtn" hidden>Cancel</button>
-          <button class="eus-gen-btn eus-gen-btn--close">Close</button>
+          <button class="eus-gen-btn eus-gen-btn--load-json" id="eusLoadJsonBtn">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Load JSON from Disk
+          </button>
+          <div class="eus-gen-footer-right">
+            <button class="eus-gen-btn eus-gen-btn--run" disabled>Run</button>
+            <button class="eus-gen-btn eus-gen-btn--cancel" id="eusGenCancelBtn" hidden>Cancel</button>
+            <button class="eus-gen-btn eus-gen-btn--load-db" id="eusLoadToDbBtn" disabled>Load to DB</button>
+            <button class="eus-gen-btn eus-gen-btn--close">Close</button>
+          </div>
         </div>
       </div>
     `;
@@ -615,10 +625,26 @@ export class ExtractUserStoriesPage {
     overlay.querySelector('.eus-gen-btn--close').addEventListener('click', close);
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
-    // Build prompt and populate textarea
-    const runBtn     = overlay.querySelector('.eus-gen-btn--run');
-    const promptBody = overlay.querySelector('.eus-gen-prompt-body');
+    const runBtn      = overlay.querySelector('.eus-gen-btn--run');
+    const loadJsonBtn = overlay.querySelector('#eusLoadJsonBtn');
+    const loadToDbBtn = overlay.querySelector('#eusLoadToDbBtn');
+    const promptBody  = overlay.querySelector('.eus-gen-prompt-body');
 
+    // Load JSON from Disk
+    loadJsonBtn.addEventListener('click', async () => {
+      const filePath = await window.db.dialog.openFile({ filters: [{ name: 'JSON Files', extensions: ['json'] }] });
+      if (!filePath) return;
+      const content = await window.shell.readFile(filePath);
+      if (!content) return;
+      overlay._rawJson = content;
+      this._showRawResult(overlay, content, null);
+      loadToDbBtn.disabled = false;
+    });
+
+    // Load to DB — saves whatever raw JSON is currently stored
+    loadToDbBtn.addEventListener('click', () => this._saveStoriesToDb(overlay, loadToDbBtn, feature.id));
+
+    // Build prompt and populate textarea
     try {
       const prompt = await this._buildPromptForModal(feature, mockup, docs);
       promptBody.innerHTML = `<textarea class="eus-gen-prompt-ta" id="eusGenPromptTa" spellcheck="false">${escHtml(prompt)}</textarea>`;
@@ -701,29 +727,62 @@ export class ExtractUserStoriesPage {
   }
 
   async _handleGenerateDone(overlay, runBtn, promptTa, raw, error, featureId) {
-    const promptBody = overlay.querySelector('.eus-gen-prompt-body');
+    overlay.querySelector('#eusGenCounter')?.remove();
+    promptTa.disabled = false;
+
+    overlay._rawJson = raw;
+    this._showRawResult(overlay, raw, error);
+
+    const loadToDbBtn = overlay.querySelector('#eusLoadToDbBtn');
+    const jsonMatch   = raw.match(/\{[\s\S]*\}/);
+    let parsed = null;
+    if (jsonMatch) {
+      try { parsed = JSON.parse(jsonMatch[0]); } catch { /* fallthrough */ }
+    }
+    if (parsed?.UserStories?.length) loadToDbBtn.disabled = false;
+
+    runBtn.disabled    = false;
+    runBtn.textContent = 'Re-run';
+  }
+
+  _showRawResult(overlay, raw, error) {
+    const promptTa = overlay.querySelector('#eusGenPromptTa');
+    overlay.querySelector('.eus-gen-result')?.remove();
+
+    const resultEl = document.createElement('div');
+    resultEl.className = 'eus-gen-result';
+
+    if (error && !raw) {
+      resultEl.innerHTML = `<div class="eus-gen-error">${escHtml(error)}</div>`;
+    } else {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      let parsed = null;
+      if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { /* fallthrough */ } }
+      const hint = parsed?.UserStories?.length
+        ? `<div class="eus-gen-parse-ok">&#10003; ${parsed.UserStories.length} user ${parsed.UserStories.length === 1 ? 'story' : 'stories'} parsed — click <strong>Load to DB</strong> to save</div>`
+        : `<div class="eus-gen-error">${escHtml(error || 'Could not parse UserStories from response.')}</div>`;
+      resultEl.innerHTML = `${hint}<pre class="eus-gen-raw">${escHtml(raw)}</pre>`;
+    }
+
+    if (promptTa) promptTa.after(resultEl);
+    else overlay.querySelector('.eus-gen-prompt-body').appendChild(resultEl);
+  }
+
+  async _saveStoriesToDb(overlay, loadToDbBtn, featureId) {
+    const raw = overlay._rawJson;
+    if (!raw) return;
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     let parsed = null;
-    if (jsonMatch) {
-      try { parsed = JSON.parse(jsonMatch[0]); } catch { /* handled below */ }
-    }
-
-    const counter = overlay.querySelector('#eusGenCounter');
-    if (counter) counter.remove();
-    promptTa.disabled = false;
+    if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { /* fallthrough */ } }
 
     if (!parsed?.UserStories?.length) {
-      const errEl = document.createElement('div');
-      errEl.innerHTML = `
-        <div class="eus-gen-error">${escHtml(error || 'Could not parse user stories from response.')}</div>
-        <pre class="eus-gen-raw">${escHtml(raw)}</pre>
-      `;
-      promptTa.after(errEl);
-      runBtn.disabled    = false;
-      runBtn.textContent = 'Retry';
+      this._showRawResult(overlay, raw, 'Could not parse UserStories from the JSON.');
       return;
     }
+
+    loadToDbBtn.disabled    = true;
+    loadToDbBtn.textContent = 'Saving…';
 
     let saved = 0;
     for (const s of parsed.UserStories) {
@@ -732,8 +791,8 @@ export class ExtractUserStoriesPage {
           feature_id:          featureId,
           project_id:          this._projectId,
           title:               s.userStoryName || 'Untitled Story',
-          description:         s.description         || null,
-          acceptance_criteria: s.acceptanceCriteria  || null,
+          description:         s.description        || null,
+          acceptance_criteria: s.acceptanceCriteria || null,
           is_extracted:        1,
         });
         if (Array.isArray(s.prompts)) {
@@ -749,14 +808,14 @@ export class ExtractUserStoriesPage {
       } catch { /* skip bad entries */ }
     }
 
-    const resultEl = document.createElement('div');
-    resultEl.innerHTML = `
-      <div class="eus-gen-success-badge">&#10003; ${saved} user ${saved === 1 ? 'story' : 'stories'} saved</div>
-      <pre class="eus-gen-raw">${escHtml(raw)}</pre>
-    `;
-    promptTa.after(resultEl);
-    runBtn.disabled    = false;
-    runBtn.textContent = 'Re-run';
+    // Replace result hint with success badge, keep raw
+    const hintEl = overlay.querySelector('.eus-gen-parse-ok, .eus-gen-error');
+    if (hintEl) {
+      hintEl.className = 'eus-gen-success-badge';
+      hintEl.innerHTML = `&#10003; ${saved} user ${saved === 1 ? 'story' : 'stories'} saved to DB`;
+    }
+    loadToDbBtn.disabled    = true;
+    loadToDbBtn.textContent = 'Saved';
 
     await this._loadExistingStories();
   }
