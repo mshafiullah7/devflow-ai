@@ -671,6 +671,8 @@ export class ExtractUserStoriesPage {
     const loadToDbBtn = overlay.querySelector('#eusLoadToDbBtn');
     const promptBody  = overlay.querySelector('.eus-gen-prompt-body');
 
+    loadJsonBtn.disabled = false;
+
     // Load JSON from Disk
     loadJsonBtn.addEventListener('click', async () => {
       const filePath = await window.db.dialog.openFile({ filters: [{ name: 'JSON Files', extensions: ['json'] }] });
@@ -909,6 +911,7 @@ Use EXACTLY this structure:
 Rules:
 - featureId MUST be ${feature.id}
 - Each story needs at least one prompt
+- Each prompt value MUST be written in Markdown
 - tag is a SINGLE word (UI, API, DB, Auth, Cache, Queue, Email…)
 - acceptanceCriteria follows Given / When / Then on separate lines
 - Do NOT write files — print the raw JSON directly to stdout`;
