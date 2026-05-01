@@ -586,15 +586,16 @@ export class ExtractUserStoriesPage {
           </div>
           <div class="eus-gen-prompt-pane">
             <div class="eus-gen-pane-header">
-              <span class="eus-gen-pane-title">Generated Prompt</span>
+              <span class="eus-gen-pane-title">Prompt</span>
+              <span class="eus-gen-pane-hint">Review and edit before running</span>
             </div>
             <div class="eus-gen-prompt-body">
-              <div class="eus-gen-pane-empty">Generated prompt will appear here…</div>
+              <div class="eus-gen-pane-empty">Building prompt…</div>
             </div>
           </div>
         </div>
         <div class="eus-gen-footer">
-          <button class="eus-gen-btn eus-gen-btn--run">Run</button>
+          <button class="eus-gen-btn eus-gen-btn--run" disabled>Run</button>
           <button class="eus-gen-btn eus-gen-btn--close">Close</button>
         </div>
       </div>
@@ -613,57 +614,71 @@ export class ExtractUserStoriesPage {
     overlay.querySelector('.eus-gen-btn--close').addEventListener('click', close);
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
-    overlay.querySelector('.eus-gen-btn--run')
-      .addEventListener('click', () => this._handleRun(overlay, feature, mockup, docs));
+    // Build prompt and populate textarea
+    const runBtn     = overlay.querySelector('.eus-gen-btn--run');
+    const promptBody = overlay.querySelector('.eus-gen-prompt-body');
+
+    try {
+      const prompt = await this._buildPromptForModal(feature, mockup, docs);
+      promptBody.innerHTML = `<textarea class="eus-gen-prompt-ta" id="eusGenPromptTa" spellcheck="false">${escHtml(prompt)}</textarea>`;
+      runBtn.disabled = false;
+      runBtn.addEventListener('click', () => this._handleRun(overlay, feature.id));
+    } catch (err) {
+      promptBody.innerHTML = `<div class="eus-gen-error">Failed to build prompt: ${escHtml(String(err))}</div>`;
+    }
   }
 
-  async _handleRun(overlay, feature, mockup, docs) {
-    const runBtn      = overlay.querySelector('.eus-gen-btn--run');
-    const promptBody  = overlay.querySelector('.eus-gen-prompt-body');
-    const isCli       = !this._aiModelConfig?.type || this._aiModelConfig.type === 'cli';
-
-    runBtn.disabled    = true;
-    runBtn.textContent = 'Generating…';
-
+  async _buildPromptForModal(feature, mockup, docs) {
+    const isCli    = !this._aiModelConfig?.type || this._aiModelConfig.type === 'cli';
     const docsFull = await Promise.all(docs.map(d => window.db.documents.get(d.id)));
 
-    let prompt;
     if (isCli) {
       const filesToWrite = [
         { name: 'mockup.html', content: mockup.html_content || '' },
         ...docsFull.map((d, i) => ({ name: `doc-${i}.md`, content: d?.content || '' })),
       ];
-      const paths    = await window.app.writeTempFiles(filesToWrite);
+      const paths = await window.app.writeTempFiles(filesToWrite);
       const [mockupPath, ...docPaths] = paths;
-      const docRefs  = docsFull.map((d, i) => ({ title: d?.title || docs[i].title, path: docPaths[i] }));
-      prompt = this._buildUserStoriesPrompt(feature, mockupPath, docRefs, true);
-    } else {
-      const docRefs = docsFull.map(d => ({ title: d?.title || '', content: d?.content || '' }));
-      prompt = this._buildUserStoriesPrompt(feature, mockup.html_content || '', docRefs, false);
+      const docRefs = docsFull.map((d, i) => ({ title: d?.title || docs[i].title, path: docPaths[i] }));
+      return this._buildUserStoriesPrompt(feature, mockupPath, docRefs, true);
     }
 
-    const preview = prompt.length > 400 ? prompt.slice(0, 400) + '…' : prompt;
-    promptBody.innerHTML = `
-      <div class="eus-gen-prompt-preview">${escHtml(preview)}</div>
-      <div class="eus-gen-counter" id="eusGenCounter">Generating… (0 chars)</div>
-    `;
+    const docRefs = docsFull.map(d => ({ title: d?.title || '', content: d?.content || '' }));
+    return this._buildUserStoriesPrompt(feature, mockup.html_content || '', docRefs, false);
+  }
+
+  async _handleRun(overlay, featureId) {
+    const runBtn    = overlay.querySelector('.eus-gen-btn--run');
+    const promptTa  = overlay.querySelector('#eusGenPromptTa');
+    const prompt    = promptTa?.value?.trim();
+    if (!prompt) return;
+
+    runBtn.disabled    = true;
+    runBtn.textContent = 'Generating…';
+    promptTa.disabled  = true;
+
+    const counter = document.createElement('div');
+    counter.className = 'eus-gen-counter';
+    counter.id        = 'eusGenCounter';
+    counter.textContent = 'Generating… (0 chars)';
+    promptTa.after(counter);
 
     let charCount = 0;
     window.app.chat.offAll();
     window.app.chat.onToken(({ text }) => {
       charCount += text.length;
-      const counter = overlay.querySelector('#eusGenCounter');
-      if (counter) counter.textContent = `Generating… (${charCount} chars)`;
+      const c = overlay.querySelector('#eusGenCounter');
+      if (c) c.textContent = `Generating… (${charCount} chars)`;
     });
     window.app.chat.onDone(({ raw, error }) => {
       window.app.chat.offAll();
-      this._handleGenerateDone(overlay, runBtn, raw || '', error, feature.id);
+      this._handleGenerateDone(overlay, runBtn, promptTa, raw || '', error, featureId);
     });
 
     window.app.chat.generate({ prompt, model: this._aiModelConfig });
   }
 
-  async _handleGenerateDone(overlay, runBtn, raw, error, featureId) {
+  async _handleGenerateDone(overlay, runBtn, promptTa, raw, error, featureId) {
     const promptBody = overlay.querySelector('.eus-gen-prompt-body');
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -672,11 +687,17 @@ export class ExtractUserStoriesPage {
       try { parsed = JSON.parse(jsonMatch[0]); } catch { /* handled below */ }
     }
 
+    const counter = overlay.querySelector('#eusGenCounter');
+    if (counter) counter.remove();
+    promptTa.disabled = false;
+
     if (!parsed?.UserStories?.length) {
-      promptBody.innerHTML = `
+      const errEl = document.createElement('div');
+      errEl.innerHTML = `
         <div class="eus-gen-error">${escHtml(error || 'Could not parse user stories from response.')}</div>
         <pre class="eus-gen-raw">${escHtml(raw)}</pre>
       `;
+      promptTa.after(errEl);
       runBtn.disabled    = false;
       runBtn.textContent = 'Retry';
       return;
@@ -706,10 +727,12 @@ export class ExtractUserStoriesPage {
       } catch { /* skip bad entries */ }
     }
 
-    promptBody.innerHTML = `
+    const resultEl = document.createElement('div');
+    resultEl.innerHTML = `
       <div class="eus-gen-success-badge">&#10003; ${saved} user ${saved === 1 ? 'story' : 'stories'} saved</div>
       <pre class="eus-gen-raw">${escHtml(raw)}</pre>
     `;
+    promptTa.after(resultEl);
     runBtn.disabled    = false;
     runBtn.textContent = 'Re-run';
 
