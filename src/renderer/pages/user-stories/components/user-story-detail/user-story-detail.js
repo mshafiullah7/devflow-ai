@@ -1,4 +1,4 @@
-import { escHtml, injectCss, timeAgo } from '../../../../shared/helpers.js';
+import { escHtml, injectCss } from '../../../../shared/helpers.js';
 
 /**
  * UserStoryDetail — renders the detail panel for a selected user story.
@@ -9,7 +9,7 @@ import { escHtml, injectCss, timeAgo } from '../../../../shared/helpers.js';
  *   - Inline Edit form (with status select, prompt history, expand overlay, run buttons)
  *
  * Usage:
- *   const detail = new UserStoryDetail({ detailEl, projectId, getModel, onRunCommand, onRunCommandExternal, onStoryUpdated, onCancelled });
+ *   const detail = new UserStoryDetail({ detailEl, projectId, getModel, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled });
  *   await detail.mount();
  *   detail.setContext(featureId, statuses);
  *   detail.showEmpty();
@@ -17,11 +17,10 @@ import { escHtml, injectCss, timeAgo } from '../../../../shared/helpers.js';
  *   detail.showEditForm(story);
  */
 export class UserStoryDetail {
-  constructor({ detailEl, projectId, getModel, onRunCommand, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled }) {
+  constructor({ detailEl, projectId, getModel, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled }) {
     this._detailEl               = detailEl;
     this._projectId              = projectId;
     this._getModel               = getModel || (() => null);
-    this._onRunCommand           = onRunCommand || (() => {});
     this._onRunCommandExternal   = onRunCommandExternal || (() => {});
     this._onPrintOutput          = onPrintOutput || (() => {});
     this._onStoryUpdated         = onStoryUpdated || (() => {});
@@ -125,19 +124,6 @@ export class UserStoryDetail {
             <div class="usl-prompts-list" id="uslAddPromptsList"></div>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--quickprompt" data-prompt-field>
-            <div class="usl-add-form__label-row">
-              <label class="usl-add-form__label" for="uslAddQuickPrompt">Quick Prompt</label>
-              <div class="usl-add-form__label-actions">
-                <button class="usl-add-form__run usl-add-form__run--quick" type="button" data-quickprompt="uslAddQuickPrompt" data-preview="uslAddQuickCmdPreview" title="Run in console (Ctrl+Q)" aria-label="Run quick prompt">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
-                </button>
-              </div>
-            </div>
-            <div class="usl-quick-cmd-preview" id="uslAddQuickCmdPreview">$ claude --dangerously-skip-permissions --print ("…")</div>
-            <textarea class="usl-add-form__textarea" id="uslAddQuickPrompt" placeholder="Quick prompt to run in console…" rows="3"></textarea>
-          </div>
-
           <div class="usl-add-form__field" data-detail-field>
             <label class="usl-add-form__label" for="uslAddStatus">Status</label>
             <select class="usl-add-form__select" id="uslAddStatus">
@@ -165,7 +151,6 @@ export class UserStoryDetail {
     this._bindPromptsSection(this._detailEl, null);
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
-    this._bindQuickRunBtns(this._detailEl);
 
     const save = async () => {
       const title = titleEl.value.trim();
@@ -271,20 +256,6 @@ export class UserStoryDetail {
             <div class="usl-prompts-list" id="uslEditPromptsList"></div>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--quickprompt" data-prompt-field>
-            <div class="usl-add-form__label-row">
-              <label class="usl-add-form__label" for="uslEditQuickPrompt">Quick Prompt</label>
-              <div class="usl-add-form__label-actions">
-                <button class="usl-add-form__run usl-add-form__run--quick" type="button" data-quickprompt="uslEditQuickPrompt" data-preview="uslEditQuickCmdPreview" title="Run in console (Ctrl+Q)" aria-label="Run quick prompt">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
-                </button>
-              </div>
-            </div>
-            <div class="usl-quick-cmd-preview" id="uslEditQuickCmdPreview">$ claude --dangerously-skip-permissions --print ("…")</div>
-            <textarea class="usl-add-form__textarea" id="uslEditQuickPrompt" placeholder="Quick prompt to run in console…" rows="3"></textarea>
-            <div class="usl-prompt-history" id="uslPromptHistory"></div>
-          </div>
-
         </div>
       </div>
     `;
@@ -344,8 +315,6 @@ export class UserStoryDetail {
     saveBtn.addEventListener('click', save);
     this._bindCtrlS(save);
     this._bindExpandBtns(this._detailEl, save);
-    this._bindQuickRunBtns(this._detailEl, story.id);
-    this._loadPromptHistory(story.id);
 
   }
 
@@ -671,28 +640,6 @@ export class UserStoryDetail {
     return `$p = @'\n${prompt}\n'@\n${exe} $p`;
   }
 
-  _buildQuickCmd(prompt) {
-    const cfg = this._resolvedConfig();
-    if (cfg.type === 'api') return null;
-    const exe   = cfg.executable || 'claude';
-    const flags = cfg.flags ? ` ${cfg.flags}` : '';
-    if (cfg.input_mode === 'heredoc') {
-      return `$p = @'\n${prompt}\n'@\n${exe}${flags} $p`;
-    }
-    return `$p = @'\n${prompt}\n'@\nWrite-Output $p | ${exe}${flags}`;
-  }
-
-  _quickCmdPreviewText(snippet) {
-    const cfg = this._resolvedConfig();
-    if (cfg.type === 'api') {
-      const name = cfg.label || cfg.model_name || 'API';
-      return `→ ${name} ("${snippet}")`;
-    }
-    const exe   = cfg.executable || 'claude';
-    const flags = cfg.flags ? ` ${cfg.flags}` : '';
-    return `$ ${exe}${flags} ("${snippet}")`;
-  }
-
   async _runApiPrompt(prompt, userStoryId) {
     const cfg = this._resolvedConfig();
     const baseUrl = (cfg.base_url || '').replace(/\/$/, '');
@@ -703,8 +650,6 @@ export class UserStoryDetail {
 
     const label = cfg.label || cfg.model_name || 'API';
     this._onPrintOutput('', { label: `▶ ${label}` });
-
-    await this._saveToHistory(userStoryId, prompt);
 
     const body = {
       model: cfg.model_name || 'default',
@@ -729,137 +674,6 @@ export class UserStoryDetail {
     } catch (err) {
       this._onPrintOutput(`API call failed: ${err.message}`, { isError: true });
     }
-  }
-
-  _expandConsole() {
-    const consoleEl    = document.getElementById('projectConsole');
-    const toggleBtn    = document.getElementById('btnConsoleToggle');
-    const resizeHandle = document.querySelector('.project-panel__resize[data-resize="console"]');
-    if (consoleEl?.classList.contains('project-console--collapsed')) {
-      consoleEl.classList.remove('project-console--collapsed');
-      consoleEl.style.flex = '0 0 20%';
-      if (resizeHandle) resizeHandle.style.display = '';
-      if (toggleBtn) {
-        toggleBtn.title = 'Collapse console';
-        toggleBtn.setAttribute('aria-label', 'Collapse console');
-        const icon = toggleBtn.querySelector('.console-toggle-icon');
-        if (icon) icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
-      }
-    }
-  }
-
-  _bindQuickRunBtns(container, userStoryId = null) {
-    container.querySelectorAll('.usl-add-form__run--quick').forEach(btn => {
-      const taId      = btn.dataset.quickprompt;
-      const prevId    = btn.dataset.preview;
-      const textarea  = taId  ? container.querySelector('#' + taId)  : null;
-      const previewEl = prevId ? container.querySelector('#' + prevId) : null;
-
-      // Live command preview as user types
-      if (textarea && previewEl) {
-        const updatePreview = () => {
-          const text    = textarea.value.trim();
-          const isMulti = text.includes('\n');
-          const snippet = isMulti
-            ? text.split('\n')[0].trim() + ' …'
-            : (text || '…');
-          previewEl.textContent = this._quickCmdPreviewText(snippet);
-        };
-        textarea.addEventListener('input', updatePreview);
-      }
-
-      const run = async () => {
-        const prompt = textarea ? textarea.value.trim() : '';
-        if (!prompt) return;
-        this._expandConsole();
-        const cfg = this._resolvedConfig();
-        if (cfg.type === 'api') {
-          await this._runApiPrompt(prompt, userStoryId);
-        } else {
-          await this._saveToHistory(userStoryId, prompt);
-          const cmd = this._buildQuickCmd(prompt);
-          if (cmd) this._onRunCommand(cmd);
-        }
-        // Clear after run
-        if (textarea) {
-          textarea.value = '';
-          textarea.dispatchEvent(new Event('input')); // reset preview
-        }
-      };
-
-      btn.addEventListener('click', run);
-
-      // Ctrl+Q shortcut — fires run when Quick Prompt textarea is focused
-      if (textarea) {
-        textarea.addEventListener('keydown', (e) => {
-          if (e.ctrlKey && e.key === 'q') {
-            e.preventDefault();
-            run();
-          }
-        });
-      }
-    });
-  }
-
-  // ----------------------------------------------------------------
-  // Prompt history
-  // ----------------------------------------------------------------
-  async _saveToHistory(userStoryId, prompt) {
-    if (!userStoryId) return;
-    const existing = await window.db.promptHistory.list(userStoryId);
-    if (existing.some(e => e.prompt === prompt)) return; // skip duplicate
-    await window.db.promptHistory.create({ user_story_id: userStoryId, prompt });
-    this._loadPromptHistory(userStoryId);
-  }
-
-  async _loadPromptHistory(userStoryId) {
-    const container = this._detailEl.querySelector('#uslPromptHistory');
-    if (!container) return;
-    const items = await window.db.promptHistory.list(userStoryId);
-    if (items.length === 0) {
-      container.innerHTML = '';
-      return;
-    }
-    const quickPromptEl = this._detailEl.querySelector('#uslEditQuickPrompt');
-    container.innerHTML = `
-      <div class="usl-ph-header">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Recent runs
-        <button class="usl-ph-delete-all" title="Clear all recent runs" aria-label="Clear all">
-          <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
-              stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </div>
-      <div class="usl-ph-list">
-        ${items.map(h => `
-          <div class="usl-ph-item" data-id="${h.id}" title="${escHtml(h.prompt)}">
-            <svg class="usl-ph-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
-              <path d="M4 3l9 5-9 5V3z" fill="currentColor" opacity="0.6"/>
-            </svg>
-            <span class="usl-ph-item__text">${escHtml(h.prompt.length > 80 ? h.prompt.slice(0, 80) + '…' : h.prompt)}</span>
-            <span class="usl-ph-item__time">${timeAgo(h.executed_at)}</span>
-          </div>
-        `).join('')}
-      </div>
-    `;
-    container.querySelectorAll('.usl-ph-item').forEach((el, i) => {
-      el.addEventListener('click', () => {
-        if (quickPromptEl) {
-          quickPromptEl.value = items[i].prompt;
-          quickPromptEl.dispatchEvent(new Event('input'));
-          quickPromptEl.focus();
-        }
-      });
-    });
-    container.querySelector('.usl-ph-delete-all').addEventListener('click', async () => {
-      await window.db.promptHistory.deleteAll(userStoryId);
-      this._loadPromptHistory(userStoryId);
-    });
   }
 
   // ----------------------------------------------------------------
