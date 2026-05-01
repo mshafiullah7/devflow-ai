@@ -72,14 +72,10 @@ export class UserStoryDetail {
       <div class="usl-add-form">
         <div class="usl-add-form__header">
           <h2 class="usl-add-form__title">Add User Story</h2>
-          <div class="usl-view-toggle" id="uslAddViewToggle">
-            <button class="usl-view-toggle__btn usl-view-toggle__btn--active" data-view="details">Details</button>
-            <button class="usl-view-toggle__btn" data-view="prompts">Prompts</button>
-          </div>
         </div>
         <div class="usl-add-form__body">
 
-          <div class="usl-add-form__field" data-detail-field>
+          <div class="usl-add-form__field">
             <label class="usl-add-form__label" for="uslAddTitle">
               Title <span class="usl-add-form__required">*</span>
             </label>
@@ -93,7 +89,7 @@ export class UserStoryDetail {
             />
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--desc" data-detail-field>
+          <div class="usl-add-form__field usl-add-form__field--desc">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddDesc">Description</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslAddDesc" title="Expand" aria-label="Expand Description">
@@ -103,7 +99,7 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslAddDesc" placeholder="Describe the story…" rows="6"></textarea>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--ac" data-detail-field>
+          <div class="usl-add-form__field usl-add-form__field--ac">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslAddAC">Acceptance Criteria</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslAddAC" title="Expand" aria-label="Expand Acceptance Criteria">
@@ -113,7 +109,7 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="6"></textarea>
           </div>
 
-          <div class="usl-prompts-section" data-prompt-field>
+          <div class="usl-prompts-section">
             <div class="usl-prompts-section__header">
               <span class="usl-prompts-section__title">Additional Prompts</span>
               <button class="usl-prompts-section__add-btn" id="uslAddPromptBtn" type="button" title="Add prompt">
@@ -124,7 +120,7 @@ export class UserStoryDetail {
             <div class="usl-prompts-list" id="uslAddPromptsList"></div>
           </div>
 
-          <div class="usl-add-form__field" data-detail-field>
+          <div class="usl-add-form__field">
             <label class="usl-add-form__label" for="uslAddStatus">Status</label>
             <select class="usl-add-form__select" id="uslAddStatus">
               <option value="">— none —</option>
@@ -147,7 +143,6 @@ export class UserStoryDetail {
     const statusEl = this._detailEl.querySelector('#uslAddStatus');
     const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
 
-    this._bindViewToggle(this._detailEl, 'details');
     this._bindPromptsSection(this._detailEl, null);
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
@@ -197,10 +192,6 @@ export class UserStoryDetail {
       <div class="usl-add-form">
         <div class="usl-add-form__header">
           <h2 class="usl-add-form__title">User Story</h2>
-          <div class="usl-view-toggle" id="uslEditViewToggle">
-            <button class="usl-view-toggle__btn usl-view-toggle__btn--active" data-view="details">Details</button>
-            <button class="usl-view-toggle__btn" data-view="prompts">Prompts</button>
-          </div>
           <select class="usl-add-form__status-select" id="uslEditStatus">
             <option value="">— none —</option>
             ${this._statuses.map(st =>
@@ -210,7 +201,7 @@ export class UserStoryDetail {
         </div>
         <div class="usl-add-form__body">
 
-          <div class="usl-add-form__field" data-detail-field>
+          <div class="usl-add-form__field">
             <label class="usl-add-form__label" for="uslEditTitle">
               Title <span class="usl-add-form__required">*</span>
             </label>
@@ -225,7 +216,7 @@ export class UserStoryDetail {
             />
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--desc" data-detail-field>
+          <div class="usl-add-form__field usl-add-form__field--desc">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditDesc">Description</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslEditDesc" title="Expand" aria-label="Expand Description">
@@ -235,7 +226,7 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslEditDesc" placeholder="Describe the story…" rows="6">${escHtml(story.description || '')}</textarea>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--ac" data-detail-field>
+          <div class="usl-add-form__field usl-add-form__field--ac">
             <div class="usl-add-form__label-row">
               <label class="usl-add-form__label" for="uslEditAC">Acceptance Criteria</label>
               <button class="usl-add-form__expand" type="button" data-expand="uslEditAC" title="Expand" aria-label="Expand Acceptance Criteria">
@@ -245,7 +236,7 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="6">${escHtml(story.acceptance_criteria || '')}</textarea>
           </div>
 
-          <div class="usl-prompts-section" data-prompt-field>
+          <div class="usl-prompts-section">
             <div class="usl-prompts-section__header">
               <span class="usl-prompts-section__title">Additional Prompts</span>
               <button class="usl-prompts-section__add-btn" id="uslEditPromptBtn" type="button" title="Add prompt">
@@ -309,38 +300,12 @@ export class UserStoryDetail {
       }
     };
 
-    this._bindViewToggle(this._detailEl, 'details');
     this._bindPromptsSection(this._detailEl, story.id);
     this._loadPrompts(story.id);
     saveBtn.addEventListener('click', save);
     this._bindCtrlS(save);
     this._bindExpandBtns(this._detailEl, save);
 
-  }
-
-  // ----------------------------------------------------------------
-  // View toggle (Details / Prompts)
-  // ----------------------------------------------------------------
-  _bindViewToggle(container, defaultView = 'prompts') {
-    const applyView = (view) => {
-      container.querySelectorAll('[data-detail-field]').forEach(el => {
-        el.style.display = view === 'details' ? '' : 'none';
-      });
-      container.querySelectorAll('[data-prompt-field]').forEach(el => {
-        el.style.display = view === 'prompts' ? '' : 'none';
-      });
-      container.querySelectorAll('.usl-view-toggle__btn').forEach(btn => {
-        btn.classList.toggle('usl-view-toggle__btn--active', btn.dataset.view === view);
-      });
-    };
-
-    container.querySelectorAll('.usl-view-toggle__btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        applyView(btn.dataset.view);
-      });
-    });
-
-    applyView(defaultView);
   }
 
   // ----------------------------------------------------------------
