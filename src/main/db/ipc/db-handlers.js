@@ -150,17 +150,17 @@ function registerDbHandlers() {
 
   ipcMain.handle(
     'db:user_stories:create',
-    (_e, { feature_id, project_id, title, description, acceptance_criteria, prompt, status_id }) => {
+    (_e, { feature_id, project_id, title, description, acceptance_criteria, status_id }) => {
       const result = db
         .prepare(
           `INSERT INTO user_stories
-            (feature_id, project_id, title, description, acceptance_criteria, prompt, status_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+            (feature_id, project_id, title, description, acceptance_criteria, status_id)
+           VALUES (?, ?, ?, ?, ?, ?)`
         )
         .run(
           feature_id, project_id, title,
           description ?? null, acceptance_criteria ?? null,
-          prompt ?? null, status_id ?? null
+          status_id ?? null
         );
       return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(result.lastInsertRowid);
     }
@@ -168,22 +168,19 @@ function registerDbHandlers() {
 
   ipcMain.handle(
     'db:user_stories:update',
-    (_e, { id, title, description, acceptance_criteria, prompt, status_id, is_active, is_executed }) => {
+    (_e, { id, title, description, acceptance_criteria, status_id, is_active }) => {
       db.prepare(
         `UPDATE user_stories
             SET title = coalesce(?, title),
                 description = coalesce(?, description),
                 acceptance_criteria = coalesce(?, acceptance_criteria),
-                prompt = coalesce(?, prompt),
                 status_id = coalesce(?, status_id),
                 is_active = coalesce(?, is_active),
-                is_executed = CASE WHEN ? IS NOT NULL THEN ? ELSE is_executed END,
                 updated_at = datetime('now')
           WHERE id = ?`
       ).run(
         title ?? null, description ?? null, acceptance_criteria ?? null,
-        prompt ?? null, status_id ?? null, is_active ?? null,
-        is_executed ?? null, is_executed ?? null, id
+        status_id ?? null, is_active ?? null, id
       );
       return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(id);
     }

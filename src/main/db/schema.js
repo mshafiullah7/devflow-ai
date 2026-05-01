@@ -59,7 +59,6 @@ function applySchema(db) {
       title               TEXT    NOT NULL,
       description         TEXT,
       acceptance_criteria TEXT,
-      prompt              TEXT,
       status_id           INTEGER REFERENCES status_master(id),
       is_active           INTEGER NOT NULL DEFAULT 1,
       created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -373,7 +372,7 @@ function applySchema(db) {
         json_object(
           'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
           'title', NEW.title, 'description', NEW.description,
-          'acceptance_criteria', NEW.acceptance_criteria, 'prompt', NEW.prompt,
+          'acceptance_criteria', NEW.acceptance_criteria,
           'status_id', NEW.status_id, 'is_active', NEW.is_active,
           'created_at', NEW.created_at, 'updated_at', NEW.updated_at
         )
@@ -389,14 +388,14 @@ function applySchema(db) {
         json_object(
           'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
           'title', OLD.title, 'description', OLD.description,
-          'acceptance_criteria', OLD.acceptance_criteria, 'prompt', OLD.prompt,
+          'acceptance_criteria', OLD.acceptance_criteria,
           'status_id', OLD.status_id, 'is_active', OLD.is_active,
           'created_at', OLD.created_at, 'updated_at', OLD.updated_at
         ),
         json_object(
           'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
           'title', NEW.title, 'description', NEW.description,
-          'acceptance_criteria', NEW.acceptance_criteria, 'prompt', NEW.prompt,
+          'acceptance_criteria', NEW.acceptance_criteria,
           'status_id', NEW.status_id, 'is_active', NEW.is_active,
           'created_at', NEW.created_at, 'updated_at', NEW.updated_at
         )
@@ -412,7 +411,7 @@ function applySchema(db) {
         json_object(
           'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
           'title', OLD.title, 'description', OLD.description,
-          'acceptance_criteria', OLD.acceptance_criteria, 'prompt', OLD.prompt,
+          'acceptance_criteria', OLD.acceptance_criteria,
           'status_id', OLD.status_id, 'is_active', OLD.is_active,
           'created_at', OLD.created_at, 'updated_at', OLD.updated_at
         ),

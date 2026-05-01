@@ -110,7 +110,6 @@ export class UserStoryList {
           title:               item.title               || '',
           description:         item.description         || null,
           acceptance_criteria: item.acceptance_criteria || null,
-          prompt:              item.prompt              || null,
           status_id:           statusId,
         });
         imported++;

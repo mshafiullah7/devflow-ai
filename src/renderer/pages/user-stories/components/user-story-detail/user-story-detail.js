@@ -114,24 +114,6 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="6"></textarea>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--prompt" data-detail-field>
-            <div class="usl-add-form__label-row">
-              <label class="usl-add-form__label" for="uslAddPrompt">Prompt</label>
-              <div class="usl-add-form__label-actions">
-                <button class="usl-add-form__mark-executed" type="button" data-story-prompt title="Mark as Executed" aria-label="Mark as Executed">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-                <button class="usl-add-form__run usl-add-form__run--external" type="button" data-prompt="uslAddPrompt" title="Run in external PowerShell window" aria-label="Run in PowerShell">
-                  <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
-                </button>
-                <button class="usl-add-form__expand" type="button" data-expand="uslAddPrompt" title="Expand" aria-label="Expand Prompt">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-              </div>
-            </div>
-            <textarea class="usl-add-form__textarea" id="uslAddPrompt" placeholder="AI prompt for this story…" rows="6"></textarea>
-          </div>
-
           <div class="usl-prompts-section" data-prompt-field>
             <div class="usl-prompts-section__header">
               <span class="usl-prompts-section__title">Additional Prompts</span>
@@ -176,7 +158,6 @@ export class UserStoryDetail {
     const titleEl  = this._detailEl.querySelector('#uslAddTitle');
     const descEl   = this._detailEl.querySelector('#uslAddDesc');
     const acEl     = this._detailEl.querySelector('#uslAddAC');
-    const promptEl = this._detailEl.querySelector('#uslAddPrompt');
     const statusEl = this._detailEl.querySelector('#uslAddStatus');
     const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
 
@@ -184,9 +165,7 @@ export class UserStoryDetail {
     this._bindPromptsSection(this._detailEl, null);
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
-    this._bindRunBtns(this._detailEl);
     this._bindQuickRunBtns(this._detailEl);
-
 
     const save = async () => {
       const title = titleEl.value.trim();
@@ -206,7 +185,6 @@ export class UserStoryDetail {
           title,
           description:         descEl.value.trim()   || null,
           acceptance_criteria: acEl.value.trim()     || null,
-          prompt:              promptEl.value.trim() || null,
           status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
         });
         this.showEmpty();
@@ -282,24 +260,6 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="6">${escHtml(story.acceptance_criteria || '')}</textarea>
           </div>
 
-          <div class="usl-add-form__field usl-add-form__field--prompt" data-detail-field>
-            <div class="usl-add-form__label-row">
-              <label class="usl-add-form__label" for="uslEditPrompt">Prompt</label>
-              <div class="usl-add-form__label-actions">
-                <button class="usl-add-form__mark-executed${story.is_executed ? ' is-executed' : ''}" type="button" data-story-prompt title="${story.is_executed ? 'Executed' : 'Mark as Executed'}" aria-label="Mark as Executed">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-                <button class="usl-add-form__run usl-add-form__run--external" type="button" data-prompt="uslEditPrompt" title="Run in external PowerShell window" aria-label="Run in PowerShell">
-                  <svg width="14" height="12" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
-                </button>
-                <button class="usl-add-form__expand" type="button" data-expand="uslEditPrompt" title="Expand" aria-label="Expand Prompt">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-              </div>
-            </div>
-            <textarea class="usl-add-form__textarea" id="uslEditPrompt" placeholder="AI prompt for this story…" rows="6">${escHtml(story.prompt || '')}</textarea>
-          </div>
-
           <div class="usl-prompts-section" data-prompt-field>
             <div class="usl-prompts-section__header">
               <span class="usl-prompts-section__title">Additional Prompts</span>
@@ -332,18 +292,12 @@ export class UserStoryDetail {
     const titleEl  = this._detailEl.querySelector('#uslEditTitle');
     const descEl   = this._detailEl.querySelector('#uslEditDesc');
     const acEl     = this._detailEl.querySelector('#uslEditAC');
-    const promptEl = this._detailEl.querySelector('#uslEditPrompt');
     const statusEl = this._detailEl.querySelector('#uslEditStatus');
 
     const saveBtn = document.createElement('button');
     saveBtn.className   = 'usl-add-form__btn usl-add-form__btn--save';
     saveBtn.textContent = 'Save Changes';
     if (headerActions) headerActions.appendChild(saveBtn);
-
-    // Normalise literal \n sequences to real newlines (e.g. from JSON import)
-    if (promptEl.value.includes('\\n')) {
-      promptEl.value = promptEl.value.replace(/\\n/g, '\n');
-    }
 
     // Auto-save status immediately on change
     statusEl.addEventListener('change', async () => {
@@ -373,7 +327,6 @@ export class UserStoryDetail {
           title,
           description:         descEl.value.trim()   || null,
           acceptance_criteria: acEl.value.trim()     || null,
-          prompt:              promptEl.value.trim() || null,
           status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
         });
         saveBtn.disabled    = false;
@@ -391,9 +344,7 @@ export class UserStoryDetail {
     saveBtn.addEventListener('click', save);
     this._bindCtrlS(save);
     this._bindExpandBtns(this._detailEl, save);
-    this._bindRunBtns(this._detailEl, story.id);
     this._bindQuickRunBtns(this._detailEl, story.id);
-    this._bindMarkExecutedBtns(this._detailEl, story);
     this._loadPromptHistory(story.id);
 
   }
@@ -780,32 +731,6 @@ export class UserStoryDetail {
     }
   }
 
-  _bindRunBtns(container, userStoryId = null) {
-    container.querySelectorAll('.usl-add-form__run--external').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const markBtn = btn.closest('.usl-add-form__label-actions')
-          ?.querySelector('.usl-add-form__mark-executed');
-        const isExecuted = markBtn?.classList.contains('is-executed');
-        if (isExecuted) {
-          const ok = await this._showConfirm(
-            'This prompt has already been marked as executed. Run again?', 'Run Again'
-          );
-          if (!ok) return;
-        }
-        const textarea = container.querySelector('#' + btn.dataset.prompt);
-        const prompt   = textarea ? textarea.value.trim() : '';
-        if (!prompt) return;
-        const cfg = this._resolvedConfig();
-        if (cfg.type === 'api') {
-          this._runApiPrompt(prompt, userStoryId);
-        } else {
-          const cmd = this._buildExternalCmd(prompt);
-          if (cmd) await this._showRunDirModal(cmd);
-        }
-      });
-    });
-  }
-
   _expandConsole() {
     const consoleEl    = document.getElementById('projectConsole');
     const toggleBtn    = document.getElementById('btnConsoleToggle');
@@ -873,22 +798,6 @@ export class UserStoryDetail {
           }
         });
       }
-    });
-  }
-
-  // ----------------------------------------------------------------
-  // Mark-executed button — main Prompt field (user story level)
-  // ----------------------------------------------------------------
-  _bindMarkExecutedBtns(container, story) {
-    container.querySelectorAll('.usl-add-form__mark-executed[data-story-prompt]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const nowExecuted = !btn.classList.contains('is-executed');
-        btn.classList.toggle('is-executed', nowExecuted);
-        btn.title = nowExecuted ? 'Executed' : 'Mark as Executed';
-        if (story?.id) {
-          await window.db.userStories.update({ id: story.id, is_executed: nowExecuted ? 1 : 0 });
-        }
-      });
     });
   }
 

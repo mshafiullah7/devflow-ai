@@ -126,12 +126,6 @@ function runMigrations(db) {
     `);
   }
 
-  // Add is_executed to user_stories
-  const usCols = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
-  if (!usCols.includes('is_executed')) {
-    db.exec('ALTER TABLE user_stories ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0');
-  }
-
   // Add is_executed to prompts
   const promptsCols = db.prepare('PRAGMA table_info(prompts)').all().map(c => c.name);
   if (!promptsCols.includes('is_executed')) {
@@ -195,6 +189,81 @@ function runMigrations(db) {
         created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
         updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
       )
+    `);
+  }
+
+  // Drop prompt and is_executed columns from user_stories (replaced by the prompts table)
+  const usColsNow = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
+  if (usColsNow.includes('prompt') || usColsNow.includes('is_executed')) {
+    // Triggers that reference these columns must be dropped first
+    db.exec(`
+      DROP TRIGGER IF EXISTS trg_user_stories_insert;
+      DROP TRIGGER IF EXISTS trg_user_stories_update;
+      DROP TRIGGER IF EXISTS trg_user_stories_delete;
+    `);
+    if (usColsNow.includes('prompt')) {
+      db.exec('ALTER TABLE user_stories DROP COLUMN prompt');
+    }
+    if (usColsNow.includes('is_executed')) {
+      db.exec('ALTER TABLE user_stories DROP COLUMN is_executed');
+    }
+    // Recreate triggers without the removed fields
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_user_stories_insert
+      AFTER INSERT ON user_stories
+      BEGIN
+        INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
+        VALUES (
+          NEW.id, 'INSERT', NULL,
+          json_object(
+            'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
+            'title', NEW.title, 'description', NEW.description,
+            'acceptance_criteria', NEW.acceptance_criteria,
+            'status_id', NEW.status_id, 'is_active', NEW.is_active,
+            'created_at', NEW.created_at, 'updated_at', NEW.updated_at
+          )
+        );
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_user_stories_update
+      AFTER UPDATE ON user_stories
+      BEGIN
+        INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
+        VALUES (
+          NEW.id, 'UPDATE',
+          json_object(
+            'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
+            'title', OLD.title, 'description', OLD.description,
+            'acceptance_criteria', OLD.acceptance_criteria,
+            'status_id', OLD.status_id, 'is_active', OLD.is_active,
+            'created_at', OLD.created_at, 'updated_at', OLD.updated_at
+          ),
+          json_object(
+            'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
+            'title', NEW.title, 'description', NEW.description,
+            'acceptance_criteria', NEW.acceptance_criteria,
+            'status_id', NEW.status_id, 'is_active', NEW.is_active,
+            'created_at', NEW.created_at, 'updated_at', NEW.updated_at
+          )
+        );
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_user_stories_delete
+      AFTER DELETE ON user_stories
+      BEGIN
+        INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
+        VALUES (
+          OLD.id, 'DELETE',
+          json_object(
+            'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
+            'title', OLD.title, 'description', OLD.description,
+            'acceptance_criteria', OLD.acceptance_criteria,
+            'status_id', OLD.status_id, 'is_active', OLD.is_active,
+            'created_at', OLD.created_at, 'updated_at', OLD.updated_at
+          ),
+          NULL
+        );
+      END;
     `);
   }
 }
