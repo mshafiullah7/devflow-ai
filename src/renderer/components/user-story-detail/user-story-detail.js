@@ -315,6 +315,11 @@ export class UserStoryDetail {
     if (!listEl) return;
     listEl.innerHTML = '';
     list.forEach(p => this._addPromptRow(listEl, userStoryId, p));
+    const firstItem = listEl.querySelector('.usl-pl-item');
+    if (firstItem) {
+      firstItem.classList.add('usl-pl-item--open');
+      firstItem.querySelector('.usl-pl-item__body').hidden = false;
+    }
   }
 
   _showConfirm(message, confirmLabel = 'Delete') {
