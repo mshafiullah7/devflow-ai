@@ -1038,7 +1038,7 @@ Rules:
 - Each story needs at least one prompt
 - Each prompt value MUST be written in Markdown
 - tag is a SINGLE word (UI, API, DB, Auth, Cache, Queue, Email…)
-- acceptanceCriteria follows Given / When / Then on separate lines
+- acceptanceCriteria follows Given / When / Then on separate lines. Cover all the positive, negative and exceptional cases.
 - Do NOT write files — print the raw JSON directly to stdout`;
   }
 
