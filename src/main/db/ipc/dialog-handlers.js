@@ -26,15 +26,17 @@ function registerDialogHandlers() {
     return fs.readFile(result.filePaths[0], 'utf-8');
   });
 
-  ipcMain.handle('dialog:openFile', async (event, { title, extensions } = {}) => {
+  ipcMain.handle('dialog:openFile', async (event, { title, extensions, defaultPath } = {}) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    const result = await dialog.showOpenDialog(win, {
+    const opts = {
       properties: ['openFile'],
       title: title || 'Open File',
       filters: extensions
         ? [{ name: 'Files', extensions }]
         : [{ name: 'All Files', extensions: ['*'] }],
-    });
+    };
+    if (defaultPath) opts.defaultPath = defaultPath;
+    const result = await dialog.showOpenDialog(win, opts);
     if (result.canceled || result.filePaths.length === 0) return null;
     const content = await fs.readFile(result.filePaths[0], 'utf-8');
     return { path: result.filePaths[0], content };

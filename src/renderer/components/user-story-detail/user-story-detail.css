@@ -404,7 +404,7 @@
   border: none;
   border-radius: 0;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   font-weight: 450;
   line-height: 1.6;
@@ -424,7 +424,7 @@
   position: absolute;
   inset: 0;
   padding: 14px 16px;
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -501,7 +501,7 @@
   padding: 16px 20px;
   background: var(--bg);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
 }
 
@@ -651,7 +651,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   font-weight: 450;
   padding: 7px 10px;
@@ -807,6 +807,9 @@
 .usl-pl-item--open {
   border-color: var(--accent, #6366f1);
 }
+[data-theme="light"] .usl-pl-item--open {
+  border-color: var(--border);
+}
 
 .usl-pl-item__header {
   display: flex;
@@ -820,7 +823,7 @@
   min-width: 0;
 }
 .usl-pl-item__header:hover {
-  background: rgba(99, 102, 241, 0.08);
+  background: var(--surface-hover);
 }
 
 .usl-pl-item__status {
@@ -842,7 +845,8 @@
 
 .usl-pl-item__label {
   flex: 1;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -884,7 +888,7 @@
   border: none;
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-family: inherit;
   padding: 2px 4px;
   outline: none;
@@ -946,7 +950,7 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   font-weight: 450;
   padding: 7px 10px;

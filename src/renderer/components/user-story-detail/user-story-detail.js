@@ -450,10 +450,17 @@ export class UserStoryDetail {
       taEl.focus();
     }
 
-    // Toggle open/close on header click
+    // Toggle open/close on header click — accordion: only one item open at a time
     headerEl.addEventListener('click', () => {
-      const isOpen = item.classList.toggle('usl-pl-item--open');
-      bodyEl.hidden = !isOpen;
+      const isOpen = item.classList.contains('usl-pl-item--open');
+      listEl.querySelectorAll('.usl-pl-item').forEach(el => {
+        el.classList.remove('usl-pl-item--open');
+        el.querySelector('.usl-pl-item__body').hidden = true;
+      });
+      if (!isOpen) {
+        item.classList.add('usl-pl-item--open');
+        bodyEl.hidden = false;
+      }
     });
 
     // Live-update label when tag or prompt changes

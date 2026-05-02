@@ -336,7 +336,7 @@
 
 .doc-sidebar__item-title {
   flex: 1;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -495,7 +495,7 @@
   border: none;
   outline: none;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   line-height: 1.7;
   padding: 16px 20px;
@@ -508,7 +508,7 @@
   padding: 16px 24px;
   background: var(--bg);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
 }
 
@@ -961,7 +961,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   padding: 7px 10px;
   outline: none;
@@ -1006,7 +1006,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
   font-family: 'Consolas', 'Courier New', monospace;
   padding: 10px;
   outline: none;

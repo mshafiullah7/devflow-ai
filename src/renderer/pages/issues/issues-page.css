@@ -86,7 +86,7 @@
 }
 .is-card__title {
   flex: 1;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.35;
@@ -235,7 +235,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   font-family: inherit;
   outline: none;

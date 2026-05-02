@@ -684,13 +684,22 @@ export class ExtractUserStoriesPage {
           </div>
         </div>
         <div class="eus-gen-footer">
-          <button class="eus-gen-btn eus-gen-btn--load-json" id="eusLoadJsonBtn">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Load JSON from Disk
-          </button>
+          <div class="eus-gen-footer-left">
+            <button class="eus-gen-btn eus-gen-btn--load-json" id="eusLoadJsonBtn">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Load JSON from Disk
+            </button>
+            <button class="eus-gen-btn eus-gen-btn--terminal" id="eusTerminalBtn" disabled>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M4 6l3 3-3 3M8 12h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Run in Terminal
+            </button>
+          </div>
           <div class="eus-gen-footer-right">
             <button class="eus-gen-btn eus-gen-btn--run" disabled>Run</button>
             <button class="eus-gen-btn eus-gen-btn--cancel" id="eusGenCancelBtn" hidden>Cancel</button>
@@ -715,15 +724,21 @@ export class ExtractUserStoriesPage {
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
     const runBtn      = overlay.querySelector('.eus-gen-btn--run');
+    const terminalBtn = overlay.querySelector('#eusTerminalBtn');
     const loadJsonBtn = overlay.querySelector('#eusLoadJsonBtn');
     const loadToDbBtn = overlay.querySelector('#eusLoadToDbBtn');
     const promptBody  = overlay.querySelector('.eus-gen-prompt-body');
 
+    const isCli = !this._aiModelConfig?.type || this._aiModelConfig.type === 'cli';
+    if (!isCli) terminalBtn.hidden = true;
+
     loadJsonBtn.disabled = false;
 
-    // Load JSON from Disk
+    // Load JSON from Disk — defaults to terminal output file when available
     loadJsonBtn.addEventListener('click', async () => {
-      const result = await window.db.dialog.openFile({ title: 'Load User Stories JSON', extensions: ['json'] });
+      const opts = { title: 'Load User Stories JSON', extensions: ['json'] };
+      if (overlay._terminalOutputPath) opts.defaultPath = overlay._terminalOutputPath;
+      const result = await window.db.dialog.openFile(opts);
       if (!result?.content) return;
       const content = result.content;
       overlay._rawJson = content;
@@ -742,6 +757,10 @@ export class ExtractUserStoriesPage {
       const prompt = await this._buildPromptForModal(feature, mockup, docs);
       promptBody.innerHTML = `<textarea class="eus-gen-prompt-ta" id="eusGenPromptTa" spellcheck="false">${escHtml(prompt)}</textarea>`;
       runBtn.disabled = false;
+      if (isCli) {
+        terminalBtn.disabled = false;
+        terminalBtn.addEventListener('click', () => this._handleRunInTerminal(overlay));
+      }
       runBtn.addEventListener('click', () => this._handleRun(overlay, feature.id));
     } catch (err) {
       promptBody.innerHTML = `<div class="eus-gen-error">Failed to build prompt: ${escHtml(String(err))}</div>`;
@@ -817,6 +836,38 @@ export class ExtractUserStoriesPage {
     });
 
     window.app.chat.generate({ prompt, model: this._aiModelConfig });
+  }
+
+  async _handleRunInTerminal(overlay) {
+    const promptTa = overlay.querySelector('#eusGenPromptTa');
+    const prompt   = promptTa?.value?.trim();
+    if (!prompt) return;
+
+    const cfg   = this._aiModelConfig;
+    const exe   = cfg?.executable || 'claude';
+    const flags = cfg?.flags      || '--dangerously-skip-permissions --print';
+
+    // Write prompt + placeholder output to temp dir
+    const [promptPath, outputPath] = await window.app.writeTempFiles([
+      { name: 'eus-prompt.txt',  content: prompt },
+      { name: 'eus-output.json', content: ''     },
+    ]);
+
+    overlay._terminalOutputPath = outputPath;
+
+    const cmd = [
+      `$promptPath = '${promptPath}'`,
+      `$outputPath = '${outputPath}'`,
+      `Write-Host "Reading prompt from: $promptPath" -ForegroundColor Cyan`,
+      `$p = Get-Content -Path $promptPath -Raw`,
+      `Write-Host "Running ${exe}..." -ForegroundColor Yellow`,
+      `& ${exe} ${flags} $p | Out-File -FilePath $outputPath -Encoding UTF8`,
+      `Write-Host ""`,
+      `Write-Host "Done! Output saved to:" -ForegroundColor Green`,
+      `Write-Host "  $outputPath" -ForegroundColor Green`,
+    ].join('\n');
+
+    await window.db.terminal.openExternal({ command: cmd });
   }
 
   async _handleGenerateDone(overlay, runBtn, promptTa, raw, error, featureId) {

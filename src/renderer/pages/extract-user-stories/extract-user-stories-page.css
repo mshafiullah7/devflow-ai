@@ -107,7 +107,7 @@
   color: #fff;
 }
 .eus-src-item__title {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -202,7 +202,7 @@
 }
 
 .eus-gen-source-value {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   max-width: 200px;
   white-space: nowrap;
@@ -291,7 +291,7 @@
   border: none;
   border-radius: 0;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
   font-family: 'Consolas', 'Courier New', monospace;
   font-weight: 400;
   line-height: 1.6;
@@ -409,6 +409,12 @@
   border-top: 1px solid var(--border);
 }
 
+.eus-gen-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .eus-gen-footer-right {
   display: flex;
   align-items: center;
@@ -486,6 +492,24 @@
 .eus-gen-btn--close:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
+}
+
+.eus-gen-btn--terminal {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  color: #a78bfa;
+}
+.eus-gen-btn--terminal:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: #8b5cf6;
+  color: #c4b5fd;
+}
+.eus-gen-btn--terminal:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Hide execution-only controls inside the detail panel on this page */

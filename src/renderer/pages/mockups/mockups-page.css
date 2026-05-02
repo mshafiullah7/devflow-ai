@@ -448,7 +448,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   resize: none;
   overflow-y: auto;
