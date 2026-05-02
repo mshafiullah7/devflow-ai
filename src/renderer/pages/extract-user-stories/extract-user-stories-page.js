@@ -242,32 +242,6 @@ export class ExtractUserStoriesPage {
 
           </div><!-- /.project-page__workspace -->
 
-          <div class="project-panel__resize" data-resize="eus-review"></div>
-
-          <!-- 4. Review panel -->
-          <div class="project-related" id="eusReview">
-            <div class="project-related__titlebar">
-              <div class="project-related__title">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M9 11l3 3L22 4"/>
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>
-                <span class="project-related__title-text">Review</span>
-              </div>
-            </div>
-
-            <!-- Review section -->
-            <div class="project-related__section" id="eusReviewSection">
-              <div class="project-related__section-hd">
-                <span class="project-related__section-label">Output</span>
-                <span class="project-related__section-count" id="eusReviewCount">0</span>
-              </div>
-              <div class="project-related__section-body" id="eusReviewBody">
-                <div class="project-related__empty">Nothing to review yet.</div>
-              </div>
-            </div>
-
-          </div><!-- /#eusReview -->
 
         </div><!-- /.project-page__body -->
       </div>
@@ -354,7 +328,7 @@ export class ExtractUserStoriesPage {
         if (!item) return;
         const story = this._existingStories.find(s => s.id === Number(item.dataset.id));
         if (!story) return;
-        this._highlightStory(item, '#eusExistingList');
+        this._highlightStory(item);
         this._detail.showEditForm(story);
       });
 
@@ -372,7 +346,7 @@ export class ExtractUserStoriesPage {
         if (!item) return;
         const story = this._extractedStories.find(s => s.id === Number(item.dataset.id));
         if (!story) return;
-        this._highlightStory(item, '#eusExtractedList');
+        this._highlightStory(item);
         this._detail.showEditForm(story);
       });
 
@@ -461,15 +435,15 @@ export class ExtractUserStoriesPage {
     if (this._existingStories.length) {
       const first = this._existingStories[0];
       const item  = this.container.querySelector(`#eusExistingList [data-id="${first.id}"]`);
-      if (item) this._highlightStory(item, '#eusExistingList');
+      if (item) this._highlightStory(item);
       this._detail.showEditForm(first);
     }
   }
 
-  _highlightStory(clickedItem, listSelector) {
-    this.container.querySelectorAll(`${listSelector} .eus-src-item`).forEach(el => {
-      el.classList.toggle('eus-src-item--active', el === clickedItem);
-    });
+  _highlightStory(clickedItem) {
+    this.container.querySelectorAll('#eusExistingList .eus-src-item, #eusExtractedList .eus-src-item')
+      .forEach(el => el.classList.remove('eus-src-item--active'));
+    clickedItem.classList.add('eus-src-item--active');
   }
 
   async _loadDocuments() {
@@ -604,7 +578,7 @@ export class ExtractUserStoriesPage {
     const story = this._existingStories.find(s => s.id === id);
     if (!story) return;
     const item = this.container.querySelector(`#eusExistingList [data-id="${id}"]`);
-    if (item) this._highlightStory(item, '#eusExistingList');
+    if (item) this._highlightStory(item);
     this._detail.showEditForm(story);
   }
 

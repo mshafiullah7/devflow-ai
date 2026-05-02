@@ -355,8 +355,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  width: 100%;
-  max-width: 860px;
+  width: 80%;
   height: 80vh;
   display: flex;
   flex-direction: column;
