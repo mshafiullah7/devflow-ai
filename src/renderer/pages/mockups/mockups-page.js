@@ -727,7 +727,7 @@ export class MockupsPage {
     });
     if (!items.length) return;
 
-    const recent     = items.slice(0, 2);
+    const recent     = items.slice(0, 3);
     const messagesEl = main.querySelector('#scrChatMessages');
     const chatInput  = main.querySelector('#scrDescription');
     const resize     = () => { chatInput.style.height = 'auto'; chatInput.style.height = chatInput.scrollHeight + 'px'; };
