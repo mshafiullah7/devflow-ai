@@ -541,6 +541,21 @@
   color: var(--text-muted);
 }
 
+.scr-chat-stream-preview {
+  margin: 0;
+  padding: 6px 11px 8px;
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--text-muted);
+  max-height: 140px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-top: 1px solid var(--border);
+  line-height: 1.5;
+}
+.scr-chat-stream-preview:empty { display: none; }
+
 .scr-chat-cancel-btn {
   padding: 2px 8px;
   font-size: 10px;

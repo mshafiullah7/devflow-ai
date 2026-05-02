@@ -659,16 +659,18 @@ export class MockupsPage {
           </div>
           <button class="scr-chat-cancel-btn">Cancel</button>
         </div>
+        <pre class="scr-chat-stream-preview"></pre>
       `;
       messagesEl.scrollTop = messagesEl.scrollHeight;
 
       window.app.chat.offAll();
 
-      let charCount = 0;
       window.app.chat.onToken(({ text }) => {
-        charCount += text.length;
-        const lbl = previewBubble.querySelector('.scr-chat-msg__gen-label');
-        if (lbl) lbl.textContent = `Generating… (${charCount} chars)`;
+        const preview = previewBubble.querySelector('.scr-chat-stream-preview');
+        if (preview) {
+          preview.textContent += text;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
       });
 
       window.app.chat.onDone(async ({ html, raw, error }) => {
