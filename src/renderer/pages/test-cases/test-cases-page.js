@@ -454,18 +454,18 @@ export class TestCasesPage {
 
     listEl.innerHTML = this._testCases.map(tc => this._cardHtml(tc)).join('');
 
-    listEl.querySelectorAll('.tc-card').forEach(card => {
+    listEl.querySelectorAll('.tc-item').forEach(card => {
       const id = parseInt(card.dataset.id);
       card.addEventListener('click', () => this._selectCase(id));
-      card.querySelector('.tc-card__del')?.addEventListener('click', async (e) => {
+      card.querySelector('.tc-item__del')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         await this._deleteCase(id);
       });
     });
 
     if (this._activeId) {
-      this.container.querySelector(`.tc-card[data-id="${this._activeId}"]`)
-        ?.classList.add('tc-card--active');
+      this.container.querySelector(`.tc-item[data-id="${this._activeId}"]`)
+        ?.classList.add('tc-item--active');
     }
   }
 
@@ -473,28 +473,26 @@ export class TestCasesPage {
     const sm = STATUS_META[tc.status]     || STATUS_META.not_run;
     const pm = PRIORITY_META[tc.priority] || PRIORITY_META.medium;
     return `
-      <div class="tc-card${tc.id === this._activeId ? ' tc-card--active' : ''}" data-id="${tc.id}">
-        <div class="tc-card__header">
-          <span class="tc-card__title">${escHtml(tc.title)}</span>
-          <button class="tc-card__del" title="Delete" aria-label="Delete">
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-              <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
-                stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
+      <div class="tc-item${tc.id === this._activeId ? ' tc-item--active' : ''}" data-id="${tc.id}">
+        <div class="tc-item__info">
+          <span class="tc-item__title">${escHtml(tc.title)}</span>
         </div>
-        <div class="tc-card__footer">
-          <span class="tc-status-badge ${sm.cls}">${sm.label}</span>
-          <span class="tc-priority-badge ${pm.cls}">${pm.label}</span>
-        </div>
+        <span class="tc-status-badge ${sm.cls}">${sm.label}</span>
+        <span class="tc-priority-badge ${pm.cls}">${pm.label}</span>
+        <button class="tc-item__del" title="Delete" aria-label="Delete">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
+              stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
     `;
   }
 
   _selectCase(id) {
     this._activeId = id;
-    this.container.querySelectorAll('.tc-card').forEach(c =>
-      c.classList.toggle('tc-card--active', parseInt(c.dataset.id) === id)
+    this.container.querySelectorAll('.tc-item').forEach(c =>
+      c.classList.toggle('tc-item--active', parseInt(c.dataset.id) === id)
     );
     const tc = this._testCases.find(t => t.id === id);
     if (tc) this._showEditForm(tc);
@@ -526,7 +524,7 @@ export class TestCasesPage {
 
   _showAddForm() {
     this._activeId = null;
-    this.container.querySelectorAll('.tc-card').forEach(c => c.classList.remove('tc-card--active'));
+    this.container.querySelectorAll('.tc-item').forEach(c => c.classList.remove('tc-item--active'));
     const el = this.container.querySelector('#tcCasesDetail');
     el.innerHTML = this._formHtml(null);
     this._bindFormEvents(el, null);
@@ -668,7 +666,7 @@ export class TestCasesPage {
   }
 
   _refreshCardBadges(id, status, priority) {
-    const cardEl = this.container.querySelector(`.tc-card[data-id="${id}"]`);
+    const cardEl = this.container.querySelector(`.tc-item[data-id="${id}"]`);
     if (!cardEl) return;
     const sm = STATUS_META[status]     || STATUS_META.not_run;
     const pm = PRIORITY_META[priority] || PRIORITY_META.medium;

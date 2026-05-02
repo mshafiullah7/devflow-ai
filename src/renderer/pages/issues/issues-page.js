@@ -457,18 +457,18 @@ export class IssuesPage {
 
     listEl.innerHTML = this._issues.map(issue => this._cardHtml(issue)).join('');
 
-    listEl.querySelectorAll('.is-card').forEach(card => {
+    listEl.querySelectorAll('.is-item').forEach(card => {
       const id = parseInt(card.dataset.id);
       card.addEventListener('click', () => this._selectIssue(id));
-      card.querySelector('.is-card__del')?.addEventListener('click', async (e) => {
+      card.querySelector('.is-item__del')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         await this._deleteIssue(id);
       });
     });
 
     if (this._activeId) {
-      this.container.querySelector(`.is-card[data-id="${this._activeId}"]`)
-        ?.classList.add('is-card--active');
+      this.container.querySelector(`.is-item[data-id="${this._activeId}"]`)
+        ?.classList.add('is-item--active');
     }
   }
 
@@ -476,28 +476,26 @@ export class IssuesPage {
     const sm = STATUS_META[issue.status]     || STATUS_META.open;
     const sv = SEVERITY_META[issue.severity] || SEVERITY_META.medium;
     return `
-      <div class="is-card${issue.id === this._activeId ? ' is-card--active' : ''}" data-id="${issue.id}">
-        <div class="is-card__header">
-          <span class="is-card__title">${escHtml(issue.title)}</span>
-          <button class="is-card__del" title="Delete" aria-label="Delete">
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-              <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
-                stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
+      <div class="is-item${issue.id === this._activeId ? ' is-item--active' : ''}" data-id="${issue.id}">
+        <div class="is-item__info">
+          <span class="is-item__title">${escHtml(issue.title)}</span>
         </div>
-        <div class="is-card__footer">
-          <span class="is-status-badge ${sm.cls}">${sm.label}</span>
-          <span class="is-severity-badge ${sv.cls}">${sv.label}</span>
-        </div>
+        <span class="is-status-badge ${sm.cls}">${sm.label}</span>
+        <span class="is-severity-badge ${sv.cls}">${sv.label}</span>
+        <button class="is-item__del" title="Delete" aria-label="Delete">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
+              stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
     `;
   }
 
   _selectIssue(id) {
     this._activeId = id;
-    this.container.querySelectorAll('.is-card').forEach(c =>
-      c.classList.toggle('is-card--active', parseInt(c.dataset.id) === id)
+    this.container.querySelectorAll('.is-item').forEach(c =>
+      c.classList.toggle('is-item--active', parseInt(c.dataset.id) === id)
     );
     const issue = this._issues.find(i => i.id === id);
     if (issue) this._showEditForm(issue);
@@ -529,7 +527,7 @@ export class IssuesPage {
 
   _showAddForm() {
     this._activeId = null;
-    this.container.querySelectorAll('.is-card').forEach(c => c.classList.remove('is-card--active'));
+    this.container.querySelectorAll('.is-item').forEach(c => c.classList.remove('is-item--active'));
     const el = this.container.querySelector('#isIssueDetail');
     el.innerHTML = this._formHtml(null);
     this._bindFormEvents(el, null);
@@ -671,7 +669,7 @@ export class IssuesPage {
   }
 
   _refreshCardBadges(id, status, severity) {
-    const cardEl = this.container.querySelector(`.is-card[data-id="${id}"]`);
+    const cardEl = this.container.querySelector(`.is-item[data-id="${id}"]`);
     if (!cardEl) return;
     const sm = STATUS_META[status]     || STATUS_META.open;
     const sv = SEVERITY_META[severity] || SEVERITY_META.medium;
