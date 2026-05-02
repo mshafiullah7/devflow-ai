@@ -843,31 +843,27 @@ export class ExtractUserStoriesPage {
     const prompt   = promptTa?.value?.trim();
     if (!prompt) return;
 
-    const cfg   = this._aiModelConfig;
-    const exe   = cfg?.executable || 'claude';
-    const flags = cfg?.flags      || '--dangerously-skip-permissions --print';
+    const cfg = this._aiModelConfig;
+    const exe = cfg?.executable || 'claude';
 
-    // Write prompt + placeholder output to temp dir
-    const [promptPath, outputPath] = await window.app.writeTempFiles([
-      { name: 'eus-prompt.txt',  content: prompt },
-      { name: 'eus-output.json', content: ''     },
+    // Create the output file in the temp dir to get its path
+    const [outputPath] = await window.app.writeTempFiles([
+      { name: 'eus-output.json', content: '' },
     ]);
 
     overlay._terminalOutputPath = outputPath;
 
-    const cmd = [
-      `$promptPath = '${promptPath}'`,
-      `$outputPath = '${outputPath}'`,
-      `Write-Host "Reading prompt from: $promptPath" -ForegroundColor Cyan`,
-      `$p = Get-Content -Path $promptPath -Raw`,
-      `Write-Host "Running ${exe}..." -ForegroundColor Yellow`,
-      `& ${exe} ${flags} $p | Out-File -FilePath $outputPath -Encoding UTF8`,
-      `Write-Host ""`,
-      `Write-Host "Done! Output saved to:" -ForegroundColor Green`,
-      `Write-Host "  $outputPath" -ForegroundColor Green`,
-    ].join('\n');
+    // Swap the "do not write files" rule for a "write to this file" rule
+    const terminalPrompt = prompt.replace(
+      /- Do NOT write files[^\n]*/,
+      `- Write the raw JSON output to this file: ${outputPath}`
+    );
 
-    await window.db.terminal.openExternal({ command: cmd });
+    // Same command style as Mockups: here-string, no stdout piping — Claude writes the file
+    const safe = terminalPrompt.replace(/'/g, "''");
+    const cmd  = `$p = @'\n${safe}\n'@\n${exe} $p`;
+
+    await window.db.terminal.openExternal({ command: cmd, cwd: this._project?.project_path || undefined });
   }
 
   async _handleGenerateDone(overlay, runBtn, promptTa, raw, error, featureId) {
