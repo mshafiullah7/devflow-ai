@@ -1072,13 +1072,7 @@ export class MockupsPage {
               </svg>
               Choose File
             </button>
-            <button class="scr-btn scr-btn--sm scr-btn--accent" id="scrExtractBtn">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                <path d="M3 4h10M3 8h7M3 12h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                <path d="M12 10l2 2-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Extract User Stories
-            </button>
+
             <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrDeleteBtn" title="Delete screen">
               <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
                 <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
