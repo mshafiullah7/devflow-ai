@@ -61,43 +61,50 @@
 .tc-header-select:focus { border-color: var(--accent); }
 
 /* ------------------------------------------------------------------ */
-/* Test case list item                                                   */
+/* Test case card                                                        */
 /* ------------------------------------------------------------------ */
-.tc-item {
+.tc-card {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 6px;
-  border-radius: 5px;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 10px 8px;
+  margin-bottom: 6px;
   cursor: pointer;
-  user-select: none;
-  margin-bottom: 2px;
+  box-shadow: var(--card-shadow);
+  transition: border-color 0.12s, background 0.12s;
 }
-.tc-item:hover { background: var(--surface-hover); }
-.tc-item--active { background: rgba(var(--accent-rgb, 99 102 241), 0.08); }
+.tc-card:hover { background: var(--surface-hover); border-color: var(--accent); }
+.tc-card--active {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.08);
+}
 
-.tc-item__info {
+.tc-card__header {
   display: flex;
-  align-items: center;
-  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+}
+.tc-card__title {
   flex: 1;
-}
-.tc-item__title {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  word-break: break-word;
 }
-.tc-item--active .tc-item__title { color: var(--accent); }
+.tc-card--active .tc-card__title { color: var(--accent); }
 
-.tc-item__del {
+.tc-card__del {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   background: transparent;
   border: none;
   border-radius: 3px;
@@ -106,8 +113,14 @@
   opacity: 0;
   transition: opacity 0.1s, color 0.1s;
 }
-.tc-item:hover .tc-item__del { opacity: 1; }
-.tc-item__del:hover { color: var(--danger); }
+.tc-card:hover .tc-card__del { opacity: 1; }
+.tc-card__del:hover { color: var(--danger); }
+
+.tc-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
 /* ------------------------------------------------------------------ */
 /* Status & Priority badges                                             */
