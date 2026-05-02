@@ -911,7 +911,7 @@ export class DocumentsPage {
     let preview = previewLines.join('\n');
     if (preview.length > 200) preview = preview.slice(0, 200) + '…';
     bubble.className = 'doc-ai-msg__bubble doc-ai-msg__bubble--success';
-    bubble.innerHTML = `<span class="doc-ai-msg__preview">${escHtml(preview)}</span><div class="doc-ai-msg__status-row"><span class="doc-ai-msg__applied">✓ Applied — review and save</span><button class="doc-ai-msg__revert-btn" title="Revert to previous content"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 9a6 6 0 1 0 1-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M2 4v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`;
+    bubble.innerHTML = `<span class="doc-ai-msg__preview">${escHtml(preview)}</span><div class="doc-ai-msg__status-row"><span class="doc-ai-msg__applied">✓ Applied — saved</span><button class="doc-ai-msg__revert-btn" title="Revert to previous content"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 9a6 6 0 1 0 1-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M2 4v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`;
     bubble.querySelector('.doc-ai-msg__revert-btn').addEventListener('click', () => {
       const contentTA = this.container.querySelector('#docContentTA');
       if (contentTA) {
@@ -998,6 +998,25 @@ export class DocumentsPage {
         await this._runAiEditApi(cfg, prompt, aiMsgEl, contentTA, prevContent);
       } else {
         await this._runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent);
+      }
+      if (this._dirty) {
+        const panel      = this.container.querySelector('#docPanel');
+        const titleInput = panel?.querySelector('#docTitleInput');
+        const saveBtn    = panel?.querySelector('#docSaveBtn');
+        const title      = titleInput?.value.trim();
+        const content    = contentTA?.value ?? '';
+        if (title) {
+          if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+          try {
+            await window.db.documents.update({ id: doc.id, title, content });
+            const idx = this._docs.findIndex(d => d.id === doc.id);
+            if (idx !== -1) { this._docs[idx].title = title; this._docs[idx].content = content; }
+            this._dirty = false;
+            this._refreshList();
+          } finally {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+          }
+        }
       }
     } finally {
       sendBtn.disabled = false;
