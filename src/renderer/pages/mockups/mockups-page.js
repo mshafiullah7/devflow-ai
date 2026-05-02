@@ -1058,13 +1058,13 @@ export class MockupsPage {
                 <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
                 <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               </svg>
-              Create Mockup
+              Run in Terminal
             </button>
             <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrEditBtn">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
-              Edit Mockup
+              Edit Mockup in Terminal
             </button>
             <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrChooseFileBtn">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -1995,7 +1995,7 @@ Spacing:
               <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
               <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
             </svg>
-            Run in Terminal
+            Run
           </button>
         </div>
       </div>
