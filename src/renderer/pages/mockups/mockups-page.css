@@ -644,6 +644,18 @@
   padding: 2px 0;
 }
 
+.scr-chat-history-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 0 1px;
+}
+.scr-chat-history-dismiss:hover { color: var(--text-secondary); }
+
 .scr-chat-history-list {
   display: flex;
   flex-direction: column;

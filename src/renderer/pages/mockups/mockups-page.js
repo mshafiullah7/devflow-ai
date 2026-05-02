@@ -611,6 +611,7 @@ export class MockupsPage {
 
     const messagesEl = main.querySelector('#scrChatMessages');
     messagesEl.querySelector('.scr-chat-empty')?.remove();
+    messagesEl.querySelector('.scr-chat-history-group--initial')?.remove();
 
     // User bubble
     const userBubble = document.createElement('div');
@@ -725,7 +726,6 @@ export class MockupsPage {
       project_id:       this._projectId,
       screen_design_id: screenId,
     });
-    if (!items.length) return;
 
     const recent     = items.slice(0, 3);
     const messagesEl = main.querySelector('#scrChatMessages');
@@ -734,30 +734,41 @@ export class MockupsPage {
 
     const group = document.createElement('div');
     group.className = 'scr-chat-history-group scr-chat-history-group--initial';
+
+    const listHtml = recent.length
+      ? `<div class="scr-chat-history-list">
+          ${recent.map((h, i) => `
+            <div class="scr-chat-history-item" data-idx="${i}">
+              <span class="scr-chat-history-item__text">${escHtml(h.prompt.length > 100 ? h.prompt.slice(0, 100) + '…' : h.prompt)}</span>
+              <span class="scr-chat-history-item__time">${timeAgo(h.executed_at)}</span>
+            </div>
+          `).join('')}
+        </div>`
+      : `<p class="scr-chat-history-empty">No prompts run for this screen yet.</p>`;
+
     group.innerHTML = `
       <div class="scr-chat-history-label">
         <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
           <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
           <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        Last ${recent.length} prompt${recent.length > 1 ? 's' : ''}
+        ${recent.length ? `Last ${recent.length} prompt${recent.length > 1 ? 's' : ''}` : 'Recent prompts'}
+        <button class="scr-chat-history-dismiss" title="Hide">&times;</button>
       </div>
-      <div class="scr-chat-history-list">
-        ${recent.map((h, i) => `
-          <div class="scr-chat-history-item" data-idx="${i}">
-            <span class="scr-chat-history-item__text">${escHtml(h.prompt.length > 100 ? h.prompt.slice(0, 100) + '…' : h.prompt)}</span>
-            <span class="scr-chat-history-item__time">${timeAgo(h.executed_at)}</span>
-          </div>
-        `).join('')}
-      </div>
+      ${listHtml}
     `;
-    group.querySelectorAll('.scr-chat-history-item').forEach(el => {
-      el.addEventListener('click', () => {
-        chatInput.value = recent[Number(el.dataset.idx)].prompt;
-        resize();
-        chatInput.focus();
+
+    if (recent.length) {
+      group.querySelectorAll('.scr-chat-history-item').forEach(el => {
+        el.addEventListener('click', () => {
+          chatInput.value = recent[Number(el.dataset.idx)].prompt;
+          resize();
+          chatInput.focus();
+        });
       });
-    });
+    }
+
+    group.querySelector('.scr-chat-history-dismiss').addEventListener('click', () => group.remove());
 
     messagesEl.querySelector('.scr-chat-empty')?.remove();
     messagesEl.appendChild(group);
