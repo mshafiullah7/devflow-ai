@@ -459,6 +459,26 @@
 .scr-chat-input:focus { border-color: var(--accent); box-shadow: var(--form-focus-shadow); }
 
 
+.scr-chat-send {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: flex-end;
+  transition: opacity .15s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.scr-chat-send:hover { opacity: .82; }
+.scr-chat-send:disabled { opacity: .4; cursor: not-allowed; }
+
 .scr-chat-load-desc {
   width: 26px;
   height: 26px;

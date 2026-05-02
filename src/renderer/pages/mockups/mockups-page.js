@@ -1145,7 +1145,12 @@ export class MockupsPage {
               </div>
               <div class="scr-chat-composer">
                 <textarea class="scr-chat-input" id="scrDescription"
-                  placeholder="Describe the screen…"></textarea>
+                  placeholder="Describe the screen… (Alt+Enter for new line)"></textarea>
+                <button class="scr-chat-send" id="scrSendBtn" title="Run (Enter)">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M3 2l11 6-11 6V9.5l8-1.5-8-1.5V2z"/>
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -1195,12 +1200,22 @@ export class MockupsPage {
     chatInput.addEventListener('input', resizeChatInput);
     resizeChatInput();
 
-    // Enter to send (Shift+Enter inserts newline)
+    // Enter to run; Alt+Enter inserts newline
     chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && e.altKey) {
+        e.preventDefault();
+        const pos = chatInput.selectionStart;
+        chatInput.value = chatInput.value.slice(0, pos) + '\n' + chatInput.value.slice(chatInput.selectionEnd);
+        chatInput.selectionStart = chatInput.selectionEnd = pos + 1;
+        resizeChatInput();
+      } else if (e.key === 'Enter' && !e.altKey) {
         e.preventDefault();
         this._runChatGeneration(screen, chatInput, main);
       }
+    });
+
+    main.querySelector('#scrSendBtn').addEventListener('click', () => {
+      this._runChatGeneration(screen, chatInput, main);
     });
 
     // Recent prompts history
