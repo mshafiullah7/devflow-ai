@@ -105,7 +105,7 @@ export class UserStoryDetail {
             <div class="usl-prompts-list" id="uslAddPromptsList"></div>
           </div>
 
-          <div class="usl-add-form__field" hidden>
+          <div class="usl-add-form__field">
             <label class="usl-add-form__label" for="uslAddStatus">Status</label>
             <select class="usl-add-form__select" id="uslAddStatus">
               <option value="">— none —</option>
@@ -177,7 +177,7 @@ export class UserStoryDetail {
       <div class="usl-add-form">
         <div class="usl-add-form__header">
           <h2 class="usl-add-form__title">User Story</h2>
-          <select class="usl-add-form__status-select" id="uslEditStatus" hidden>
+          <select class="usl-add-form__status-select" id="uslEditStatus">
             <option value="">— none —</option>
             ${this._statuses.map(st =>
               `<option value="${st.id}"${st.id === defaultStatus ? ' selected' : ''}>${escHtml(st.name)}</option>`
