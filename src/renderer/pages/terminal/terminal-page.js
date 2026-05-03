@@ -52,7 +52,7 @@ export class TerminalPage {
         </header>
 
         <div class="term-page__body">
-          <div class="project-console term-page__console">
+          <div class="term-page__console">
             <div class="project-console__titlebar">
               <div class="project-console__title">
                 <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
