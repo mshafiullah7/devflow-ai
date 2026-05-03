@@ -355,6 +355,25 @@ export class ProjectHomePage {
               </div>
             </button>
 
+            <button class="ph-card" id="cardTerminal">
+              <div class="ph-card__icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 17l5-5-5-5"/>
+                  <line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+              </div>
+              <div class="ph-card__body">
+                <div class="ph-card__name">Terminal</div>
+                <div class="ph-card__desc">Run commands and scripts in the project folder.</div>
+              </div>
+              <div class="ph-card__footer">
+                <span class="ph-card__count"></span>
+                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </div>
+            </button>
+
           </div>
         </div>
       </div>
@@ -430,6 +449,9 @@ export class ProjectHomePage {
 
     this.container.querySelector('#cardIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
+
+    this.container.querySelector('#cardTerminal')
+      .addEventListener('click', () => this.router.navigate('terminal', { projectId: this.projectId }));
 
     this.container.querySelector('#phlOverview')
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId, docTitle: 'Project Overview' }));
