@@ -1039,6 +1039,10 @@ Rules:
 - Each prompt value MUST be written in Markdown
 - tag is a SINGLE word (UI, API, DB, Auth, Cache, Queue, Email…)
 - acceptanceCriteria follows Given / When / Then on separate lines. Cover all the positive, negative and exceptional cases.
+- Analyze the mockup in detail and reference specific UI elements in the prompts. Include all the functionality of all the buttons and interactive elements in the mockup, and cover edge cases.
+- Include unit test prompts for API/DB/Auth stories, and E2E test prompts for UI stories.
+- The purpose of the prompts is to provide detailed instructions for a developer or an LLM to implement the story, so be specific and cover all necessary details.
+- Include detailed design elements in the prompts such as exact colours, layout, spacing, and component types for UI stories exactly as they appear in the mockup.
 - Do NOT write files — print the raw JSON directly to stdout`;
   }
 
