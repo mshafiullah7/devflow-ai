@@ -328,6 +328,17 @@ export class TerminalController {
       return;
     }
 
+    // Interactive CLIs need a real TTY — open them in an external window
+    if (/^(claude|gemini|gh\s+copilot|aider|ollama\s+run)\b/i.test(cmd.trim())) {
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'project-console__line project-console__line--warn';
+      infoDiv.textContent = `Opening "${cmd.trim().split(/\s+/)[0]}" in a new terminal window (requires interactive TTY)…`;
+      out.appendChild(infoDiv);
+      out.scrollTop = out.scrollHeight;
+      await window.db.terminal.openExternal({ command: cmd, cwd: this._termCwd });
+      return;
+    }
+
     // Streaming command
     const streamDiv = document.createElement('div');
     streamDiv.className = 'project-console__stream-block';
