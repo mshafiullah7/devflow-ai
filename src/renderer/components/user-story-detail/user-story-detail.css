@@ -971,8 +971,8 @@
 .usl-pl-item__body .usl-expand-preview {
   flex: unset;
   padding: 8px 10px;
-  min-height: 60px;
-  max-height: 240px;
+  min-height: 72px;
+  max-height: 288px;
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 13px;
