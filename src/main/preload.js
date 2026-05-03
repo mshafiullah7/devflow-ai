@@ -128,18 +128,6 @@ contextBridge.exposeInMainWorld('db', {
       ipcRenderer.removeAllListeners('terminal:done');
     },
   },
-  pty: {
-    create:  (data) => invoke('pty:create', data),
-    write:   (data) => invoke('pty:write', data),
-    resize:  (data) => invoke('pty:resize', data),
-    destroy: ()     => invoke('pty:destroy'),
-    onData:  (cb)   => ipcRenderer.on('pty:data', (_e, d) => cb(d)),
-    onExit:  (cb)   => ipcRenderer.on('pty:exit', (_e, d) => cb(d)),
-    removeListeners: () => {
-      ipcRenderer.removeAllListeners('pty:data');
-      ipcRenderer.removeAllListeners('pty:exit');
-    },
-  },
 });
 
 contextBridge.exposeInMainWorld('app', {

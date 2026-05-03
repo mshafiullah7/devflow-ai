@@ -3,10 +3,7 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
 module.exports = {
   packagerConfig: {
-    asar: {
-      // Unpack node-pty native binaries and ConPTY DLLs so they're accessible at runtime
-      unpack: '{**/node_modules/node-pty/**,**/node_modules/@homebridge/node-pty-prebuilt-multiarch/**}',
-    },
+    asar: true,
   },
   rebuildConfig: {},
   makers: [
