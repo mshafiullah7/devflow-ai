@@ -429,7 +429,8 @@ export class UserStoryDetail {
             </button>
           </div>
         </div>
-        <textarea class="usl-pl-item__textarea" placeholder="Prompt text…">${escHtml(existing?.prompt || '')}</textarea>
+        <div class="usl-pl-item__preview usl-expand-preview"></div>
+        <textarea class="usl-pl-item__textarea" hidden>${escHtml(existing?.prompt || '')}</textarea>
       </div>
     `;
 
@@ -441,13 +442,24 @@ export class UserStoryDetail {
     const labelEl    = item.querySelector('.usl-pl-item__label');
     const tagInput   = item.querySelector('.usl-pl-item__tag-input');
     const taEl       = item.querySelector('.usl-pl-item__textarea');
+    const previewEl  = item.querySelector('.usl-pl-item__preview');
     const markExecBtn = item.querySelector('.usl-pl-item__btn--mark-executed');
 
-    // Open new (unsaved) items immediately
+    const renderPreview = () => {
+      const text = taEl.value.trim();
+      previewEl.innerHTML = text
+        ? this._renderMarkdown(text)
+        : '<p class="usl-pl-preview--empty">No content · click &#x2922; to edit</p>';
+    };
+    renderPreview();
+
+    // Open new (unsaved) items immediately and launch edit overlay
     if (!existing) {
       item.classList.add('usl-pl-item--open');
       bodyEl.hidden = false;
-      taEl.focus();
+      setTimeout(() => {
+        this._openExpandOverlay(taEl, 'Prompt', async () => { renderPreview(); await save(); }, true);
+      }, 0);
     }
 
     // Toggle open/close on header click — accordion: only one item open at a time
@@ -524,7 +536,7 @@ export class UserStoryDetail {
     item.querySelector('.usl-pl-item__btn--expand').addEventListener('click', async (e) => {
       e.stopPropagation();
       await save();
-      this._openExpandOverlay(taEl, tagInput.value.trim() || 'Prompt', async () => { await save(); }, true);
+      this._openExpandOverlay(taEl, tagInput.value.trim() || 'Prompt', async () => { renderPreview(); await save(); }, true);
     });
 
     // Delete

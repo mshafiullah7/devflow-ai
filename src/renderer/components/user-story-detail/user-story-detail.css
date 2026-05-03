@@ -967,6 +967,26 @@
   opacity: 0.5;
 }
 
+/* Compact markdown preview inside accordion body */
+.usl-pl-item__body .usl-expand-preview {
+  flex: unset;
+  padding: 8px 10px;
+  min-height: 60px;
+  max-height: 240px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.usl-pl-preview--empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 /* Tab bar */
 .usl-ptabs__bar {
   display: flex;
