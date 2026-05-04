@@ -262,7 +262,12 @@ export class TestRunnerPage {
                 </svg>
                 Last Runs
               </div>
-              <div class="tr-history-list" id="trHistoryList"></div>
+              <!-- Last run: fills remaining panel height; pre scrolls inside it -->
+              <div class="tr-last-run-section" id="trLastRunSection">
+                <div class="tr-history-empty">No runs yet</div>
+              </div>
+              <!-- Previous runs: capped height, independently scrollable -->
+              <div class="tr-prev-runs-section" id="trPrevRunsSection" hidden></div>
             </div>
 
           </div>
@@ -475,25 +480,30 @@ export class TestRunnerPage {
   }
 
   _renderHistory() {
-    const list = this.container.querySelector('#trHistoryList');
-    if (!list) return;
+    const lastRunEl  = this.container.querySelector('#trLastRunSection');
+    const prevRunsEl = this.container.querySelector('#trPrevRunsSection');
+    if (!lastRunEl || !prevRunsEl) return;
 
     if (this._history.length === 0) {
-      list.innerHTML = `<div class="tr-history-empty">No runs yet</div>`;
+      lastRunEl.innerHTML = `<div class="tr-history-empty">No runs yet</div>`;
+      prevRunsEl.hidden = true;
       return;
     }
 
     const [last, ...older] = this._history;
 
-    const olderHtml = older.length > 0
-      ? `<div class="tr-history-section-label">Previous Runs</div>` +
-        older.map(r => this._historyCardHtml(r)).join('')
-      : '';
-
-    list.innerHTML =
+    lastRunEl.innerHTML =
       `<div class="tr-history-section-label">Last Run</div>` +
-      this._lastRunSectionHtml(last) +
-      olderHtml;
+      this._lastRunSectionHtml(last);
+
+    if (older.length > 0) {
+      prevRunsEl.innerHTML =
+        `<div class="tr-history-section-label">Previous Runs</div>` +
+        older.map(r => this._historyCardHtml(r)).join('');
+      prevRunsEl.hidden = false;
+    } else {
+      prevRunsEl.hidden = true;
+    }
   }
 
   _lastRunSectionHtml(r) {

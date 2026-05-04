@@ -201,18 +201,34 @@
   flex-shrink: 0;
 }
 
-.tr-history-list {
+/* Last run section — grows to fill all remaining panel height */
+.tr-last-run-section {
   flex: 1 1 auto;
+  min-height: 0;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* Previous runs section — capped, independently scrollable */
+.tr-prev-runs-section {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-height: 35%;
+  min-height: 60px;
   overflow-y: auto;
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  border-top: 1px solid var(--border);
 }
-.tr-history-list::-webkit-scrollbar       { width: 4px; }
-.tr-history-list::-webkit-scrollbar-track { background: transparent; }
-.tr-history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.tr-prev-runs-section::-webkit-scrollbar       { width: 4px; }
+.tr-prev-runs-section::-webkit-scrollbar-track { background: transparent; }
+.tr-prev-runs-section::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .tr-history-empty {
   font-size: 12px;
@@ -234,10 +250,14 @@
 /* Last run output card                                                 */
 /* ------------------------------------------------------------------ */
 .tr-last-run-output {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  min-width: 0;
   background: #0d1117;
 }
 
@@ -252,13 +272,13 @@
 }
 
 .tr-last-run-output__pre {
+  flex: 1 1 auto;
+  min-height: 0;
   display: block;
   width: 100%;
   box-sizing: border-box;
   margin: 0;
   padding: 8px 10px;
-  min-height: 220px;
-  max-height: 700px;
   overflow: auto;
   font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
   font-size: 11px;
