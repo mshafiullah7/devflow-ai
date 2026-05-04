@@ -255,17 +255,17 @@
   padding: 8px 10px;
   min-height: 220px;
   max-height: 700px;
-  overflow-y: auto;
+  overflow: auto;
   font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
   font-size: 11px;
   line-height: 1.55;
   color: #c9d1d9;
-  white-space: pre-wrap;
-  word-break: break-all;
+  white-space: pre;
 }
-.tr-last-run-output__pre::-webkit-scrollbar       { width: 4px; }
-.tr-last-run-output__pre::-webkit-scrollbar-track { background: transparent; }
-.tr-last-run-output__pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+.tr-last-run-output__pre::-webkit-scrollbar        { width: 4px; height: 4px; }
+.tr-last-run-output__pre::-webkit-scrollbar-track  { background: transparent; }
+.tr-last-run-output__pre::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.15); border-radius: 2px; }
+.tr-last-run-output__pre::-webkit-scrollbar-corner { background: transparent; }
 
 .tr-output-none {
   color: rgba(201,209,217,0.35);
