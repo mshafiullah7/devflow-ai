@@ -21,9 +21,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -49,11 +49,13 @@
 }
 .is-header-select:focus { border-color: var(--accent); }
 
-/* Compact variant when sitting inside a 32px section header */
+/* Filter inside the 40px section header — matches add-button height */
 .is-section-filter {
-  padding: 2px 5px;
+  height: 26px;
+  padding: 0 6px;
   font-size: 11px;
   margin-left: auto;
+  box-sizing: border-box;
 }
 
 /* ------------------------------------------------------------------ */
