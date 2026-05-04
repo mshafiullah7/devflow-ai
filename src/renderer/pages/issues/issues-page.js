@@ -171,6 +171,7 @@ export class IssuesPage {
           <section class="project-panel project-panel--detail" id="isPanelDetail">
             <div class="project-panel__header">
               <span class="project-panel__title">Issue Detail</span>
+              <div class="project-panel__header-actions" id="isDetailHeaderActions"></div>
             </div>
             <div class="project-panel__content" id="isIssueDetail">
               <div class="project-panel__empty">
@@ -348,6 +349,8 @@ export class IssuesPage {
         <p>Select an issue or add a new one</p>
       </div>
     `;
+    const headerActions = this.container.querySelector('#isDetailHeaderActions');
+    if (headerActions) headerActions.innerHTML = '';
   }
 
   async _showAddForm() {
@@ -356,6 +359,8 @@ export class IssuesPage {
     const el       = this.container.querySelector('#isIssueDetail');
     const features = await window.db.features.list(this._projectId) ?? [];
     el.innerHTML   = this._formHtml(null, features);
+    const headerActions = this.container.querySelector('#isDetailHeaderActions');
+    if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Add Issue</button>';
     await this._bindFormEvents(el, null);
     el.querySelector('#isFormTitle')?.focus();
   }
@@ -364,6 +369,8 @@ export class IssuesPage {
     const el       = this.container.querySelector('#isIssueDetail');
     const features = await window.db.features.list(this._projectId) ?? [];
     el.innerHTML   = this._formHtml(issue, features);
+    const headerActions = this.container.querySelector('#isDetailHeaderActions');
+    if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Save Changes</button>';
     await this._bindFormEvents(el, issue);
   }
 
@@ -446,10 +453,6 @@ export class IssuesPage {
           </div>
 
         </div>
-
-        <div class="is-form__footer">
-          <button class="is-form__btn" id="isFormSave">${isEdit ? 'Save Changes' : 'Add Issue'}</button>
-        </div>
       </div>
     `;
   }
@@ -464,7 +467,7 @@ export class IssuesPage {
     const stepsEl    = el.querySelector('#isFormSteps');
     const expectedEl = el.querySelector('#isFormExpected');
     const actualEl   = el.querySelector('#isFormActual');
-    const saveBtn    = el.querySelector('#isFormSave');
+    const saveBtn    = this.container.querySelector('#isFormSave');
 
     if (issue) {
       statusEl.addEventListener('change', async () => {
