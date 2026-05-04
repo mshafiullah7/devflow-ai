@@ -3,11 +3,10 @@
 /* Panel structure uses project.css classes                             */
 /* ------------------------------------------------------------------ */
 
-/* Features column */
-#isPanelFeatures {
-  flex: 0 0 15%;
-  min-width: 120px;
-  transition: flex 0.2s ease;
+/* Issues list column */
+#isPanelIssuesList {
+  flex: 0 0 30%;
+  min-width: 180px;
 }
 
 /* Add issue button inside section header */
@@ -28,18 +27,6 @@
   transition: background 0.12s, color 0.12s;
 }
 .is-add-btn:hover { background: var(--surface-hover); color: var(--accent); }
-
-/* User Stories column */
-#isPanelStories {
-  flex: 0 0 20%;
-  min-width: 130px;
-}
-
-/* Issues list column */
-#isPanelIssuesList {
-  flex: 0 0 25%;
-  min-width: 140px;
-}
 
 /* Header status filter */
 .is-header-select {

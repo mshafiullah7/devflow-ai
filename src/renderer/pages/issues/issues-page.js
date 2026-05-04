@@ -25,18 +25,11 @@ export class IssuesPage {
     this.router         = router;
     this._projectId     = params.projectId;
     this._project       = null;
-    this._features      = [];
-    this._activeFeature = null;
-    this._stories       = [];
-    this._activeStoryId = null;
     this._issues        = [];
     this._activeId      = null;
     this._filterStatus  = '';
     this._aiModelConfig = null;
-    // deep-link params: navigate directly to a specific item
-    this._deepFeatureId = params.featureId ?? null;
-    this._deepStoryId   = params.storyId   ?? null;
-    this._deepItemId    = params.itemId    ?? null;
+    this._deepItemId    = params.itemId ?? null;
   }
 
   async mount() {
@@ -70,7 +63,6 @@ export class IssuesPage {
       this._git.startPoll();
     }
     this._initResizable();
-    await this._loadFeatures();
     await this._loadIssues();
   }
 
@@ -157,33 +149,7 @@ export class IssuesPage {
 
         <div class="project-page__workspace">
 
-          <!-- Panel 1: Features — 15% -->
-          <aside class="project-panel" id="isPanelFeatures">
-            <div class="project-related__section-hd">
-              <span class="project-related__section-label">Features</span>
-              <span class="project-related__section-count" id="isFeatureCount">0</span>
-            </div>
-            <div class="project-related__section-body" id="isFeatureList">
-              <div class="project-related__empty">No features</div>
-            </div>
-          </aside>
-
-          <div class="project-panel__resize" data-resize="is-features"></div>
-
-          <!-- Panel 2: User Stories — 20% -->
-          <aside class="project-panel" id="isPanelStories">
-            <div class="project-related__section-hd">
-              <span class="project-related__section-label">User Stories</span>
-              <span class="project-related__section-count" id="isStoryCount">0</span>
-            </div>
-            <div class="project-related__section-body" id="isStoryList">
-              <div class="project-related__empty">Select a feature</div>
-            </div>
-          </aside>
-
-          <div class="project-panel__resize" data-resize="is-stories"></div>
-
-          <!-- Panel 3: Issues list — 25% -->
+          <!-- Panel 1: Issues list -->
           <aside class="project-panel" id="isPanelIssuesList">
             <div class="project-related__section-hd">
               <span class="project-related__section-label">Issues</span>
@@ -287,124 +253,11 @@ export class IssuesPage {
   }
 
   // ----------------------------------------------------------------
-  // Features list
-  // ----------------------------------------------------------------
-  async _loadFeatures() {
-    this._features = await window.db.features.list(this._projectId) ?? [];
-    this._renderFeatures();
-
-    if (!this._features.length) return;
-
-    const deepId = this._deepFeatureId;
-    this._deepFeatureId = null;
-    const target = (deepId && this._features.find(f => f.id === deepId))
-      ? this._features.find(f => f.id === deepId)
-      : this._features[0];
-    await this._onFeatureSelected(target);
-  }
-
-  _renderFeatures() {
-    const listEl  = this.container.querySelector('#isFeatureList');
-    const countEl = this.container.querySelector('#isFeatureCount');
-    if (!listEl) return;
-    if (countEl) countEl.textContent = this._features.length;
-
-    if (!this._features.length) {
-      listEl.innerHTML = '<div class="project-related__empty">No features</div>';
-      return;
-    }
-
-    listEl.innerHTML = this._features.map(f => `
-      <div class="eus-src-item${f.id === this._activeFeature?.id ? ' eus-src-item--active' : ''}" data-id="${f.id}">
-        <svg class="eus-src-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
-          <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        <div class="eus-src-item__info">
-          <span class="eus-src-item__id">#${f.id}</span>
-          <span class="eus-src-item__title">${escHtml(f.name)}</span>
-        </div>
-      </div>
-    `).join('');
-
-    listEl.querySelectorAll('.eus-src-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const id = parseInt(item.dataset.id);
-        const feature = this._features.find(f => f.id === id);
-        if (feature) this._onFeatureSelected(feature);
-      });
-    });
-  }
-
-  async _onFeatureSelected(feature) {
-    this._activeFeature = feature;
-    this._activeStoryId = null;
-    this._activeId      = null;
-    this._renderFeatures();
-    this._showEmptyDetail();
-    await Promise.all([this._loadStories(feature.id), this._loadIssues()]);
-  }
-
-  // ----------------------------------------------------------------
-  // Story panel
-  // ----------------------------------------------------------------
-  async _loadStories(featureId) {
-    this._stories = await window.db.userStories.list({ feature_id: featureId });
-    this._renderStories();
-    if (this._stories.length > 0) {
-      const deepId = this._deepStoryId;
-      this._deepStoryId = null;
-      const targetId = (deepId && this._stories.some(s => s.id === deepId))
-        ? deepId
-        : this._stories[0].id;
-      await this._selectStory(targetId);
-    }
-  }
-
-  _renderStories() {
-    const listEl  = this.container.querySelector('#isStoryList');
-    const countEl = this.container.querySelector('#isStoryCount');
-    if (!listEl) return;
-    if (countEl) countEl.textContent = this._stories.length;
-
-    if (this._stories.length === 0) {
-      listEl.innerHTML = `<div class="project-related__empty">No stories in this feature</div>`;
-      return;
-    }
-
-    listEl.innerHTML = this._stories.map(s => `
-      <div class="eus-src-item${s.id === this._activeStoryId ? ' eus-src-item--active' : ''}" data-story="${s.id}">
-        <div class="eus-src-item__info">
-          <span class="eus-src-item__id">#${s.id}</span>
-          <span class="eus-src-item__title">${escHtml(s.title)}</span>
-        </div>
-      </div>
-    `).join('');
-
-    listEl.querySelectorAll('.eus-src-item').forEach(item => {
-      item.addEventListener('click', () => this._selectStory(parseInt(item.dataset.story)));
-    });
-  }
-
-  async _selectStory(storyId) {
-    this._activeStoryId = storyId;
-    this._activeId      = null;
-
-    this.container.querySelectorAll('#isStoryList .eus-src-item').forEach(c =>
-      c.classList.toggle('eus-src-item--active', parseInt(c.dataset.story) === storyId)
-    );
-
-    this._showEmptyDetail();
-    await this._loadIssues();
-  }
-
-  // ----------------------------------------------------------------
   // Issues list panel
   // ----------------------------------------------------------------
   async _loadIssues() {
     const filters = { project_id: this._projectId };
-    if (this._activeStoryId)      filters.user_story_id = this._activeStoryId;
-    else if (this._activeFeature) filters.feature_id    = this._activeFeature.id;
-    if (this._filterStatus)       filters.status        = this._filterStatus;
+    if (this._filterStatus) filters.status = this._filterStatus;
 
     this._issues = await window.db.issues.list(filters);
     this._renderIssues();
@@ -606,8 +459,8 @@ export class IssuesPage {
 
       const payload = {
         project_id:         this._projectId,
-        user_story_id:      this._activeStoryId ?? null,
-        feature_id:         this._activeFeature?.id ?? null,
+        user_story_id:      null,
+        feature_id:         null,
         title,
         description:        descEl.value.trim()     || null,
         steps_to_reproduce: stepsEl.value.trim()    || null,
@@ -660,9 +513,7 @@ export class IssuesPage {
   // ----------------------------------------------------------------
   _initResizable() {
     const PANEL_MAP = {
-      'is-features': { elId: 'isPanelFeatures',   min: 120, dir: 1 },
-      'is-stories':  { elId: 'isPanelStories',     min: 140, dir: 1 },
-      'is-issues':   { elId: 'isPanelIssuesList',  min: 140, dir: 1 },
+      'is-issues': { elId: 'isPanelIssuesList', min: 180, dir: 1 },
     };
 
     this.container.querySelectorAll('.project-panel__resize').forEach(handle => {
