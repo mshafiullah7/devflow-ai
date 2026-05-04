@@ -271,7 +271,11 @@ export class IssuesPage {
 
     if (this._deepItemId) {
       const issue = this._issues.find(i => i.id === this._deepItemId);
-      if (issue) { this._deepItemId = null; this._selectIssue(issue.id); }
+      if (issue) { this._deepItemId = null; this._selectIssue(issue.id); return; }
+    }
+
+    if (!this._activeId && this._issues.length > 0) {
+      this._selectIssue(this._issues[0].id);
     }
   }
 
