@@ -350,31 +350,36 @@ export class IssuesPage {
     `;
   }
 
-  _showAddForm() {
+  async _showAddForm() {
     this._activeId = null;
     this.container.querySelectorAll('#isIssuesList .eus-src-item').forEach(c => c.classList.remove('eus-src-item--active'));
-    const el = this.container.querySelector('#isIssueDetail');
-    el.innerHTML = this._formHtml(null);
-    this._bindFormEvents(el, null);
+    const el       = this.container.querySelector('#isIssueDetail');
+    const features = await window.db.features.list(this._projectId) ?? [];
+    el.innerHTML   = this._formHtml(null, features);
+    await this._bindFormEvents(el, null);
     el.querySelector('#isFormTitle')?.focus();
   }
 
-  _showEditForm(issue) {
-    const el = this.container.querySelector('#isIssueDetail');
-    el.innerHTML = this._formHtml(issue);
-    this._bindFormEvents(el, issue);
+  async _showEditForm(issue) {
+    const el       = this.container.querySelector('#isIssueDetail');
+    const features = await window.db.features.list(this._projectId) ?? [];
+    el.innerHTML   = this._formHtml(issue, features);
+    await this._bindFormEvents(el, issue);
   }
 
   // ----------------------------------------------------------------
   // Form
   // ----------------------------------------------------------------
-  _formHtml(issue) {
+  _formHtml(issue, features = []) {
     const isEdit = !!issue;
     const statusOptions = Object.entries(STATUS_META).map(([val, m]) =>
       `<option value="${val}"${(issue?.status ?? 'open') === val ? ' selected' : ''}>${m.label}</option>`
     ).join('');
     const severityOptions = Object.entries(SEVERITY_META).map(([val, m]) =>
       `<option value="${val}"${(issue?.severity ?? 'medium') === val ? ' selected' : ''}>${m.label}</option>`
+    ).join('');
+    const featureOptions = features.map(f =>
+      `<option value="${f.id}"${issue?.feature_id === f.id ? ' selected' : ''}>${escHtml(f.name)}</option>`
     ).join('');
 
     return `
@@ -397,21 +402,37 @@ export class IssuesPage {
             <select class="is-form__select" id="isFormSeverity">${severityOptions}</select>
           </div>
 
+          <div class="is-form__row">
+            <div class="is-form__field">
+              <label class="is-form__label" for="isFormFeature">Feature <span class="is-form__label-opt">(optional)</span></label>
+              <select class="is-form__select" id="isFormFeature">
+                <option value="">— none —</option>
+                ${featureOptions}
+              </select>
+            </div>
+            <div class="is-form__field">
+              <label class="is-form__label" for="isFormStoryLink">User Story <span class="is-form__label-opt">(optional)</span></label>
+              <select class="is-form__select" id="isFormStoryLink" ${issue?.feature_id ? '' : 'disabled'}>
+                <option value="">— select feature first —</option>
+              </select>
+            </div>
+          </div>
+
           <div class="is-form__field">
             <label class="is-form__label" for="isFormDesc">Description</label>
-            <textarea class="is-form__textarea" id="isFormDesc" rows="2"
+            <textarea class="is-form__textarea" id="isFormDesc" rows="5"
               placeholder="What is the issue about?">${escHtml(issue?.description || '')}</textarea>
           </div>
 
           <div class="is-form__field">
             <label class="is-form__label" for="isFormSteps">Steps to Reproduce</label>
-            <textarea class="is-form__textarea is-form__textarea--steps" id="isFormSteps" rows="5"
+            <textarea class="is-form__textarea is-form__textarea--steps" id="isFormSteps" rows="8"
               placeholder="1. Navigate to…&#10;2. Click…&#10;3. Observe…">${escHtml(issue?.steps_to_reproduce || '')}</textarea>
           </div>
 
           <div class="is-form__field">
             <label class="is-form__label" for="isFormExpected">Expected Behavior</label>
-            <textarea class="is-form__textarea" id="isFormExpected" rows="3"
+            <textarea class="is-form__textarea" id="isFormExpected" rows="6"
               placeholder="The system should…">${escHtml(issue?.expected_behavior || '')}</textarea>
           </div>
 
@@ -420,7 +441,7 @@ export class IssuesPage {
               Actual Behavior
               <span class="is-form__label-hint">(what actually happens)</span>
             </label>
-            <textarea class="is-form__textarea" id="isFormActual" rows="3"
+            <textarea class="is-form__textarea" id="isFormActual" rows="6"
               placeholder="What actually happened…">${escHtml(issue?.actual_behavior || '')}</textarea>
           </div>
 
@@ -433,10 +454,12 @@ export class IssuesPage {
     `;
   }
 
-  _bindFormEvents(el, issue) {
+  async _bindFormEvents(el, issue) {
     const titleEl    = el.querySelector('#isFormTitle');
     const severityEl = el.querySelector('#isFormSeverity');
     const statusEl   = el.querySelector('#isFormStatus');
+    const featureEl  = el.querySelector('#isFormFeature');
+    const storyEl    = el.querySelector('#isFormStoryLink');
     const descEl     = el.querySelector('#isFormDesc');
     const stepsEl    = el.querySelector('#isFormSteps');
     const expectedEl = el.querySelector('#isFormExpected');
@@ -450,6 +473,26 @@ export class IssuesPage {
       });
     }
 
+    const loadStories = async (featureId, preselectId = null) => {
+      if (!featureId) {
+        storyEl.innerHTML = '<option value="">— none —</option>';
+        storyEl.disabled  = true;
+        return;
+      }
+      const stories = await window.db.userStories.list({ feature_id: featureId }) ?? [];
+      storyEl.innerHTML = '<option value="">— none —</option>' +
+        stories.map(s =>
+          `<option value="${s.id}"${s.id === preselectId ? ' selected' : ''}>${escHtml(s.title)}</option>`
+        ).join('');
+      storyEl.disabled = stories.length === 0;
+    };
+
+    featureEl.addEventListener('change', () => loadStories(parseInt(featureEl.value) || null));
+
+    if (issue?.feature_id) {
+      await loadStories(issue.feature_id, issue.user_story_id ?? null);
+    }
+
     const save = async () => {
       const title = titleEl.value.trim();
       if (!title) { titleEl.classList.add('is-form__input--error'); titleEl.focus(); return; }
@@ -459,13 +502,13 @@ export class IssuesPage {
 
       const payload = {
         project_id:         this._projectId,
-        user_story_id:      null,
-        feature_id:         null,
+        feature_id:         parseInt(featureEl.value)  || null,
+        user_story_id:      parseInt(storyEl.value)    || null,
         title,
-        description:        descEl.value.trim()     || null,
-        steps_to_reproduce: stepsEl.value.trim()    || null,
-        expected_behavior:  expectedEl.value.trim() || null,
-        actual_behavior:    actualEl.value.trim()   || null,
+        description:        descEl.value.trim()        || null,
+        steps_to_reproduce: stepsEl.value.trim()       || null,
+        expected_behavior:  expectedEl.value.trim()    || null,
+        actual_behavior:    actualEl.value.trim()       || null,
         status:             statusEl.value,
         severity:           severityEl.value,
       };
