@@ -856,7 +856,7 @@ export class ExtractUserStoriesPage {
     // Swap the "do not write files" rule for a "write to this file" rule
     const terminalPrompt = prompt.replace(
       /- Do NOT write files[^\n]*/,
-      `- Write the raw JSON output to this file: ${outputPath}`
+      `- Write the raw JSON output to this file: ${outputPath}.json`
     );
 
     // Same command style as Mockups: here-string, no stdout piping — Claude writes the file
@@ -1033,16 +1033,27 @@ Use EXACTLY this structure:
   ]
 }
 
+userStoryName: short action-oriented title
+description: 
+- Along with user story name, include some description about the user story (simple description, do not go technical level)
+acceptanceCriteria: 
+- Include at functional level, do not include color validations and technical validations.
+- Follows Given / When / Then on separate lines. Cover all the positive, negative and exceptional cases.
+
+promptName: descriptive name
+prompt:
+- The purpose of the prompt is to provide instructions to LLM to implement the production ready code for the user story. 
+- Include design elements which needs to tell the prompt for the designing of the page. This should exactly match the mockup.
+- Include plain instructions (no code unless needed)
+- Need instructions to cover end to end development. It should exactly work as if it is calling APIs. Mock all the data in the data layer or services which calls the API (positive & negative cases). And should be able to replace that code by actual call later. 
+- Include unit test prompts for API/DB/Auth stories, and E2E test prompts for UI stories.
+
+tag: Is a SINGLE word (UI, API, DB, Auth, Cache, Queue, Email)
+
 Rules:
 - featureId MUST be ${feature.id}
 - Each story needs at least one prompt
 - Each prompt value MUST be written in Markdown
-- tag is a SINGLE word (UI, API, DB, Auth, Cache, Queue, Email…)
-- acceptanceCriteria follows Given / When / Then on separate lines. Cover all the positive, negative and exceptional cases.
-- Analyze the mockup in detail and reference specific UI elements in the prompts. Include all the functionality of all the buttons and interactive elements in the mockup, and cover edge cases.
-- Include unit test prompts for API/DB/Auth stories, and E2E test prompts for UI stories.
-- The purpose of the prompts is to provide detailed instructions for a developer or an LLM to implement the story, so be specific and cover all necessary details.
-- Include detailed design elements in the prompts such as exact colours, layout, spacing, and component types for UI stories exactly as they appear in the mockup.
 - Do NOT write files — print the raw JSON directly to stdout`;
   }
 
