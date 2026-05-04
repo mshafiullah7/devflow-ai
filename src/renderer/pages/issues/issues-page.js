@@ -1,4 +1,3 @@
-import { FeatureList } from '../../components/feature-list/feature-list.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
@@ -26,6 +25,7 @@ export class IssuesPage {
     this.router         = router;
     this._projectId     = params.projectId;
     this._project       = null;
+    this._features      = [];
     this._activeFeature = null;
     this._stories       = [];
     this._activeStoryId = null;
@@ -41,8 +41,7 @@ export class IssuesPage {
 
   async mount() {
     injectCss('pages/user-stories/user-stories.css');
-    injectCss('components/feature-list/feature-list.css');
-    injectCss('components/user-story-list/user-story-list.css');
+    injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     injectCss('pages/issues/issues-page.css');
     applyStoredTheme();
 
@@ -70,15 +69,13 @@ export class IssuesPage {
       this._git.refreshStatus();
       this._git.startPoll();
     }
-    this._initFeatureToggle();
     this._initResizable();
-    await this._mountFeatureList();
+    await this._loadFeatures();
   }
 
   unmount() {
     removeCss('pages/issues/issues-page.css');
-    removeCss('components/user-story-list/user-story-list.css');
-    removeCss('components/feature-list/feature-list.css');
+    removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('pages/user-stories/user-stories.css');
     this._git?.stopPoll();
   }
@@ -161,29 +158,25 @@ export class IssuesPage {
 
           <!-- Panel 1: Features — 15% -->
           <aside class="project-panel" id="isPanelFeatures">
-            <div class="project-panel__header">
-              <span class="project-panel__title">Features</span>
-              <div class="project-panel__actions">
-                <button class="project-panel__add project-panel__toggle" id="isBtnToggleFeatures" title="Collapse features" aria-label="Collapse features">
-                  <svg class="is-toggle-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-              </div>
+            <div class="project-related__section-hd">
+              <span class="project-related__section-label">Features</span>
+              <span class="project-related__section-count" id="isFeatureCount">0</span>
             </div>
-            <button id="isBtnAddFeature" style="display:none;" aria-hidden="true"></button>
-            <div class="project-panel__list" id="isFeatureList"></div>
+            <div class="project-related__section-body" id="isFeatureList">
+              <div class="project-related__empty">No features</div>
+            </div>
           </aside>
 
           <div class="project-panel__resize" data-resize="is-features"></div>
 
           <!-- Panel 2: User Stories — 20% -->
           <aside class="project-panel" id="isPanelStories">
-            <div class="project-panel__header">
-              <span class="project-panel__title">User Stories</span>
+            <div class="project-related__section-hd">
+              <span class="project-related__section-label">User Stories</span>
+              <span class="project-related__section-count" id="isStoryCount">0</span>
             </div>
-            <div class="project-panel__list" id="isStoryList">
-              <div class="project-panel__empty"><p>Select a feature</p></div>
+            <div class="project-related__section-body" id="isStoryList">
+              <div class="project-related__empty">Select a feature</div>
             </div>
           </aside>
 
@@ -299,55 +292,52 @@ export class IssuesPage {
   }
 
   // ----------------------------------------------------------------
-  // Feature panel collapse/expand
+  // Features list
   // ----------------------------------------------------------------
-  _initFeatureToggle() {
-    const panel        = this.container.querySelector('#isPanelFeatures');
-    const toggleBtn    = this.container.querySelector('#isBtnToggleFeatures');
-    const resizeHandle = panel.nextElementSibling;
-    const icon         = toggleBtn.querySelector('.is-toggle-icon');
+  async _loadFeatures() {
+    this._features = await window.db.features.list(this._projectId) ?? [];
+    this._renderFeatures();
 
-    let savedFlex = '0 0 15%';
+    if (!this._features.length) return;
 
-    toggleBtn.addEventListener('click', () => {
-      const isCollapsed = panel.classList.toggle('project-panel--collapsed');
-
-      if (isCollapsed) {
-        savedFlex                  = panel.style.flex || '0 0 15%';
-        panel.style.flex           = '0 0 32px';
-        resizeHandle.style.display = 'none';
-        toggleBtn.title            = 'Expand features';
-        toggleBtn.setAttribute('aria-label', 'Expand features');
-        icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
-      } else {
-        panel.style.flex           = savedFlex;
-        resizeHandle.style.display = '';
-        toggleBtn.title            = 'Collapse features';
-        toggleBtn.setAttribute('aria-label', 'Collapse features');
-        icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
-      }
-    });
+    const deepId = this._deepFeatureId;
+    this._deepFeatureId = null;
+    const target = (deepId && this._features.find(f => f.id === deepId))
+      ? this._features.find(f => f.id === deepId)
+      : this._features[0];
+    await this._onFeatureSelected(target);
   }
 
-  // ----------------------------------------------------------------
-  // FeatureList component
-  // ----------------------------------------------------------------
-  async _mountFeatureList() {
-    this._featureList = new FeatureList({
-      listEl:    this.container.querySelector('#isFeatureList'),
-      addBtn:    this.container.querySelector('#isBtnAddFeature'),
-      projectId: this._projectId,
-      onSelect:  (feature) => this._onFeatureSelected(feature),
-    });
-    await this._featureList.mount();
+  _renderFeatures() {
+    const listEl  = this.container.querySelector('#isFeatureList');
+    const countEl = this.container.querySelector('#isFeatureCount');
+    if (!listEl) return;
+    if (countEl) countEl.textContent = this._features.length;
 
-    if (this._deepFeatureId) {
-      const card = this.container.querySelector(`#isFeatureList .fl-card[data-id="${this._deepFeatureId}"]`);
-      this._deepFeatureId = null;
-      if (card) { card.click(); return; }
+    if (!this._features.length) {
+      listEl.innerHTML = '<div class="project-related__empty">No features</div>';
+      return;
     }
-    const firstCard = this.container.querySelector('#isFeatureList .fl-card');
-    if (firstCard) firstCard.click();
+
+    listEl.innerHTML = this._features.map(f => `
+      <div class="eus-src-item${f.id === this._activeFeature?.id ? ' eus-src-item--active' : ''}" data-id="${f.id}">
+        <svg class="eus-src-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+          <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <div class="eus-src-item__info">
+          <span class="eus-src-item__id">#${f.id}</span>
+          <span class="eus-src-item__title">${escHtml(f.name)}</span>
+        </div>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.eus-src-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const id = parseInt(item.dataset.id);
+        const feature = this._features.find(f => f.id === id);
+        if (feature) this._onFeatureSelected(feature);
+      });
+    });
   }
 
   async _onFeatureSelected(feature) {
@@ -355,6 +345,7 @@ export class IssuesPage {
     this._activeStoryId = null;
     this._activeId      = null;
     this._issues        = [];
+    this._renderFeatures();
     this._renderIssues();
     this._showEmptyDetail();
     await this._loadStories(feature.id);
@@ -377,28 +368,27 @@ export class IssuesPage {
   }
 
   _renderStories() {
-    const listEl = this.container.querySelector('#isStoryList');
+    const listEl  = this.container.querySelector('#isStoryList');
+    const countEl = this.container.querySelector('#isStoryCount');
     if (!listEl) return;
+    if (countEl) countEl.textContent = this._stories.length;
 
     if (this._stories.length === 0) {
-      listEl.innerHTML = `<div class="project-panel__empty"><p>No stories in this feature</p></div>`;
+      listEl.innerHTML = `<div class="project-related__empty">No stories in this feature</div>`;
       return;
     }
 
     listEl.innerHTML = this._stories.map(s => `
-      <div class="usl-card${s.id === this._activeStoryId ? ' usl-card--active' : ''}" data-story="${s.id}">
-        <div class="usl-card__header">
-          <span class="usl-card__title">${escHtml(s.title)}</span>
+      <div class="eus-src-item${s.id === this._activeStoryId ? ' eus-src-item--active' : ''}" data-story="${s.id}">
+        <div class="eus-src-item__info">
+          <span class="eus-src-item__id">#${s.id}</span>
+          <span class="eus-src-item__title">${escHtml(s.title)}</span>
         </div>
-        ${s.status_name ? `
-        <div class="usl-card__footer">
-          <span class="usl-card__status">${escHtml(s.status_name)}</span>
-        </div>` : ''}
       </div>
     `).join('');
 
-    listEl.querySelectorAll('.usl-card').forEach(card => {
-      card.addEventListener('click', () => this._selectStory(parseInt(card.dataset.story)));
+    listEl.querySelectorAll('.eus-src-item').forEach(item => {
+      item.addEventListener('click', () => this._selectStory(parseInt(item.dataset.story)));
     });
   }
 
@@ -406,8 +396,8 @@ export class IssuesPage {
     this._activeStoryId = storyId;
     this._activeId      = null;
 
-    this.container.querySelectorAll('#isStoryList .usl-card').forEach(c =>
-      c.classList.toggle('usl-card--active', parseInt(c.dataset.story) === storyId)
+    this.container.querySelectorAll('#isStoryList .eus-src-item').forEach(c =>
+      c.classList.toggle('eus-src-item--active', parseInt(c.dataset.story) === storyId)
     );
 
     this._showEmptyDetail();
