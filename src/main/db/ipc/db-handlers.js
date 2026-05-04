@@ -285,10 +285,10 @@ function registerDbHandlers() {
     ).all(project_id);
   });
 
-  ipcMain.handle('testRunHistory:create', (_e, { project_id, framework, command, passed, failed, skipped, duration, exit_code }) => {
+  ipcMain.handle('testRunHistory:create', (_e, { project_id, framework, command, passed, failed, skipped, duration, output, exit_code }) => {
     db.prepare(
-      `INSERT INTO test_run_history (project_id, framework, command, passed, failed, skipped, duration, exit_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO test_run_history (project_id, framework, command, passed, failed, skipped, duration, output, exit_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       project_id,
       framework  ?? null,
@@ -297,6 +297,7 @@ function registerDbHandlers() {
       failed     ?? null,
       skipped    ?? null,
       duration   ?? null,
+      output     ?? null,
       exit_code  ?? 0
     );
     // Keep only the latest 20 runs per project

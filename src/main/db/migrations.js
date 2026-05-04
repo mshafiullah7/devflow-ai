@@ -200,6 +200,12 @@ function runMigrations(db) {
     `);
   }
 
+  // Add output column to test_run_history for existing databases
+  const trhCols = db.prepare('PRAGMA table_info(test_run_history)').all().map(c => c.name);
+  if (trhCols.length > 0 && !trhCols.includes('output')) {
+    db.exec('ALTER TABLE test_run_history ADD COLUMN output TEXT');
+  }
+
   // Add document_attachments table for existing databases
   const allTables4 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
   if (!allTables4.includes('document_attachments')) {

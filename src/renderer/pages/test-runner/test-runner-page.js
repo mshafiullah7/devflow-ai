@@ -463,10 +463,11 @@ export class TestRunnerPage {
       project_id: this._projectId,
       framework:  this._activeEntry.framework ?? null,
       command:    this._activeEntry.cmd,
-      passed:     results.passed  ?? null,
-      failed:     results.failed  ?? null,
-      skipped:    results.skipped ?? null,
+      passed:     results.passed   ?? null,
+      failed:     results.failed   ?? null,
+      skipped:    results.skipped  ?? null,
       duration:   results.duration ?? null,
+      output:     this._outputText || null,
       exit_code:  exitCode,
     });
     this._history = await window.db.testRunHistory.list(this._projectId);
@@ -482,7 +483,28 @@ export class TestRunnerPage {
       return;
     }
 
-    list.innerHTML = this._history.map(r => this._historyCardHtml(r)).join('');
+    const [last, ...older] = this._history;
+
+    const olderHtml = older.length > 0
+      ? `<div class="tr-history-section-label">Previous Runs</div>` +
+        older.map(r => this._historyCardHtml(r)).join('')
+      : '';
+
+    list.innerHTML =
+      `<div class="tr-history-section-label">Last Run</div>` +
+      this._lastRunSectionHtml(last) +
+      olderHtml;
+  }
+
+  _lastRunSectionHtml(r) {
+    const outputText = r.output ? escHtml(r.output) : '<span class="tr-output-none">No output captured</span>';
+    return `
+      ${this._historyCardHtml(r)}
+      <div class="tr-last-run-output">
+        <div class="tr-last-run-output__label">Output</div>
+        <pre class="tr-last-run-output__pre">${outputText}</pre>
+      </div>
+    `;
   }
 
   _historyCardHtml(r) {

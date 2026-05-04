@@ -232,6 +232,7 @@ function applySchema(db) {
       failed     INTEGER,
       skipped    INTEGER,
       duration   TEXT,
+      output     TEXT,
       exit_code  INTEGER NOT NULL DEFAULT 0,
       ran_at     TEXT    NOT NULL DEFAULT (datetime('now'))
     );
