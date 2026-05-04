@@ -10,24 +10,24 @@
   transition: flex 0.2s ease;
 }
 
-/* Features — collapsed strip */
-#isPanelFeatures.project-panel--collapsed {
-  flex: 0 0 32px !important;
-  min-width: 32px !important;
-  overflow: hidden;
-}
-#isPanelFeatures.project-panel--collapsed .project-panel__title,
-#isPanelFeatures.project-panel--collapsed #isBtnAddFeature,
-#isPanelFeatures.project-panel--collapsed .project-panel__list {
-  display: none;
-}
-#isPanelFeatures.project-panel--collapsed .project-panel__header {
+/* Add issue button inside section header */
+.is-add-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
   padding: 0;
-  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
 }
-#isPanelFeatures.project-panel--collapsed .project-panel__actions {
-  justify-content: center;
-}
+.is-add-btn:hover { background: var(--surface-hover); color: var(--accent); }
 
 /* User Stories column */
 #isPanelStories {
@@ -57,122 +57,19 @@
 .is-header-select:focus { border-color: var(--accent); }
 
 /* ------------------------------------------------------------------ */
-/* Issue card                                                            */
+/* Severity dot (shown in issue list items)                             */
 /* ------------------------------------------------------------------ */
-.is-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 10px 8px;
-  margin-bottom: 6px;
-  cursor: pointer;
-  box-shadow: var(--card-shadow);
-  transition: border-color 0.12s, background 0.12s;
-}
-.is-card:hover { background: var(--surface-hover); border-color: var(--accent); }
-.is-card--active {
-  border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.08);
-}
-
-.is-card__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 4px;
-}
-.is-card__title {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.35;
-  word-break: break-word;
-}
-.is-card--active .is-card__title { color: var(--accent); }
-
-.is-card__del {
+.is-sev-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  background: transparent;
-  border: none;
-  border-radius: 3px;
-  color: var(--text-muted);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.1s, color 0.1s;
+  background: var(--text-muted);
 }
-.is-card:hover .is-card__del { opacity: 1; }
-.is-card__del:hover { color: var(--danger); }
-
-.is-card__footer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* ------------------------------------------------------------------ */
-/* Status & Severity badges                                             */
-/* ------------------------------------------------------------------ */
-.is-status-badge,
-.is-severity-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-}
-
-/* Status */
-.is-status--open        { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
-.is-status--in-progress { background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; }
-.is-status--resolved    { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
-.is-status--closed      { background: var(--surface-hover); color: var(--text-muted); border: 1px solid var(--border); }
-.is-status--wont-fix    { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-
-/* Severity */
-.is-severity--critical { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-.is-severity--high     { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
-.is-severity--medium   { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
-.is-severity--low      { background: var(--surface-hover); color: var(--text-muted); border: 1px solid var(--border); }
-
-/* Dark theme overrides */
-[data-theme="dark"] .is-status--open        { background: #1e3a5f; color: #93c5fd; border-color: #1e40af; }
-[data-theme="dark"] .is-status--in-progress { background: #2e1065; color: #c4b5fd; border-color: #5b21b6; }
-[data-theme="dark"] .is-status--resolved    { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
-[data-theme="dark"] .is-status--wont-fix    { background: #451a03; color: #fcd34d; border-color: #92400e; }
-[data-theme="dark"] .is-severity--critical  { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
-[data-theme="dark"] .is-severity--high      { background: #431407; color: #fdba74; border-color: #9a3412; }
-[data-theme="dark"] .is-severity--medium    { background: #422006; color: #fde047; border-color: #854d0e; }
-
-/* Midnight theme overrides */
-[data-theme="midnight"] .is-status--open        { background: #0c2340; color: #7dd3fc; border-color: #0369a1; }
-[data-theme="midnight"] .is-status--in-progress { background: #1e0950; color: #a78bfa; border-color: #4f46e5; }
-[data-theme="midnight"] .is-status--resolved    { background: #022c22; color: #34d399; border-color: #047857; }
-
-/* ------------------------------------------------------------------ */
-/* Empty state                                                           */
-/* ------------------------------------------------------------------ */
-.is-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 40px 16px;
-  color: var(--text-muted);
-  text-align: center;
-}
-.is-empty p { font-size: 12px; margin: 0; }
+.is-sev-dot--critical { background: #ef4444; }
+.is-sev-dot--high     { background: #f97316; }
+.is-sev-dot--medium   { background: #eab308; }
+.is-sev-dot--low      { background: #6b7280; }
 
 /* ------------------------------------------------------------------ */
 /* Detail form                                                           */

@@ -71,6 +71,7 @@ export class IssuesPage {
     }
     this._initResizable();
     await this._loadFeatures();
+    await this._loadIssues();
   }
 
   unmount() {
@@ -184,23 +185,17 @@ export class IssuesPage {
 
           <!-- Panel 3: Issues list — 25% -->
           <aside class="project-panel" id="isPanelIssuesList">
-            <div class="project-panel__header">
-              <span class="project-panel__title">Issues</span>
-              <div class="project-panel__actions">
-                <button class="project-panel__add" id="isBtnAdd" title="Add issue" aria-label="Add issue">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div class="project-panel__list" id="isIssuesList">
-              <div class="is-empty">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            <div class="project-related__section-hd">
+              <span class="project-related__section-label">Issues</span>
+              <span class="project-related__section-count" id="isIssueCount">0</span>
+              <button class="is-add-btn" id="isBtnAdd" title="Add issue" aria-label="Add issue">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                 </svg>
-                <p>Select a user story</p>
-              </div>
+              </button>
+            </div>
+            <div class="project-related__section-body" id="isIssuesList">
+              <div class="project-related__empty">No issues</div>
             </div>
           </aside>
 
@@ -344,11 +339,9 @@ export class IssuesPage {
     this._activeFeature = feature;
     this._activeStoryId = null;
     this._activeId      = null;
-    this._issues        = [];
     this._renderFeatures();
-    this._renderIssues();
     this._showEmptyDetail();
-    await this._loadStories(feature.id);
+    await Promise.all([this._loadStories(feature.id), this._loadIssues()]);
   }
 
   // ----------------------------------------------------------------
@@ -408,13 +401,11 @@ export class IssuesPage {
   // Issues list panel
   // ----------------------------------------------------------------
   async _loadIssues() {
-    if (!this._activeStoryId) {
-      this._issues = [];
-      this._renderIssues();
-      return;
-    }
-    const filters = { project_id: this._projectId, user_story_id: this._activeStoryId };
-    if (this._filterStatus) filters.status = this._filterStatus;
+    const filters = { project_id: this._projectId };
+    if (this._activeStoryId)      filters.user_story_id = this._activeStoryId;
+    else if (this._activeFeature) filters.feature_id    = this._activeFeature.id;
+    if (this._filterStatus)       filters.status        = this._filterStatus;
+
     this._issues = await window.db.issues.list(filters);
     this._renderIssues();
 
@@ -430,55 +421,44 @@ export class IssuesPage {
   }
 
   _renderIssues() {
-    const listEl = this.container.querySelector('#isIssuesList');
+    const listEl  = this.container.querySelector('#isIssuesList');
+    const countEl = this.container.querySelector('#isIssueCount');
     if (!listEl) return;
+    if (countEl) countEl.textContent = this._issues.length;
 
     if (this._issues.length === 0) {
-      listEl.innerHTML = `
-        <div class="is-empty">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <p>${this._activeStoryId ? 'No issues for this story' : 'Select a user story'}</p>
-        </div>
-      `;
+      listEl.innerHTML = `<div class="project-related__empty">No issues</div>`;
       return;
     }
 
-    listEl.innerHTML = this._issues.map(issue => this._cardHtml(issue)).join('');
+    listEl.innerHTML = this._issues.map(issue => this._issueItemHtml(issue)).join('');
 
-    listEl.querySelectorAll('.is-card').forEach(card => {
-      const id = parseInt(card.dataset.id);
-      card.addEventListener('click', () => this._selectIssue(id));
-      card.querySelector('.is-card__del')?.addEventListener('click', async (e) => {
+    listEl.querySelectorAll('.eus-src-item').forEach(item => {
+      const id = parseInt(item.dataset.id);
+      item.addEventListener('click', () => this._selectIssue(id));
+      item.querySelector('.eus-story-action--delete')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         await this._deleteIssue(id);
       });
     });
-
-    if (this._activeId) {
-      this.container.querySelector(`.is-card[data-id="${this._activeId}"]`)
-        ?.classList.add('is-card--active');
-    }
   }
 
-  _cardHtml(issue) {
-    const sm = STATUS_META[issue.status]     || STATUS_META.open;
+  _issueItemHtml(issue) {
     const sv = SEVERITY_META[issue.severity] || SEVERITY_META.medium;
     return `
-      <div class="is-card${issue.id === this._activeId ? ' is-card--active' : ''}" data-id="${issue.id}">
-        <div class="is-card__header">
-          <span class="is-card__title">${escHtml(issue.title)}</span>
-          <button class="is-card__del" title="Delete" aria-label="Delete">
+      <div class="eus-src-item${issue.id === this._activeId ? ' eus-src-item--active' : ''}" data-id="${issue.id}">
+        <span class="is-sev-dot is-sev-dot--${issue.severity || 'medium'}" title="${sv.label}"></span>
+        <div class="eus-src-item__info">
+          <span class="eus-src-item__id">#${issue.id}</span>
+          <span class="eus-src-item__title">${escHtml(issue.title)}</span>
+        </div>
+        <div class="eus-src-item__actions">
+          <button class="eus-story-action eus-story-action--delete" title="Delete" aria-label="Delete">
             <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
               <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
                 stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-        </div>
-        <div class="is-card__footer">
-          <span class="is-status-badge ${sm.cls}">${sm.label}</span>
-          <span class="is-severity-badge ${sv.cls}">${sv.label}</span>
         </div>
       </div>
     `;
@@ -486,8 +466,8 @@ export class IssuesPage {
 
   _selectIssue(id) {
     this._activeId = id;
-    this.container.querySelectorAll('.is-card').forEach(c =>
-      c.classList.toggle('is-card--active', parseInt(c.dataset.id) === id)
+    this.container.querySelectorAll('#isIssuesList .eus-src-item').forEach(c =>
+      c.classList.toggle('eus-src-item--active', parseInt(c.dataset.id) === id)
     );
     const issue = this._issues.find(i => i.id === id);
     if (issue) this._showEditForm(issue);
@@ -519,7 +499,7 @@ export class IssuesPage {
 
   _showAddForm() {
     this._activeId = null;
-    this.container.querySelectorAll('.is-card').forEach(c => c.classList.remove('is-card--active'));
+    this.container.querySelectorAll('#isIssuesList .eus-src-item').forEach(c => c.classList.remove('eus-src-item--active'));
     const el = this.container.querySelector('#isIssueDetail');
     el.innerHTML = this._formHtml(null);
     this._bindFormEvents(el, null);
@@ -661,16 +641,18 @@ export class IssuesPage {
   }
 
   _refreshCardBadges(id, status, severity) {
-    const cardEl = this.container.querySelector(`.is-card[data-id="${id}"]`);
-    if (!cardEl) return;
-    const sm = STATUS_META[status]     || STATUS_META.open;
-    const sv = SEVERITY_META[severity] || SEVERITY_META.medium;
-    const sb = cardEl.querySelector('.is-status-badge');
-    const vb = cardEl.querySelector('.is-severity-badge');
-    if (sb) { sb.className = `is-status-badge ${sm.cls}`; sb.textContent = sm.label; }
-    if (vb) { vb.className = `is-severity-badge ${sv.cls}`; vb.textContent = sv.label; }
     const idx = this._issues.findIndex(i => i.id === id);
-    if (idx !== -1) { this._issues[idx].status = status; this._issues[idx].severity = severity; }
+    if (idx !== -1) {
+      this._issues[idx].status   = status;
+      this._issues[idx].severity = severity;
+    }
+    const itemEl = this.container.querySelector(`#isIssuesList .eus-src-item[data-id="${id}"]`);
+    if (!itemEl) return;
+    const dot = itemEl.querySelector('.is-sev-dot');
+    if (dot) {
+      dot.className = `is-sev-dot is-sev-dot--${severity || 'medium'}`;
+      dot.title     = (SEVERITY_META[severity] || SEVERITY_META.medium).label;
+    }
   }
 
   // ----------------------------------------------------------------
