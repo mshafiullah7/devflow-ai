@@ -9,6 +9,12 @@
   min-width: 180px;
 }
 
+/* Match the 40px height of project-panel__header used by Issue Detail */
+#isPanelIssuesList .project-related__section-hd {
+  height: 40px;
+  padding: 0 12px;
+}
+
 /* Add issue button inside section header */
 .is-add-btn {
   margin-left: 4px;
