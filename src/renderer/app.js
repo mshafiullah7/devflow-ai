@@ -24,9 +24,9 @@ router.register('user-stories', async () => {
   const { ProjectPage } = await import('./pages/user-stories/user-stories.js');
   return ProjectPage;
 });
-router.register('test-cases', async () => {
-  const { TestCasesPage } = await import('./pages/test-cases/test-cases-page.js');
-  return TestCasesPage;
+router.register('test-runner', async () => {
+  const { TestRunnerPage } = await import('./pages/test-runner/test-runner-page.js');
+  return TestRunnerPage;
 });
 router.register('style-guide', async () => {
   const { StyleGuidePage } = await import('./pages/style-guide/style-guide-page.js');

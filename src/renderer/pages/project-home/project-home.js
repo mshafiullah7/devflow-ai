@@ -17,7 +17,7 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, stories, allStories, features, statuses, documents, mockups, tcCoverage, issueCount] = await Promise.all([
+    const [project, stories, allStories, features, statuses, documents, mockups, issueCount] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.userStories.list({ project_id: this.projectId }),
       window.db.userStories.list({ project_id: this.projectId, include_extracted: true }),
@@ -25,7 +25,6 @@ export class ProjectHomePage {
       window.db.status.list(),
       window.db.documents.list(this.projectId),
       window.db.screenDesigns.list(this.projectId),
-      window.db.testCases.coverage(this.projectId),
       window.db.issues.count(this.projectId),
     ]);
 
@@ -36,7 +35,6 @@ export class ProjectHomePage {
     this._statuses         = statuses;
     this._documents        = documents;
     this._mockups          = mockups;
-    this._tcCoverage       = tcCoverage;
     this._issueCount       = issueCount;
 
     this.container.innerHTML = this._template();
@@ -317,18 +315,18 @@ export class ProjectHomePage {
               </div>
             </button>
 
-            <button class="ph-card" id="cardTestCases">
+            <button class="ph-card" id="cardTestRunner">
               <div class="ph-card__icon">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4m0-6h4m0 0h4m-4 0v6m0 0H9m4 0h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-4"/>
+                  <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
               </div>
               <div class="ph-card__body">
-                <div class="ph-card__name">Test Cases</div>
-                <div class="ph-card__desc">Test cases linked to stories with pass/fail tracking.</div>
+                <div class="ph-card__name">Test Runner</div>
+                <div class="ph-card__desc">Run Cypress, Flutter, Jest or Playwright tests and view results.</div>
               </div>
               <div class="ph-card__footer">
-                <span class="ph-card__count">${this._tcCoverage?.total ?? 0}</span>
+                <span class="ph-card__count"></span>
                 <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
                 </svg>
@@ -425,8 +423,8 @@ export class ProjectHomePage {
     this.container.querySelector('#cardUserStories')
       .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this.projectId }));
 
-    this.container.querySelector('#cardTestCases')
-      .addEventListener('click', () => this.router.navigate('test-cases', { projectId: this.projectId }));
+    this.container.querySelector('#cardTestRunner')
+      .addEventListener('click', () => this.router.navigate('test-runner', { projectId: this.projectId }));
 
     this.container.querySelector('#cardIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));

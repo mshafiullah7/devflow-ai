@@ -6,7 +6,8 @@ const fs   = require('node:fs');
 const os   = require('node:os');
 const path = require('node:path');
 
-let _activeProc = null;
+let _activeProc     = null;
+let _activeTestProc = null;
 
 function killTree(proc) {
   if (!proc) return;
@@ -99,6 +100,36 @@ function registerTerminalHandlers() {
     );
     proc.unref();
     return { pid: proc.pid };
+  });
+
+  // Dedicated test runner — separate process slot so it doesn't conflict with the terminal panel
+  ipcMain.handle('testRunner:run', (event, { command, cwd }) => {
+    if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
+
+    const wc        = event.sender;
+    const utf8Pre   = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; ';
+    _activeTestProc = spawn(
+      'powershell.exe',
+      ['-NoLogo', '-NonInteractive', '-Command', utf8Pre + command],
+      { stdio: ['ignore', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: process.env, windowsHide: true }
+    );
+
+    const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
+
+    _activeTestProc.stdout.on('data', d => send('testRunner:data', { text: d.toString('utf8') }));
+    _activeTestProc.stderr.on('data', d => send('testRunner:data', { text: d.toString('utf8') }));
+    _activeTestProc.on('close', code => { _activeTestProc = null; send('testRunner:done', { exitCode: code }); });
+    _activeTestProc.on('error', err => {
+      _activeTestProc = null;
+      send('testRunner:data', { text: err.message });
+      send('testRunner:done', { exitCode: 1 });
+    });
+
+    return { pid: _activeTestProc.pid };
+  });
+
+  ipcMain.handle('testRunner:kill', () => {
+    if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
   });
 }
 

@@ -90,13 +90,16 @@ contextBridge.exposeInMainWorld('db', {
     update: (data)       => invoke('db:screen_designs:update', data),
     delete: (id)         => invoke('db:screen_designs:delete', id),
   },
-  testCases: {
-    list:     (filters) => invoke('db:test_cases:list', filters),
-    get:      (id)      => invoke('db:test_cases:get', id),
-    create:   (data)    => invoke('db:test_cases:create', data),
-    update:   (data)    => invoke('db:test_cases:update', data),
-    delete:   (id)      => invoke('db:test_cases:delete', id),
-    coverage: (project_id) => invoke('db:test_cases:coverage', project_id),
+  testRunner: {
+    detect:          (projectPath) => invoke('testRunner:detect', projectPath),
+    run:             (data)        => invoke('testRunner:run', data),
+    kill:            ()            => invoke('testRunner:kill'),
+    onData:          (cb)          => ipcRenderer.on('testRunner:data', (_e, p) => cb(p)),
+    onDone:          (cb)          => ipcRenderer.on('testRunner:done', (_e, p) => cb(p)),
+    removeListeners: ()            => {
+      ipcRenderer.removeAllListeners('testRunner:data');
+      ipcRenderer.removeAllListeners('testRunner:done');
+    },
   },
   issues: {
     list:   (filters)    => invoke('db:issues:list', filters),

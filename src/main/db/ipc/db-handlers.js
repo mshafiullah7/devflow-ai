@@ -277,105 +277,66 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
-  // test_cases
+  // testRunner — framework detection
   // ----------------------------------------------------------------
-  ipcMain.handle('db:test_cases:list', (_e, { project_id, feature_id, user_story_id, status } = {}) => {
-    let sql = `
-      SELECT tc.*,
-             us.title AS story_title,
-             f.name   AS feature_name
-        FROM test_cases tc
-        LEFT JOIN user_stories us ON tc.user_story_id = us.id
-        LEFT JOIN features f      ON tc.feature_id = f.id
-       WHERE tc.is_active = 1`;
-    const params = [];
-    if (project_id)    { sql += ' AND tc.project_id = ?';      params.push(project_id); }
-    if (feature_id)    { sql += ' AND tc.feature_id = ?';      params.push(feature_id); }
-    if (user_story_id) { sql += ' AND tc.user_story_id = ?';   params.push(user_story_id); }
-    if (status)        { sql += ' AND tc.status = ?';          params.push(status); }
-    sql += ' ORDER BY tc.created_at DESC';
-    return db.prepare(sql).all(...params);
-  });
+  ipcMain.handle('testRunner:detect', (_e, projectPath) => {
+    if (!projectPath) return [];
+    const exists  = (p) => { try { return fs.existsSync(p); } catch { return false; } };
+    const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
+    const commands = [];
 
-  ipcMain.handle('db:test_cases:get', (_e, id) => {
-    return db.prepare('SELECT * FROM test_cases WHERE id = ?').get(id);
-  });
+    // Flutter
+    if (exists(path.join(projectPath, 'pubspec.yaml'))) {
+      commands.push({ id: 'flutter-test',    label: 'flutter test',                   cmd: 'flutter test',                   framework: 'Flutter' });
+      commands.push({ id: 'flutter-verbose', label: 'flutter test --reporter expanded', cmd: 'flutter test --reporter expanded', framework: 'Flutter' });
+    }
 
-  ipcMain.handle('db:test_cases:create', (_e, { project_id, feature_id, user_story_id, title, description, test_steps, expected_result, actual_result, status, priority }) => {
-    const result = db.prepare(`
-      INSERT INTO test_cases (project_id, feature_id, user_story_id, title, description, test_steps, expected_result, actual_result, status, priority)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      project_id,
-      feature_id      ?? null,
-      user_story_id   ?? null,
-      title,
-      description     ?? null,
-      test_steps      ?? null,
-      expected_result ?? null,
-      actual_result   ?? null,
-      status   ?? 'not_run',
-      priority ?? 'medium'
-    );
-    return db.prepare(`
-      SELECT tc.*, us.title AS story_title, f.name AS feature_name
-        FROM test_cases tc
-        LEFT JOIN user_stories us ON tc.user_story_id = us.id
-        LEFT JOIN features f      ON tc.feature_id = f.id
-       WHERE tc.id = ?
-    `).get(result.lastInsertRowid);
-  });
+    // Node-based projects
+    const pkgPath = path.join(projectPath, 'package.json');
+    if (exists(pkgPath)) {
+      const pkg     = readJson(pkgPath) || {};
+      const scripts = pkg.scripts || {};
+      const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 
-  ipcMain.handle('db:test_cases:update', (_e, { id, feature_id, user_story_id, title, description, test_steps, expected_result, actual_result, status, priority, is_active }) => {
-    db.prepare(`
-      UPDATE test_cases
-         SET feature_id      = CASE WHEN ? IS NOT NULL THEN ? ELSE feature_id END,
-             user_story_id   = CASE WHEN ? IS NOT NULL THEN ? ELSE user_story_id END,
-             title           = coalesce(?, title),
-             description     = coalesce(?, description),
-             test_steps      = coalesce(?, test_steps),
-             expected_result = coalesce(?, expected_result),
-             actual_result   = ?,
-             status          = coalesce(?, status),
-             priority        = coalesce(?, priority),
-             is_active       = coalesce(?, is_active),
-             updated_at      = datetime('now')
-       WHERE id = ?
-    `).run(
-      feature_id    ?? null, feature_id    ?? null,
-      user_story_id ?? null, user_story_id ?? null,
-      title           ?? null,
-      description     ?? null,
-      test_steps      ?? null,
-      expected_result ?? null,
-      actual_result   ?? null,
-      status   ?? null,
-      priority ?? null,
-      is_active ?? null,
-      id
-    );
-    return db.prepare(`
-      SELECT tc.*, us.title AS story_title, f.name AS feature_name
-        FROM test_cases tc
-        LEFT JOIN user_stories us ON tc.user_story_id = us.id
-        LEFT JOIN features f      ON tc.feature_id = f.id
-       WHERE tc.id = ?
-    `).get(id);
-  });
+      const isAngular    = exists(path.join(projectPath, 'angular.json'));
+      const hasCypress   = !!allDeps['cypress'] ||
+                           exists(path.join(projectPath, 'cypress.json')) ||
+                           exists(path.join(projectPath, 'cypress.config.js')) ||
+                           exists(path.join(projectPath, 'cypress.config.ts')) ||
+                           exists(path.join(projectPath, 'cypress.config.mjs'));
+      const hasPlaywright = !!allDeps['@playwright/test'] || !!allDeps['playwright'];
+      const hasJest       = !!allDeps['jest'] || !!allDeps['@jest/core'];
+      const fwLabel       = isAngular ? 'Angular' : 'Node';
 
-  ipcMain.handle('db:test_cases:delete', (_e, id) => {
-    db.prepare(`UPDATE test_cases SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
-    return { success: true };
-  });
+      // Cypress
+      if (hasCypress) {
+        if (scripts['e2e'])      commands.push({ id: 'e2e',      label: 'npm run e2e',      cmd: 'npm run e2e',      framework: `${fwLabel} / Cypress` });
+        if (scripts['cy:run'])   commands.push({ id: 'cy-run',   label: 'npm run cy:run',   cmd: 'npm run cy:run',   framework: `${fwLabel} / Cypress` });
+        if (scripts['test:e2e']) commands.push({ id: 'test-e2e', label: 'npm run test:e2e', cmd: 'npm run test:e2e', framework: `${fwLabel} / Cypress` });
+        if (!scripts['e2e'] && !scripts['cy:run'] && !scripts['test:e2e'])
+          commands.push({ id: 'cypress-run', label: 'npx cypress run', cmd: 'npx cypress run', framework: `${fwLabel} / Cypress` });
+      }
 
-  ipcMain.handle('db:test_cases:coverage', (_e, project_id) => {
-    const total = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1`).get(project_id)?.n ?? 0;
-    const pass  = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND status = 'pass'`).get(project_id)?.n ?? 0;
-    const fail  = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND status = 'fail'`).get(project_id)?.n ?? 0;
-    const blocked = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND status = 'blocked'`).get(project_id)?.n ?? 0;
-    const not_run = db.prepare(`SELECT COUNT(*) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND status = 'not_run'`).get(project_id)?.n ?? 0;
-    const stories_covered = db.prepare(`SELECT COUNT(DISTINCT user_story_id) AS n FROM test_cases WHERE project_id = ? AND is_active = 1 AND user_story_id IS NOT NULL`).get(project_id)?.n ?? 0;
-    return { total, pass, fail, blocked, not_run, stories_covered };
+      // Playwright
+      if (hasPlaywright) {
+        if (scripts['test:e2e']) commands.push({ id: 'pw-e2e',    label: 'npm run test:e2e',    cmd: 'npm run test:e2e',    framework: 'Playwright' });
+        else                     commands.push({ id: 'playwright', label: 'npx playwright test', cmd: 'npx playwright test', framework: 'Playwright' });
+      }
+
+      // Unit tests
+      if (scripts['test']) {
+        const fw     = isAngular ? 'Angular / Karma' : hasJest ? 'Jest' : fwLabel;
+        const suffix = isAngular ? ' --no-watch' : hasJest ? ' -- --watchAll=false' : '';
+        commands.push({ id: 'test', label: 'npm test', cmd: `npm test${suffix}`, framework: fw });
+      }
+      if (scripts['test:unit']) commands.push({ id: 'test-unit', label: 'npm run test:unit', cmd: 'npm run test:unit', framework: hasJest ? 'Jest' : fwLabel });
+
+      // Angular CLI
+      if (isAngular)
+        commands.push({ id: 'ng-test', label: 'ng test --no-watch', cmd: 'npx ng test --no-watch --browsers=ChromeHeadless', framework: 'Angular / Karma' });
+    }
+
+    return commands;
   });
 
   // ----------------------------------------------------------------
