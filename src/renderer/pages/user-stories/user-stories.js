@@ -6,13 +6,6 @@ import { ModelConfigsModal } from '../../components/model-configs/model-configs-
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
-const TC_STATUS = {
-  not_run: { label: 'Not Run', cls: 'rs-badge--not-run' },
-  pass:    { label: 'Pass',    cls: 'rs-badge--pass'    },
-  fail:    { label: 'Fail',    cls: 'rs-badge--fail'    },
-  blocked: { label: 'Blocked', cls: 'rs-badge--blocked' },
-};
-
 const IS_STATUS = {
   open:        { label: 'Open',        cls: 'rs-badge--open'        },
   in_progress: { label: 'In Progress', cls: 'rs-badge--in-progress' },
@@ -70,7 +63,6 @@ export class ProjectPage {
     this._initResizable();
     this._initFeatureToggle();
     this._initRelatedToggle();
-    this._initRelatedInnerResize();
     await this._mountComponents();
   }
 
@@ -238,21 +230,7 @@ export class ProjectPage {
               </div>
             </div>
 
-            <!-- Top section: Test Cases -->
-            <div class="project-related__section" id="relatedTestsSection">
-              <div class="project-related__section-hd">
-                <span class="project-related__section-label">Test Cases</span>
-                <span class="project-related__section-count" id="relatedTestsCount" hidden></span>
-              </div>
-              <div class="project-related__section-body" id="relatedTestsList">
-                <div class="project-related__empty">Select a story</div>
-              </div>
-            </div>
-
-            <!-- Inner resize handle -->
-            <div class="project-related__inner-resize" id="relatedInnerResize"></div>
-
-            <!-- Bottom section: Issues -->
+            <!-- Issues -->
             <div class="project-related__section" id="relatedIssuesSection">
               <div class="project-related__section-hd">
                 <span class="project-related__section-label">Issues</span>
@@ -343,68 +321,22 @@ export class ProjectPage {
   async _refreshRelated(storyId) {
     this._activeStoryId = storyId || null;
 
-    const testsEl       = document.getElementById('relatedTestsList');
     const issuesEl      = document.getElementById('relatedIssuesList');
-    const testsCountEl  = document.getElementById('relatedTestsCount');
     const issuesCountEl = document.getElementById('relatedIssuesCount');
-    if (!testsEl || !issuesEl) return;
+    if (!issuesEl) return;
 
     if (!storyId) {
-      testsEl.innerHTML  = '<div class="project-related__empty">Select a story</div>';
-      issuesEl.innerHTML = '<div class="project-related__empty">Select a story</div>';
-      testsCountEl.hidden  = true;
+      issuesEl.innerHTML   = '<div class="project-related__empty">Select a story</div>';
       issuesCountEl.hidden = true;
       return;
     }
 
-    const [testCases, issues] = await Promise.all([
-      window.db.testCases.list({ project_id: this.projectId, user_story_id: storyId }),
-      window.db.issues.list({ project_id: this.projectId, user_story_id: storyId }),
-    ]);
+    const issues = await window.db.issues.list({ project_id: this.projectId, user_story_id: storyId });
 
-    this._renderRelatedTestCases(testCases);
     this._renderRelatedIssues(issues);
 
-    testsCountEl.textContent = testCases.length;
-    testsCountEl.hidden = testCases.length === 0;
     issuesCountEl.textContent = issues.length;
-    issuesCountEl.hidden = issues.length === 0;
-  }
-
-  _renderRelatedTestCases(items) {
-    const el = document.getElementById('relatedTestsList');
-    if (!el) return;
-
-    if (items.length === 0) {
-      el.innerHTML = '<div class="project-related__empty">No test cases for this story</div>';
-      return;
-    }
-
-    el.innerHTML = items.map((tc, i) => {
-      const sm = TC_STATUS[tc.status] || TC_STATUS.not_run;
-      return `
-        <div class="related-item" data-id="${tc.id}"
-          data-story="${tc.user_story_id}" data-feature="${tc.feature_id || ''}">
-          <div class="related-item__header">
-            <span class="related-item__seq">#${i + 1}</span>
-            <span class="related-item__title">${escHtml(tc.title)}</span>
-          </div>
-          <div class="related-item__footer">
-            <span class="rs-badge ${sm.cls}">${sm.label}</span>
-          </div>
-        </div>`;
-    }).join('');
-
-    el.querySelectorAll('.related-item').forEach(item => {
-      item.addEventListener('click', () => {
-        this.router.navigate('test-cases', {
-          projectId: this.projectId,
-          featureId: parseInt(item.dataset.feature) || undefined,
-          storyId:   parseInt(item.dataset.story),
-          itemId:    parseInt(item.dataset.id),
-        });
-      });
-    });
+    issuesCountEl.hidden      = issues.length === 0;
   }
 
   _renderRelatedIssues(items) {
@@ -472,41 +404,6 @@ export class ProjectPage {
         toggleBtn.setAttribute('aria-label', 'Collapse panel');
         icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
       }
-    });
-  }
-
-  // ----------------------------------------------------------------
-  // Related panel — inner resize between test cases and issues
-  // ----------------------------------------------------------------
-  _initRelatedInnerResize() {
-    const handle      = document.getElementById('relatedInnerResize');
-    const topSection  = document.getElementById('relatedTestsSection');
-    if (!handle || !topSection) return;
-
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const startY  = e.clientY;
-      const startH  = topSection.getBoundingClientRect().height;
-      const parentH = topSection.parentElement.getBoundingClientRect().height;
-
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor     = 'row-resize';
-
-      const onMove = (ev) => {
-        const delta  = ev.clientY - startY;
-        const newPct = Math.max(20, Math.min(80, ((startH + delta) / parentH) * 100));
-        topSection.style.flex = `0 0 ${newPct}%`;
-      };
-
-      const onUp = () => {
-        document.body.style.userSelect = '';
-        document.body.style.cursor     = '';
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup',   onUp);
-      };
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup',   onUp);
     });
   }
 
