@@ -360,7 +360,12 @@ export class IssuesPage {
     const features = await window.db.features.list(this._projectId) ?? [];
     el.innerHTML   = this._formHtml(null, features);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
-    if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Add Issue</button>';
+    if (headerActions) headerActions.innerHTML = `
+      <select class="is-header-select" id="isFormStatus">
+        ${Object.entries(STATUS_META).map(([val, m]) =>
+          `<option value="${val}"${val === 'open' ? ' selected' : ''}>${m.label}</option>`).join('')}
+      </select>
+      <button class="is-form__btn" id="isFormSave">Add Issue</button>`;
     await this._bindFormEvents(el, null);
     el.querySelector('#isFormTitle')?.focus();
   }
@@ -370,7 +375,12 @@ export class IssuesPage {
     const features = await window.db.features.list(this._projectId) ?? [];
     el.innerHTML   = this._formHtml(issue, features);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
-    if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Save Changes</button>';
+    if (headerActions) headerActions.innerHTML = `
+      <select class="is-header-select" id="isFormStatus">
+        ${Object.entries(STATUS_META).map(([val, m]) =>
+          `<option value="${val}"${(issue?.status ?? 'open') === val ? ' selected' : ''}>${m.label}</option>`).join('')}
+      </select>
+      <button class="is-form__btn" id="isFormSave">Save Changes</button>`;
     await this._bindFormEvents(el, issue);
   }
 
@@ -391,11 +401,6 @@ export class IssuesPage {
 
     return `
       <div class="is-form">
-        <div class="is-form__header">
-          <h2 class="is-form__heading">${isEdit ? 'Edit Issue' : 'Add Issue'}</h2>
-          <select class="is-header-select" id="isFormStatus">${statusOptions}</select>
-        </div>
-
         <div class="is-form__body">
 
           <div class="is-form__field">
@@ -460,7 +465,7 @@ export class IssuesPage {
   async _bindFormEvents(el, issue) {
     const titleEl    = el.querySelector('#isFormTitle');
     const severityEl = el.querySelector('#isFormSeverity');
-    const statusEl   = el.querySelector('#isFormStatus');
+    const statusEl   = this.container.querySelector('#isFormStatus');
     const featureEl  = el.querySelector('#isFormFeature');
     const storyEl    = el.querySelector('#isFormStoryLink');
     const descEl     = el.querySelector('#isFormDesc');
