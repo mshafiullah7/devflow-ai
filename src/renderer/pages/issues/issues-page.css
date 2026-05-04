@@ -176,6 +176,57 @@
 .is-form__btn:disabled { opacity: 0.5; cursor: default; }
 
 /* ------------------------------------------------------------------ */
+/* Issues list — status accordion                                        */
+/* ------------------------------------------------------------------ */
+.is-acc { margin-bottom: 2px; }
+
+.is-acc__hd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 4px 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s;
+  -webkit-app-region: no-drag;
+}
+.is-acc__hd:hover { background: var(--surface-hover); }
+
+.is-acc__chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.is-acc__chevron--open { transform: rotate(90deg); }
+
+.is-acc__label {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.is-acc__count {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  border-radius: 10px;
+  padding: 1px 6px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.is-acc__body { padding-bottom: 2px; }
+.is-acc__body--collapsed { display: none; }
+
+/* ------------------------------------------------------------------ */
 /* Confirm dialog                                                        */
 /* ------------------------------------------------------------------ */
 .is-confirm-overlay {

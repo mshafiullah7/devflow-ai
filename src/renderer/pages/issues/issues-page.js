@@ -29,7 +29,8 @@ export class IssuesPage {
     this._activeId      = null;
     this._filterStatus  = '';
     this._aiModelConfig = null;
-    this._deepItemId    = params.itemId ?? null;
+    this._deepItemId         = params.itemId ?? null;
+    this._collapsedStatuses  = new Set(['resolved', 'closed', 'wont_fix']);
   }
 
   async mount() {
@@ -285,8 +286,64 @@ export class IssuesPage {
       return;
     }
 
-    listEl.innerHTML = this._issues.map(issue => this._issueItemHtml(issue)).join('');
+    // Group by status (preserving STATUS_META order)
+    const groups = {};
+    for (const key of Object.keys(STATUS_META)) groups[key] = [];
+    for (const issue of this._issues) {
+      const k = issue.status || 'open';
+      (groups[k] ?? (groups['open'] ??= [])).push(issue);
+    }
 
+    // Ensure active issue's group is never collapsed
+    if (this._activeId) {
+      const active = this._issues.find(i => i.id === this._activeId);
+      if (active) this._collapsedStatuses.delete(active.status || 'open');
+    }
+
+    const chevron = (open) => `
+      <svg class="is-acc__chevron${open ? ' is-acc__chevron--open' : ''}"
+           width="10" height="10" viewBox="0 0 12 12" fill="none">
+        <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+
+    listEl.innerHTML = Object.entries(STATUS_META).map(([status, meta]) => {
+      const items = groups[status];
+      if (!items?.length) return '';
+      const open = !this._collapsedStatuses.has(status);
+      return `
+        <div class="is-acc" data-status="${status}">
+          <button class="is-acc__hd" data-status="${status}">
+            ${chevron(open)}
+            <span class="is-acc__label">${meta.label}</span>
+            <span class="is-acc__count">${items.length}</span>
+          </button>
+          <div class="is-acc__body${open ? '' : ' is-acc__body--collapsed'}">
+            ${items.map(issue => this._issueItemHtml(issue)).join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    // Accordion toggles
+    listEl.querySelectorAll('.is-acc__hd').forEach(hd => {
+      hd.addEventListener('click', () => {
+        const status  = hd.dataset.status;
+        const body    = hd.nextElementSibling;
+        const ch      = hd.querySelector('.is-acc__chevron');
+        const open    = !this._collapsedStatuses.has(status);
+        if (open) {
+          this._collapsedStatuses.add(status);
+          body.classList.add('is-acc__body--collapsed');
+          ch.classList.remove('is-acc__chevron--open');
+        } else {
+          this._collapsedStatuses.delete(status);
+          body.classList.remove('is-acc__body--collapsed');
+          ch.classList.add('is-acc__chevron--open');
+        }
+      });
+    });
+
+    // Issue item events
     listEl.querySelectorAll('.eus-src-item').forEach(item => {
       const id = parseInt(item.dataset.id);
       item.addEventListener('click', () => this._selectIssue(id));
