@@ -221,6 +221,22 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- TEST RUN HISTORY
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS test_run_history (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      framework  TEXT,
+      command    TEXT    NOT NULL,
+      passed     INTEGER,
+      failed     INTEGER,
+      skipped    INTEGER,
+      duration   TEXT,
+      exit_code  INTEGER NOT NULL DEFAULT 0,
+      ran_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (

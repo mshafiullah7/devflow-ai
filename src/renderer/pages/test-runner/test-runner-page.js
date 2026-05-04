@@ -3,12 +3,18 @@ import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { GitController } from '../../components/git/git-controller.js';
 import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 
-// Strip ANSI escape codes from terminal output
 function stripAnsi(str) {
   return str.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '').replace(/\x1B\][^\x07]*\x07/g, '');
 }
 
-// Parse pass/fail/skip counts from accumulated output text
+function relativeTime(isoString) {
+  const diff = Math.floor((Date.now() - new Date(isoString + 'Z').getTime()) / 1000);
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 function parseResults(text) {
   const results = { passed: null, failed: null, skipped: null, duration: null };
 
@@ -19,8 +25,8 @@ function parseResults(text) {
   const cyDur  = text.match(/(\d+)\s+passing\s+\(([^)]+)\)/i);
   if (cyPass) {
     results.passed  = parseInt(cyPass[1]);
-    results.failed  = cyFail  ? parseInt(cyFail[1])  : 0;
-    results.skipped = cyPend  ? parseInt(cyPend[1])  : 0;
+    results.failed  = cyFail ? parseInt(cyFail[1]) : 0;
+    results.skipped = cyPend ? parseInt(cyPend[1]) : 0;
     if (cyDur) results.duration = cyDur[2];
     return results;
   }
@@ -44,18 +50,10 @@ function parseResults(text) {
   // Flutter: "+42: All tests passed!" or "+40 -2: X tests failed"
   const flutterAll  = text.match(/\+(\d+):\s*All tests passed/i);
   const flutterFail = text.match(/\+(\d+)\s+-(\d+):/);
-  if (flutterAll) {
-    results.passed = parseInt(flutterAll[1]);
-    results.failed = 0;
-    return results;
-  }
-  if (flutterFail) {
-    results.passed = parseInt(flutterFail[1]);
-    results.failed = parseInt(flutterFail[2]);
-    return results;
-  }
+  if (flutterAll) { results.passed = parseInt(flutterAll[1]); results.failed = 0; return results; }
+  if (flutterFail) { results.passed = parseInt(flutterFail[1]); results.failed = parseInt(flutterFail[2]); return results; }
 
-  // Playwright: "X passed (Xs)" / "X failed"
+  // Playwright: "X passed (Xs)"
   const pwPass = text.match(/(\d+)\s+passed\s+\(([^)]+)\)/i);
   const pwFail = text.match(/(\d+)\s+failed/i);
   if (pwPass) {
@@ -65,7 +63,7 @@ function parseResults(text) {
     return results;
   }
 
-  // Angular/Karma: "Executed 42 of 42 SUCCESS" / "FAILED (42/42)"
+  // Angular/Karma: "Executed 42 of 42 SUCCESS"
   const karmaPass = text.match(/Executed\s+(\d+)\s+of\s+\d+\s+SUCCESS/i);
   const karmaFail = text.match(/(\d+)\s+FAILED/i);
   if (karmaPass) {
@@ -79,13 +77,15 @@ function parseResults(text) {
 
 export class TestRunnerPage {
   constructor(container, params, router) {
-    this.container   = container;
-    this.router      = router;
-    this._projectId  = params.projectId;
-    this._project    = null;
-    this._commands   = [];
-    this._running    = false;
-    this._outputText = '';
+    this.container      = container;
+    this.router         = router;
+    this._projectId     = params.projectId;
+    this._project       = null;
+    this._commands      = [];
+    this._running       = false;
+    this._outputText    = '';
+    this._activeEntry   = null; // command entry currently running
+    this._history       = [];
   }
 
   async mount() {
@@ -108,6 +108,10 @@ export class TestRunnerPage {
     this._git.mount();
 
     this._bindHeaderEvents();
+
+    // Load history first so the panel is populated immediately
+    this._history = await window.db.testRunHistory.list(this._projectId);
+    this._renderHistory();
 
     if (this._project?.project_path) {
       this._setHeaderFolderPath(this._project.project_path);
@@ -186,7 +190,7 @@ export class TestRunnerPage {
         <div class="tr-body">
 
           <!-- Command bar -->
-          <div class="tr-command-bar" id="trCommandBar">
+          <div class="tr-command-bar">
             <div class="tr-framework-badge" id="trFrameworkBadge" hidden></div>
             <select class="tr-command-select" id="trCommandSelect" hidden>
               <option value="">Select a command…</option>
@@ -232,17 +236,36 @@ export class TestRunnerPage {
             <span class="tr-result tr-result--exit" id="trExitCode" hidden></span>
           </div>
 
-          <!-- Output area -->
-          <div class="tr-output-wrap" id="trOutputWrap">
-            <div class="tr-output-empty" id="trOutputEmpty">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3"/>
-              </svg>
-              <p id="trOutputEmptyMsg">Select a project folder to detect test commands</p>
-            </div>
-            <pre class="tr-output" id="trOutput" hidden></pre>
-          </div>
+          <!-- Console + History split -->
+          <div class="tr-panels">
 
+            <!-- 70% — live console output -->
+            <div class="tr-output-wrap" id="trOutputWrap">
+              <div class="tr-output-empty" id="trOutputEmpty">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <p id="trOutputEmptyMsg">Select a project folder to detect test commands</p>
+              </div>
+              <pre class="tr-output" id="trOutput" hidden></pre>
+            </div>
+
+            <!-- Divider -->
+            <div class="tr-panels__divider"></div>
+
+            <!-- 30% — run history -->
+            <div class="tr-history-panel">
+              <div class="tr-history-header">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M8 5v3.5l2 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Last Runs
+              </div>
+              <div class="tr-history-list" id="trHistoryList"></div>
+            </div>
+
+          </div>
         </div>
       </div>
     `;
@@ -279,9 +302,6 @@ export class TestRunnerPage {
 
     this.container.querySelector('#trStopBtn')
       .addEventListener('click', () => this._stopTests());
-
-    this.container.querySelector('#trCommandSelect')
-      .addEventListener('change', () => this._onCommandChanged());
   }
 
   _setHeaderFolderPath(folderPath) {
@@ -298,21 +318,20 @@ export class TestRunnerPage {
   async _detectFrameworks(projectPath) {
     this._commands = await window.db.testRunner.detect(projectPath);
 
-    const badge  = this.container.querySelector('#trFrameworkBadge');
-    const select = this.container.querySelector('#trCommandSelect');
-    const runBtn = this.container.querySelector('#trRunBtn');
-    const empty  = this.container.querySelector('#trOutputEmpty');
-    const msg    = this.container.querySelector('#trOutputEmptyMsg');
+    const badge   = this.container.querySelector('#trFrameworkBadge');
+    const select  = this.container.querySelector('#trCommandSelect');
+    const runBtn  = this.container.querySelector('#trRunBtn');
+    const msg     = this.container.querySelector('#trOutputEmptyMsg');
+    const empty   = this.container.querySelector('#trOutputEmpty');
 
     if (this._commands.length === 0) {
-      badge.hidden  = true;
-      select.hidden = true;
+      badge.hidden    = true;
+      select.hidden   = true;
       runBtn.disabled = true;
-      if (msg) msg.textContent = 'No test framework detected. Ensure the project folder contains package.json (Angular/Cypress/Jest/Playwright) or pubspec.yaml (Flutter).';
+      if (msg) msg.textContent = 'No test framework detected. Ensure the folder contains package.json (Angular/Cypress/Jest/Playwright) or pubspec.yaml (Flutter).';
       return;
     }
 
-    // Collect unique framework labels
     const frameworks = [...new Set(this._commands.map(c => c.framework))];
     badge.textContent = frameworks.join(' · ');
     badge.hidden  = false;
@@ -332,10 +351,6 @@ export class TestRunnerPage {
     if (msg) msg.textContent = 'Select a project folder to detect test commands.';
   }
 
-  _onCommandChanged() {
-    // Nothing extra needed — selected value is read at run time
-  }
-
   // ----------------------------------------------------------------
   // Run / Stop
   // ----------------------------------------------------------------
@@ -345,8 +360,9 @@ export class TestRunnerPage {
     const entry  = this._commands.find(c => c.id === cmdId) || this._commands[0];
     if (!entry) return;
 
-    this._running    = true;
-    this._outputText = '';
+    this._running      = true;
+    this._outputText   = '';
+    this._activeEntry  = entry;
 
     const output  = this.container.querySelector('#trOutput');
     const empty   = this.container.querySelector('#trOutputEmpty');
@@ -356,7 +372,7 @@ export class TestRunnerPage {
 
     output.textContent = `> ${entry.cmd}\n\n`;
     output.hidden = false;
-    if (empty) empty.style.display = 'none';
+    if (empty)   empty.style.display = 'none';
     if (results) results.hidden = true;
 
     runBtn.hidden  = true;
@@ -370,7 +386,6 @@ export class TestRunnerPage {
 
   _stopTests() {
     window.db.testRunner.kill();
-    this._running = false;
     this._setRunIdle();
     this._appendOutput('\n[Stopped by user]\n');
   }
@@ -378,7 +393,7 @@ export class TestRunnerPage {
   _setRunIdle() {
     const runBtn  = this.container.querySelector('#trRunBtn');
     const stopBtn = this.container.querySelector('#trStopBtn');
-    if (runBtn)  { runBtn.hidden  = false; runBtn.disabled = false; }
+    if (runBtn)  { runBtn.hidden = false; runBtn.disabled = false; }
     if (stopBtn)   stopBtn.hidden = true;
     this._running = false;
   }
@@ -387,7 +402,7 @@ export class TestRunnerPage {
   // Output streaming
   // ----------------------------------------------------------------
   _appendOutput(rawText) {
-    const clean  = stripAnsi(rawText);
+    const clean = stripAnsi(rawText);
     this._outputText += clean;
     const output = this.container.querySelector('#trOutput');
     if (!output) return;
@@ -395,19 +410,19 @@ export class TestRunnerPage {
     output.scrollTop = output.scrollHeight;
   }
 
-  _onRunDone(exitCode) {
+  async _onRunDone(exitCode) {
     this._setRunIdle();
-    this._showResults(exitCode);
+    const results = parseResults(this._outputText);
+    this._showResults(exitCode, results);
+    await this._saveRun(exitCode, results);
   }
 
   // ----------------------------------------------------------------
-  // Results summary
+  // Results summary bar
   // ----------------------------------------------------------------
-  _showResults(exitCode) {
+  _showResults(exitCode, results) {
     const bar = this.container.querySelector('#trResultsBar');
     if (!bar) return;
-
-    const results = parseResults(this._outputText);
 
     const setResult = (id, value, show) => {
       const el = this.container.querySelector(`#${id}`);
@@ -429,13 +444,80 @@ export class TestRunnerPage {
       durEl.textContent = results.duration ? `Duration: ${results.duration}` : '';
     }
 
-    const showExitCode = results.passed === null && results.failed === null;
+    const showExit = results.passed === null && results.failed === null;
     if (exitEl) {
-      exitEl.hidden      = !showExitCode;
-      exitEl.textContent = showExitCode ? `Exit code: ${exitCode}` : '';
+      exitEl.hidden      = !showExit;
+      exitEl.textContent = showExit ? `Exit code: ${exitCode}` : '';
       exitEl.className   = `tr-result ${exitCode === 0 ? 'tr-result--pass' : 'tr-result--fail'}`;
     }
 
     bar.hidden = false;
+  }
+
+  // ----------------------------------------------------------------
+  // History — save & render
+  // ----------------------------------------------------------------
+  async _saveRun(exitCode, results) {
+    if (!this._activeEntry) return;
+    await window.db.testRunHistory.create({
+      project_id: this._projectId,
+      framework:  this._activeEntry.framework ?? null,
+      command:    this._activeEntry.cmd,
+      passed:     results.passed  ?? null,
+      failed:     results.failed  ?? null,
+      skipped:    results.skipped ?? null,
+      duration:   results.duration ?? null,
+      exit_code:  exitCode,
+    });
+    this._history = await window.db.testRunHistory.list(this._projectId);
+    this._renderHistory();
+  }
+
+  _renderHistory() {
+    const list = this.container.querySelector('#trHistoryList');
+    if (!list) return;
+
+    if (this._history.length === 0) {
+      list.innerHTML = `<div class="tr-history-empty">No runs yet</div>`;
+      return;
+    }
+
+    list.innerHTML = this._history.map(r => this._historyCardHtml(r)).join('');
+  }
+
+  _historyCardHtml(r) {
+    const passed  = r.passed  ?? null;
+    const failed  = r.failed  ?? null;
+    const success = r.exit_code === 0 && (failed === null || failed === 0);
+
+    const statusIcon = success
+      ? `<svg class="tr-hcard__icon tr-hcard__icon--pass" width="14" height="14" viewBox="0 0 16 16" fill="none">
+           <path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+         </svg>`
+      : `<svg class="tr-hcard__icon tr-hcard__icon--fail" width="14" height="14" viewBox="0 0 16 16" fill="none">
+           <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+         </svg>`;
+
+    const statsHtml = (() => {
+      const parts = [];
+      if (passed  !== null) parts.push(`<span class="tr-hcard__stat tr-hcard__stat--pass">${passed} passed</span>`);
+      if (failed  !== null && failed > 0) parts.push(`<span class="tr-hcard__stat tr-hcard__stat--fail">${failed} failed</span>`);
+      if (r.skipped > 0)   parts.push(`<span class="tr-hcard__stat tr-hcard__stat--skip">${r.skipped} skipped</span>`);
+      if (!parts.length)   parts.push(`<span class="tr-hcard__stat">exit ${r.exit_code}</span>`);
+      if (r.duration)      parts.push(`<span class="tr-hcard__stat tr-hcard__stat--dur">${escHtml(r.duration)}</span>`);
+      return parts.join('');
+    })();
+
+    return `
+      <div class="tr-hcard${success ? '' : ' tr-hcard--fail'}">
+        <div class="tr-hcard__top">
+          ${statusIcon}
+          <span class="tr-hcard__cmd" title="${escHtml(r.command)}">${escHtml(r.command)}</span>
+        </div>
+        ${r.framework ? `<div class="tr-hcard__fw">${escHtml(r.framework)}</div>` : ''}
+        <div class="tr-hcard__stats">${statsHtml}</div>
+        <div class="tr-hcard__time">${relativeTime(r.ran_at)}</div>
+      </div>
+    `;
   }
 }

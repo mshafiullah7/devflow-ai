@@ -101,6 +101,10 @@ contextBridge.exposeInMainWorld('db', {
       ipcRenderer.removeAllListeners('testRunner:done');
     },
   },
+  testRunHistory: {
+    list:   (project_id) => invoke('testRunHistory:list', project_id),
+    create: (data)       => invoke('testRunHistory:create', data),
+  },
   issues: {
     list:   (filters)    => invoke('db:issues:list', filters),
     get:    (id)         => invoke('db:issues:get', id),

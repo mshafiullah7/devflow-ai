@@ -277,6 +277,42 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // test_run_history
+  // ----------------------------------------------------------------
+  ipcMain.handle('testRunHistory:list', (_e, project_id) => {
+    return db.prepare(
+      `SELECT * FROM test_run_history WHERE project_id = ? ORDER BY ran_at DESC LIMIT 20`
+    ).all(project_id);
+  });
+
+  ipcMain.handle('testRunHistory:create', (_e, { project_id, framework, command, passed, failed, skipped, duration, exit_code }) => {
+    db.prepare(
+      `INSERT INTO test_run_history (project_id, framework, command, passed, failed, skipped, duration, exit_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      project_id,
+      framework  ?? null,
+      command,
+      passed     ?? null,
+      failed     ?? null,
+      skipped    ?? null,
+      duration   ?? null,
+      exit_code  ?? 0
+    );
+    // Keep only the latest 20 runs per project
+    db.prepare(
+      `DELETE FROM test_run_history
+        WHERE project_id = ?
+          AND id NOT IN (
+            SELECT id FROM test_run_history
+             WHERE project_id = ?
+             ORDER BY ran_at DESC
+             LIMIT 20
+          )`
+    ).run(project_id, project_id);
+  });
+
+  // ----------------------------------------------------------------
   // testRunner — framework detection
   // ----------------------------------------------------------------
   ipcMain.handle('testRunner:detect', (_e, projectPath) => {

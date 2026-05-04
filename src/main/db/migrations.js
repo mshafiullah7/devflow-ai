@@ -181,6 +181,25 @@ function runMigrations(db) {
     `);
   }
 
+  // Add test_run_history table for existing databases
+  const trhCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='test_run_history'").get();
+  if (!trhCheck) {
+    db.exec(`
+      CREATE TABLE test_run_history (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        framework  TEXT,
+        command    TEXT    NOT NULL,
+        passed     INTEGER,
+        failed     INTEGER,
+        skipped    INTEGER,
+        duration   TEXT,
+        exit_code  INTEGER NOT NULL DEFAULT 0,
+        ran_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
   // Add document_attachments table for existing databases
   const allTables4 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
   if (!allTables4.includes('document_attachments')) {
