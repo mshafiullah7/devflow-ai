@@ -6,6 +6,13 @@ import { ModelConfigsModal } from '../../components/model-configs/model-configs-
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
+const TC_STATUS = {
+  not_run: { label: 'Not Run', cls: 'rs-badge--not-run' },
+  pass:    { label: 'Pass',    cls: 'rs-badge--pass'    },
+  fail:    { label: 'Fail',    cls: 'rs-badge--fail'    },
+  blocked: { label: 'Blocked', cls: 'rs-badge--blocked' },
+};
+
 const IS_STATUS = {
   open:        { label: 'Open',        cls: 'rs-badge--open'        },
   in_progress: { label: 'In Progress', cls: 'rs-badge--in-progress' },
@@ -26,10 +33,9 @@ export class ProjectPage {
     this.container = container;
     this.router    = router;
     this.projectId = params.projectId;
-    this._project        = null;
-    this._aiModelConfig  = null;
-    this._activeStoryId  = null;
-    this._consolePrompts = [];
+    this._project       = null;
+    this._aiModelConfig = null;
+    this._activeStoryId = null;
   }
 
   // ----------------------------------------------------------------
@@ -66,13 +72,11 @@ export class ProjectPage {
     this._initRelatedToggle();
     this._initRelatedInnerResize();
     await this._mountComponents();
-    this._initConsole();
   }
 
   unmount() {
     removeCss('pages/user-stories/user-stories.css');
     this._git?.stopPoll();
-    window.db.terminal.removeListeners();
   }
 
   // ----------------------------------------------------------------
@@ -234,37 +238,14 @@ export class ProjectPage {
               </div>
             </div>
 
-            <!-- Top section: Console (inline AI prompt runner) -->
+            <!-- Top section: Test Cases -->
             <div class="project-related__section" id="relatedTestsSection">
               <div class="project-related__section-hd">
-                <span class="project-related__section-label">Console</span>
-                <div class="rtc-hd-btns">
-                  <button class="rtc-clear-btn" id="rtcClearBtn" title="Clear output" aria-label="Clear output">
-                    <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
-                      <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-                    </svg>
-                  </button>
-                  <button class="rtc-stop-btn" id="rtcStopBtn" title="Stop" aria-label="Stop" hidden>
-                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-                      <rect x="1.5" y="1.5" width="9" height="9" rx="1" fill="currentColor"/>
-                    </svg>
-                  </button>
-                  <button class="rtc-run-btn" id="rtcRunBtn" title="Run selected prompt" aria-label="Run" disabled>
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                      <path d="M2.5 1.5l8 4.5-8 4.5V1.5z" fill="currentColor"/>
-                    </svg>
-                  </button>
-                </div>
+                <span class="project-related__section-label">Test Cases</span>
+                <span class="project-related__section-count" id="relatedTestsCount" hidden></span>
               </div>
-              <div class="project-related__section-body rtc-body" id="relatedTestsList">
-                <div class="rtc-control-bar">
-                  <select class="rtc-prompt-select" id="rtcPromptSelect" disabled>
-                    <option value="">— select a story —</option>
-                  </select>
-                </div>
-                <div class="rtc-output-wrap">
-                  <pre class="rtc-output" id="rtcOutput"><span class="rtc-placeholder">Select a story and prompt, then click ▶</span></pre>
-                </div>
+              <div class="project-related__section-body" id="relatedTestsList">
+                <div class="project-related__empty">Select a story</div>
               </div>
             </div>
 
@@ -362,115 +343,67 @@ export class ProjectPage {
   async _refreshRelated(storyId) {
     this._activeStoryId = storyId || null;
 
+    const testsEl       = document.getElementById('relatedTestsList');
     const issuesEl      = document.getElementById('relatedIssuesList');
+    const testsCountEl  = document.getElementById('relatedTestsCount');
     const issuesCountEl = document.getElementById('relatedIssuesCount');
-    if (!issuesEl) return;
+    if (!testsEl || !issuesEl) return;
 
     if (!storyId) {
+      testsEl.innerHTML  = '<div class="project-related__empty">Select a story</div>';
       issuesEl.innerHTML = '<div class="project-related__empty">Select a story</div>';
+      testsCountEl.hidden  = true;
       issuesCountEl.hidden = true;
-      this._populatePromptSelect([]);
       return;
     }
 
-    const [prompts, issues] = await Promise.all([
-      window.db.prompts.list(storyId),
+    const [testCases, issues] = await Promise.all([
+      window.db.testCases.list({ project_id: this.projectId, user_story_id: storyId }),
       window.db.issues.list({ project_id: this.projectId, user_story_id: storyId }),
     ]);
 
-    this._populatePromptSelect(prompts);
+    this._renderRelatedTestCases(testCases);
     this._renderRelatedIssues(issues);
 
+    testsCountEl.textContent = testCases.length;
+    testsCountEl.hidden = testCases.length === 0;
     issuesCountEl.textContent = issues.length;
     issuesCountEl.hidden = issues.length === 0;
   }
 
-  // ----------------------------------------------------------------
-  // Related panel — console (prompt runner)
-  // ----------------------------------------------------------------
-  _populatePromptSelect(prompts) {
-    const select = document.getElementById('rtcPromptSelect');
-    const runBtn = document.getElementById('rtcRunBtn');
-    if (!select) return;
+  _renderRelatedTestCases(items) {
+    const el = document.getElementById('relatedTestsList');
+    if (!el) return;
 
-    this._consolePrompts = prompts || [];
-
-    if (!prompts || prompts.length === 0) {
-      select.innerHTML = '<option value="">— no prompts for this story —</option>';
-      select.disabled = true;
-      if (runBtn) runBtn.disabled = true;
+    if (items.length === 0) {
+      el.innerHTML = '<div class="project-related__empty">No test cases for this story</div>';
       return;
     }
 
-    select.innerHTML = [
-      '<option value="">— select prompt —</option>',
-      ...prompts.map((p, i) => {
-        const label = escHtml((p.tag || '').trim() || `Prompt ${i + 1}`);
-        return `<option value="${i}">${label}</option>`;
-      }),
-    ].join('');
-    select.disabled = false;
-    if (runBtn) runBtn.disabled = true;
-  }
+    el.innerHTML = items.map((tc, i) => {
+      const sm = TC_STATUS[tc.status] || TC_STATUS.not_run;
+      return `
+        <div class="related-item" data-id="${tc.id}"
+          data-story="${tc.user_story_id}" data-feature="${tc.feature_id || ''}">
+          <div class="related-item__header">
+            <span class="related-item__seq">#${i + 1}</span>
+            <span class="related-item__title">${escHtml(tc.title)}</span>
+          </div>
+          <div class="related-item__footer">
+            <span class="rs-badge ${sm.cls}">${sm.label}</span>
+          </div>
+        </div>`;
+    }).join('');
 
-  _initConsole() {
-    const runBtn   = document.getElementById('rtcRunBtn');
-    const stopBtn  = document.getElementById('rtcStopBtn');
-    const clearBtn = document.getElementById('rtcClearBtn');
-    const select   = document.getElementById('rtcPromptSelect');
-    const output   = document.getElementById('rtcOutput');
-    if (!runBtn || !output) return;
-
-    const setRunning = (v) => {
-      runBtn.hidden  = v;
-      stopBtn.hidden = !v;
-    };
-
-    select?.addEventListener('change', () => {
-      if (runBtn) runBtn.disabled = select.value === '';
-    });
-
-    runBtn.addEventListener('click', async () => {
-      const idx = parseInt(select?.value);
-      if (isNaN(idx) || idx < 0) return;
-      const prompt = this._consolePrompts?.[idx]?.prompt?.trim();
-      if (!prompt) return;
-
-      const cwd = this._project?.project_path;
-      if (!cwd) {
-        output.textContent = 'Error: No project folder selected. Click the folder button in the header.';
-        return;
-      }
-
-      const cfg  = this._aiModelConfig;
-      const exe  = (cfg?.type === 'cli' && cfg.executable) ? cfg.executable : 'claude';
-      const flags = (cfg?.type === 'cli' && cfg.flags) ? cfg.flags : '--dangerously-skip-permissions --print';
-      const cmd  = `$p = @'\n${prompt}\n'@\n${exe} ${flags} $p`;
-
-      output.textContent = '';
-      setRunning(true);
-
-      window.db.terminal.removeListeners();
-      window.db.terminal.onData(({ text }) => {
-        output.textContent += text;
-        output.scrollTop = output.scrollHeight;
+    el.querySelectorAll('.related-item').forEach(item => {
+      item.addEventListener('click', () => {
+        this.router.navigate('test-cases', {
+          projectId: this.projectId,
+          featureId: parseInt(item.dataset.feature) || undefined,
+          storyId:   parseInt(item.dataset.story),
+          itemId:    parseInt(item.dataset.id),
+        });
       });
-      window.db.terminal.onDone(() => {
-        setRunning(false);
-        window.db.terminal.removeListeners();
-      });
-
-      await window.db.terminal.execStart({ command: cmd, cwd });
-    });
-
-    stopBtn.addEventListener('click', () => {
-      window.db.terminal.killActive();
-      setRunning(false);
-      window.db.terminal.removeListeners();
-    });
-
-    clearBtn.addEventListener('click', () => {
-      output.textContent = '';
     });
   }
 
