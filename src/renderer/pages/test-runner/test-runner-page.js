@@ -234,6 +234,13 @@ export class TestRunnerPage {
             </span>
             <span class="tr-result tr-result--duration" id="trDuration" hidden></span>
             <span class="tr-result tr-result--exit" id="trExitCode" hidden></span>
+            <button class="tr-log-issue-btn" id="trLogIssueBtn" hidden>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M8 5v3M8 11h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+              Log as Issue
+            </button>
           </div>
 
           <!-- Console + History split -->
@@ -456,7 +463,215 @@ export class TestRunnerPage {
       exitEl.className   = `tr-result ${exitCode === 0 ? 'tr-result--pass' : 'tr-result--fail'}`;
     }
 
+    const hasFailed = (results.failed !== null && results.failed > 0) || exitCode !== 0;
+    const logBtn = this.container.querySelector('#trLogIssueBtn');
+    if (logBtn) {
+      logBtn.hidden = !hasFailed;
+      logBtn.onclick = () => this._showLogIssueModal(results, exitCode);
+    }
+
     bar.hidden = false;
+  }
+
+  // ----------------------------------------------------------------
+  // Log as Issue modal
+  // ----------------------------------------------------------------
+  _buildActualText(results, exitCode) {
+    const parts = [];
+    if (results.failed  !== null && results.failed  > 0) parts.push(`${results.failed} failed`);
+    if (results.passed  !== null && results.passed  > 0) parts.push(`${results.passed} passed`);
+    if (results.skipped !== null && results.skipped > 0) parts.push(`${results.skipped} skipped`);
+    if (results.duration) parts.push(`duration: ${results.duration}`);
+    const summary = parts.length ? parts.join(', ') : `exit code ${exitCode}`;
+    return `Test run finished with failures (${summary}).`;
+  }
+
+  _extractErrorSnippet(output) {
+    if (!output) return '';
+    const lines = output.split('\n');
+    const errorLines = [];
+    let capturing = false;
+    for (const line of lines) {
+      if (/FAIL |● |Error:|FAILED|AssertionError|at Object\.|expected|received/i.test(line)) {
+        capturing = true;
+      }
+      if (capturing) errorLines.push(line);
+      if (errorLines.length >= 30) break;
+    }
+    const snippet = (errorLines.length ? errorLines : lines.slice(0, 30)).join('\n').trim();
+    return snippet.length > 1200 ? snippet.slice(0, 1200) + '\n…' : snippet;
+  }
+
+  async _showLogIssueModal(results, exitCode) {
+    const framework = this._activeEntry?.framework ?? '';
+    const command   = this._activeEntry?.cmd        ?? '';
+
+    const title    = framework ? `${framework} test failure` : 'Test failure';
+    const steps    = command   ? `$ ${command}` : '';
+    const expected = 'All tests should pass.';
+    const actual   = this._buildActualText(results, exitCode);
+    const snippet  = this._extractErrorSnippet(this._outputText);
+
+    const features = await window.db.features.list(this._projectId);
+
+    const featureOptions = features.map(f =>
+      `<option value="${f.id}">${escHtml(f.name)}</option>`
+    ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'tr-modal-overlay';
+    overlay.innerHTML = `
+      <div class="tr-modal">
+        <div class="tr-modal__header">
+          <h2 class="tr-modal__title">Log as Issue</h2>
+          <button class="tr-modal__close" id="trModalClose" aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="tr-modal__body">
+
+          <div class="tr-modal__row tr-modal__row--2col">
+            <div class="tr-modal__field">
+              <label class="tr-modal__label" for="trMFeature">Feature <span class="tr-modal__hint">(optional)</span></label>
+              <select class="tr-modal__select" id="trMFeature">
+                <option value="">— none —</option>
+                ${featureOptions}
+              </select>
+            </div>
+            <div class="tr-modal__field">
+              <label class="tr-modal__label" for="trMStory">User Story <span class="tr-modal__hint">(optional)</span></label>
+              <select class="tr-modal__select" id="trMStory" disabled>
+                <option value="">— select feature first —</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tr-modal__row tr-modal__row--2col">
+            <div class="tr-modal__field">
+              <label class="tr-modal__label" for="trMSeverity">Severity</label>
+              <select class="tr-modal__select" id="trMSeverity">
+                <option value="critical">Critical</option>
+                <option value="high" selected>High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div class="tr-modal__field">
+              <label class="tr-modal__label" for="trMStatus">Status</label>
+              <select class="tr-modal__select" id="trMStatus">
+                <option value="open" selected>Open</option>
+                <option value="in_progress">In Progress</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tr-modal__field">
+            <label class="tr-modal__label" for="trMTitle">Title <span class="tr-modal__required">*</span></label>
+            <input class="tr-modal__input" id="trMTitle" type="text" maxlength="200"
+              value="${escHtml(title)}" autocomplete="off"/>
+          </div>
+
+          <div class="tr-modal__field">
+            <label class="tr-modal__label" for="trMSteps">Steps to Reproduce</label>
+            <textarea class="tr-modal__textarea tr-modal__textarea--sm" id="trMSteps">${escHtml(steps)}</textarea>
+          </div>
+
+          <div class="tr-modal__row tr-modal__row--2col">
+            <div class="tr-modal__field">
+              <label class="tr-modal__label" for="trMExpected">Expected Behavior</label>
+              <textarea class="tr-modal__textarea tr-modal__textarea--sm" id="trMExpected">${escHtml(expected)}</textarea>
+            </div>
+            <div class="tr-modal__field">
+              <label class="tr-modal__label" for="trMActual">Actual Behavior</label>
+              <textarea class="tr-modal__textarea tr-modal__textarea--sm" id="trMActual">${escHtml(actual)}</textarea>
+            </div>
+          </div>
+
+          <div class="tr-modal__field">
+            <label class="tr-modal__label" for="trMDesc">
+              Error Snippet
+              <span class="tr-modal__hint">(from console output)</span>
+            </label>
+            <textarea class="tr-modal__textarea tr-modal__textarea--code" id="trMDesc">${escHtml(snippet)}</textarea>
+          </div>
+
+        </div>
+
+        <div class="tr-modal__footer">
+          <button class="tr-modal__btn tr-modal__btn--cancel" id="trModalCancel">Cancel</button>
+          <button class="tr-modal__btn tr-modal__btn--save"   id="trModalSave">Log Issue</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const featureEl  = overlay.querySelector('#trMFeature');
+    const storyEl    = overlay.querySelector('#trMStory');
+    const titleEl    = overlay.querySelector('#trMTitle');
+    const severityEl = overlay.querySelector('#trMSeverity');
+    const statusEl   = overlay.querySelector('#trMStatus');
+    const stepsEl    = overlay.querySelector('#trMSteps');
+    const expectedEl = overlay.querySelector('#trMExpected');
+    const actualEl   = overlay.querySelector('#trMActual');
+    const descEl     = overlay.querySelector('#trMDesc');
+    const saveBtn    = overlay.querySelector('#trModalSave');
+
+    const close = () => overlay.remove();
+
+    overlay.querySelector('#trModalClose').addEventListener('click', close);
+    overlay.querySelector('#trModalCancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    featureEl.addEventListener('change', async () => {
+      const fid = parseInt(featureEl.value);
+      if (!fid) {
+        storyEl.innerHTML = '<option value="">— select feature first —</option>';
+        storyEl.disabled = true;
+        return;
+      }
+      const stories = await window.db.userStories.list({ feature_id: fid });
+      storyEl.innerHTML = '<option value="">— none —</option>' +
+        stories.map(s => `<option value="${s.id}">${escHtml(s.title)}</option>`).join('');
+      storyEl.disabled = stories.length === 0;
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      const t = titleEl.value.trim();
+      if (!t) { titleEl.classList.add('tr-modal__input--error'); titleEl.focus(); return; }
+      titleEl.classList.remove('tr-modal__input--error');
+
+      saveBtn.disabled    = true;
+      saveBtn.textContent = 'Logging…';
+
+      const featureId = parseInt(featureEl.value) || null;
+      const storyId   = parseInt(storyEl.value)   || null;
+
+      try {
+        await window.db.issues.create({
+          project_id:         this._projectId,
+          feature_id:         featureId,
+          user_story_id:      storyId,
+          title:              t,
+          description:        descEl.value.trim()     || null,
+          steps_to_reproduce: stepsEl.value.trim()    || null,
+          expected_behavior:  expectedEl.value.trim() || null,
+          actual_behavior:    actualEl.value.trim()   || null,
+          severity:           severityEl.value,
+          status:             statusEl.value,
+        });
+        close();
+      } catch {
+        saveBtn.disabled    = false;
+        saveBtn.textContent = 'Log Issue';
+      }
+    });
+
+    titleEl.focus();
+    titleEl.select();
   }
 
   // ----------------------------------------------------------------
