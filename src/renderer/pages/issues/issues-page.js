@@ -100,14 +100,6 @@ export class IssuesPage {
             <span class="project-page__folder-text" id="headerFolderText"></span>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
-            <select class="is-header-select" id="isStatusFilter" title="Filter by status">
-              <option value="">All Statuses</option>
-              <option value="open">Open</option>
-              <option value="in_progress">In Progress</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
-              <option value="wont_fix">Won't Fix</option>
-            </select>
             <div class="project-page__model-group">
               <select class="project-page__model-select" id="isModelSelect" title="AI Model">
                 <option value="">Loading…</option>
@@ -154,6 +146,14 @@ export class IssuesPage {
             <div class="project-related__section-hd">
               <span class="project-related__section-label">Issues</span>
               <span class="project-related__section-count" id="isIssueCount">0</span>
+              <select class="is-header-select is-section-filter" id="isStatusFilter" title="Filter by status">
+                <option value="">All</option>
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+                <option value="wont_fix">Won't Fix</option>
+              </select>
               <button class="is-add-btn" id="isBtnAdd" title="Add issue" aria-label="Add issue">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                   <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>

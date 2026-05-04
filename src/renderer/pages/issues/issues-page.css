@@ -11,7 +11,7 @@
 
 /* Add issue button inside section header */
 .is-add-btn {
-  margin-left: auto;
+  margin-left: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -42,6 +42,13 @@
   -webkit-app-region: no-drag;
 }
 .is-header-select:focus { border-color: var(--accent); }
+
+/* Compact variant when sitting inside a 32px section header */
+.is-section-filter {
+  padding: 2px 5px;
+  font-size: 11px;
+  margin-left: auto;
+}
 
 /* ------------------------------------------------------------------ */
 /* Severity dot (shown in issue list items)                             */
