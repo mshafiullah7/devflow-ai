@@ -89,6 +89,7 @@ export class TestRunnerPage {
   }
 
   async mount() {
+    injectCss('pages/user-stories/user-stories.css');
     injectCss('pages/test-runner/test-runner-page.css');
     applyStoredTheme();
 
@@ -123,6 +124,7 @@ export class TestRunnerPage {
 
   unmount() {
     removeCss('pages/test-runner/test-runner-page.css');
+    removeCss('pages/user-stories/user-stories.css');
     this._git?.stopPoll();
     window.db.testRunner.removeListeners();
     if (this._running) window.db.testRunner.kill();
