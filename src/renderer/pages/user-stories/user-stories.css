@@ -674,3 +674,117 @@
 [data-theme="light"] .project-related {
   border-left-color: var(--border);
 }
+
+/* ------------------------------------------------------------------ */
+/* Related panel — inline AI console (Console section)                 */
+/* ------------------------------------------------------------------ */
+
+/* Override section body defaults so we can use flex layout */
+#relatedTestsList.project-related__section-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* Header buttons cluster */
+.rtc-hd-btns {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.rtc-run-btn,
+.rtc-stop-btn,
+.rtc-clear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.12s, background 0.12s;
+  -webkit-app-region: no-drag;
+}
+
+.rtc-run-btn {
+  background: var(--accent);
+  color: #fff;
+}
+.rtc-run-btn:hover:not(:disabled) { opacity: 0.82; }
+.rtc-run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.rtc-stop-btn {
+  background: var(--danger, #ef4444);
+  color: #fff;
+}
+.rtc-stop-btn:hover { opacity: 0.82; }
+
+.rtc-clear-btn {
+  background: transparent;
+  color: var(--text-muted);
+}
+.rtc-clear-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+
+/* Prompt selector bar */
+.rtc-control-bar {
+  flex-shrink: 0;
+  padding: 5px 6px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rtc-prompt-select {
+  width: 100%;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+  -webkit-app-region: no-drag;
+}
+.rtc-prompt-select:focus { border-color: var(--accent); }
+.rtc-prompt-select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Output area */
+.rtc-output-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+.rtc-output {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #c9d1d9;
+  background: #0d1117;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  box-sizing: border-box;
+}
+.rtc-output::-webkit-scrollbar       { width: 4px; }
+.rtc-output::-webkit-scrollbar-track { background: transparent; }
+.rtc-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.rtc-placeholder {
+  color: rgba(201, 209, 217, 0.38);
+  font-style: italic;
+}
