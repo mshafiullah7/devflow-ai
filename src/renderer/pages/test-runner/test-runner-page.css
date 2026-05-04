@@ -203,6 +203,7 @@
 
 .tr-history-list {
   flex: 1 1 auto;
+  min-width: 0;
   overflow-y: auto;
   padding: 8px;
   display: flex;
@@ -236,6 +237,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  min-width: 0;
   background: #0d1117;
 }
 
@@ -251,6 +253,8 @@
 
 .tr-last-run-output__pre {
   display: block;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0;
   padding: 8px 10px;
   min-height: 220px;
