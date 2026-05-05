@@ -309,7 +309,8 @@ export class MockupsPage {
     const select = this.container.querySelector('#mockupsModelSelect');
     if (!select) return;
     this._modelConfigs = await window.db.modelConfigs.list();
-    const prevId = select.value ? Number(select.value) : this._selectedModelId;
+    const storedId = Number(localStorage.getItem('devflow-selected-model')) || null;
+    const prevId = storedId || (select.value ? Number(select.value) : this._selectedModelId);
     select.innerHTML = this._modelConfigs.length === 0
       ? `<option value="">No models configured</option>`
       : this._modelConfigs.map(c => `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`).join('');
@@ -344,6 +345,7 @@ export class MockupsPage {
     this.container.querySelector('#mockupsModelSelect')
       .addEventListener('change', (e) => {
         this._selectedModelId = Number(e.target.value) || null;
+        if (this._selectedModelId) localStorage.setItem('devflow-selected-model', this._selectedModelId);
         const nameEl = this.container.querySelector('#scrModelName');
         if (nameEl) nameEl.textContent = this._getSelectedModel()?.label || 'No model selected';
         this._updateMockupBtns();

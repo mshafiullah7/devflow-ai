@@ -252,7 +252,8 @@ export class ExtractUserStoriesPage {
     const select = this.container.querySelector('#aiModelSelect');
     if (!select) return;
     const configs  = await window.db.modelConfigs.list();
-    const prevId   = select.value ? Number(select.value) : null;
+    const storedId   = Number(localStorage.getItem('devflow-selected-model')) || null;
+    const prevId     = storedId || (select.value ? Number(select.value) : null);
     select.innerHTML = configs.length === 0
       ? `<option value="">No models configured</option>`
       : configs.map(c =>
@@ -295,6 +296,7 @@ export class ExtractUserStoriesPage {
     this.container.querySelector('#aiModelSelect')
       .addEventListener('change', e => {
         const id = Number(e.target.value);
+        localStorage.setItem('devflow-selected-model', id);
         window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
       });
 
