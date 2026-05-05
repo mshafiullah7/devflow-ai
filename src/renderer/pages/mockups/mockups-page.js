@@ -1099,7 +1099,7 @@ export class MockupsPage {
         <div class="scr-viewer__split" id="scrSplit">
           <div class="scr-viewer__preview-pane">
             <div class="scr-viewer__preview-bar">
-              <span class="scr-viewer__preview-label">Preview</span>
+              <span class="scr-viewer__preview-label">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></span>
               <button class="scr-btn scr-btn--sm" id="scrRefreshBtn" title="Refresh preview">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -1122,7 +1122,7 @@ export class MockupsPage {
                   <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
                   <path d="M5.5 8.5l1.5 1.5L10.5 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span class="scr-chat-header-label">Chat</span>
+                <span class="scr-chat-header-label">Chat <span id="scrEditPct" class="scr-split-pct"></span></span>
                 <span class="scr-viewer__model-name" id="scrModelName">${escHtml(this._getSelectedModel()?.label || 'No model selected')}</span>
                 <button class="scr-chat-load-desc" id="scrChatHistoryBtn" title="Recent prompts" style="margin-left:auto">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -1233,9 +1233,21 @@ export class MockupsPage {
     });
 
     // Draggable divider
-    const divider  = main.querySelector('#scrDivider');
-    const splitEl  = main.querySelector('#scrSplit');
-    const editPane = main.querySelector('#scrEditPane');
+    const divider      = main.querySelector('#scrDivider');
+    const splitEl      = main.querySelector('#scrSplit');
+    const editPane     = main.querySelector('#scrEditPane');
+    const previewPctEl = main.querySelector('#scrPreviewPct');
+    const editPctEl    = main.querySelector('#scrEditPct');
+
+    const updatePct = () => {
+      const total = splitEl.getBoundingClientRect().width;
+      if (!total) return;
+      const editW   = editPane.getBoundingClientRect().width;
+      const editPct = Math.round((editW / total) * 100);
+      if (editPctEl)    editPctEl.textContent    = editPct + '%';
+      if (previewPctEl) previewPctEl.textContent = (100 - editPct) + '%';
+    };
+    requestAnimationFrame(updatePct);
 
     divider.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -1252,6 +1264,9 @@ export class MockupsPage {
       const onMove = (mv) => {
         const newWidth = Math.min(Math.max(startWidth - (mv.clientX - startX), 200), totalWidth - 200);
         editPane.style.flex = `0 0 ${newWidth}px`;
+        const editPct = Math.round((newWidth / totalWidth) * 100);
+        if (editPctEl)    editPctEl.textContent    = editPct + '%';
+        if (previewPctEl) previewPctEl.textContent = (100 - editPct) + '%';
       };
 
       const onUp = () => {

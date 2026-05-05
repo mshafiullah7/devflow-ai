@@ -372,6 +372,16 @@
   flex: 1;
 }
 
+.scr-split-pct {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  opacity: 0.65;
+  margin-left: 3px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 /* ------------------------------------------------------------------ */
 /* Chat pane                                                            */
 /* ------------------------------------------------------------------ */
