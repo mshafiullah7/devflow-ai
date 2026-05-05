@@ -17,7 +17,7 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, stories, allStories, features, statuses, documents, mockups, issueCount] = await Promise.all([
+    const [project, stories, allStories, features, statuses, documents, mockups, issueCount, testRunHistory] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.userStories.list({ project_id: this.projectId }),
       window.db.userStories.list({ project_id: this.projectId, include_extracted: true }),
@@ -26,6 +26,7 @@ export class ProjectHomePage {
       window.db.documents.list(this.projectId),
       window.db.screenDesigns.list(this.projectId),
       window.db.issues.count(this.projectId),
+      window.db.testRunHistory.list(this.projectId),
     ]);
 
     this._project          = project;
@@ -36,6 +37,7 @@ export class ProjectHomePage {
     this._documents        = documents;
     this._mockups          = mockups;
     this._issueCount       = issueCount;
+    this._testRunHistory   = testRunHistory;
 
     this.container.innerHTML = this._template();
 
@@ -326,7 +328,7 @@ export class ProjectHomePage {
                 <div class="ph-card__desc">Run Cypress, Flutter, Jest or Playwright tests and view results.</div>
               </div>
               <div class="ph-card__footer">
-                <span class="ph-card__count"></span>
+                <span class="ph-card__count">${this._testRunHistory[0]?.failed ?? 0} failed</span>
                 <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
                 </svg>
