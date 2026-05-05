@@ -76,7 +76,7 @@
 
 /* Sidebar */
 .scr-sidebar {
-  width: 286px;
+  width: 25%;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   display: flex;
