@@ -365,7 +365,8 @@ export class ProjectHomePage {
     const select = this.container.querySelector('#phModelSelect');
     if (!select) return;
     const configs = await window.db.modelConfigs.list();
-    const prevId  = select.value ? Number(select.value) : null;
+    const storedId = Number(localStorage.getItem('devflow-selected-model')) || null;
+    const prevId   = storedId || (select.value ? Number(select.value) : null);
     select.innerHTML = configs.length === 0
       ? `<option value="">No models configured</option>`
       : configs.map(c => `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`).join('');
@@ -392,6 +393,7 @@ export class ProjectHomePage {
     this.container.querySelector('#phModelSelect')
       .addEventListener('change', (e) => {
         const id = Number(e.target.value);
+        localStorage.setItem('devflow-selected-model', id);
         window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
       });
 
