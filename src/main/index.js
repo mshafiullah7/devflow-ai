@@ -22,8 +22,6 @@ const createWindow = () => {
     },
   });
 
-  mainWindow.maximize();
-
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   mainWindow.webContents.on('will-navigate', (event) => {
