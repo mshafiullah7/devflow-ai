@@ -1203,6 +1203,35 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Export PDF button in editor toolbar                                  */
+/* ------------------------------------------------------------------ */
+.doc-editor__export-pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-secondary, #64748b);
+  background: transparent;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.doc-editor__export-pdf-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.07);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.doc-editor__export-pdf-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------ */
 /* AI Edit button in editor toolbar                                     */
 /* ------------------------------------------------------------------ */
 .doc-editor__ai-btn {

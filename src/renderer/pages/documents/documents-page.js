@@ -303,6 +303,14 @@ export class DocumentsPage {
             </svg>
             AI
           </button>
+          <button class="doc-editor__export-pdf-btn" id="docExportPdfBtn" title="Export to PDF">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L9 2z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9 2v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6 10h4M6 12.5h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            Export PDF
+          </button>
           <button class="doc-editor__save" id="docSaveBtn"${initialTab === 'preview' ? ' disabled' : ''}>Save</button>
         </div>
 
@@ -474,6 +482,20 @@ export class DocumentsPage {
     });
 
     panel.querySelector('#docAiBtn').addEventListener('click', () => this._toggleAiCard(doc));
+
+    const exportPdfBtn = panel.querySelector('#docExportPdfBtn');
+    exportPdfBtn.addEventListener('click', async () => {
+      const title   = titleInput.value.trim() || 'document';
+      const origHtml = exportPdfBtn.innerHTML;
+      exportPdfBtn.disabled = true;
+      exportPdfBtn.textContent = 'Exporting…';
+      try {
+        await window.app.exportPdf({ html: this._buildPdfHtml(title, contentTA.value), filename: title });
+      } finally {
+        exportPdfBtn.disabled = false;
+        exportPdfBtn.innerHTML = origHtml;
+      }
+    });
 
     saveBtn.addEventListener('click', save);
     panel.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } });
@@ -1158,6 +1180,51 @@ export class DocumentsPage {
     t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 2500);
+  }
+
+  // ----------------------------------------------------------------
+  // PDF export
+  // ----------------------------------------------------------------
+  _buildPdfHtml(title, content) {
+    const esc  = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const body = this._renderMarkdown(content);
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(title)}</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; font-size: 13px; line-height: 1.65; color: #1e293b; margin: 0; padding: 48px 56px; }
+.doc-pdf-title { font-size: 22px; font-weight: 700; margin: 0 0 24px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0; color: #0f172a; }
+h1 { font-size: 1.6em; margin: 1.2em 0 0.5em; }
+h2 { font-size: 1.35em; margin: 1em 0 0.4em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.2em; }
+h3 { font-size: 1.15em; margin: 0.9em 0 0.3em; }
+h4, h5, h6 { font-size: 1em; margin: 0.8em 0 0.3em; }
+p { margin: 0.45em 0; }
+code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 0.87em; font-family: 'Courier New', Consolas, monospace; color: #334155; }
+pre { background: #f1f5f9; padding: 12px 14px; border-radius: 6px; margin: 0.7em 0; }
+pre code { background: none; padding: 0; font-size: 0.85em; }
+blockquote { border-left: 3px solid #94a3b8; margin: 0.7em 0; padding: 2px 0 2px 14px; color: #64748b; }
+ul, ol { padding-left: 1.6em; margin: 0.4em 0; }
+li { margin: 0.2em 0; }
+hr { border: none; border-top: 1px solid #e2e8f0; margin: 1em 0; }
+.md-table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.92em; }
+.md-table th, .md-table td { border: 1px solid #e2e8f0; padding: 6px 12px; text-align: left; }
+.md-table th { background: #f8fafc; font-weight: 600; }
+.md-table tr:nth-child(even) td { background: #fafafa; }
+.md-svg-img { max-width: 100%; height: auto; display: block; margin: 0.8em 0; }
+.doc-attach-link { color: #6366f1; text-decoration: underline; }
+a { color: #2563eb; }
+strong { font-weight: 600; }
+del { color: #94a3b8; text-decoration: line-through; }
+</style>
+</head>
+<body>
+<div class="doc-pdf-title">${esc(title)}</div>
+${body}
+</body>
+</html>`;
   }
 
   // ----------------------------------------------------------------

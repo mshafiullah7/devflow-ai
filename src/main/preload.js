@@ -142,6 +142,7 @@ contextBridge.exposeInMainWorld('app', {
   screensDir:       (projectName) => invoke('app:screens-dir', projectName),
   prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),
   writeTempFiles:   (files)       => invoke('app:writeTempFiles', files),
+  exportPdf:        (data)        => invoke('app:export-pdf', data),
   chat: {
     generate: (data) => ipcRenderer.invoke('chat:generate', data),
     cancel:   ()     => ipcRenderer.invoke('chat:cancel'),

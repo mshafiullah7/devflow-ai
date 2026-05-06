@@ -51,6 +51,36 @@ function registerDialogHandlers() {
     win.setSize(w, h);
     win.center();
   });
+
+  ipcMain.handle('app:export-pdf', async (event, { html, filename }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Export to PDF',
+      defaultPath: `${filename || 'document'}.pdf`,
+      filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+    });
+    if (result.canceled || !result.filePath) return { success: false };
+
+    const os   = require('node:os');
+    const path = require('node:path');
+    const tmpFile = path.join(os.tmpdir(), `_pdf_export_${Date.now()}.html`);
+    await fs.writeFile(tmpFile, html, 'utf-8');
+
+    const hidden = new BrowserWindow({
+      show: false,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    });
+    await hidden.loadFile(tmpFile);
+    const pdfData = await hidden.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      margins: { top: 0.5, bottom: 0.5, left: 0.75, right: 0.75 },
+    });
+    hidden.close();
+    try { await fs.unlink(tmpFile); } catch {}
+    await fs.writeFile(result.filePath, pdfData);
+    return { success: true };
+  });
 }
 
 module.exports = { registerDialogHandlers };
