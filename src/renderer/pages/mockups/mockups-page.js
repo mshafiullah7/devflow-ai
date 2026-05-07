@@ -1358,6 +1358,7 @@ export class MockupsPage {
       const safeTitle = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
       const filePath  = `${folderPath}\\${safeTitle}.html`;
       await window.shell.writeFile(filePath, html);
+      alert(`${safeTitle}.html exported successfully.`);
     });
 
     main.querySelector('#scrRunBtn').addEventListener('click', async () => {
