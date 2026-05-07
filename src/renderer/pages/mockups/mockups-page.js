@@ -1416,16 +1416,14 @@ export class MockupsPage {
       const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
       const fileName   = `${safeTitle}.html`;
       const filePath   = `${folderPath}\\${fileName}`;
-      const doWrite    = async () => {
-        await window.shell.writeFile(filePath, html);
-        this._showExportSuccessModal(fileName);
-      };
-
       const existing = await window.shell.readFile(filePath);
       if (existing) {
-        this._showOverwriteConfirmDialog(fileName, doWrite);
+        this._showOverwriteConfirmDialog(fileName, async () => {
+          await window.shell.writeFile(filePath, html);
+        });
       } else {
-        await doWrite();
+        await window.shell.writeFile(filePath, html);
+        this._showExportSuccessModal(fileName);
       }
     });
 
