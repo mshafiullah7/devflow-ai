@@ -1388,7 +1388,7 @@ export class MockupsPage {
       localStorage.setItem(VIEWPORT_KEY, mode);
       if (mode === 'mobile') {
         const totalWidth      = splitEl.getBoundingClientRect().width || 800;
-        const editW           = Math.max(200, totalWidth - 5 - 390);
+        const editW           = Math.max(200, totalWidth - 5 - 410);
         editPane.style.flex   = `0 0 ${editW}px`;
         viewportBtn.innerHTML = mobileIcon;
         viewportBtn.title     = 'Switch to desktop preview';
