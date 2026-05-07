@@ -1338,29 +1338,25 @@ export class MockupsPage {
     });
 
     main.querySelector('#scrRunBtn').addEventListener('click', async () => {
-      const title = screen.title;
-      const desc  = main.querySelector('#scrDescription').value.trim();
-
-      if (!desc)  { main.querySelector('#scrDescription').focus(); return; }
-
       const model = this._getSelectedModel();
       if (!model || model.type === 'anthropic' || !model.executable) {
         alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
         return;
       }
 
-      await window.db.screenDesigns.update({
-        id: screen.id, description: desc, prompt_used: desc, model_used: model.label || '',
-      });
-      screen.description = desc;
+      const desc = screen.description || screen.prompt_used || '';
+      if (!desc) {
+        alert('No description saved for this screen. Edit the screen details and add a description first.');
+        return;
+      }
 
       const project    = this._getProject();
       const screensDir = await window.app.screensDir(project?.name);
-      const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
+      const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
       const outputFile = `${screensDir}\\${safeTitle}.html`;
       const prompt     = buildScreenPrompt(desc, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
       const cmd        = buildPsCommand(prompt, model);
-      this._showPromptPreviewModal(prompt, async () => {
+      this._showPromptPreviewModal(cmd, async () => {
         await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
         await this._saveToHistory(desc);
       });
