@@ -1192,7 +1192,7 @@ export class MockupsPage {
         </div>
 
         <div class="scr-viewer__split" id="scrSplit">
-          <div class="scr-viewer__preview-pane">
+          <div class="scr-viewer__preview-pane" id="scrPreviewPane">
             <div class="scr-viewer__preview-bar">
               <span class="scr-viewer__preview-label">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></span>
               <button class="scr-btn scr-btn--sm" id="scrViewportToggle"></button>
@@ -1383,19 +1383,20 @@ export class MockupsPage {
     const mobileIcon   = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="1" width="7" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="12.5" r=".7" fill="currentColor"/></svg> Desktop`;
     const desktopIcon  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Mobile`;
     const viewportBtn  = main.querySelector('#scrViewportToggle');
+    const previewPane  = main.querySelector('#scrPreviewPane');
 
     const applyViewport = (mode) => {
       localStorage.setItem(VIEWPORT_KEY, mode);
       if (mode === 'mobile') {
-        const totalWidth      = splitEl.getBoundingClientRect().width || 800;
-        const editW           = Math.max(200, totalWidth - 5 - 500);
-        editPane.style.flex   = `0 0 ${editW}px`;
-        viewportBtn.innerHTML = mobileIcon;
-        viewportBtn.title     = 'Switch to desktop preview';
+        previewPane.style.flex = '0 0 500px';
+        editPane.style.flex    = '1 1 0';
+        viewportBtn.innerHTML  = mobileIcon;
+        viewportBtn.title      = 'Switch to desktop preview';
       } else {
-        editPane.style.flex   = '0 0 25%';
-        viewportBtn.innerHTML = desktopIcon;
-        viewportBtn.title     = 'Switch to mobile preview';
+        previewPane.style.flex = '';
+        editPane.style.flex    = '0 0 25%';
+        viewportBtn.innerHTML  = desktopIcon;
+        viewportBtn.title      = 'Switch to mobile preview';
       }
       requestAnimationFrame(updatePct);
     };
