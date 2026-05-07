@@ -1387,13 +1387,15 @@ export class MockupsPage {
     const applyViewport = (mode) => {
       localStorage.setItem(VIEWPORT_KEY, mode);
       if (mode === 'mobile') {
-        editPane.style.flex     = '0 0 65%';
-        viewportBtn.innerHTML   = mobileIcon;
-        viewportBtn.title       = 'Switch to desktop preview';
+        const totalWidth      = splitEl.getBoundingClientRect().width || 800;
+        const editW           = Math.max(200, totalWidth - 5 - 390);
+        editPane.style.flex   = `0 0 ${editW}px`;
+        viewportBtn.innerHTML = mobileIcon;
+        viewportBtn.title     = 'Switch to desktop preview';
       } else {
-        editPane.style.flex     = '0 0 25%';
-        viewportBtn.innerHTML   = desktopIcon;
-        viewportBtn.title       = 'Switch to mobile preview';
+        editPane.style.flex   = '0 0 25%';
+        viewportBtn.innerHTML = desktopIcon;
+        viewportBtn.title     = 'Switch to mobile preview';
       }
       requestAnimationFrame(updatePct);
     };
