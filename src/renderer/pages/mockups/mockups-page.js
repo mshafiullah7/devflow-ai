@@ -1195,6 +1195,7 @@ export class MockupsPage {
           <div class="scr-viewer__preview-pane">
             <div class="scr-viewer__preview-bar">
               <span class="scr-viewer__preview-label">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></span>
+              <button class="scr-btn scr-btn--sm" id="scrViewportToggle"></button>
               <button class="scr-btn scr-btn--sm" id="scrRefreshBtn" title="Refresh preview">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -1376,6 +1377,30 @@ export class MockupsPage {
       divider.classList.add('scr-viewer__divider--dragging');
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup',  onUp);
+    });
+
+    const VIEWPORT_KEY  = 'mockups_preview_mode';
+    const mobileIcon   = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="1" width="7" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="12.5" r=".7" fill="currentColor"/></svg> Desktop`;
+    const desktopIcon  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Mobile`;
+    const viewportBtn  = main.querySelector('#scrViewportToggle');
+
+    const applyViewport = (mode) => {
+      localStorage.setItem(VIEWPORT_KEY, mode);
+      if (mode === 'mobile') {
+        editPane.style.flex     = '0 0 65%';
+        viewportBtn.innerHTML   = mobileIcon;
+        viewportBtn.title       = 'Switch to desktop preview';
+      } else {
+        editPane.style.flex     = '0 0 40%';
+        viewportBtn.innerHTML   = desktopIcon;
+        viewportBtn.title       = 'Switch to mobile preview';
+      }
+      requestAnimationFrame(updatePct);
+    };
+
+    applyViewport(localStorage.getItem(VIEWPORT_KEY) || 'desktop');
+    viewportBtn.addEventListener('click', () => {
+      applyViewport((localStorage.getItem(VIEWPORT_KEY) || 'desktop') === 'mobile' ? 'desktop' : 'mobile');
     });
 
     main.querySelector('#scrEditDetailsBtn').addEventListener('click', () => this._showEditScreenModal(screen));
