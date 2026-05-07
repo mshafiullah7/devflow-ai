@@ -440,6 +440,36 @@ export class MockupsPage {
     dlg.querySelector('#unsavedDraft').addEventListener('click', () => this._saveAsDraft(dlg));
   }
 
+  _showDeleteConfirmDialog(screen, onConfirm) {
+    const existing = this.container.querySelector('.scr-unsaved-overlay');
+    if (existing) return;
+
+    const dlg = document.createElement('div');
+    dlg.className = 'scr-unsaved-overlay';
+    dlg.innerHTML = `
+      <div class="scr-unsaved-dialog">
+        <div class="scr-unsaved-dialog__icon" style="color:#ef4444">
+          <svg width="22" height="22" viewBox="0 0 14 14" fill="none">
+            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3 class="scr-unsaved-dialog__title">Delete Screen</h3>
+        <p class="scr-unsaved-dialog__body">Delete <strong>${escHtml(screen.title)}</strong>? This cannot be undone.</p>
+        <div class="scr-unsaved-dialog__actions">
+          <button class="scr-btn scr-btn--danger"    id="dlgDeleteConfirm">Delete</button>
+          <button class="scr-btn scr-btn--secondary" id="dlgDeleteCancel">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    this.container.querySelector('.mockups-page').appendChild(dlg);
+    dlg.querySelector('#dlgDeleteCancel').addEventListener('click', () => dlg.remove());
+    dlg.querySelector('#dlgDeleteConfirm').addEventListener('click', () => {
+      dlg.remove();
+      onConfirm();
+    });
+  }
+
   async _saveForm() {
     const main  = this.container.querySelector('#scrMain');
     const title = main?.querySelector('#scrTitle')?.value.trim() || '';
@@ -1352,14 +1382,15 @@ export class MockupsPage {
 
     main.querySelector('#scrExtractBtn').addEventListener('click', () => this._showExtractDialog(screen));
 
-    main.querySelector('#scrDeleteBtn').addEventListener('click', async () => {
-      if (!confirm(`Delete "${screen.title}"?`)) return;
-      await window.db.screenDesigns.delete(screen.id);
-      this._screens  = await window.db.screenDesigns.list(this._projectId);
-      this._activeId = this._screens[0]?.id ?? null;
-      this._refreshSidebar();
-      if (this._activeId) this._selectScreen(this._activeId);
-      else                this._showEmptyState();
+    main.querySelector('#scrDeleteBtn').addEventListener('click', () => {
+      this._showDeleteConfirmDialog(screen, async () => {
+        await window.db.screenDesigns.delete(screen.id);
+        this._screens  = await window.db.screenDesigns.list(this._projectId);
+        this._activeId = this._screens[0]?.id ?? null;
+        this._refreshSidebar();
+        if (this._activeId) this._selectScreen(this._activeId);
+        else                this._showEmptyState();
+      });
     });
 
     this._loadInitialHistory(screen.id, main);
