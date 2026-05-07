@@ -470,6 +470,39 @@ export class MockupsPage {
     });
   }
 
+  _showOverwriteConfirmDialog(fileName, onConfirm) {
+    const existing = this.container.querySelector('.scr-unsaved-overlay');
+    if (existing) return;
+
+    const dlg = document.createElement('div');
+    dlg.className = 'scr-unsaved-overlay';
+    dlg.innerHTML = `
+      <div class="scr-unsaved-dialog">
+        <div class="scr-unsaved-dialog__icon" style="color:#f59e0b">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+            <path d="M12 9v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3 class="scr-unsaved-dialog__title">File Already Exists</h3>
+        <p class="scr-unsaved-dialog__body">
+          <code style="display:inline-block;margin-bottom:6px;padding:4px 10px;background:var(--bg-secondary,rgba(0,0,0,.08));border-radius:4px;font-size:12px;word-break:break-all">${escHtml(fileName)}</code><br>
+          already exists in the selected folder. Overwrite it?
+        </p>
+        <div class="scr-unsaved-dialog__actions">
+          <button class="scr-btn scr-btn--danger"    id="overwriteConfirm">Overwrite</button>
+          <button class="scr-btn scr-btn--secondary" id="overwriteCancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    this.container.querySelector('.mockups-page').appendChild(dlg);
+    dlg.querySelector('#overwriteCancel').addEventListener('click', () => dlg.remove());
+    dlg.querySelector('#overwriteConfirm').addEventListener('click', () => {
+      dlg.remove();
+      onConfirm();
+    });
+  }
+
   _showExportSuccessModal(fileName) {
     const dlg = document.createElement('div');
     dlg.className = 'scr-unsaved-overlay';
@@ -1380,10 +1413,20 @@ export class MockupsPage {
       const folderPath = await window.db.dialog.openFolder();
       if (!folderPath) return;
 
-      const safeTitle = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
-      const filePath  = `${folderPath}\\${safeTitle}.html`;
-      await window.shell.writeFile(filePath, html);
-      this._showExportSuccessModal(`${safeTitle}.html`);
+      const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
+      const fileName   = `${safeTitle}.html`;
+      const filePath   = `${folderPath}\\${fileName}`;
+      const doWrite    = async () => {
+        await window.shell.writeFile(filePath, html);
+        this._showExportSuccessModal(fileName);
+      };
+
+      const existing = await window.shell.readFile(filePath);
+      if (existing) {
+        this._showOverwriteConfirmDialog(fileName, doWrite);
+      } else {
+        await doWrite();
+      }
     });
 
     main.querySelector('#scrRunBtn').addEventListener('click', async () => {
