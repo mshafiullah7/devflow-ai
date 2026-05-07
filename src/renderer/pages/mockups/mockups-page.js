@@ -1380,7 +1380,7 @@ export class MockupsPage {
       this._loadPreview(result.content);
     });
 
-    main.querySelector('#scrExtractBtn').addEventListener('click', () => this._showExtractDialog(screen));
+    main.querySelector('#scrExtractBtn')?.addEventListener('click', () => this._showExtractDialog(screen));
 
     main.querySelector('#scrDeleteBtn').addEventListener('click', () => {
       this._showDeleteConfirmDialog(screen, async () => {
