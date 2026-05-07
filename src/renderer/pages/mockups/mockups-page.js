@@ -470,6 +470,31 @@ export class MockupsPage {
     });
   }
 
+  _showExportSuccessModal(fileName) {
+    const dlg = document.createElement('div');
+    dlg.className = 'scr-unsaved-overlay';
+    dlg.innerHTML = `
+      <div class="scr-unsaved-dialog">
+        <div class="scr-unsaved-dialog__icon" style="color:#22c55e">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M8 12.5l2.5 2.5L16 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3 class="scr-unsaved-dialog__title">Export Successful</h3>
+        <p class="scr-unsaved-dialog__body">
+          File saved as<br>
+          <code style="display:inline-block;margin-top:6px;padding:4px 10px;background:var(--bg-secondary,rgba(0,0,0,.08));border-radius:4px;font-size:12px;word-break:break-all">${escHtml(fileName)}</code>
+        </p>
+        <div class="scr-unsaved-dialog__actions">
+          <button class="scr-btn scr-btn--primary" id="exportSuccessOk">OK</button>
+        </div>
+      </div>
+    `;
+    this.container.querySelector('.mockups-page').appendChild(dlg);
+    dlg.querySelector('#exportSuccessOk').addEventListener('click', () => dlg.remove());
+  }
+
   async _saveForm() {
     const main  = this.container.querySelector('#scrMain');
     const title = main?.querySelector('#scrTitle')?.value.trim() || '';
@@ -1358,7 +1383,7 @@ export class MockupsPage {
       const safeTitle = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
       const filePath  = `${folderPath}\\${safeTitle}.html`;
       await window.shell.writeFile(filePath, html);
-      alert(`${safeTitle}.html exported successfully.`);
+      this._showExportSuccessModal(`${safeTitle}.html`);
     });
 
     main.querySelector('#scrRunBtn').addEventListener('click', async () => {
