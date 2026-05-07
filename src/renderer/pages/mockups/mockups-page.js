@@ -1391,7 +1391,7 @@ export class MockupsPage {
         viewportBtn.innerHTML   = mobileIcon;
         viewportBtn.title       = 'Switch to desktop preview';
       } else {
-        editPane.style.flex     = '0 0 40%';
+        editPane.style.flex     = '0 0 25%';
         viewportBtn.innerHTML   = desktopIcon;
         viewportBtn.title       = 'Switch to mobile preview';
       }
