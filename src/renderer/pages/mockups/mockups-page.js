@@ -1097,6 +1097,13 @@ export class MockupsPage {
             </button>
           </div>
           <div class="scr-viewer__actions">
+            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrExportHtmlBtn" title="Export HTML to folder">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Export HTML
+            </button>
             <button class="scr-btn scr-btn--sm scr-btn--primary" id="scrRunBtn">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
@@ -1335,6 +1342,23 @@ export class MockupsPage {
           this._loadPreview(fresh.html_content);
         }
       }
+    });
+
+    main.querySelector('#scrExportHtmlBtn').addEventListener('click', async () => {
+      const fresh = await window.db.screenDesigns.get(screen.id);
+      const html  = fresh?.html_content || screen.html_content || '';
+      if (!html) {
+        alert('No HTML content to export. Generate a mockup first.');
+        return;
+      }
+
+      const folderPath = await window.db.dialog.openFolder();
+      if (!folderPath) return;
+
+      const safeTitle = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
+      const filePath  = `${folderPath}\\${safeTitle}.html`;
+      await window.shell.writeFile(filePath, html);
+      alert(`Exported to:\n${filePath}`);
     });
 
     main.querySelector('#scrRunBtn').addEventListener('click', async () => {
