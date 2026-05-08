@@ -44,9 +44,19 @@ function registerTerminalHandlers() {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
 
     const wc = event.sender;
+    // Purge stale temp scripts older than 2 days
+    const tmpDir = os.tmpdir();
+    const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    try {
+      for (const f of fs.readdirSync(tmpDir)) {
+        if (!f.startsWith('ai-sdlc-exec-') || !f.endsWith('.ps1')) continue;
+        const fp = path.join(tmpDir, f);
+        try { if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp); } catch (_) {}
+      }
+    } catch (_) {}
     // Write command to a temp .ps1 file to avoid Windows command-line length limits
     const utf8Prefix = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null\n';
-    const tmpFile = path.join(os.tmpdir(), `ai-sdlc-exec-${Date.now()}.ps1`);
+    const tmpFile = path.join(tmpDir, `ai-sdlc-exec-${Date.now()}.ps1`);
     fs.writeFileSync(tmpFile, utf8Prefix + command, 'utf8');
     _activeProc = spawn(
       'powershell.exe',
