@@ -108,11 +108,12 @@ export class GitChangesPage {
     }
 
     try {
-      const result = await window.db.terminal.exec({
-        command: 'git status --short 2>&1',
-        cwd,
-      });
-      this._files = this._parseGitStatus(result.stdout || '');
+      const [result, ignorePatterns] = await Promise.all([
+        window.db.terminal.exec({ command: 'git status --short 2>&1', cwd }),
+        this._fetchGitignorePatterns(cwd),
+      ]);
+      this._files = this._parseGitStatus(result.stdout || '')
+        .filter(f => !this._matchesGitignore(f.file, ignorePatterns));
 
       if (label) {
         label.textContent = this._files.length === 0
@@ -207,6 +208,50 @@ export class GitChangesPage {
     } catch {
       view.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
     }
+  }
+
+  // ----------------------------------------------------------------
+  // .gitignore helpers
+  // ----------------------------------------------------------------
+  async _fetchGitignorePatterns(cwd) {
+    try {
+      const r = await window.db.terminal.exec({
+        command: `if (Test-Path ".gitignore") { Get-Content -Raw ".gitignore" } else { "" }`,
+        cwd,
+      });
+      return (r.stdout || '').split('\n')
+        .map(l => l.trim())
+        .filter(l => l && !l.startsWith('#'));
+    } catch {
+      return [];
+    }
+  }
+
+  _matchesGitignore(file, patterns) {
+    const norm = file.replace(/\\/g, '/');
+    return patterns.some(pattern => {
+      const negated = pattern.startsWith('!');
+      const p       = negated ? pattern.slice(1) : pattern;
+      const dirOnly = p.endsWith('/');
+      const clean   = dirOnly ? p.slice(0, -1) : p;
+      const anchored = clean.startsWith('/');
+      const base     = anchored ? clean.slice(1) : clean;
+      const regexStr = base
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*\*/g, '\x00')
+        .replace(/\*/g, '[^/]*')
+        .replace(/\x00/g, '.*')
+        .replace(/\?/g, '[^/]');
+      try {
+        const re = anchored
+          ? new RegExp(`^${regexStr}(/.*)?$`)
+          : new RegExp(`(^|/)${regexStr}(/.*)?$`);
+        const matched = re.test(norm);
+        return negated ? !matched : matched;
+      } catch {
+        return false;
+      }
+    });
   }
 
   // ----------------------------------------------------------------
