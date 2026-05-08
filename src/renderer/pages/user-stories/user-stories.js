@@ -154,6 +154,12 @@ export class ProjectPage {
               <div class="project-panel__header">
                 <span class="project-panel__title">Features</span>
                 <div class="project-panel__actions">
+                  <button class="project-panel__add" id="btnImportFeature" aria-label="Import feature from JSON" title="Import from JSON">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 10V2M5 5l3-3 3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                    </svg>
+                  </button>
                   <button class="project-panel__add" id="btnAddFeature" aria-label="Add feature" title="Add feature">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                       <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -320,6 +326,7 @@ export class ProjectPage {
     this._featureList = new FeatureList({
       listEl:    document.getElementById('featureList'),
       addBtn:    document.getElementById('btnAddFeature'),
+      importBtn: document.getElementById('btnImportFeature'),
       projectId: this.projectId,
       onSelect:  (feature) => this._storyList.load(feature.id),
       onExport:  (feature) => this._exportFeature(feature),

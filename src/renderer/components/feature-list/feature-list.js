@@ -8,9 +8,10 @@ import { escHtml, injectCss, formatDate } from '../../shared/helpers.js';
  *   await fl.mount();
  */
 export class FeatureList {
-  constructor({ listEl, addBtn, projectId, onSelect, onExport }) {
+  constructor({ listEl, addBtn, importBtn, projectId, onSelect, onExport }) {
     this._listEl       = listEl;
     this._addBtn       = addBtn;
+    this._importBtn    = importBtn;
     this._projectId    = projectId;
     this._onSelect     = onSelect || (() => {});
     this._onExport     = onExport || (() => {});
@@ -27,6 +28,9 @@ export class FeatureList {
     injectCss('components/feature-list/feature-list.css');
     this._statuses = await window.db.status.list();
     this._addBtn.addEventListener('click', () => this._openModal(null));
+    if (this._importBtn) {
+      this._importBtn.addEventListener('click', () => this._importFromJson());
+    }
     await this._load();
   }
 
@@ -318,5 +322,178 @@ export class FeatureList {
       this._confirmModal.remove();
       this._confirmModal = null;
     }
+  }
+
+  // ----------------------------------------------------------------
+  // JSON import (feature with user stories + prompts)
+  // ----------------------------------------------------------------
+  async _importFromJson() {
+    let raw;
+    try {
+      raw = await window.db.dialog.openJsonFile();
+    } catch {
+      return;
+    }
+    if (!raw) return;
+
+    let record;
+    try {
+      record = JSON.parse(raw);
+      if (!record || typeof record !== 'object' || !record.feature) {
+        throw new Error('Expected a JSON object with a "feature" field');
+      }
+    } catch (err) {
+      this._showImportToast(`Invalid JSON file: ${err.message}`);
+      return;
+    }
+
+    const features = await window.db.features.list(this._projectId);
+    const match = features.find(f => f.name.trim().toLowerCase() === record.feature.trim().toLowerCase());
+
+    if (match) {
+      this._openReplaceConfirm(record, match);
+    } else {
+      await this._createFeatureFromImport(record);
+    }
+  }
+
+  async _createFeatureFromImport(record) {
+    const statusMatch = record.status
+      ? this._statuses.find(s => s.name.toLowerCase() === record.status.toLowerCase())
+      : null;
+    const backlog  = this._statuses.find(s => s.name === 'Backlog');
+    const statusId = statusMatch ? statusMatch.id : (backlog ? backlog.id : null);
+
+    try {
+      const feature = await window.db.features.create({
+        project_id:  this._projectId,
+        name:        record.feature,
+        description: record.description || null,
+        status_id:   statusId,
+      });
+      await this._importStories(feature.id, record.user_stories || []);
+      await this._load();
+      this._showImportToast('Feature imported successfully.');
+    } catch {
+      this._showImportToast('Failed to import feature.');
+    }
+  }
+
+  async _replaceFeatureFromImport(record, existingFeature) {
+    const statusMatch = record.status
+      ? this._statuses.find(s => s.name.toLowerCase() === record.status.toLowerCase())
+      : null;
+    const statusId = statusMatch ? statusMatch.id : existingFeature.status_id;
+
+    try {
+      await window.db.features.update({
+        id:          existingFeature.id,
+        name:        record.feature,
+        description: record.description || null,
+        status_id:   statusId,
+      });
+
+      const oldStories = await window.db.userStories.list({ feature_id: existingFeature.id });
+      for (const s of oldStories) {
+        const oldPrompts = await window.db.prompts.list(s.id);
+        for (const p of oldPrompts) {
+          await window.db.prompts.delete(p.id);
+        }
+        await window.db.userStories.delete(s.id);
+      }
+
+      await this._importStories(existingFeature.id, record.user_stories || []);
+      await this._load();
+      this._showImportToast('Feature replaced successfully.');
+    } catch {
+      this._showImportToast('Failed to replace feature.');
+    }
+  }
+
+  async _importStories(featureId, stories) {
+    const backlog  = this._statuses.find(s => s.name === 'Backlog');
+    for (const item of stories) {
+      const statusMatch = item.status
+        ? this._statuses.find(s => s.name.toLowerCase() === item.status.toLowerCase())
+        : null;
+      const statusId = statusMatch ? statusMatch.id : (backlog ? backlog.id : null);
+
+      const story = await window.db.userStories.create({
+        feature_id:          featureId,
+        project_id:          this._projectId,
+        title:               item.title || '',
+        description:         item.description || null,
+        acceptance_criteria: item.acceptance_criteria || null,
+        status_id:           statusId,
+      });
+
+      if (Array.isArray(item.prompts)) {
+        for (const p of item.prompts) {
+          await window.db.prompts.create({
+            user_story_id: story.id,
+            tag:           p.tag || null,
+            prompt:        p.prompt || null,
+          });
+        }
+      }
+    }
+  }
+
+  _openReplaceConfirm(record, existingFeature) {
+    this._closeConfirm();
+
+    const storyCount = Array.isArray(record.user_stories) ? record.user_stories.length : 0;
+    const overlay = document.createElement('div');
+    overlay.className = 'fl-modal-overlay';
+    overlay.innerHTML = `
+      <div class="fl-modal fl-modal--sm" role="alertdialog" aria-modal="true">
+        <div class="fl-modal__header">
+          <h2 class="fl-modal__title">Replace Existing Feature?</h2>
+        </div>
+        <div class="fl-modal__body">
+          <p class="fl-confirm__msg">
+            A feature named <strong>${escHtml(existingFeature.name)}</strong> already exists.
+            Replacing it will remove all its current user stories and prompts,
+            then import ${storyCount} user ${storyCount === 1 ? 'story' : 'stories'} from the file.
+          </p>
+        </div>
+        <div class="fl-modal__footer">
+          <button class="fl-modal__btn fl-modal__btn--cancel">Cancel</button>
+          <button class="fl-modal__btn fl-modal__btn--save">Replace</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    this._confirmModal = overlay;
+
+    const close = () => this._closeConfirm();
+    overlay.querySelector('.fl-modal__btn--cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    const escHandler = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escHandler);
+    overlay._removeEsc = () => document.removeEventListener('keydown', escHandler);
+
+    const replaceBtn = overlay.querySelector('.fl-modal__btn--save');
+    replaceBtn.addEventListener('click', async () => {
+      replaceBtn.disabled    = true;
+      replaceBtn.textContent = 'Replacing…';
+      this._closeConfirm();
+      await this._replaceFeatureFromImport(record, existingFeature);
+    });
+  }
+
+  _showImportToast(message) {
+    document.querySelector('.fl-import-toast')?.remove();
+    const toast = document.createElement('div');
+    toast.className = 'usl-import-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('usl-import-toast--visible'));
+    setTimeout(() => {
+      toast.classList.remove('usl-import-toast--visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 }
