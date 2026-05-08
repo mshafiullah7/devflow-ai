@@ -78,7 +78,7 @@ export class UserStoryList {
   }
 
   // ----------------------------------------------------------------
-  // JSON import
+  // JSON import (single story with prompts)
   // ----------------------------------------------------------------
   async _importFromJson() {
     let raw;
@@ -87,44 +87,136 @@ export class UserStoryList {
     } catch {
       return;
     }
-    if (!raw) return; // user cancelled
+    if (!raw) return;
 
-    let records;
+    let record;
     try {
-      records = JSON.parse(raw);
-      if (!Array.isArray(records)) throw new Error('Expected a JSON array');
+      record = JSON.parse(raw);
+      if (!record || typeof record !== 'object' || !record.title) {
+        throw new Error('Expected a JSON object with a "title" field');
+      }
     } catch (err) {
       this._showImportToast(`Invalid JSON file: ${err.message}`);
       return;
     }
 
-    const backlog   = this._statuses.find(s => s.name === 'Backlog');
-    const statusId  = backlog ? backlog.id : null;
-    let imported    = 0;
-    let skipped     = 0;
+    const existing = await window.db.userStories.list({ feature_id: this._featureId });
+    const match = existing.find(s => s.title.trim().toLowerCase() === record.title.trim().toLowerCase());
 
-    for (const item of records) {
-      try {
-        await window.db.userStories.create({
-          feature_id:          this._featureId,
-          project_id:          this._projectId,
-          title:               item.title               || '',
-          description:         item.description         || null,
-          acceptance_criteria: item.acceptance_criteria || null,
-          status_id:           statusId,
-        });
-        imported++;
-      } catch {
-        skipped++;
-      }
+    if (match) {
+      this._openReplaceConfirm(record, match);
+    } else {
+      await this._createStoryFromImport(record);
     }
+  }
 
-    await this._load();
+  async _createStoryFromImport(record) {
+    const statusMatch = record.status
+      ? this._statuses.find(s => s.name.toLowerCase() === record.status.toLowerCase())
+      : null;
+    const backlog  = this._statuses.find(s => s.name === 'Backlog');
+    const statusId = statusMatch ? statusMatch.id : (backlog ? backlog.id : null);
 
-    const msg = skipped > 0
-      ? `Imported ${imported} user ${imported === 1 ? 'story' : 'stories'}. ${skipped} skipped due to errors.`
-      : `Imported ${imported} user ${imported === 1 ? 'story' : 'stories'} successfully.`;
-    this._showImportToast(msg);
+    try {
+      const story = await window.db.userStories.create({
+        feature_id:          this._featureId,
+        project_id:          this._projectId,
+        title:               record.title,
+        description:         record.description || null,
+        acceptance_criteria: record.acceptance_criteria || null,
+        status_id:           statusId,
+      });
+      if (Array.isArray(record.prompts)) {
+        for (const p of record.prompts) {
+          await window.db.prompts.create({
+            user_story_id: story.id,
+            tag:           p.tag || null,
+            prompt:        p.prompt || null,
+          });
+        }
+      }
+      await this._load();
+      this._showImportToast('User story imported successfully.');
+    } catch {
+      this._showImportToast('Failed to import user story.');
+    }
+  }
+
+  async _replaceStoryFromImport(record, existingStory) {
+    const statusMatch = record.status
+      ? this._statuses.find(s => s.name.toLowerCase() === record.status.toLowerCase())
+      : null;
+    const statusId = statusMatch ? statusMatch.id : existingStory.status_id;
+
+    try {
+      await window.db.userStories.update({
+        id:                  existingStory.id,
+        title:               record.title,
+        description:         record.description || null,
+        acceptance_criteria: record.acceptance_criteria || null,
+        status_id:           statusId,
+      });
+      const oldPrompts = await window.db.prompts.list(existingStory.id);
+      for (const p of oldPrompts) {
+        await window.db.prompts.delete(p.id);
+      }
+      if (Array.isArray(record.prompts)) {
+        for (const p of record.prompts) {
+          await window.db.prompts.create({
+            user_story_id: existingStory.id,
+            tag:           p.tag || null,
+            prompt:        p.prompt || null,
+          });
+        }
+      }
+      await this._load();
+      this._showImportToast('User story replaced successfully.');
+    } catch {
+      this._showImportToast('Failed to replace user story.');
+    }
+  }
+
+  _openReplaceConfirm(record, existingStory) {
+    this._closeConfirm();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'usl-modal-overlay';
+    overlay.innerHTML = `
+      <div class="usl-modal usl-modal--sm" role="alertdialog" aria-modal="true">
+        <div class="usl-modal__header">
+          <h2 class="usl-modal__title">Replace Existing Story?</h2>
+        </div>
+        <div class="usl-modal__body">
+          <p class="usl-confirm__msg">
+            A user story named <strong>${escHtml(existingStory.title)}</strong> already exists.
+            Do you want to replace it with the imported data?
+          </p>
+        </div>
+        <div class="usl-modal__footer">
+          <button class="usl-modal__btn usl-modal__btn--cancel">Cancel</button>
+          <button class="usl-modal__btn usl-modal__btn--save">Replace</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    this._confirmModal = overlay;
+
+    const close = () => this._closeConfirm();
+    overlay.querySelector('.usl-modal__btn--cancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    const escHandler = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escHandler);
+    overlay._removeEsc = () => document.removeEventListener('keydown', escHandler);
+
+    const replaceBtn = overlay.querySelector('.usl-modal__btn--save');
+    replaceBtn.addEventListener('click', async () => {
+      replaceBtn.disabled    = true;
+      replaceBtn.textContent = 'Replacing…';
+      this._closeConfirm();
+      await this._replaceStoryFromImport(record, existingStory);
+    });
   }
 
   _showImportToast(message) {
