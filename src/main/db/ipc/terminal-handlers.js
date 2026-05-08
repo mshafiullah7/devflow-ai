@@ -44,11 +44,13 @@ function registerTerminalHandlers() {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
 
     const wc = event.sender;
-    // Force UTF-8 so box-drawing chars from CMD tools render correctly
-    const utf8Prefix = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; ';
+    // Write command to a temp .ps1 file to avoid Windows command-line length limits
+    const utf8Prefix = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null\n';
+    const tmpFile = path.join(os.tmpdir(), `ai-sdlc-exec-${Date.now()}.ps1`);
+    fs.writeFileSync(tmpFile, utf8Prefix + command, 'utf8');
     _activeProc = spawn(
       'powershell.exe',
-      ['-NoLogo', '-NonInteractive', '-Command', utf8Prefix + command],
+      ['-NoLogo', '-NonInteractive', '-File', tmpFile],
       { stdio: ['pipe', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: { ...process.env, FORCE_COLOR: '1', COLORTERM: 'truecolor' }, windowsHide: true }
     );
 
@@ -61,9 +63,11 @@ function registerTerminalHandlers() {
 
     _activeProc.stdout.on('data', d => send('terminal:data', { text: d.toString('utf8'), stream: 'stdout' }));
     _activeProc.stderr.on('data', d => send('terminal:data', { text: d.toString('utf8'), stream: 'stderr' }));
-    _activeProc.on('close', code => { _activeProc = null; send('terminal:done', { exitCode: code }); });
+    const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch (_) {} };
+    _activeProc.on('close', code => { _activeProc = null; cleanup(); send('terminal:done', { exitCode: code }); });
     _activeProc.on('error', err => {
       _activeProc = null;
+      cleanup();
       send('terminal:data', { text: err.message, stream: 'stderr' });
       send('terminal:done', { exitCode: 1 });
     });
