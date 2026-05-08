@@ -127,6 +127,12 @@ export class ProjectPage {
             </svg>
             <span class="project-page__git-badge" id="gitBadge" hidden></span>
           </button>
+          <button class="project-page__qcmd-btn" id="btnExportProject" title="Export all features &amp; stories" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </button>
           <button class="project-page__qcmd-btn" id="btnHeaderQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
               <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
@@ -275,6 +281,9 @@ export class ProjectPage {
     document.getElementById('btnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
 
+    document.getElementById('btnExportProject')
+      .addEventListener('click', () => this._exportProject());
+
     document.getElementById('btnHeaderQcmd')
       .addEventListener('click', () => this._qcmdModal.show());
 
@@ -295,6 +304,7 @@ export class ProjectPage {
       projectId:            this.projectId,
       getModel:             () => this._aiModelConfig,
       onSelect:             (story) => { this._refreshRelated(story?.id || null); },
+      onExport:             (story) => this._exportStory(story),
       onRunCommand:         (cmd) => {
         if (!this._project?.project_path) return;
         window.db.terminal.openExternal({ command: cmd, cwd: this._project.project_path });
@@ -312,6 +322,7 @@ export class ProjectPage {
       addBtn:    document.getElementById('btnAddFeature'),
       projectId: this.projectId,
       onSelect:  (feature) => this._storyList.load(feature.id),
+      onExport:  (feature) => this._exportFeature(feature),
     });
     await this._featureList.mount();
   }
@@ -479,6 +490,81 @@ export class ProjectPage {
         icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
       }
     });
+  }
+
+  // ----------------------------------------------------------------
+  // Export helpers
+  // ----------------------------------------------------------------
+  async _exportProject() {
+    const features = await window.db.features.list(this.projectId);
+    const result = [];
+    for (const f of features) {
+      const stories = await window.db.userStories.list({ feature_id: f.id });
+      result.push({
+        feature: f.name,
+        description: f.description || null,
+        status: f.status_name || null,
+        user_stories: stories.map(s => ({
+          title: s.title,
+          description: s.description || null,
+          acceptance_criteria: s.acceptance_criteria || null,
+          status: s.status_name || null,
+        })),
+      });
+    }
+    const projectName = this._project?.name || 'project';
+    const res = await window.db.dialog.saveJsonFile({
+      data: result,
+      filename: `${projectName}-all-stories`,
+    });
+    if (res?.success) this._showExportToast('Project exported successfully.');
+  }
+
+  async _exportFeature(feature) {
+    const stories = await window.db.userStories.list({ feature_id: feature.id });
+    const result = {
+      feature: feature.name,
+      description: feature.description || null,
+      status: feature.status_name || null,
+      user_stories: stories.map(s => ({
+        title: s.title,
+        description: s.description || null,
+        acceptance_criteria: s.acceptance_criteria || null,
+        status: s.status_name || null,
+      })),
+    };
+    const res = await window.db.dialog.saveJsonFile({
+      data: result,
+      filename: `feature-${feature.name}`,
+    });
+    if (res?.success) this._showExportToast('Feature exported successfully.');
+  }
+
+  async _exportStory(story) {
+    const result = {
+      title: story.title,
+      description: story.description || null,
+      acceptance_criteria: story.acceptance_criteria || null,
+      status: story.status_name || null,
+    };
+    const res = await window.db.dialog.saveJsonFile({
+      data: result,
+      filename: `story-${story.title}`,
+    });
+    if (res?.success) this._showExportToast('User story exported successfully.');
+  }
+
+  _showExportToast(message) {
+    document.querySelector('.usl-import-toast')?.remove();
+    const toast = document.createElement('div');
+    toast.className = 'usl-import-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('usl-import-toast--visible'));
+    setTimeout(() => {
+      toast.classList.remove('usl-import-toast--visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 
   // ----------------------------------------------------------------

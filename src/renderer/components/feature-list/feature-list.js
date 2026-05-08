@@ -8,11 +8,12 @@ import { escHtml, injectCss, formatDate } from '../../shared/helpers.js';
  *   await fl.mount();
  */
 export class FeatureList {
-  constructor({ listEl, addBtn, projectId, onSelect }) {
+  constructor({ listEl, addBtn, projectId, onSelect, onExport }) {
     this._listEl       = listEl;
     this._addBtn       = addBtn;
     this._projectId    = projectId;
     this._onSelect     = onSelect || (() => {});
+    this._onExport     = onExport || (() => {});
     this._activeId     = null;
     this._statuses     = [];
     this._modal        = null;
@@ -71,6 +72,12 @@ export class FeatureList {
           <span class="fl-card__id">#${f.id}</span>
           <span class="fl-card__name">${escHtml(f.name)}</span>
           <div class="fl-card__actions">
+            <button class="fl-card__action fl-card__action--export" title="Export feature" aria-label="Export feature">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </button>
             <button class="fl-card__action fl-card__action--edit" title="Edit feature" aria-label="Edit feature">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13l-3 1 1-3 8.5-8.5z"
@@ -99,6 +106,11 @@ export class FeatureList {
           .forEach(el => el.classList.remove('fl-card--active'));
         card.classList.add('fl-card--active');
         this._onSelect(f);
+      });
+
+      card.querySelector('.fl-card__action--export').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._onExport(f);
       });
 
       card.querySelector('.fl-card__action--edit').addEventListener('click', (e) => {

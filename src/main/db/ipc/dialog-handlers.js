@@ -52,6 +52,18 @@ function registerDialogHandlers() {
     win.center();
   });
 
+  ipcMain.handle('dialog:saveJsonFile', async (event, { data, filename }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Export to JSON',
+      defaultPath: `${filename || 'export'}.json`,
+      filters: [{ name: 'JSON Files', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePath) return { success: false };
+    await fs.writeFile(result.filePath, JSON.stringify(data, null, 2), 'utf-8');
+    return { success: true, filePath: result.filePath };
+  });
+
   ipcMain.handle('app:export-pdf', async (event, { html, filename }) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = await dialog.showSaveDialog(win, {

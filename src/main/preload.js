@@ -117,6 +117,7 @@ contextBridge.exposeInMainWorld('db', {
     openFolder:   ()     => invoke('dialog:openFolder'),
     openJsonFile: ()     => invoke('dialog:openJsonFile'),
     openFile:     (opts) => invoke('dialog:openFile', opts),
+    saveJsonFile: (data) => invoke('dialog:saveJsonFile', data),
   },
   window: {
     expand: () => invoke('window:expand'),

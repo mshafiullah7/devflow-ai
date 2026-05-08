@@ -13,13 +13,14 @@ import { UserStoryDetail } from '../user-story-detail/user-story-detail.js';
  *   await usl.load(featureId);
  */
 export class UserStoryList {
-  constructor({ listEl, addBtn, importBtn, detailEl, projectId, getModel, onSelect, onRunCommand, onRunCommandExternal, onPrintOutput }) {
+  constructor({ listEl, addBtn, importBtn, detailEl, projectId, getModel, onSelect, onExport, onRunCommand, onRunCommandExternal, onPrintOutput }) {
     this._listEl    = listEl;
     this._addBtn    = addBtn;
     this._importBtn = importBtn;
     this._projectId = projectId;
     this._featureId = null;
     this._onSelect  = onSelect || (() => {});
+    this._onExport  = onExport || (() => {});
     this._activeId  = null;
     this._statuses  = [];
     this._confirmModal = null;
@@ -181,6 +182,12 @@ export class UserStoryList {
           <span class="usl-card__id">#${s.id}</span>
           <span class="usl-card__title">${escHtml(s.title)}</span>
           <div class="usl-card__actions">
+            <button class="usl-card__action usl-card__action--export" title="Export story" aria-label="Export story">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </button>
             <button class="usl-card__action usl-card__action--delete" title="Delete story" aria-label="Delete story">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M3 4h10M6 4V3h4v1M4 4l1 9h6l1-9M6 7v4M10 7v4"
@@ -204,6 +211,11 @@ export class UserStoryList {
         card.classList.add('usl-card--active');
         this._detail.showEditForm(s);
         this._onSelect(s);
+      });
+
+      card.querySelector('.usl-card__action--export').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._onExport(s);
       });
 
       card.querySelector('.usl-card__action--delete').addEventListener('click', (e) => {
