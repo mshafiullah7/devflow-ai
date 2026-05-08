@@ -358,7 +358,6 @@
 }
 
 [data-theme="light"] .project-page__header {
-  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 

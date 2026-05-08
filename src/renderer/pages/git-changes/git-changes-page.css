@@ -159,7 +159,6 @@
 /* Light theme                                                          */
 /* ------------------------------------------------------------------ */
 [data-theme="light"] .git-page__header {
-  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 [data-theme="light"] .git-page__back {
