@@ -704,8 +704,11 @@ function registerDbHandlers() {
     const safe = name.replace(/[^a-z0-9_\-]/gi, '_');
     const file = path.join(dir, `${safe}_${id}.drawio`);
     fs.writeFileSync(file, content, 'utf8');
-    await shell.openPath(file);
-    return file;
+    const err = await shell.openPath(file);
+    if (err) {
+      return { file, error: err };
+    }
+    return { file };
   });
 
   ipcMain.handle('shell:readFile', (_e, filepath) => {

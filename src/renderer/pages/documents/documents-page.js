@@ -283,6 +283,7 @@ export class DocumentsPage {
     });
 
     this._attachments = await window.db.attachments.list(id);
+    const attachMap   = await this._getAttachmentContentMap();
 
     const panel      = this.container.querySelector('#docPanel');
     const initialTab = switchToEdit ? 'edit' : 'preview';
@@ -319,7 +320,7 @@ export class DocumentsPage {
             placeholder="Write your document in Markdown…\n\nReference attachments with: [My Diagram](attach:ID)">${escHtml(doc.content || '')}</textarea>
         </div>
         <div class="doc-editor__pane doc-editor__pane--preview${initialTab === 'preview' ? '' : ' doc-editor__pane--hidden'}" data-pane="preview">
-          ${this._renderMarkdown(doc.content || '')}
+          ${this._renderMarkdown(doc.content || '', attachMap)}
         </div>
 
         <div class="doc-attach-bar">
@@ -449,7 +450,8 @@ export class DocumentsPage {
         const attachList    = panel.querySelector('#docAttachList');
         if (tab.dataset.tab === 'preview') {
           if (this._dirty) await save();
-          previewPane.innerHTML = this._renderMarkdown(contentTA.value);
+          const attachMap = await this._getAttachmentContentMap();
+          previewPane.innerHTML = this._renderMarkdown(contentTA.value, attachMap);
           editPane.classList.add('doc-editor__pane--hidden');
           previewPane.classList.remove('doc-editor__pane--hidden');
           this._bindAttachLinks(panel);
@@ -490,7 +492,8 @@ export class DocumentsPage {
       exportPdfBtn.disabled = true;
       exportPdfBtn.textContent = 'Exporting…';
       try {
-        await window.app.exportPdf({ html: this._buildPdfHtml(title, contentTA.value), filename: title });
+        const attachMap = await this._getAttachmentContentMap();
+        await window.app.exportPdf({ html: this._buildPdfHtml(title, contentTA.value, attachMap), filename: title });
       } finally {
         exportPdfBtn.disabled = false;
         exportPdfBtn.innerHTML = origHtml;
@@ -527,8 +530,12 @@ export class DocumentsPage {
         const id  = Number(drawioBtn.dataset.drawio);
         const att = await window.db.attachments.getContent(id);
         if (!att) return;
-        const filepath = await window.shell.openDrawio({ id, name: att.name, content: att.content });
-        this._drawioFiles.set(id, filepath);
+        const result = await window.shell.openDrawio({ id, name: att.name, content: att.content });
+        if (result.error) {
+          this._showToast('No app found for .drawio files — install draw.io desktop');
+        } else {
+          this._drawioFiles.set(id, result.file);
+        }
         return;
       }
       const syncBtn = e.target.closest('[data-sync]');
@@ -751,10 +758,14 @@ export class DocumentsPage {
       openBtn.addEventListener('click', async () => {
         const full = await window.db.attachments.getContent(openDrawioId);
         if (!full) return;
-        const filepath = await window.shell.openDrawio({ id: full.id ?? openDrawioId, name: full.name, content: full.content });
-        this._drawioFiles.set(openDrawioId, filepath);
-        lb.remove();
-        document.removeEventListener('keydown', escH);
+        const result = await window.shell.openDrawio({ id: full.id ?? openDrawioId, name: full.name, content: full.content });
+        if (result.error) {
+          this._showToast('No app found for .drawio files — install draw.io desktop');
+        } else {
+          this._drawioFiles.set(openDrawioId, result.file);
+          lb.remove();
+          document.removeEventListener('keydown', escH);
+        }
       });
     }
   }
@@ -767,6 +778,14 @@ export class DocumentsPage {
       a.addEventListener('click', async e => {
         e.preventDefault();
         const att = await window.db.attachments.getContent(Number(a.dataset.attachId));
+        if (att) this._showAttachLightbox(att);
+      });
+    });
+    panel.querySelectorAll('img.md-attach-inline[data-attach-id]').forEach(img => {
+      img.style.cursor = 'pointer';
+      img.addEventListener('click', async e => {
+        e.preventDefault();
+        const att = await window.db.attachments.getContent(Number(img.dataset.attachId));
         if (att) this._showAttachLightbox(att);
       });
     });
@@ -1157,14 +1176,15 @@ export class DocumentsPage {
   // ----------------------------------------------------------------
   // Preview refresh (called after AI applies content)
   // ----------------------------------------------------------------
-  _refreshPreviewIfActive() {
+  async _refreshPreviewIfActive() {
     const panel = this.container.querySelector('#docPanel');
     if (!panel) return;
     const previewPane = panel.querySelector('[data-pane="preview"]');
     const contentTA   = panel.querySelector('#docContentTA');
     if (!previewPane || !contentTA) return;
     if (!previewPane.classList.contains('doc-editor__pane--hidden')) {
-      previewPane.innerHTML = this._renderMarkdown(contentTA.value);
+      const attachMap = await this._getAttachmentContentMap();
+      previewPane.innerHTML = this._renderMarkdown(contentTA.value, attachMap);
       this._bindAttachLinks(panel);
       const saveBtn = panel.querySelector('#docSaveBtn');
       if (saveBtn) saveBtn.disabled = false;
@@ -1185,9 +1205,9 @@ export class DocumentsPage {
   // ----------------------------------------------------------------
   // PDF export
   // ----------------------------------------------------------------
-  _buildPdfHtml(title, content) {
+  _buildPdfHtml(title, content, attachMap) {
     const esc  = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const body = this._renderMarkdown(content);
+    const body = this._renderMarkdown(content, attachMap);
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -1227,10 +1247,21 @@ ${body}
 </html>`;
   }
 
+  async _getAttachmentContentMap() {
+    const map = new Map();
+    for (const att of this._attachments) {
+      try {
+        const full = await window.db.attachments.getContent(att.id);
+        if (full) map.set(String(att.id), { type: full.type, content: full.content, name: full.name });
+      } catch { /* skip */ }
+    }
+    return map;
+  }
+
   // ----------------------------------------------------------------
   // Markdown renderer (identical to DocumentsModal)
   // ----------------------------------------------------------------
-  _renderMarkdown(text) {
+  _renderMarkdown(text, attachMap) {
     if (!text || !text.trim()) return '<p class="doc-preview__hint">Nothing to preview yet.</p>';
     const esc   = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = text.split('\n');
@@ -1247,7 +1278,7 @@ ${body}
     };
     const flushTable = () => {
       if (!inTable) return;
-      out.push(this._renderTable(tableLines));
+      out.push(this._renderTable(tableLines, attachMap));
       tableLines = []; inTable = false; lastBlock = 'table';
     };
 
@@ -1286,17 +1317,17 @@ ${body}
       if (inTable) flushTable();
 
       const hm = line.match(/^(#{1,6})\s+(.*)/);
-      if (hm) { closeList(); out.push(`<h${hm[1].length}>${this._inlineMd(esc(hm[2]))}</h${hm[1].length}>`); lastBlock = 'heading'; continue; }
+      if (hm) { closeList(); out.push(`<h${hm[1].length}>${this._inlineMd(esc(hm[2]), attachMap)}</h${hm[1].length}>`); lastBlock = 'heading'; continue; }
       if (/^[-*_]{3,}\s*$/.test(line)) { closeList(); out.push('<hr>'); lastBlock = 'hr'; continue; }
       const ulm = line.match(/^[-*+]\s+(.*)/);
-      if (ulm) { if (inOl) { out.push('</ol>'); inOl = false; } if (!inUl) { out.push('<ul>'); inUl = true; } out.push(`<li>${this._inlineMd(esc(ulm[1]))}</li>`); lastBlock = 'list'; continue; }
+      if (ulm) { if (inOl) { out.push('</ol>'); inOl = false; } if (!inUl) { out.push('<ul>'); inUl = true; } out.push(`<li>${this._inlineMd(esc(ulm[1]), attachMap)}</li>`); lastBlock = 'list'; continue; }
       const olm = line.match(/^\d+\.\s+(.*)/);
-      if (olm) { if (inUl) { out.push('</ul>'); inUl = false; } if (!inOl) { out.push('<ol>'); inOl = true; } out.push(`<li>${this._inlineMd(esc(olm[1]))}</li>`); lastBlock = 'list'; continue; }
+      if (olm) { if (inUl) { out.push('</ul>'); inUl = false; } if (!inOl) { out.push('<ol>'); inOl = true; } out.push(`<li>${this._inlineMd(esc(olm[1]), attachMap)}</li>`); lastBlock = 'list'; continue; }
       const bqm = line.match(/^>\s?(.*)/);
-      if (bqm) { closeList(); out.push(`<blockquote>${this._inlineMd(esc(bqm[1]))}</blockquote>`); lastBlock = 'blockquote'; continue; }
+      if (bqm) { closeList(); out.push(`<blockquote>${this._inlineMd(esc(bqm[1]), attachMap)}</blockquote>`); lastBlock = 'blockquote'; continue; }
       if (line.trim() === '') { closeList(); if (lastBlock === 'p') { out.push('<br>'); lastBlock = 'br'; } continue; }
       closeList();
-      out.push(`<p>${this._inlineMd(esc(line))}</p>`);
+      out.push(`<p>${this._inlineMd(esc(line), attachMap)}</p>`);
       lastBlock = 'p';
     }
 
@@ -1306,9 +1337,9 @@ ${body}
     return out.join('');
   }
 
-  _renderTable(lines) {
+  _renderTable(lines, attachMap) {
     const esc      = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const parseRow = line => line.split('|').slice(1, -1).map(c => this._inlineMd(esc(c.trim())));
+    const parseRow = line => line.split('|').slice(1, -1).map(c => this._inlineMd(esc(c.trim()), attachMap));
     const isSep    = line => /^\|[\s|:-]+\|$/.test(line.trim());
 
     const rows = lines.filter(l => !isSep(l));
@@ -1325,16 +1356,35 @@ ${body}
     return `<table class="md-table"><thead><tr>${th}</tr></thead><tbody>${tbody}</tbody></table>`;
   }
 
-  _inlineMd(s) {
-    return s
+  _inlineMd(s, attachMap) {
+    let result = s
       .replace(/`([^`]+)`/g,           '<code>$1</code>')
       .replace(/\*\*\*(.+?)\*\*\*/g,   '<strong><em>$1</em></strong>')
       .replace(/\*\*(.+?)\*\*/g,       '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g,           '<em>$1</em>')
-      .replace(/~~(.+?)~~/g,           '<del>$1</del>')
-      .replace(/\[([^\]]+)\]\(attach:(\d+)\)/g,
-        '<a class="doc-attach-link" data-attach-id="$2" href="#">$1</a>')
-      .replace(/\[([^\]]+)\]\((?!attach:)([^)]+)\)/g,
-        '<a href="$2" target="_blank">$1</a>');
+      .replace(/~~(.+?)~~/g,           '<del>$1</del>');
+
+    result = result.replace(/\[([^\]]+)\]\(attach:(\d+)\)/g, (_match, label, id) => {
+      const att = attachMap && attachMap.get(id);
+      if (att) {
+        let svgSource = null;
+        if (att.type === 'svg') {
+          svgSource = att.content;
+        } else {
+          const m = att.content.match(/<svg[\s\S]*?<\/svg>/i);
+          if (m) svgSource = m[0];
+        }
+        if (svgSource) {
+          const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgSource)}`;
+          return `<img class="md-svg-img md-attach-inline" data-attach-id="${id}" src="${dataUri}" alt="${label}" title="${label} — click to enlarge"/>`;
+        }
+      }
+      return `<a class="doc-attach-link" data-attach-id="${id}" href="#">${label}</a>`;
+    });
+
+    result = result.replace(/\[([^\]]+)\]\((?!attach:)([^)]+)\)/g,
+      '<a href="$2" target="_blank">$1</a>');
+
+    return result;
   }
 }
