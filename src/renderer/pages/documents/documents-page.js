@@ -273,7 +273,6 @@ export class DocumentsPage {
   // Editor
   // ----------------------------------------------------------------
   async _selectDoc(id, switchToEdit = false) {
-    this.container.querySelector('.doc-ai-card')?.remove();
     this._activeId = id;
     const doc = this._docs.find(d => d.id === id);
     if (!doc) return;
@@ -289,71 +288,99 @@ export class DocumentsPage {
     const initialTab = switchToEdit ? 'edit' : 'preview';
 
     panel.innerHTML = `
-      <div class="doc-editor">
-        <div class="doc-editor__toolbar">
-          <input class="doc-editor__title-input" id="docTitleInput"
-            value="${escHtml(doc.title)}" placeholder="Document title" maxlength="200" autocomplete="off"/>
-          <div class="doc-editor__tabs">
-            <button class="doc-editor__tab${initialTab === 'edit' ? ' doc-editor__tab--active' : ''}" data-tab="edit">Edit</button>
-            <button class="doc-editor__tab${initialTab === 'preview' ? ' doc-editor__tab--active' : ''}" data-tab="preview">Preview</button>
+      <div class="doc-editor-wrap">
+        <div class="doc-editor">
+          <div class="doc-editor__toolbar">
+            <input class="doc-editor__title-input" id="docTitleInput"
+              value="${escHtml(doc.title)}" placeholder="Document title" maxlength="200" autocomplete="off"/>
+            <div class="doc-editor__tabs">
+              <button class="doc-editor__tab${initialTab === 'edit' ? ' doc-editor__tab--active' : ''}" data-tab="edit">Edit</button>
+              <button class="doc-editor__tab${initialTab === 'preview' ? ' doc-editor__tab--active' : ''}" data-tab="preview">Preview</button>
+            </div>
+            <button class="doc-editor__export-pdf-btn" id="docExportPdfBtn" title="Export to PDF">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L9 2z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 2v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6 10h4M6 12.5h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              Export PDF
+            </button>
+            <button class="doc-editor__save" id="docSaveBtn"${initialTab === 'preview' ? ' disabled' : ''}>Save</button>
           </div>
-          <button class="doc-editor__ai-btn" id="docAiBtn" title="AI Edit"${initialTab === 'preview' ? ' hidden' : ''}>
+
+          <div class="doc-editor__pane doc-editor__pane--edit${initialTab === 'edit' ? '' : ' doc-editor__pane--hidden'}" data-pane="edit">
+            <textarea class="doc-editor__textarea" id="docContentTA"
+              placeholder="Write your document in Markdown…\n\nReference attachments with: [My Diagram](attach:ID)">${escHtml(doc.content || '')}</textarea>
+          </div>
+          <div class="doc-editor__pane doc-editor__pane--preview${initialTab === 'preview' ? '' : ' doc-editor__pane--hidden'}" data-pane="preview">
+            ${this._renderMarkdown(doc.content || '', attachMap)}
+          </div>
+
+          <div class="doc-attach-bar">
+            <div class="doc-attach-bar__header" id="docAttachToggle">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M13.5 8.5l-5.5 5.5a4 4 0 01-5.66-5.66l6-6a2.5 2.5 0 013.54 3.54l-6.01 6a1 1 0 01-1.41-1.42l5.5-5.5"
+                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>Attachments</span>
+              <span class="doc-attach-bar__count" id="docAttachCount">${this._attachments.length}</span>
+              <svg class="doc-attach-bar__chevron" width="10" height="10" viewBox="0 0 12 12" fill="none">
+                <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="doc-attach-bar__body" id="docAttachBody">
+              <div class="doc-attach-list" id="docAttachList">
+                ${this._renderAttachList(initialTab === 'preview')}
+              </div>
+              <div class="doc-attach-actions" id="docAttachActions"${initialTab === 'preview' ? ' hidden' : ''}>
+                <button class="doc-attach-add-btn" id="docAddSvg">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  </svg>
+                  Add SVG
+                </button>
+                <button class="doc-attach-add-btn" id="docAddDrawio">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  </svg>
+                  Add draw.io
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="doc-divider" id="docDivider"></div>
+
+      <div class="doc-ai-card" id="docAiCard">
+        <div class="doc-ai-card__header">
+          <span class="doc-ai-card__title">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M8 1v3M8 12v3M1 8h3M12 8h3M3.05 3.05l2.12 2.12M10.83 10.83l2.12 2.12M3.05 12.95l2.12-2.12M10.83 5.17l2.12-2.12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               <circle cx="8" cy="8" r="2" fill="currentColor"/>
             </svg>
-            AI
-          </button>
-          <button class="doc-editor__export-pdf-btn" id="docExportPdfBtn" title="Export to PDF">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L9 2z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M9 2v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M6 10h4M6 12.5h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-            </svg>
-            Export PDF
-          </button>
-          <button class="doc-editor__save" id="docSaveBtn"${initialTab === 'preview' ? ' disabled' : ''}>Save</button>
-        </div>
-
-        <div class="doc-editor__pane doc-editor__pane--edit${initialTab === 'edit' ? '' : ' doc-editor__pane--hidden'}" data-pane="edit">
-          <textarea class="doc-editor__textarea" id="docContentTA"
-            placeholder="Write your document in Markdown…\n\nReference attachments with: [My Diagram](attach:ID)">${escHtml(doc.content || '')}</textarea>
-        </div>
-        <div class="doc-editor__pane doc-editor__pane--preview${initialTab === 'preview' ? '' : ' doc-editor__pane--hidden'}" data-pane="preview">
-          ${this._renderMarkdown(doc.content || '', attachMap)}
-        </div>
-
-        <div class="doc-attach-bar">
-          <div class="doc-attach-bar__header" id="docAttachToggle">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-              <path d="M13.5 8.5l-5.5 5.5a4 4 0 01-5.66-5.66l6-6a2.5 2.5 0 013.54 3.54l-6.01 6a1 1 0 01-1.41-1.42l5.5-5.5"
-                stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>Attachments</span>
-            <span class="doc-attach-bar__count" id="docAttachCount">${this._attachments.length}</span>
-            <svg class="doc-attach-bar__chevron" width="10" height="10" viewBox="0 0 12 12" fill="none">
-              <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            AI Edit
+          </span>
+          <div class="doc-ai-card__header-actions">
+            <button class="doc-ai-card__icon-btn" id="docAiClear" title="Clear conversation">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 13h12M10.5 3L5 8.5l-2 4.5 4.5-2 5.5-5.5-2-2z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
-          <div class="doc-attach-bar__body" id="docAttachBody">
-            <div class="doc-attach-list" id="docAttachList">
-              ${this._renderAttachList(initialTab === 'preview')}
-            </div>
-            <div class="doc-attach-actions" id="docAttachActions"${initialTab === 'preview' ? ' hidden' : ''}>
-              <button class="doc-attach-add-btn" id="docAddSvg">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-                Add SVG
-              </button>
-              <button class="doc-attach-add-btn" id="docAddDrawio">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-                Add draw.io
-              </button>
-            </div>
-          </div>
+        </div>
+        <div class="doc-ai-card__messages" id="docAiMessages">
+          <p class="doc-ai-card__welcome">Describe what changes to make. The AI has full context of the document and any attached diagrams.</p>
+        </div>
+        <div class="doc-ai-card__compose">
+          <textarea class="doc-ai-card__input" id="docAiInput" rows="2" maxlength="4000"
+            placeholder="e.g. Add a deployment section based on the architecture diagram"></textarea>
+          <button class="doc-ai-card__send" id="docAiSend" title="Send (Enter) — Alt+Enter for new line">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M14 2L2 8l4 2 2 4 6-12z" fill="currentColor"/>
+            </svg>
+          </button>
         </div>
       </div>
     `;
@@ -361,6 +388,8 @@ export class DocumentsPage {
     this._dirty = false;
     this._bindEditorEvents(doc);
     this._bindAttachEvents(doc);
+    this._bindAiPane(doc);
+    this._bindDivider();
     if (initialTab === 'preview') this._bindAttachLinks(panel);
   }
 
@@ -445,7 +474,6 @@ export class DocumentsPage {
       tab.addEventListener('click', async () => {
         tabs.forEach(t => t.classList.remove('doc-editor__tab--active'));
         tab.classList.add('doc-editor__tab--active');
-        const aiBtn  = panel.querySelector('#docAiBtn');
         const attachActions = panel.querySelector('#docAttachActions');
         const attachList    = panel.querySelector('#docAttachList');
         if (tab.dataset.tab === 'preview') {
@@ -456,9 +484,6 @@ export class DocumentsPage {
           previewPane.classList.remove('doc-editor__pane--hidden');
           this._bindAttachLinks(panel);
           saveBtn.disabled = true;
-          if (aiBtn) aiBtn.hidden = true;
-          const aiCard = this.container.querySelector('.doc-ai-card');
-          if (aiCard) aiCard.hidden = true;
           if (attachActions) attachActions.hidden = true;
           if (attachList) attachList.innerHTML = this._renderAttachList(true);
           this._bindAttachListEvents(panel, doc.id);
@@ -466,10 +491,6 @@ export class DocumentsPage {
           previewPane.classList.add('doc-editor__pane--hidden');
           editPane.classList.remove('doc-editor__pane--hidden');
           saveBtn.disabled = false;
-          if (aiBtn) aiBtn.hidden = false;
-          const existingCard = this.container.querySelector('.doc-ai-card');
-          if (existingCard) existingCard.hidden = false;
-          else this._showAiCard(doc);
           if (attachActions) attachActions.hidden = false;
           if (attachList) attachList.innerHTML = this._renderAttachList(false);
           this._bindAttachListEvents(panel, doc.id);
@@ -482,8 +503,6 @@ export class DocumentsPage {
       panel.querySelector('#docAttachBody').classList.toggle('doc-attach-bar__body--open');
       panel.querySelector('.doc-attach-bar__chevron').classList.toggle('doc-attach-bar__chevron--open');
     });
-
-    panel.querySelector('#docAiBtn').addEventListener('click', () => this._toggleAiCard(doc));
 
     const exportPdfBtn = panel.querySelector('#docExportPdfBtn');
     exportPdfBtn.addEventListener('click', async () => {
@@ -864,56 +883,12 @@ export class DocumentsPage {
   }
 
   // ----------------------------------------------------------------
-  // AI Edit card
+  // AI Edit pane (right panel)
   // ----------------------------------------------------------------
-  _toggleAiCard(doc) {
-    const existing = this.container.querySelector('.doc-ai-card');
-    if (existing) { existing.remove(); return; }
-    this._showAiCard(doc);
-  }
-
-  _showAiCard(doc) {
-    const card = document.createElement('div');
-    card.className = 'doc-ai-card';
-    card.innerHTML = `
-      <div class="doc-ai-card__header">
-        <span class="doc-ai-card__title">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <path d="M8 1v3M8 12v3M1 8h3M12 8h3M3.05 3.05l2.12 2.12M10.83 10.83l2.12 2.12M3.05 12.95l2.12-2.12M10.83 5.17l2.12-2.12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <circle cx="8" cy="8" r="2" fill="currentColor"/>
-          </svg>
-          AI Edit
-        </span>
-        <div class="doc-ai-card__header-actions">
-          <button class="doc-ai-card__icon-btn" id="docAiClear" title="Clear conversation">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-              <path d="M2 13h12M10.5 3L5 8.5l-2 4.5 4.5-2 5.5-5.5-2-2z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button class="doc-ai-card__icon-btn" id="docAiClose" aria-label="Close">
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-              <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div class="doc-ai-card__messages" id="docAiMessages">
-        <p class="doc-ai-card__welcome">Describe what changes to make. The AI has full context of the document and any attached diagrams.</p>
-      </div>
-      <div class="doc-ai-card__compose">
-        <textarea class="doc-ai-card__input" id="docAiInput" rows="2" maxlength="4000"
-          placeholder="e.g. Add a deployment section based on the architecture diagram"></textarea>
-        <button class="doc-ai-card__send" id="docAiSend" title="Send (Enter) — Alt+Enter for new line">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M14 2L2 8l4 2 2 4 6-12z" fill="currentColor"/>
-          </svg>
-        </button>
-      </div>
-    `;
-
-    this.container.querySelector('.documents-page__body').appendChild(card);
-
+  _bindAiPane(doc) {
+    const card    = this.container.querySelector('#docAiCard');
     const inputEl = card.querySelector('#docAiInput');
+
     inputEl.addEventListener('input', () => {
       inputEl.style.height = 'auto';
       const capped = Math.min(inputEl.scrollHeight, 160);
@@ -921,7 +896,6 @@ export class DocumentsPage {
       inputEl.style.overflowY = inputEl.scrollHeight > 160 ? 'auto' : 'hidden';
     });
 
-    card.querySelector('#docAiClose').addEventListener('click', () => card.remove());
     card.querySelector('#docAiClear').addEventListener('click', () => {
       card.querySelector('#docAiMessages').innerHTML =
         '<p class="doc-ai-card__welcome">Conversation cleared.</p>';
@@ -940,8 +914,41 @@ export class DocumentsPage {
     inputEl.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); submit(); }
     });
+  }
 
-    inputEl.focus();
+  // ----------------------------------------------------------------
+  // Resizable divider between editor and AI pane
+  // ----------------------------------------------------------------
+  _bindDivider() {
+    const divider  = this.container.querySelector('#docDivider');
+    const panel    = this.container.querySelector('#docPanel');
+    const editorWrap = panel.querySelector('.doc-editor-wrap');
+    const aiCard   = panel.querySelector('#docAiCard');
+    if (!divider || !editorWrap || !aiCard) return;
+
+    const onMouseMove = e => {
+      const panelRect = panel.getBoundingClientRect();
+      const totalW    = panelRect.width;
+      let aiW = panelRect.right - e.clientX;
+      aiW = Math.max(200, Math.min(aiW, totalW - 200));
+      aiCard.style.flex = `0 0 ${aiW}px`;
+      editorWrap.style.flex = '1';
+    };
+    const onMouseUp = () => {
+      divider.classList.remove('doc-divider--dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    divider.addEventListener('mousedown', e => {
+      e.preventDefault();
+      divider.classList.add('doc-divider--dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
   }
 
   _appendChatMsg(msgsEl, role, text, isError = false) {
