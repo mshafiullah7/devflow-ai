@@ -1,23 +1,25 @@
 /* ------------------------------------------------------------------ */
-/* Launcher page layout                                                 */
+/* Launcher page — Combined design (B header + C minimal body)          */
 /* ------------------------------------------------------------------ */
 .launcher {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
+  overflow: hidden;
+  background: var(--bg);
 }
 
+/* ------------------------------------------------------------------ */
+/* Header / topbar                                                       */
+/* ------------------------------------------------------------------ */
 .launcher__header {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 56px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 0 1.5rem;
-  background: var(--surface);
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 48px;
+  background: var(--surface-header);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
 }
@@ -25,199 +27,309 @@
 .launcher__logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   -webkit-app-region: no-drag;
 }
 
+.launcher__logo-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.launcher__logo-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 7px;
+  display: block;
+}
 
 .launcher__app-name {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.02em;
   color: var(--text-primary);
 }
 
+/* Theme pill switcher */
+.launcher__theme-control {
+  display: flex;
+  gap: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  -webkit-app-region: no-drag;
+}
+
+.launcher__theme-btn {
+  padding: 3px 10px;
+  border: none;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+
+.launcher__theme-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ */
+/* Main — centered content                                              */
+/* ------------------------------------------------------------------ */
 .launcher__main {
-  width: 100%;
-  max-width: 520px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
-  padding-top: 56px;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding-top: max(36px, calc(50vh - 330px));
+  padding-bottom: 24px;
+}
+
+/* Logo mark */
+.launcher__mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 20px;
+  color: #fff;
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+              0 8px 24px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.launcher__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 14px;
+  display: block;
 }
 
 .launcher__title {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.4px;
+  margin-bottom: 4px;
   text-align: center;
 }
 
 .launcher__subtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   text-align: center;
-  margin-top: -1rem;
+  margin-bottom: 28px;
 }
 
 /* ------------------------------------------------------------------ */
-/* New project button                                                   */
+/* Card                                                                 */
 /* ------------------------------------------------------------------ */
-.btn-new-project {
+.launcher__card {
+  width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 240px);
+  box-shadow: var(--card-shadow);
+}
+
+/* ------------------------------------------------------------------ */
+/* New project row                                                      */
+/* ------------------------------------------------------------------ */
+.launcher__new-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.launcher__new-row:hover { background: var(--surface-hover); }
+
+.launcher__new-plus {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 10px 22px;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
 }
-.btn-new-project:hover  { background: var(--accent-hover); }
-.btn-new-project:active { transform: scale(0.98); }
 
-/* ------------------------------------------------------------------ */
-/* Recent projects list                                                 */
-/* ------------------------------------------------------------------ */
-.recent-section { width: 100%; }
+.launcher__new-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
 
-.recent-section__heading {
+.launcher__new-hint {
   font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Recent divider                                                       */
+/* ------------------------------------------------------------------ */
+.launcher__divider {
+  padding: 7px 18px 5px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  background: var(--surface-header);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-.project-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* ------------------------------------------------------------------ */
+/* Scrollable project list                                              */
+/* ------------------------------------------------------------------ */
+.launcher__proj-scroll {
+  overflow-y: auto;
+  flex: 1;
 }
+.launcher__proj-scroll::-webkit-scrollbar { width: 4px; }
+.launcher__proj-scroll::-webkit-scrollbar-track { background: transparent; }
+.launcher__proj-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-.project-list__empty {
+/* Empty state */
+.launcher__empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 2.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  padding: 40px 20px;
   color: var(--text-muted);
   font-size: 13px;
+  text-align: center;
 }
 
 /* ------------------------------------------------------------------ */
-/* Project card (also defined in app.css — this local copy is         */
-/* identical, the app.css version is the canonical one)                */
+/* Project rows                                                         */
 /* ------------------------------------------------------------------ */
-.project-card {
+.launcher__proj-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
+  padding: 10px 18px;
   cursor: pointer;
-  text-align: left;
+  transition: background 0.15s;
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-top: none;
   font-family: inherit;
-  box-shadow: var(--card-shadow);
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  text-align: left;
 }
-.project-card:hover {
-  background: var(--surface-hover, rgba(99,102,241,0.04));
-  border-color: var(--accent);
-}
+.launcher__proj-row:last-child { border-bottom: none; }
+.launcher__proj-row:hover { background: var(--surface-hover); }
 
-.project-card__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--card-icon-bg, var(--accent));
-  color: #fff;
+.launcher__proj-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  font-weight: 700;
   flex-shrink: 0;
 }
 
-[data-theme="light"] .project-card__icon {
-  background: rgba(30,58,95,0.10);
-  color: #1e3a5f;
+[data-theme="light"] .launcher__proj-dot {
+  background: rgba(30, 58, 95, 0.08);
 }
 
-.project-card__info {
-  flex: 1;
-  min-width: 0;
-}
+.launcher__proj-info { flex: 1; min-width: 0; }
 
-.project-card__name {
-  font-size: 14px;
-  font-weight: 600;
+.launcher__proj-name {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.project-card__desc {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
+.launcher__proj-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-top: 1px;
 }
 
-.project-card__meta {
+.launcher__proj-time {
   font-size: 11px;
   color: var(--text-muted);
-  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.project-card__edit,
-.project-card__delete {
-  background: transparent;
+.launcher__proj-actions {
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.launcher__proj-row:hover .launcher__proj-actions { opacity: 1; }
+
+.launcher__action-btn {
+  width: 24px;
+  height: 24px;
   border: none;
-  padding: 4px 5px;
-  border-radius: 4px;
-  cursor: pointer;
+  background: transparent;
   color: var(--text-muted);
+  border-radius: 5px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s, background 0.15s;
-  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
 }
-.project-card:hover .project-card__edit,
-.project-card:hover .project-card__delete {
-  opacity: 1;
-}
-.project-card__edit:hover {
-  color: var(--accent, #6366f1);
-  background: rgba(99, 102, 241, 0.1);
-}
-.project-card__delete:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+.launcher__action-btn:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
 /* ------------------------------------------------------------------ */
-/* Project edit modal                                                   */
+/* Project edit overlay (kept identical to before)                      */
 /* ------------------------------------------------------------------ */
 .proj-edit-overlay {
   position: fixed;
@@ -230,7 +342,7 @@
 }
 
 .proj-edit-dialog {
-  background: var(--surface, #1e1e2e);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 24px;
@@ -248,11 +360,7 @@
   margin: 0;
 }
 
-.proj-edit-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+.proj-edit-field { display: flex; flex-direction: column; gap: 6px; }
 
 .proj-edit-label {
   font-size: 12px;
@@ -264,7 +372,7 @@
 .proj-edit-textarea {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: 14px;
   font-family: inherit;
@@ -275,23 +383,15 @@
   box-sizing: border-box;
 }
 .proj-edit-input:focus,
-.proj-edit-textarea:focus {
-  border-color: var(--accent, #6366f1);
-}
-.proj-edit-textarea {
-  resize: vertical;
-}
+.proj-edit-textarea:focus { border-color: var(--accent); }
+.proj-edit-textarea { resize: vertical; }
 
-.proj-edit-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
+.proj-edit-footer { display: flex; justify-content: flex-end; gap: 8px; }
 
 .proj-edit-btn {
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 12px;
   font-family: inherit;
@@ -300,52 +400,6 @@
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
-.proj-edit-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--accent, #6366f1);
-}
-.proj-edit-btn--save {
-  border-color: var(--accent, #6366f1);
-  color: var(--accent, #6366f1);
-}
-.proj-edit-btn--save:hover {
-  background: var(--accent, #6366f1);
-  color: #fff;
-}
-
-/* ------------------------------------------------------------------ */
-/* Theme control (header top-right)                                     */
-/* ------------------------------------------------------------------ */
-.launcher__theme-control {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-  -webkit-app-region: no-drag;
-}
-
-.launcher__theme-select {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-family: inherit;
-  padding: 4px 24px 4px 8px;
-  height: 28px;
-  cursor: pointer;
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%234b5563' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 7px center;
-  transition: border-color 0.15s, color 0.15s;
-}
-.launcher__theme-select:hover { border-color: var(--accent); }
-.launcher__theme-select:focus { border-color: var(--accent); }
-.launcher__theme-select option {
-  background: var(--surface);
-  color: var(--text-primary);
-}
+.proj-edit-btn:hover { color: var(--text-primary); border-color: var(--accent); }
+.proj-edit-btn--save { border-color: var(--accent); color: var(--accent); }
+.proj-edit-btn--save:hover { background: var(--accent); color: #fff; }

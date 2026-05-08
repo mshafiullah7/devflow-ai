@@ -70,10 +70,42 @@ export class ProjectHomePage {
     this._git?.stopPoll();
   }
 
+  // ----------------------------------------------------------------
+  // Stats boxes (3-up: stories, features, issues)
+  // ----------------------------------------------------------------
   _statsHtml() {
     const stories  = this._stories  || [];
     const features = this._features || [];
+    const issues   = this._issueCount?.total ?? 0;
+
+    return `
+      <div class="ph-stats-strip">
+        <div class="ph-stat-box ph-stat-box--accent">
+          <div class="ph-stat-box__value">${stories.length}</div>
+          <div class="ph-stat-box__label">User Stories</div>
+        </div>
+        <div class="ph-stat-box">
+          <div class="ph-stat-box__value">${features.length}</div>
+          <div class="ph-stat-box__label">Features</div>
+        </div>
+        <div class="ph-stat-box ${issues > 0 ? 'ph-stat-box--danger' : ''}">
+          <div class="ph-stat-box__value">${issues}</div>
+          <div class="ph-stat-box__label">Open Issues</div>
+        </div>
+      </div>`;
+  }
+
+  // ----------------------------------------------------------------
+  // Status breakdown with progress bars
+  // ----------------------------------------------------------------
+  _statusBreakdownHtml() {
+    const stories  = this._stories  || [];
     const statuses = this._statuses || [];
+    const total    = stories.length;
+
+    if (total === 0) {
+      return `<p class="ph-status-empty">No stories yet</p>`;
+    }
 
     const storyCounts = {};
     for (const s of stories) {
@@ -81,114 +113,112 @@ export class ProjectHomePage {
       storyCounts[label] = (storyCounts[label] || 0) + 1;
     }
 
-    const statusPills = [];
+    const rows = [];
     for (const st of statuses) {
-      if (storyCounts[st.name] !== undefined) {
-        statusPills.push({ label: st.name, count: storyCounts[st.name] });
+      if (storyCounts[st.name]) {
+        rows.push({ label: st.name, count: storyCounts[st.name] });
       }
     }
     if (storyCounts['No Status']) {
-      statusPills.push({ label: 'No Status', count: storyCounts['No Status'] });
+      rows.push({ label: 'No Status', count: storyCounts['No Status'] });
     }
 
-    const pillsHtml = statusPills.length
-      ? statusPills.map(p => `
-          <span class="ph-stat-pill">
-            <span class="ph-stat-pill__label">${escHtml(p.label)}</span>
-            <span class="ph-stat-pill__count">${p.count}</span>
-          </span>`).join('')
-      : `<span class="ph-stat-empty">No stories yet</span>`;
-
-    return `
-      <div class="project-home__stats">
-        <div class="ph-stat-card">
-          <div class="ph-stat-card__value">${stories.length}</div>
-          <div class="ph-stat-card__label">User Stories</div>
-        </div>
-        <div class="ph-stat-card">
-          <div class="ph-stat-card__value">${features.length}</div>
-          <div class="ph-stat-card__label">Features</div>
-        </div>
-        <div class="ph-stat-card ph-stat-card--wide">
-          <div class="ph-stat-card__label ph-stat-card__label--top">Stories by Status</div>
-          <div class="ph-stat-pills">${pillsHtml}</div>
-        </div>
-      </div>`;
+    return rows.map(r => {
+      const pct = Math.round((r.count / total) * 100);
+      return `
+        <div class="ph-status-row">
+          <span class="ph-status-dot"></span>
+          <span class="ph-status-name">${escHtml(r.label)}</span>
+          <div class="ph-status-bar-wrap">
+            <div class="ph-status-bar" style="width:${pct}%"></div>
+          </div>
+          <span class="ph-status-count">${r.count}</span>
+        </div>`;
+    }).join('');
   }
 
+  // ----------------------------------------------------------------
+  // Quick links
+  // ----------------------------------------------------------------
   _quickLinksHtml() {
-    const docs = this._documents || [];
-    const hasDoc  = title => docs.some(d => d.title.toLowerCase() === title.toLowerCase());
+    const docs     = this._documents || [];
+    const hasDoc   = title => docs.some(d => d.title.toLowerCase() === title.toLowerCase());
     const hasStyle = !!((() => { try { const p = JSON.parse(this._project?.design_template || ''); return p?.light || p?.dark; } catch { return this._project?.design_template; } })());
 
     const links = [
       {
         id:   'phlOverview',
         name: 'Project Overview',
-        desc: 'High-level project summary document',
         has:  hasDoc('Project Overview'),
-        icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
+        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
       },
       {
         id:   'phlStyleGuide',
-        name: 'Project Style Guide',
-        desc: 'Design tokens, colours and components',
+        name: 'Style Guide',
         has:  hasStyle,
-        icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,
+        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,
       },
       {
         id:   'phlArchitecture',
-        name: 'Architecture Overview',
-        desc: 'System design and component structure',
+        name: 'Architecture',
         has:  hasDoc('Architecture Overview'),
-        icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>`,
+        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>`,
       },
       {
         id:   'phlTechStack',
         name: 'Tech Stack',
-        desc: 'Languages, frameworks and tools used',
         has:  hasDoc('Tech Stack'),
-        icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
       },
     ];
 
-    return `
-      <div class="project-home__stats">
-        ${links.map(l => `
-          <button class="ph-stat-card ph-stat-card--link" id="${l.id}">
-            <div class="ph-qlink__top">
-              <div class="ph-qlink__name">${escHtml(l.name)}</div>
-              <span class="ph-qlink__badge ${l.has ? 'ph-qlink__badge--set' : ''}">
-                ${l.has ? 'Set' : 'Not set'}
-              </span>
-            </div>
-            <div class="ph-qlink__desc">${escHtml(l.desc)}</div>
-          </button>
-        `).join('')}
-      </div>`;
+    return links.map(l => `
+      <button class="ph-qlink" id="${l.id}">
+        <span class="ph-qlink__icon">${l.icon}</span>
+        <span class="ph-qlink__name">${escHtml(l.name)}</span>
+        <span class="ph-qlink__badge ${l.has ? 'ph-qlink__badge--set' : 'ph-qlink__badge--unset'}">
+          ${l.has ? 'Set' : 'Not set'}
+        </span>
+      </button>`).join('');
   }
 
+  // ----------------------------------------------------------------
+  // Template
+  // ----------------------------------------------------------------
   _template() {
-    const name = this._project?.name ?? 'Project';
+    const name        = this._project?.name ?? 'Project';
+    const initial     = name.trim()[0]?.toUpperCase() ?? '?';
+    const stories     = this._stories  || [];
+    const features    = this._features || [];
+    const mockups     = this._mockups  || [];
+    const documents   = this._documents || [];
+    const extracted   = this._extractedStories || [];
+    const failed      = this._testRunHistory[0]?.failed ?? 0;
+    const issueTotal  = this._issueCount?.total ?? 0;
+
     return `
       <div class="project-home">
+
         <header class="project-home__header">
           <button class="project-home__back" id="btnBack" aria-label="Back to projects">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <div class="project-home__title-group">
-            <div class="project-home__title">${escHtml(name)}</div>
-            <div class="project-home__subtitle">Project Overview</div>
+
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${escHtml(initial)}</div>
+            <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
-          <div class="project-page__folder-display" id="headerFolderDisplay">
+
+          <div class="project-page__folder-display" id="headerFolderDisplay" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
               <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
                 stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
             </svg>
             <span class="project-page__folder-text" id="headerFolderText"></span>
           </div>
+
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <select class="project-page__model-select" id="phModelSelect" title="AI Model">
               <option value="">Loading…</option>
@@ -201,13 +231,15 @@ export class ProjectHomePage {
               </svg>
             </button>
           </div>
+
           <button class="project-page__folder-btn" id="phBtnFolder" title="Select folder" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
               <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
                 stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
             </svg>
           </button>
-          <button class="project-page__git-btn" id="phBtnGit" title="Git (opens User Stories)" style="-webkit-app-region:no-drag;">
+
+          <button class="project-page__git-btn" id="phBtnGit" title="Git" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
               <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
               <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -217,6 +249,7 @@ export class ProjectHomePage {
             </svg>
             <span class="project-page__git-badge" id="phGitBadge" hidden></span>
           </button>
+
           <button class="project-page__qcmd-btn" id="phBtnQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
               <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
@@ -227,144 +260,129 @@ export class ProjectHomePage {
           </button>
         </header>
 
-        <div class="project-home__body">
-          <div class="project-home__section-label">Overview</div>
-          ${this._statsHtml()}
+        <div class="project-home__layout">
 
-          <div class="project-home__section-label" style="margin-top:2rem;">Quick Links</div>
-          ${this._quickLinksHtml()}
+          <!-- Sidebar -->
+          <nav class="project-home__sidebar">
 
-          <div class="project-home__section-label" style="margin-top:2rem;">Project Areas</div>
-          <div class="project-home__cards">
+            <div class="ph-sidebar-section">Overview</div>
+            <button class="ph-nav-item active" id="navDashboard">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <rect x="3" y="3" width="7" height="7" rx="1"/>
+                  <rect x="14" y="3" width="7" height="7" rx="1"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1"/>
+                  <rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Dashboard</span>
+            </button>
 
-            <button class="ph-card" id="cardMockups">
-              <div class="ph-card__icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <div class="ph-sidebar-section">Work</div>
+            <button class="ph-nav-item" id="navMockups">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="2" y="3" width="20" height="14" rx="2"/>
                   <path d="M8 21h8M12 17v4"/>
                 </svg>
-              </div>
-              <div class="ph-card__body">
-                <div class="ph-card__name">Project Mockups</div>
-                <div class="ph-card__desc">UI screen designs and wireframes for this project.</div>
-              </div>
-              <div class="ph-card__footer">
-                <span class="ph-card__count">${this._mockups.length}</span>
-                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-              </div>
+              </span>
+              <span class="ph-nav-item__label">Mockups</span>
+              <span class="ph-nav-item__count">${mockups.length}</span>
             </button>
 
-            <button class="ph-card" id="cardDocuments">
-              <div class="ph-card__icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <button class="ph-nav-item" id="navDocuments">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                   <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                  <polyline points="10 9 9 9 8 9"/>
                 </svg>
-              </div>
-              <div class="ph-card__body">
-                <div class="ph-card__name">Project Documents</div>
-                <div class="ph-card__desc">Requirements, notes, and reference documents.</div>
-              </div>
-              <div class="ph-card__footer">
-                <span class="ph-card__count">${this._documents.length}</span>
-                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-              </div>
+              </span>
+              <span class="ph-nav-item__label">Documents</span>
+              <span class="ph-nav-item__count">${documents.length}</span>
             </button>
 
-            <button class="ph-card" id="cardExtractStories">
-              <div class="ph-card__icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <button class="ph-nav-item" id="navExtractStories">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                   <path d="M2 17l10 5 10-5"/>
                   <path d="M2 12l10 5 10-5"/>
                 </svg>
-              </div>
-              <div class="ph-card__body">
-                <div class="ph-card__name">Extract User Stories</div>
-                <div class="ph-card__desc">Extract and generate user stories from documents.</div>
-              </div>
-              <div class="ph-card__footer">
-                <span class="ph-card__count">${this._extractedStories.length}</span>
-                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-              </div>
+              </span>
+              <span class="ph-nav-item__label">Extract Stories</span>
+              <span class="ph-nav-item__count">${extracted.length}</span>
             </button>
 
-            <button class="ph-card" id="cardUserStories">
-              <div class="ph-card__icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <button class="ph-nav-item" id="navUserStories">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M9 11l3 3L22 4"/>
                   <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                 </svg>
-              </div>
-              <div class="ph-card__body">
-                <div class="ph-card__name">User Stories</div>
-                <div class="ph-card__desc">Features, stories, prompts, and development tasks.</div>
-              </div>
-              <div class="ph-card__footer">
-                <span class="ph-card__count">${this._stories.length}</span>
-                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-              </div>
+              </span>
+              <span class="ph-nav-item__label">User Stories</span>
+              <span class="ph-nav-item__count">${stories.length}</span>
             </button>
 
-            <button class="ph-card" id="cardTestRunner">
-              <div class="ph-card__icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <div class="ph-sidebar-section">Quality</div>
+            <button class="ph-nav-item" id="navTestRunner">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
-              </div>
-              <div class="ph-card__body">
-                <div class="ph-card__name">Test Runner</div>
-                <div class="ph-card__desc">Run Cypress, Flutter, Jest or Playwright tests and view results.</div>
-              </div>
-              <div class="ph-card__footer">
-                <span class="ph-card__count">${this._testRunHistory[0]?.failed ?? 0} failed</span>
-                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-              </div>
+              </span>
+              <span class="ph-nav-item__label">Test Runner</span>
+              <span class="ph-nav-item__count ${failed > 0 ? 'ph-nav-item__count--danger' : ''}">${failed} failed</span>
             </button>
 
-            <button class="ph-card" id="cardIssues">
-              <div class="ph-card__icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <button class="ph-nav-item" id="navIssues">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"/>
                   <line x1="12" y1="8" x2="12" y2="12"/>
                   <line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
-              </div>
-              <div class="ph-card__body">
-                <div class="ph-card__name">Issues</div>
-                <div class="ph-card__desc">Track bugs and issues linked to user stories.</div>
-              </div>
-              <div class="ph-card__footer">
-                <span class="ph-card__count">${this._issueCount?.total ?? 0}</span>
-                <svg class="ph-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-              </div>
+              </span>
+              <span class="ph-nav-item__label">Issues</span>
+              <span class="ph-nav-item__count ${issueTotal > 0 ? 'ph-nav-item__count--danger' : ''}">${issueTotal}</span>
             </button>
 
-          </div>
+          </nav>
+
+          <!-- Main content -->
+          <main class="project-home__content">
+            <div class="ph-content-title">Dashboard</div>
+            <div class="ph-content-sub">${escHtml(name)}</div>
+
+            ${this._statsHtml()}
+
+            <div class="ph-status-section">
+              <div class="ph-section-label">Stories by Status</div>
+              <div class="ph-status-rows">
+                ${this._statusBreakdownHtml()}
+              </div>
+            </div>
+
+            <div>
+              <div class="ph-section-label">Quick Links</div>
+              <div class="ph-qlinks-grid">
+                ${this._quickLinksHtml()}
+              </div>
+            </div>
+          </main>
+
         </div>
       </div>
     `;
   }
 
+  // ----------------------------------------------------------------
+  // Model dropdown
+  // ----------------------------------------------------------------
   async _reloadModelDropdown() {
     const select = this.container.querySelector('#phModelSelect');
     if (!select) return;
-    const configs = await window.db.modelConfigs.list();
+    const configs  = await window.db.modelConfigs.list();
     const storedId = Number(localStorage.getItem('devflow-selected-model')) || null;
     const prevId   = storedId || (select.value ? Number(select.value) : null);
     select.innerHTML = configs.length === 0
@@ -383,6 +401,9 @@ export class ProjectHomePage {
     display.classList.add('project-page__folder-display--active');
   }
 
+  // ----------------------------------------------------------------
+  // Events
+  // ----------------------------------------------------------------
   _bindEvents() {
     this.container.querySelector('#btnBack')
       .addEventListener('click', () => this.router.navigate('launcher'));
@@ -415,24 +436,26 @@ export class ProjectHomePage {
     this.container.querySelector('#phBtnQcmd')
       .addEventListener('click', () => this._qcmdModal.show());
 
-    this.container.querySelector('#cardMockups')
+    // Sidebar navigation
+    this.container.querySelector('#navMockups')
       .addEventListener('click', () => this.router.navigate('mockups', { projectId: this.projectId }));
 
-    this.container.querySelector('#cardDocuments')
+    this.container.querySelector('#navDocuments')
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId }));
 
-    this.container.querySelector('#cardExtractStories')
+    this.container.querySelector('#navExtractStories')
       .addEventListener('click', () => this.router.navigate('extract-user-stories', { projectId: this.projectId }));
 
-    this.container.querySelector('#cardUserStories')
+    this.container.querySelector('#navUserStories')
       .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this.projectId }));
 
-    this.container.querySelector('#cardTestRunner')
+    this.container.querySelector('#navTestRunner')
       .addEventListener('click', () => this.router.navigate('test-runner', { projectId: this.projectId }));
 
-    this.container.querySelector('#cardIssues')
+    this.container.querySelector('#navIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
 
+    // Quick links
     this.container.querySelector('#phlOverview')
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId, docTitle: 'Project Overview' }));
 
