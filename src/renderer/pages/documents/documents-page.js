@@ -518,7 +518,8 @@ export class DocumentsPage {
     const list = panel.querySelector('#docAttachList');
     if (!list) return;
 
-    list.addEventListener('click', async e => {
+    if (this._attachListHandler) list.removeEventListener('click', this._attachListHandler);
+    this._attachListHandler = async e => {
       const viewBtn = e.target.closest('[data-view]');
       if (viewBtn) {
         const att = await window.db.attachments.getContent(Number(viewBtn.dataset.view));
@@ -578,7 +579,8 @@ export class DocumentsPage {
         this._attachments = this._attachments.filter(a => a.id !== id);
         this._refreshAttachList(panel);
       }
-    });
+    };
+    list.addEventListener('click', this._attachListHandler);
   }
 
   _refreshAttachList(panel) {
@@ -787,6 +789,20 @@ export class DocumentsPage {
         e.preventDefault();
         const att = await window.db.attachments.getContent(Number(img.dataset.attachId));
         if (att) this._showAttachLightbox(att);
+      });
+    });
+    panel.querySelectorAll('a[data-drawio-open]').forEach(a => {
+      a.addEventListener('click', async e => {
+        e.preventDefault();
+        const id  = Number(a.dataset.drawioOpen);
+        const att = await window.db.attachments.getContent(id);
+        if (!att) return;
+        const result = await window.shell.openDrawio({ id, name: att.name, content: att.content });
+        if (result.error) {
+          this._showToast('No app found for .drawio files — install draw.io desktop');
+        } else {
+          this._drawioFiles.set(id, result.file);
+        }
       });
     });
   }
@@ -1235,6 +1251,7 @@ hr { border: none; border-top: 1px solid #e2e8f0; margin: 1em 0; }
 .md-table tr:nth-child(even) td { background: #fafafa; }
 .md-svg-img { max-width: 100%; height: auto; display: block; margin: 0.8em 0; }
 .doc-attach-link { color: #6366f1; text-decoration: underline; }
+.doc-attach-link--drawio { display: inline-flex; align-items: center; padding: 3px 10px; background: #f1f5f9; border-radius: 4px; text-decoration: none; font-size: 0.92em; }
 a { color: #2563eb; }
 strong { font-weight: 600; }
 del { color: #94a3b8; text-decoration: line-through; }
@@ -1366,18 +1383,16 @@ ${body}
 
     result = result.replace(/\[([^\]]+)\]\(attach:(\d+)\)/g, (_match, label, id) => {
       const att = attachMap && attachMap.get(id);
-      if (att) {
-        let svgSource = null;
-        if (att.type === 'svg') {
-          svgSource = att.content;
-        } else {
-          const m = att.content.match(/<svg[\s\S]*?<\/svg>/i);
-          if (m) svgSource = m[0];
-        }
-        if (svgSource) {
-          const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgSource)}`;
-          return `<img class="md-svg-img md-attach-inline" data-attach-id="${id}" src="${dataUri}" alt="${label}" title="${label} — click to enlarge"/>`;
-        }
+      if (att && att.type === 'svg') {
+        const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(att.content)}`;
+        return `<img class="md-svg-img md-attach-inline" data-attach-id="${id}" src="${dataUri}" alt="${label}" title="${label} — click to enlarge"/>`;
+      }
+      if (att && att.type === 'drawio') {
+        return `<a class="doc-attach-link doc-attach-link--drawio" data-drawio-open="${id}" href="#">`
+          + `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="vertical-align:-2px;margin-right:4px">`
+          + `<rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.2"/>`
+          + `<path d="M5 7l3 3-3 3M8 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>`
+          + `</svg>${label}</a>`;
       }
       return `<a class="doc-attach-link" data-attach-id="${id}" href="#">${label}</a>`;
     });
