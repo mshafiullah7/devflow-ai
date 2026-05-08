@@ -495,21 +495,35 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   // Export helpers
   // ----------------------------------------------------------------
+  async _buildStoryExport(s) {
+    const prompts = await window.db.prompts.list(s.id);
+    return {
+      title: s.title,
+      description: s.description || null,
+      acceptance_criteria: s.acceptance_criteria || null,
+      status: s.status_name || null,
+      prompts: prompts.map(p => ({
+        tag: p.tag || null,
+        prompt: p.prompt || null,
+        is_executed: !!p.is_executed,
+      })),
+    };
+  }
+
   async _exportProject() {
     const features = await window.db.features.list(this.projectId);
     const result = [];
     for (const f of features) {
       const stories = await window.db.userStories.list({ feature_id: f.id });
+      const storyExports = [];
+      for (const s of stories) {
+        storyExports.push(await this._buildStoryExport(s));
+      }
       result.push({
         feature: f.name,
         description: f.description || null,
         status: f.status_name || null,
-        user_stories: stories.map(s => ({
-          title: s.title,
-          description: s.description || null,
-          acceptance_criteria: s.acceptance_criteria || null,
-          status: s.status_name || null,
-        })),
+        user_stories: storyExports,
       });
     }
     const projectName = this._project?.name || 'project';
@@ -522,16 +536,15 @@ export class ProjectPage {
 
   async _exportFeature(feature) {
     const stories = await window.db.userStories.list({ feature_id: feature.id });
+    const storyExports = [];
+    for (const s of stories) {
+      storyExports.push(await this._buildStoryExport(s));
+    }
     const result = {
       feature: feature.name,
       description: feature.description || null,
       status: feature.status_name || null,
-      user_stories: stories.map(s => ({
-        title: s.title,
-        description: s.description || null,
-        acceptance_criteria: s.acceptance_criteria || null,
-        status: s.status_name || null,
-      })),
+      user_stories: storyExports,
     };
     const res = await window.db.dialog.saveJsonFile({
       data: result,
@@ -541,12 +554,7 @@ export class ProjectPage {
   }
 
   async _exportStory(story) {
-    const result = {
-      title: story.title,
-      description: story.description || null,
-      acceptance_criteria: story.acceptance_criteria || null,
-      status: story.status_name || null,
-    };
+    const result = await this._buildStoryExport(story);
     const res = await window.db.dialog.saveJsonFile({
       data: result,
       filename: `story-${story.title}`,
