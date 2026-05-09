@@ -205,13 +205,6 @@ export class MockupsPage {
             <div class="mockups-page__title">${escHtml(name)}</div>
             <div class="mockups-page__subtitle">Project Mockups</div>
           </div>
-          <div class="project-page__folder-display" id="headerFolderDisplay">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-            </svg>
-            <span class="project-page__folder-text" id="headerFolderText"></span>
-          </div>
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <select class="project-page__model-select" id="mockupsModelSelect" title="AI Model">
               <option value="">Loading…</option>
@@ -256,6 +249,13 @@ export class MockupsPage {
             Styles
             <span class="scr-style-dot${this._hasAnyTemplate() ? ' scr-style-dot--active' : ''}"></span>
           </button>
+          <div class="project-page__folder-display mockups-page__folder-display" id="headerFolderDisplay">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+            <span class="project-page__folder-text" id="headerFolderText"></span>
+          </div>
         </header>
 
         <div class="mockups-page__body">
