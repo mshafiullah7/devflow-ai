@@ -608,17 +608,22 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   min-width: 0;
-  color: var(--text-muted);
-  font-size: 11px;
   -webkit-app-region: no-drag;
   opacity: 0;
   pointer-events: none;
+}
+.project-page__folder-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 3px 10px;
+  max-width: 100%;
 }
 .project-page__folder-display--active {
   opacity: 1;

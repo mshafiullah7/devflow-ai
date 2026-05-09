@@ -153,11 +153,13 @@ export class TestRunnerPage {
             <p class="project-page__desc">Test Runner</p>
           </div>
           <div class="project-page__folder-display" id="headerFolderDisplay">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-            </svg>
-            <span class="project-page__folder-text" id="headerFolderText"></span>
+            <div class="project-page__folder-pill">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              </svg>
+              <span class="project-page__folder-text" id="headerFolderText"></span>
+            </div>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
             <button class="project-page__folder-btn" id="trBtnFolder" title="Select project folder">
