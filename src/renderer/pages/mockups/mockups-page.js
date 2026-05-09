@@ -1155,32 +1155,28 @@ export class MockupsPage {
             </button>
           </div>
           <div class="scr-viewer__actions">
-            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrExportHtmlBtn" title="Export HTML to folder">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <button class="scr-btn scr-btn--sm scr-btn--secondary scr-btn--icon" id="scrExportHtmlBtn" title="Export HTML to folder" aria-label="Export HTML to folder">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                 <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              Export HTML
             </button>
-            <button class="scr-btn scr-btn--sm scr-btn--primary" id="scrRunBtn">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <button class="scr-btn scr-btn--sm scr-btn--primary scr-btn--icon" id="scrRunBtn" title="Run in Terminal" aria-label="Run in Terminal">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
                 <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
                 <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               </svg>
-              Run in Terminal
             </button>
-            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrEditBtn">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <button class="scr-btn scr-btn--sm scr-btn--secondary scr-btn--icon" id="scrEditBtn" title="Edit Mockup in Terminal" aria-label="Edit Mockup in Terminal">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
-              Edit Mockup in Terminal
             </button>
-            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrChooseFileBtn">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <button class="scr-btn scr-btn--sm scr-btn--secondary scr-btn--icon" id="scrChooseFileBtn" title="Choose File" aria-label="Choose File">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
-              Choose File
             </button>
 
             <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrDeleteBtn" title="Delete screen">

@@ -301,6 +301,8 @@
 .scr-btn--danger:hover:not(:disabled) { background: rgba(239,68,68,.08); color: #ef4444; border-color: #ef4444; }
 
 .scr-btn--sm { padding: 5px 10px; font-size: 11px; }
+.scr-btn--icon { padding: 5px; width: 28px; height: 28px; justify-content: center; }
+[data-theme="light"] .scr-btn--icon { padding: 5px; }
 
 /* Design System button — lit up when a template is saved */
 .scr-btn--ds-active {
