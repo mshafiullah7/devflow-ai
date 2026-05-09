@@ -250,6 +250,26 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- PROMPT QUEUE
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS prompt_queue (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id    INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_story_id INTEGER REFERENCES user_stories(id) ON DELETE SET NULL,
+      story_title   TEXT,
+      prompt_id     INTEGER REFERENCES prompts(id) ON DELETE SET NULL,
+      tag           TEXT,
+      prompt_text   TEXT    NOT NULL,
+      status        TEXT    NOT NULL DEFAULT 'pending',
+      output        TEXT,
+      exit_code     INTEGER,
+      model_label   TEXT,
+      sort_order    INTEGER NOT NULL DEFAULT 0,
+      created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+      ran_at        TEXT
+    );
+
+    -- ----------------------------------------------------------------
     -- AUDIT / LOG TABLES
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS projects_log (

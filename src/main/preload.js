@@ -90,6 +90,22 @@ contextBridge.exposeInMainWorld('db', {
     update: (data)       => invoke('db:screen_designs:update', data),
     delete: (id)         => invoke('db:screen_designs:delete', id),
   },
+  promptQueue: {
+    list:            (data) => invoke('db:prompt_queue:list', data),
+    add:             (data) => invoke('db:prompt_queue:add', data),
+    update:          (data) => invoke('db:prompt_queue:update', data),
+    delete:          (id)   => invoke('db:prompt_queue:delete', id),
+    clearDone:       (pid)  => invoke('db:prompt_queue:clear_done', pid),
+    pendingCount:    (pid)  => invoke('db:prompt_queue:pending_count', pid),
+    run:             (data) => invoke('promptQueue:run', data),
+    kill:            ()     => invoke('promptQueue:kill'),
+    onData:          (cb)   => ipcRenderer.on('promptQueue:data', (_e, p) => cb(p)),
+    onDone:          (cb)   => ipcRenderer.on('promptQueue:done', (_e, p) => cb(p)),
+    removeListeners: ()     => {
+      ipcRenderer.removeAllListeners('promptQueue:data');
+      ipcRenderer.removeAllListeners('promptQueue:done');
+    },
+  },
   testRunner: {
     detect:          (projectPath) => invoke('testRunner:detect', projectPath),
     run:             (data)        => invoke('testRunner:run', data),

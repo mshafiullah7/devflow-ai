@@ -724,6 +724,61 @@ function registerDbHandlers() {
     } catch { return false; }
   });
 
+  // ----------------------------------------------------------------
+  // prompt_queue
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:prompt_queue:list', (_e, { project_id }) => {
+    return db.prepare(`
+      SELECT * FROM prompt_queue
+      WHERE project_id = ?
+      ORDER BY sort_order ASC, created_at ASC
+    `).all(project_id);
+  });
+
+  ipcMain.handle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text }) => {
+    const max = db.prepare('SELECT MAX(sort_order) AS m FROM prompt_queue WHERE project_id = ?').get(project_id);
+    const sort_order = (max?.m ?? -1) + 1;
+    const result = db.prepare(`
+      INSERT INTO prompt_queue (project_id, user_story_id, story_title, prompt_id, tag, prompt_text, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(project_id, user_story_id ?? null, story_title ?? null, prompt_id ?? null, tag ?? null, prompt_text, sort_order);
+    return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:prompt_queue:update', (_e, { id, status, output, exit_code, ran_at, model_label }) => {
+    db.prepare(`
+      UPDATE prompt_queue
+         SET status      = CASE WHEN ? IS NOT NULL THEN ? ELSE status END,
+             output      = CASE WHEN ? IS NOT NULL THEN ? ELSE output END,
+             exit_code   = CASE WHEN ? IS NOT NULL THEN ? ELSE exit_code END,
+             ran_at      = CASE WHEN ? IS NOT NULL THEN ? ELSE ran_at END,
+             model_label = CASE WHEN ? IS NOT NULL THEN ? ELSE model_label END
+       WHERE id = ?
+    `).run(
+      status      ?? null, status      ?? null,
+      output      ?? null, output      ?? null,
+      exit_code   ?? null, exit_code   ?? null,
+      ran_at      ?? null, ran_at      ?? null,
+      model_label ?? null, model_label ?? null,
+      id
+    );
+    return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(id);
+  });
+
+  ipcMain.handle('db:prompt_queue:delete', (_e, id) => {
+    db.prepare('DELETE FROM prompt_queue WHERE id = ?').run(id);
+    return { success: true };
+  });
+
+  ipcMain.handle('db:prompt_queue:clear_done', (_e, project_id) => {
+    db.prepare(`DELETE FROM prompt_queue WHERE project_id = ? AND status IN ('done','failed','skipped')`).run(project_id);
+    return { success: true };
+  });
+
+  ipcMain.handle('db:prompt_queue:pending_count', (_e, project_id) => {
+    return db.prepare(`SELECT COUNT(*) AS count FROM prompt_queue WHERE project_id = ? AND status = 'pending'`).get(project_id)?.count ?? 0;
+  });
+
   ipcMain.handle('app:writeTempFiles', (_e, files) => {
     const dir = path.join(os.tmpdir(), 'electron-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });

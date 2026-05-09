@@ -17,7 +17,7 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, stories, allStories, features, statuses, documents, mockups, issueCount, testRunHistory] = await Promise.all([
+    const [project, stories, allStories, features, statuses, documents, mockups, issueCount, testRunHistory, queuePending] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.userStories.list({ project_id: this.projectId }),
       window.db.userStories.list({ project_id: this.projectId, include_extracted: true }),
@@ -27,6 +27,7 @@ export class ProjectHomePage {
       window.db.screenDesigns.list(this.projectId),
       window.db.issues.count(this.projectId),
       window.db.testRunHistory.list(this.projectId),
+      window.db.promptQueue.pendingCount(this.projectId),
     ]);
 
     this._project          = project;
@@ -38,6 +39,7 @@ export class ProjectHomePage {
     this._mockups          = mockups;
     this._issueCount       = issueCount;
     this._testRunHistory   = testRunHistory;
+    this._queuePending     = queuePending ?? 0;
 
     this.container.innerHTML = this._template();
 
@@ -342,6 +344,17 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count ${issueTotal > 0 ? 'ph-nav-item__count--danger' : ''}">${issueTotal}</span>
             </button>
 
+            <div class="ph-sidebar-section">Tools</div>
+            <button class="ph-nav-item" id="navPromptQueue">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Prompt Queue</span>
+              ${this._queuePending > 0 ? `<span class="ph-nav-item__count">${this._queuePending}</span>` : ''}
+            </button>
+
           </nav>
 
           <!-- Main content -->
@@ -449,6 +462,9 @@ export class ProjectHomePage {
 
     this.container.querySelector('#navIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
+
+    this.container.querySelector('#navPromptQueue')
+      .addEventListener('click', () => this.router.navigate('prompt-queue', { projectId: this.projectId, from: 'project-home' }));
 
     // Quick links
     this.container.querySelector('#phlOverview')

@@ -447,6 +447,9 @@ export class UserStoryDetail {
             <button class="usl-pl-item__btn usl-pl-item__btn--run-ext" type="button" title="Run in external PowerShell window">
               <svg width="13" height="11" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
             </button>
+            <button class="usl-pl-item__btn usl-pl-item__btn--queue" type="button" title="Add to prompt queue"${!userStoryId ? ' disabled' : ''}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
             <button class="usl-pl-item__btn usl-pl-item__btn--expand" type="button" title="Expand to full editor">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -522,6 +525,37 @@ export class UserStoryDetail {
     };
     tagInput.addEventListener('blur', save);
     taEl.addEventListener('blur', save);
+
+    // Add to prompt queue
+    const queueBtn = item.querySelector('.usl-pl-item__btn--queue');
+    if (queueBtn && userStoryId) {
+      queueBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await save();
+        const prompt = taEl.value.trim();
+        if (!prompt) return;
+        let storyTitle = null;
+        try {
+          const story = await window.db.userStories.get(userStoryId);
+          storyTitle = story?.title || null;
+        } catch (_) {}
+        const model      = this._getModel();
+        const modelLabel = (typeof model === 'string' ? model : model?.label) || null;
+        await window.db.promptQueue.add({
+          project_id:    this._projectId,
+          user_story_id: userStoryId,
+          story_title:   storyTitle,
+          prompt_id:     item.dataset.rowId ? parseInt(item.dataset.rowId) : null,
+          tag:           tagInput.value.trim() || null,
+          prompt_text:   prompt,
+          model_label:   modelLabel,
+        });
+        const origHTML    = queueBtn.innerHTML;
+        queueBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        queueBtn.disabled  = true;
+        setTimeout(() => { queueBtn.innerHTML = origHTML; queueBtn.disabled = false; }, 1500);
+      });
+    }
 
     // Mark as executed
     markExecBtn.addEventListener('click', async (e) => {
