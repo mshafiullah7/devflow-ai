@@ -491,6 +491,32 @@
 .scr-viewer__btn--accent:hover { background: rgba(var(--accent-rgb,99,102,241),.08); }
 .scr-viewer__btn--danger:hover { background: rgba(239,68,68,.08); color: #ef4444; border-color: #ef4444; }
 
+/* ------------------------------------------------------------------ */
+/* Light theme — sidebar overrides                                      */
+/* ------------------------------------------------------------------ */
+[data-theme="light"] .scr-sidebar {
+  background: var(--surface-header);
+}
+
+[data-theme="light"] .scr-sidebar__item--active {
+  background: rgba(var(--accent-rgb), 0.10);
+}
+
+[data-theme="light"] .scr-sidebar__item--active .scr-sidebar__item-title {
+  color: var(--accent);
+}
+
+[data-theme="light"] .scr-sidebar__item--active .scr-sidebar__item-id,
+[data-theme="light"] .scr-sidebar__item--active .scr-sidebar__icon {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+[data-theme="light"] .scr-sidebar__add {
+  background: var(--accent);
+  color: #fff;
+}
+
 [data-theme="light"] .scr-btn {
   background: var(--surface);
   border-color: var(--accent);

@@ -14,6 +14,7 @@
   --surface-hover:  #e8edf5;
   --border:         #d4dae8;
   --accent:         #1e3a5f;
+  --accent-rgb:     30, 58, 95;
   --accent-hover:   #162c47;
   --text-primary:   #1a1916;
   --text-secondary: #4a4740;
@@ -48,6 +49,7 @@
   --surface-hover:  #21253a;
   --border:         #2a2d3e;
   --accent:         #6366f1;
+  --accent-rgb:     99, 102, 241;
   --accent-hover:   #4f52d9;
   --text-primary:   #c9d3e0;
   --text-secondary: #7a8ba0;
@@ -80,6 +82,7 @@
   --surface-hover:  #0d1a12;
   --border:         #1e3d2c;
   --accent:         #10b981;
+  --accent-rgb:     16, 185, 129;
   --accent-hover:   #059669;
   --text-primary:   #cbd5e1;
   --text-secondary: #94a3b8;
