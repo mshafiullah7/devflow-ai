@@ -1,7 +1,7 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 
 export class UserStoryDetail {
-  constructor({ detailEl, projectId, getModel, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled, headerActionsEl }) {
+  constructor({ detailEl, projectId, getModel, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled, headerActionsEl, onExport, onDelete }) {
     this._detailEl               = detailEl;
     this._headerActionsEl        = headerActionsEl || null;
     this._projectId              = projectId;
@@ -10,6 +10,8 @@ export class UserStoryDetail {
     this._onPrintOutput          = onPrintOutput || (() => {});
     this._onStoryUpdated         = onStoryUpdated || (() => {});
     this._onCancelled            = onCancelled || (() => {});
+    this._onExport               = onExport || null;
+    this._onDelete               = onDelete || null;
     this._featureId              = null;
     this._statuses               = [];
     this._ctrlSHandler           = null;
@@ -240,6 +242,30 @@ export class UserStoryDetail {
     const descEl   = this._detailEl.querySelector('#uslEditDesc');
     const acEl     = this._detailEl.querySelector('#uslEditAC');
     const statusEl = this._detailEl.querySelector('#uslEditStatus');
+
+    if (headerActions && this._onExport) {
+      const exportBtn = document.createElement('button');
+      exportBtn.className = 'usl-detail-hdr-btn';
+      exportBtn.title = 'Export story';
+      exportBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>`;
+      exportBtn.addEventListener('click', () => this._onExport(story));
+      headerActions.appendChild(exportBtn);
+    }
+
+    if (headerActions && this._onDelete) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'usl-detail-hdr-btn usl-detail-hdr-btn--danger';
+      deleteBtn.title = 'Delete story';
+      deleteBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <path d="M3 4h10M6 4V3h4v1M4 4l1 9h6l1-9M6 7v4M10 7v4"
+          stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      deleteBtn.addEventListener('click', () => this._onDelete(story));
+      headerActions.appendChild(deleteBtn);
+    }
 
     const saveBtn = document.createElement('button');
     saveBtn.className   = 'usl-add-form__btn usl-add-form__btn--save';

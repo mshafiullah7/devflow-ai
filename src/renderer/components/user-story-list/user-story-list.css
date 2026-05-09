@@ -50,9 +50,9 @@
 }
 .usl-card--active .usl-card__title { color: var(--accent); }
 
-/* Row 2 — description (spans full width) */
+/* Row 2 — description (left, leaves room for status) */
 .usl-card__desc {
-  grid-column: 1 / 4;
+  grid-column: 1 / 3;
   grid-row: 2;
   font-size: 11px;
   color: var(--text-muted);
@@ -62,47 +62,12 @@
   min-width: 0;
 }
 
-/* Row 3, cols 1-2 — action buttons (left-aligned) */
-.usl-card__actions {
-  grid-column: 1 / 3;
-  grid-row: 3;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.usl-card:hover .usl-card__actions,
-.usl-card--active .usl-card__actions { opacity: 1; }
-
-.usl-card__action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  background: transparent;
-  border: none;
-  border-radius: 3px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.12s, background 0.12s;
-}
-.usl-card__action--export:hover,
-.usl-card__action--edit:hover {
-  color: var(--accent);
-  background: rgba(99, 102, 241, 0.12);
-}
-.usl-card__action--delete:hover {
-  color: var(--danger);
-  background: rgba(239, 68, 68, 0.1);
-}
-
-/* Row 3, col 3 — status badge (right-aligned) */
+/* Row 2, col 3 — status badge (inline with description) */
 .usl-card__status {
   grid-column: 3;
-  grid-row: 3;
+  grid-row: 2;
   justify-self: end;
+  align-self: center;
   font-size: 9px;
   font-weight: 500;
   padding: 1px 6px;

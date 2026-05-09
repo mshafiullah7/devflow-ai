@@ -38,6 +38,8 @@ export class UserStoryList {
         this._listEl.querySelectorAll('.usl-card')
           .forEach(el => el.classList.remove('usl-card--active'));
       },
+      onExport: (story) => this._onExport(story),
+      onDelete: (story) => this._openConfirm(story),
     });
   }
 
@@ -273,20 +275,6 @@ export class UserStoryList {
         <div class="usl-card__header">
           <span class="usl-card__id">#${s.id}</span>
           <span class="usl-card__title">${escHtml(s.title)}</span>
-          <div class="usl-card__actions">
-            <button class="usl-card__action usl-card__action--export" title="Export story" aria-label="Export story">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-              </svg>
-            </button>
-            <button class="usl-card__action usl-card__action--delete" title="Delete story" aria-label="Delete story">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M3 4h10M6 4V3h4v1M4 4l1 9h6l1-9M6 7v4M10 7v4"
-                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>
         </div>
         ${s.description ? `<p class="usl-card__desc">${escHtml(s.description)}</p>` : ''}
         <div class="usl-card__footer">
@@ -295,24 +283,13 @@ export class UserStoryList {
         </div>
       `;
 
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('.usl-card__actions')) return;
+      card.addEventListener('click', () => {
         this._activeId = s.id;
         this._listEl.querySelectorAll('.usl-card')
           .forEach(el => el.classList.remove('usl-card--active'));
         card.classList.add('usl-card--active');
         this._detail.showEditForm(s);
         this._onSelect(s);
-      });
-
-      card.querySelector('.usl-card__action--export').addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._onExport(s);
-      });
-
-      card.querySelector('.usl-card__action--delete').addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._openConfirm(s);
       });
 
       this._listEl.appendChild(card);

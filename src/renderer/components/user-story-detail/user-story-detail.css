@@ -120,6 +120,32 @@
   color: #16a34a;
 }
 
+/* Header action icon buttons (export / delete) */
+.usl-detail-hdr-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.usl-detail-hdr-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.usl-detail-hdr-btn--danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
 .usl-add-form__title {
   font-size: 14px;
   font-weight: 600;
