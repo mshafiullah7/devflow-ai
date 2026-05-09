@@ -6,7 +6,7 @@
 .fl-card {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  align-items: center;
+  align-items: start;
   column-gap: 4px;
   row-gap: 3px;
   background: var(--surface);
@@ -43,9 +43,8 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
+  line-height: 1.35;
   min-width: 0;
 }
 .fl-card--active .fl-card__name { color: var(--accent); }
