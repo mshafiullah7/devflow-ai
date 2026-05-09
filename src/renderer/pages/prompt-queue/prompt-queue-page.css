@@ -100,9 +100,15 @@
 .pq-toolbar__btn--stop:hover { opacity: 0.88; background: #ef4444; }
 
 .pq-toolbar__summary {
-  margin-left: auto;
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+.pq-toolbar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* ------------------------------------------------------------------ */

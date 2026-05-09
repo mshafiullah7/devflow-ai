@@ -82,22 +82,24 @@ export class PromptQueuePage {
         </header>
 
         <div class="pq-toolbar">
-          <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunNext">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
-            Run Next
-          </button>
-          <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunAll">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3l5 5-5 5V3zM9 3l5 5-5 5V3z" fill="currentColor"/></svg>
-            Run All
-          </button>
-          <button class="pq-toolbar__btn pq-toolbar__btn--stop" id="pqBtnStop" hidden>
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
-            Stop
-          </button>
-          <button class="pq-toolbar__btn" id="pqBtnClearDone">
-            Clear Done
-          </button>
           <span class="pq-toolbar__summary" id="pqSummary"></span>
+          <div class="pq-toolbar__actions">
+            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunNext">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
+              Run Next
+            </button>
+            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunAll">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3l5 5-5 5V3zM9 3l5 5-5 5V3z" fill="currentColor"/></svg>
+              Run All
+            </button>
+            <button class="pq-toolbar__btn pq-toolbar__btn--stop" id="pqBtnStop" hidden>
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
+              Stop
+            </button>
+            <button class="pq-toolbar__btn" id="pqBtnClearDone">
+              Clear Done
+            </button>
+          </div>
         </div>
 
         <div class="pq-layout">
