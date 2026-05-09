@@ -23,7 +23,7 @@
 /* Flatten header and footer into the grid */
 .fl-card__header { display: contents; }
 .fl-card__footer  { display: contents; }
-.fl-card__desc    { display: none; }
+.fl-card__desc    { /* shown — placed at grid-row 2 */ }
 .fl-card__date    { display: none; }
 
 /* Row 1, col 1 — ID badge */
@@ -49,10 +49,22 @@
 }
 .fl-card--active .fl-card__name { color: var(--accent); }
 
-/* Row 2, cols 1-2 — action buttons (left-aligned) */
+/* Row 2 — description (spans full width) */
+.fl-card__desc {
+  grid-column: 1 / 4;
+  grid-row: 2;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Row 3, cols 1-2 — action buttons (left-aligned) */
 .fl-card__actions {
   grid-column: 1 / 3;
-  grid-row: 2;
+  grid-row: 3;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -85,10 +97,10 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
-/* Row 2, col 3 — status badge (right-aligned) */
+/* Row 3, col 3 — status badge (right-aligned) */
 .fl-card__status {
   grid-column: 3;
-  grid-row: 2;
+  grid-row: 3;
   justify-self: end;
   font-size: 9px;
   font-weight: 500;
