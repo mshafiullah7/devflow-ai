@@ -31,9 +31,18 @@
   grid-column: 1;
   grid-row: 1;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
+  background: var(--surface-hover);
+  border-radius: 4px;
+  padding: 1px 5px;
   white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.usl-card--active .usl-card__id {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* Row 1, cols 2-3 — title (fills remaining width) */
