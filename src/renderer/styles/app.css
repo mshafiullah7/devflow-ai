@@ -615,6 +615,10 @@ html, body {
   -webkit-app-region: no-drag;
   opacity: 0;
   pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 10px;
 }
 .project-page__folder-display--active {
   opacity: 1;
