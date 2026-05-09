@@ -8,6 +8,7 @@ const path = require('node:path');
 
 let _activeProc     = null;
 let _activeTestProc = null;
+let _activeCliProc  = null;
 
 function killTree(proc) {
   if (!proc) return;
@@ -144,6 +145,79 @@ function registerTerminalHandlers() {
 
   ipcMain.handle('testRunner:kill', () => {
     if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
+  });
+
+  // Dedicated CLI runner — separate process slot, supports stdin for interactive CLIs
+  ipcMain.handle('cliRunner:run', (event, { command, prompt, cwd }) => {
+    if (_activeCliProc) { killTree(_activeCliProc); _activeCliProc = null; }
+
+    const wc = event.sender;
+    const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
+
+    let tmpPromptFile = null;
+    const ts = Date.now();
+
+    // Build PS1 script — prompt is written to a temp file to avoid quoting issues
+    let psScript = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null\n';
+
+    if (prompt) {
+      tmpPromptFile = path.join(os.tmpdir(), `ai-sdlc-cliprompt-${ts}.txt`);
+      try {
+        fs.writeFileSync(tmpPromptFile, prompt, 'utf8');
+      } catch (err) {
+        send('cliRunner:data', { text: `Failed to write prompt file: ${err.message}` });
+        send('cliRunner:done', { exitCode: 1 });
+        return { pid: null };
+      }
+      const safePath = tmpPromptFile.replace(/'/g, "''");
+      psScript += `$__p = Get-Content -Path '${safePath}' -Raw -Encoding UTF8\n`;
+      psScript += `${command} $__p\n`;
+    } else {
+      psScript += `${command}\n`;
+    }
+
+    const tmpScript = path.join(os.tmpdir(), `ai-sdlc-cli-${ts}.ps1`);
+    try {
+      fs.writeFileSync(tmpScript, psScript, 'utf8');
+    } catch (err) {
+      if (tmpPromptFile) { try { fs.unlinkSync(tmpPromptFile); } catch (_) {} }
+      send('cliRunner:data', { text: `Failed to write script: ${err.message}` });
+      send('cliRunner:done', { exitCode: 1 });
+      return { pid: null };
+    }
+
+    _activeCliProc = spawn(
+      'powershell.exe',
+      ['-NoLogo', '-NonInteractive', '-File', tmpScript],
+      { stdio: ['pipe', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: { ...process.env, FORCE_COLOR: '1', COLORTERM: 'truecolor' }, windowsHide: true }
+    );
+
+    const cleanup = () => {
+      try { fs.unlinkSync(tmpScript); } catch (_) {}
+      if (tmpPromptFile) { try { fs.unlinkSync(tmpPromptFile); } catch (_) {} }
+    };
+
+    _activeCliProc.stdout.on('data', d => send('cliRunner:data', { text: d.toString('utf8') }));
+    _activeCliProc.stderr.on('data', d => send('cliRunner:data', { text: d.toString('utf8') }));
+    _activeCliProc.on('close', code => { _activeCliProc = null; cleanup(); send('cliRunner:done', { exitCode: code }); });
+    _activeCliProc.on('error', err => {
+      _activeCliProc = null;
+      cleanup();
+      send('cliRunner:data', { text: err.message });
+      send('cliRunner:done', { exitCode: 1 });
+    });
+
+    return { pid: _activeCliProc.pid };
+  });
+
+  ipcMain.handle('cliRunner:kill', () => {
+    if (_activeCliProc) { killTree(_activeCliProc); _activeCliProc = null; }
+  });
+
+  ipcMain.handle('cliRunner:stdin', (_e, text) => {
+    if (_activeCliProc && _activeCliProc.stdin && !_activeCliProc.stdin.destroyed) {
+      _activeCliProc.stdin.write(text);
+    }
   });
 }
 

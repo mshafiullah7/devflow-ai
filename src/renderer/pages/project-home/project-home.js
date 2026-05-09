@@ -342,6 +342,17 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count ${issueTotal > 0 ? 'ph-nav-item__count--danger' : ''}">${issueTotal}</span>
             </button>
 
+            <div class="ph-sidebar-section">Tools</div>
+            <button class="ph-nav-item" id="navCliRunner">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="4 17 10 11 4 5"/>
+                  <line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">CLI Runner</span>
+            </button>
+
           </nav>
 
           <!-- Main content -->
@@ -449,6 +460,9 @@ export class ProjectHomePage {
 
     this.container.querySelector('#navIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
+
+    this.container.querySelector('#navCliRunner')
+      .addEventListener('click', () => this.router.navigate('cli-runner', { projectId: this.projectId }));
 
     // Quick links
     this.container.querySelector('#phlOverview')

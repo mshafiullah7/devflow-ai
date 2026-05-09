@@ -105,6 +105,17 @@ contextBridge.exposeInMainWorld('db', {
     list:   (project_id) => invoke('testRunHistory:list', project_id),
     create: (data)       => invoke('testRunHistory:create', data),
   },
+  cliRunner: {
+    run:             (data) => invoke('cliRunner:run', data),
+    kill:            ()     => invoke('cliRunner:kill'),
+    sendInput:       (text) => invoke('cliRunner:stdin', text),
+    onData:          (cb)   => ipcRenderer.on('cliRunner:data', (_e, p) => cb(p)),
+    onDone:          (cb)   => ipcRenderer.on('cliRunner:done', (_e, p) => cb(p)),
+    removeListeners: ()     => {
+      ipcRenderer.removeAllListeners('cliRunner:data');
+      ipcRenderer.removeAllListeners('cliRunner:done');
+    },
+  },
   issues: {
     list:   (filters)    => invoke('db:issues:list', filters),
     get:    (id)         => invoke('db:issues:get', id),

@@ -40,4 +40,8 @@ router.register('git-changes', async () => {
   const { GitChangesPage } = await import('./pages/git-changes/git-changes-page.js');
   return GitChangesPage;
 });
+router.register('cli-runner', async () => {
+  const { CliRunnerPage } = await import('./pages/cli-runner/cli-runner-page.js');
+  return CliRunnerPage;
+});
 router.navigate('launcher');
