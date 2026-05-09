@@ -1,69 +1,67 @@
 /* ------------------------------------------------------------------ */
-/* Feature items — sidebar-style flat rows                              */
+/* Feature items — two-row sidebar style                                */
+/* Row 1: #id  name                                                     */
+/* Row 2: [export][edit][delete]           [status]                     */
 /* ------------------------------------------------------------------ */
 .fl-card {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 0;
+  column-gap: 4px;
+  row-gap: 3px;
   background: transparent;
   border: none;
   border-radius: 6px;
-  padding: 5px 8px;
+  padding: 6px 8px;
   margin-bottom: 2px;
   cursor: pointer;
   transition: background 0.1s;
 }
-.fl-card:hover {
-  background: var(--surface-hover);
-}
-.fl-card--active {
-  background: rgba(99, 102, 241, 0.1);
-}
+.fl-card:hover  { background: var(--surface-hover); }
+.fl-card--active { background: rgba(99, 102, 241, 0.1); }
 
-/* header row: id + name + actions */
-.fl-card__header {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+/* Flatten header and footer into the grid */
+.fl-card__header { display: contents; }
+.fl-card__footer  { display: contents; }
+.fl-card__desc    { display: none; }
+.fl-card__date    { display: none; }
 
+/* Row 1, col 1 — ID badge */
 .fl-card__id {
-  flex-shrink: 0;
+  grid-column: 1;
+  grid-row: 1;
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
-  margin-right: 3px;
+  white-space: nowrap;
 }
+
+/* Row 1, cols 2-3 — name (fills remaining width) */
 .fl-card__name {
-  flex: 1;
+  grid-column: 2 / 4;
+  grid-row: 1;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
-.fl-card--active .fl-card__name {
-  color: var(--accent);
-  font-weight: 500;
-}
+.fl-card--active .fl-card__name { color: var(--accent); }
 
-/* action icon buttons */
+/* Row 2, cols 1-2 — action buttons (left-aligned) */
 .fl-card__actions {
+  grid-column: 1 / 3;
+  grid-row: 2;
   display: flex;
   align-items: center;
   gap: 2px;
-  flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.12s;
 }
 .fl-card:hover .fl-card__actions,
-.fl-card--active .fl-card__actions {
-  opacity: 1;
-}
+.fl-card--active .fl-card__actions { opacity: 1; }
 
 .fl-card__action {
   display: flex;
@@ -78,6 +76,7 @@
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
 }
+.fl-card__action--export:hover,
 .fl-card__action--edit:hover {
   color: var(--accent);
   background: rgba(99, 102, 241, 0.12);
@@ -86,30 +85,12 @@
   color: var(--danger);
   background: rgba(239, 68, 68, 0.1);
 }
-.fl-card__action--export:hover {
-  color: var(--accent);
-  background: rgba(99, 102, 241, 0.12);
-}
 
-/* description — hidden in sidebar style */
-.fl-card__desc {
-  display: none;
-}
-
-/* footer: status badge only, inline after header */
-.fl-card__footer {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 6px;
-}
-
-.fl-card__date {
-  display: none;
-}
-
+/* Row 2, col 3 — status badge (right-aligned) */
 .fl-card__status {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
   font-size: 9px;
   font-weight: 500;
   padding: 1px 6px;
