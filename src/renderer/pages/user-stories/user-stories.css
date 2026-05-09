@@ -139,6 +139,7 @@
   overflow: hidden;
 }
 #panelFeatures.project-panel--collapsed .project-panel__title,
+#panelFeatures.project-panel--collapsed #btnImportFeature,
 #panelFeatures.project-panel--collapsed #btnAddFeature,
 #panelFeatures.project-panel--collapsed .project-panel__list {
   display: none;
