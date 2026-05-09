@@ -1147,21 +1147,16 @@ export class MockupsPage {
           <div class="scr-viewer__meta">
             <span class="scr-viewer__title">${escHtml(screen.title)}</span>
             <span class="scr-viewer__tech-badge">${TECH}</span>
-            <button class="scr-btn scr-btn--sm" id="scrEditDetailsBtn" title="Edit title & description">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <button class="scr-btn scr-btn--sm scr-btn--icon" id="scrEditDetailsBtn" title="Edit title & description" aria-label="Edit title & description">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
-              Edit Details
             </button>
           </div>
           <div class="scr-viewer__actions">
             <div class="scr-actions-menu" id="scrActionsMenu">
               <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrActionsMenuTrigger" title="Actions">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <circle cx="4" cy="8" r="1.3" fill="currentColor"/>
-                  <circle cx="8" cy="8" r="1.3" fill="currentColor"/>
-                  <circle cx="12" cy="8" r="1.3" fill="currentColor"/>
-                </svg>
+                Actions
                 <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
                   <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
