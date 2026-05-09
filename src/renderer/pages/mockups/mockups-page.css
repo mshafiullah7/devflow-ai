@@ -74,18 +74,6 @@
   margin-top: 1px;
 }
 
-/* Folder path — right-aligned, with background pill */
-.mockups-page__folder-display {
-  flex: 0 0 auto;
-  margin-left: auto;
-  justify-content: flex-start;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 3px 8px;
-  max-width: 260px;
-}
-
 /* ------------------------------------------------------------------ */
 /* Header — style guide button                                          */
 /* ------------------------------------------------------------------ */
