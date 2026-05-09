@@ -58,9 +58,9 @@
 }
 .fl-card--active .fl-card__name { color: var(--accent); }
 
-/* Row 2 — description (spans full width) */
+/* Row 2 — description (starts under title) */
 .fl-card__desc {
-  grid-column: 1 / 4;
+  grid-column: 2 / 4;
   grid-row: 2;
   font-size: 11px;
   color: var(--text-muted);
