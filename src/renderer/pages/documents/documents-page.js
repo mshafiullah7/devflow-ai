@@ -91,7 +91,7 @@ export class DocumentsPage {
             <div class="documents-page__title">${escHtml(name)}</div>
             <div class="documents-page__subtitle">Project Documents</div>
           </div>
-          <div class="project-page__folder-display" id="headerFolderDisplay">
+          <div class="project-page__folder-display" id="headerFolderDisplay" title="Select folder">
             <div class="project-page__folder-pill">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"

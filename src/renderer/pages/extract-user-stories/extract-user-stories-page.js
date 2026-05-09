@@ -86,7 +86,7 @@ export class ExtractUserStoriesPage {
             <h1 class="project-page__title">Extract User Stories</h1>
             <p class="project-page__desc">Generate user stories from project documents</p>
           </div>
-          <div class="project-page__folder-display" id="headerFolderDisplay">
+          <div class="project-page__folder-display" id="headerFolderDisplay" title="Select folder">
             <div class="project-page__folder-pill">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"

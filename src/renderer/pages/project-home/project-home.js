@@ -211,7 +211,7 @@ export class ProjectHomePage {
             <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
 
-          <div class="project-page__folder-display" id="headerFolderDisplay" style="-webkit-app-region:no-drag;">
+          <div class="project-page__folder-display" id="headerFolderDisplay" title="Select folder" style="-webkit-app-region:no-drag;">
             <div class="project-page__folder-pill">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
