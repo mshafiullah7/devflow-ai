@@ -1155,29 +1155,47 @@ export class MockupsPage {
             </button>
           </div>
           <div class="scr-viewer__actions">
-            <button class="scr-btn scr-btn--sm scr-btn--secondary scr-btn--icon" id="scrExportHtmlBtn" title="Export HTML to folder" aria-label="Export HTML to folder">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button class="scr-btn scr-btn--sm scr-btn--primary scr-btn--icon" id="scrRunBtn" title="Run in Terminal" aria-label="Run in Terminal">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
-                <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-            </button>
-            <button class="scr-btn scr-btn--sm scr-btn--secondary scr-btn--icon" id="scrEditBtn" title="Edit Mockup in Terminal" aria-label="Edit Mockup in Terminal">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button class="scr-btn scr-btn--sm scr-btn--secondary scr-btn--icon" id="scrChooseFileBtn" title="Choose File" aria-label="Choose File">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              </svg>
-            </button>
+            <div class="scr-actions-menu" id="scrActionsMenu">
+              <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrActionsMenuTrigger" title="Actions">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <circle cx="4" cy="8" r="1.3" fill="currentColor"/>
+                  <circle cx="8" cy="8" r="1.3" fill="currentColor"/>
+                  <circle cx="12" cy="8" r="1.3" fill="currentColor"/>
+                </svg>
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                  <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <div class="scr-actions-dropdown" id="scrActionsDropdown" hidden>
+                <button class="scr-actions-dropdown__item" id="scrExportHtmlBtn">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                    <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Export HTML
+                </button>
+                <button class="scr-actions-dropdown__item" id="scrRunBtn">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+                    <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
+                    <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                  </svg>
+                  Run in Terminal
+                </button>
+                <button class="scr-actions-dropdown__item" id="scrEditBtn">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                  </svg>
+                  Edit Mockup in Terminal
+                </button>
+                <button class="scr-actions-dropdown__item" id="scrChooseFileBtn">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                  </svg>
+                  Choose File
+                </button>
+              </div>
+            </div>
 
             <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrDeleteBtn" title="Delete screen">
               <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
@@ -1425,6 +1443,18 @@ export class MockupsPage {
         }
       }
     });
+
+    // Actions dropdown toggle
+    const actionsMenuEl = main.querySelector('#scrActionsMenu');
+    const dropdownEl    = main.querySelector('#scrActionsDropdown');
+    main.querySelector('#scrActionsMenuTrigger').addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdownEl.hidden = !dropdownEl.hidden;
+    });
+    dropdownEl.addEventListener('click', () => { dropdownEl.hidden = true; });
+    document.addEventListener('click', (e) => {
+      if (!actionsMenuEl.contains(e.target)) dropdownEl.hidden = true;
+    }, { capture: false });
 
     main.querySelector('#scrExportHtmlBtn').addEventListener('click', async () => {
       const fresh = await window.db.screenDesigns.get(screen.id);
