@@ -584,20 +584,15 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 10px 8px;
-  border-radius: 8px;
-  margin-bottom: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 1px;
   cursor: pointer;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--card-shadow);
-  transition: background 0.12s, border-color 0.12s;
+  background: transparent;
+  border: none;
+  transition: background 0.1s;
 }
-.related-item:last-child { margin-bottom: 0; }
-.related-item:hover {
-  background: var(--surface-hover);
-  border-color: var(--accent);
-}
+.related-item:hover { background: var(--surface-hover); }
 
 .related-item__header {
   display: flex;
