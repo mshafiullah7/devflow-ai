@@ -143,7 +143,8 @@
   min-width: 0;
 }
 .scr-sidebar__item:hover { background: var(--surface-hover); }
-.scr-sidebar__item--active { background: rgba(var(--accent-rgb, 99, 102, 241), 0.10); }
+.scr-sidebar__item--active { background: rgba(99, 102, 241, 0.1); }
+[data-theme="light"] .scr-sidebar__item--active { background: rgba(99, 102, 241, 0.08); }
 .scr-sidebar__item--active .scr-sidebar__item-title {
   color: var(--accent);
   font-weight: 500;
