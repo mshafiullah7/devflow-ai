@@ -46,6 +46,7 @@
 
 /* Project badge (initial circle + name) */
 .project-home__badge {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;

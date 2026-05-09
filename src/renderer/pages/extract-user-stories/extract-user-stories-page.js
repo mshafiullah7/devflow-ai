@@ -86,6 +86,9 @@ export class ExtractUserStoriesPage {
             <h1 class="project-page__title">Extract User Stories</h1>
             <p class="project-page__desc">Generate user stories from project documents</p>
           </div>
+          <button class="eus-generate-btn" id="eusBtnGenerate" style="-webkit-app-region:no-drag;">
+            Generate User Stories
+          </button>
           <div class="project-page__folder-display" id="headerFolderDisplay">
             <div class="project-page__folder-pill">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
@@ -95,9 +98,6 @@ export class ExtractUserStoriesPage {
               <span class="project-page__folder-text" id="headerFolderText"></span>
             </div>
           </div>
-          <button class="eus-generate-btn" id="eusBtnGenerate" style="-webkit-app-region:no-drag;">
-            Generate User Stories
-          </button>
           <div class="project-page__model-group">
             <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
               <option value="">Loading…</option>

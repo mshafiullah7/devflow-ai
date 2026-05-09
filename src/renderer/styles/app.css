@@ -604,11 +604,9 @@ html, body {
 }
 
 .project-page__folder-display {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 0;
   -webkit-app-region: no-drag;
   opacity: 0;
   pointer-events: none;
