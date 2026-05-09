@@ -253,7 +253,7 @@ export class MockupsPage {
               <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
               <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
             </svg>
-            Project style guide
+            Styles
             <span class="scr-style-dot${this._hasAnyTemplate() ? ' scr-style-dot--active' : ''}"></span>
           </button>
         </header>
