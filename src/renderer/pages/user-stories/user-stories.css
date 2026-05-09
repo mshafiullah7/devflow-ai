@@ -185,6 +185,12 @@
   gap: 2px;
 }
 
+.project-panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .project-panel__add {
   display: flex;
   align-items: center;
