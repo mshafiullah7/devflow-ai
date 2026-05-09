@@ -114,7 +114,7 @@ export class TestCasesPage {
                   <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
                     stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
                 </svg>
-                <span class="project-page__folder-text" id="headerFolderText"></span>
+                <span class="project-page__folder-text" id="headerFolderText">Select folder</span>
               </div>
             </div>
             <div class="project-page__model-group">
@@ -129,12 +129,6 @@ export class TestCasesPage {
                 </svg>
               </button>
             </div>
-            <button class="project-page__folder-btn" id="tcBtnFolder" title="Select folder">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              </svg>
-            </button>
             <button class="project-page__git-btn" id="tcBtnGit" title="Git (opens User Stories)">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -271,7 +265,7 @@ export class TestCasesPage {
         window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
       });
 
-    this.container.querySelector('#tcBtnFolder')
+    this.container.querySelector('#headerFolderDisplay')
       .addEventListener('click', async () => {
         const folderPath = await window.db.dialog.openFolder();
         if (!folderPath) return;

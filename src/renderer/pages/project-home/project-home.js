@@ -217,7 +217,7 @@ export class ProjectHomePage {
                 <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
                   stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
               </svg>
-              <span class="project-page__folder-text" id="headerFolderText"></span>
+              <span class="project-page__folder-text" id="headerFolderText">Select folder</span>
             </div>
           </div>
 
@@ -233,13 +233,6 @@ export class ProjectHomePage {
               </svg>
             </button>
           </div>
-
-          <button class="project-page__folder-btn" id="phBtnFolder" title="Select folder" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-            </svg>
-          </button>
 
           <button class="project-page__git-btn" id="phBtnGit" title="Git" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
@@ -420,7 +413,7 @@ export class ProjectHomePage {
         window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
       });
 
-    this.container.querySelector('#phBtnFolder')
+    this.container.querySelector('#headerFolderDisplay')
       .addEventListener('click', async () => {
         const folderPath = await window.db.dialog.openFolder();
         if (!folderPath) return;

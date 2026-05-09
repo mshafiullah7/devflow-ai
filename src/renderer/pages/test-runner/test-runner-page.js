@@ -158,16 +158,10 @@ export class TestRunnerPage {
                 <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
                   stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
               </svg>
-              <span class="project-page__folder-text" id="headerFolderText"></span>
+              <span class="project-page__folder-text" id="headerFolderText">Select folder</span>
             </div>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
-            <button class="project-page__folder-btn" id="trBtnFolder" title="Select project folder">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              </svg>
-            </button>
             <button class="project-page__git-btn" id="trBtnGit" title="Git changes">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -292,7 +286,7 @@ export class TestRunnerPage {
     this.container.querySelector('#trBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
 
-    this.container.querySelector('#trBtnFolder')
+    this.container.querySelector('#headerFolderDisplay')
       .addEventListener('click', async () => {
         const folderPath = await window.db.dialog.openFolder();
         if (!folderPath) return;
