@@ -9,16 +9,16 @@
   align-items: center;
   column-gap: 4px;
   row-gap: 3px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: none;
   border-radius: 6px;
-  padding: 7px 10px;
-  margin-bottom: 4px;
+  padding: 6px 8px;
+  margin-bottom: 1px;
   cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
+  transition: background 0.1s;
 }
-.usl-card:hover   { background: var(--surface-hover); border-color: var(--accent); }
-.usl-card--active { background: rgba(99, 102, 241, 0.08); border-color: var(--accent); }
+.usl-card:hover   { background: var(--surface-hover); }
+.usl-card--active { background: rgba(99, 102, 241, 0.1); }
 
 /* Flatten header and footer into the grid */
 .usl-card__header { display: contents; }
