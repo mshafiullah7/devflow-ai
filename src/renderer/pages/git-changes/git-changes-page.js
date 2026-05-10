@@ -224,7 +224,9 @@ export class GitChangesPage {
     const onMouseMove = e => {
       const bodyRect = this.container.querySelector('.git-page__body').getBoundingClientRect();
       let w = bodyRect.right - e.clientX;
-      w = Math.max(220, Math.min(w, bodyRect.width - 300));
+      const minW = bodyRect.width * 0.1;
+      const maxW = bodyRect.width * 0.4;
+      w = Math.max(minW, Math.min(w, maxW));
       consoleEl.style.flex = `0 0 ${w}px`;
     };
     const onMouseUp = () => {
