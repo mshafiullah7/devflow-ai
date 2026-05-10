@@ -284,7 +284,7 @@ export class AiConsolePage {
         <div class="aic-body">
 
           <!-- Chat column -->
-          <div class="aic-chat">
+          <div class="aic-chat" id="aicChat">
 
             <!-- Thread -->
             <div class="aic-thread" id="aicThread">
@@ -319,8 +319,11 @@ export class AiConsolePage {
 
           </div>
 
+          <!-- Draggable divider -->
+          <div class="aic-divider" id="aicDivider"></div>
+
           <!-- Context panel -->
-          <aside class="aic-context">
+          <aside class="aic-context" id="aicContext">
             <div class="aic-context__heading">Context</div>
             <p class="aic-context__desc">Choose what project data is injected into the AI prompt.</p>
 
@@ -546,6 +549,45 @@ export class AiConsolePage {
         const chevron = disc.querySelector('.aic-prompt-disc__chevron');
         if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
       });
+
+    // Draggable divider between chat and context panel
+    this._initDividerDrag();
+  }
+
+  _initDividerDrag() {
+    const divider     = this.container.querySelector('#aicDivider');
+    const contextPane = this.container.querySelector('#aicContext');
+    const bodyEl      = this.container.querySelector('.aic-body');
+    if (!divider || !contextPane || !bodyEl) return;
+
+    divider.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const startX      = e.clientX;
+      const startWidth  = contextPane.getBoundingClientRect().width;
+      const totalWidth  = bodyEl.getBoundingClientRect().width;
+      const minW        = 200;
+      const maxW        = totalWidth - 400;
+
+      document.body.style.cursor     = 'col-resize';
+      document.body.style.userSelect = 'none';
+      divider.classList.add('aic-divider--dragging');
+
+      const onMove = (mv) => {
+        const newWidth = Math.min(Math.max(startWidth - (mv.clientX - startX), minW), maxW);
+        contextPane.style.flex = `0 0 ${newWidth}px`;
+      };
+
+      const onUp = () => {
+        document.body.style.cursor     = '';
+        document.body.style.userSelect = '';
+        divider.classList.remove('aic-divider--dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
   }
 
   // ----------------------------------------------------------------
