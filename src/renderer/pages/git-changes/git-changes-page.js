@@ -139,10 +139,16 @@ export class GitChangesPage {
     const killBtn = this.container.querySelector('#gitConsoleKill');
     const clearBtn = this.container.querySelector('#gitConsoleClear');
 
+    const clearOutput = () => {
+      const out = this.container.querySelector('#gitConsoleOutput');
+      if (out) out.innerHTML = '';
+    };
+
     const run = () => {
       const cmd = input.value.trim();
       if (!cmd || this._consoleRunning) return;
       input.value = '';
+      if (cmd === 'clear' || cmd === 'cls') { clearOutput(); return; }
       this._consoleRun(cmd);
     };
 
