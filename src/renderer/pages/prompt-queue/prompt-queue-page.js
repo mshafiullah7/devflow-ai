@@ -48,6 +48,7 @@ export class PromptQueuePage {
     this._renderList();
     this._bindEvents();
 
+    if (this._project?.project_path) this._setHeaderFolderPath(this._project.project_path);
     if (this._queue.length > 0) this._selectItem(this._queue[0]);
   }
 
@@ -73,6 +74,17 @@ export class PromptQueuePage {
             </svg>
           </button>
           <span class="pq-header__title">Prompt Queue</span>
+
+          <div class="project-page__folder-display" id="pqHeaderFolderDisplay" title="Select folder" style="-webkit-app-region:no-drag;">
+            <div class="project-page__folder-pill">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              </svg>
+              <span class="project-page__folder-text" id="pqHeaderFolderText">Select folder</span>
+            </div>
+          </div>
+
           <div class="project-page__model-group pq-header__model" style="-webkit-app-region:no-drag;">
             <div id="pqModelPicker"></div>
             <button class="project-page__model-cfg-btn" id="pqBtnModelConfigs" title="Configure AI models">
@@ -485,6 +497,14 @@ export class PromptQueuePage {
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
   }
 
+  _setHeaderFolderPath(folderPath) {
+    const text    = this.container.querySelector('#pqHeaderFolderText');
+    const display = this.container.querySelector('#pqHeaderFolderDisplay');
+    if (!text || !display) return;
+    text.textContent = folderPath;
+    display.classList.add('project-page__folder-display--active');
+  }
+
   // ----------------------------------------------------------------
   // Model dropdown
   // ----------------------------------------------------------------
@@ -501,6 +521,15 @@ export class PromptQueuePage {
 
     this.container.querySelector('#pqBtnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
+
+    this.container.querySelector('#pqHeaderFolderDisplay')
+      .addEventListener('click', async () => {
+        const folderPath = await window.db.dialog.openFolder();
+        if (!folderPath) return;
+        await window.db.projects.setPath({ id: this.projectId, project_path: folderPath });
+        if (this._project) this._project.project_path = folderPath;
+        this._setHeaderFolderPath(folderPath);
+      });
 
 
     this.container.querySelector('#pqBtnRunNext')
