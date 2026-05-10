@@ -71,6 +71,11 @@
   border-radius: 6px;
   padding: 0 8px;
   height: 28px;
+  transition: border-color 0.15s;
+}
+.aic-header__model-wrap:focus-within,
+.aic-header__tpl-wrap:focus-within {
+  border-color: var(--accent);
 }
 
 .aic-header__ctrl-icon {
@@ -85,21 +90,16 @@
   background: transparent;
   border: none;
   outline: none;
-  cursor: not-allowed;
-  max-width: 160px;
+  max-width: 180px;
+  cursor: pointer;
 }
-
-.aic-coming-soon-pill {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 3px 9px;
-  border-radius: 99px;
+.aic-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.aic-select option {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-tertiary);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  white-space: nowrap;
+  color: var(--text-primary);
 }
 
 /* ----------------------------------------------------------------
@@ -132,7 +132,17 @@
   gap: 18px;
 }
 
-/* Messages */
+/* Loading / empty state */
+.aic-thread__loading {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin-top: 40px;
+}
+
+/* ----------------------------------------------------------------
+   Messages
+---------------------------------------------------------------- */
 .aic-msg {
   display: flex;
   gap: 10px;
@@ -178,10 +188,11 @@
 
 .aic-msg__bubble {
   font-size: 12.5px;
-  line-height: 1.6;
+  line-height: 1.65;
   padding: 10px 13px;
   border-radius: 10px;
   color: var(--text-primary);
+  word-break: break-word;
 }
 
 .aic-msg--ai .aic-msg__bubble {
@@ -196,7 +207,48 @@
   border-top-right-radius: 3px;
 }
 
-/* Inline apply-action chips on AI messages */
+.aic-msg__bubble code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  background: var(--bg-primary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+}
+
+/* Streaming cursor animation */
+@keyframes aic-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.aic-cursor {
+  display: inline-block;
+  font-size: 13px;
+  line-height: 1;
+  margin-left: 1px;
+  animation: aic-blink 1s step-start infinite;
+  color: var(--accent);
+}
+
+.aic-msg--streaming .aic-msg__bubble {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+}
+
+/* Error message */
+.aic-error-msg {
+  font-size: 12px;
+  color: var(--color-danger, #e05252);
+  background: color-mix(in srgb, var(--color-danger, #e05252) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger, #e05252) 20%, transparent);
+  border-radius: 8px;
+  padding: 8px 12px;
+  align-self: center;
+  max-width: 80%;
+  text-align: center;
+}
+
+/* Inline action chips on AI messages */
 .aic-msg__actions {
   display: flex;
   flex-wrap: wrap;
@@ -205,7 +257,7 @@
 }
 
 /* ----------------------------------------------------------------
-   Action chips (both message actions and legend)
+   Action chips
 ---------------------------------------------------------------- */
 .aic-action-chip {
   font-size: 11px;
@@ -215,14 +267,24 @@
   border: 1px solid var(--border-default);
   background: var(--bg-primary);
   color: var(--text-secondary);
-  cursor: not-allowed;
-  opacity: 0.7;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.aic-action-chip:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .aic-action-chip--preview {
   cursor: default;
-  opacity: 0.5;
+  opacity: 0.45;
+}
+.aic-action-chip--preview:hover {
+  background: var(--bg-primary);
+  border-color: var(--border-default);
+  color: var(--text-secondary);
 }
 
 /* ----------------------------------------------------------------
@@ -255,10 +317,15 @@
   background: var(--bg-secondary);
   color: var(--text-primary);
   outline: none;
-  cursor: not-allowed;
-  opacity: 0.6;
+  transition: border-color 0.15s;
 }
-
+.aic-input-bar__textarea:focus {
+  border-color: var(--accent);
+}
+.aic-input-bar__textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .aic-input-bar__textarea::placeholder {
   color: var(--text-tertiary);
 }
@@ -270,6 +337,7 @@
   align-items: stretch;
 }
 
+/* Ghost / Clear button */
 .aic-btn-ghost {
   font-size: 11.5px;
   font-weight: 500;
@@ -278,10 +346,19 @@
   border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.aic-btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.aic-btn-ghost:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
+/* Send button */
 .aic-btn-send {
   display: flex;
   align-items: center;
@@ -293,24 +370,24 @@
   border: none;
   background: var(--accent);
   color: #fff;
+  cursor: pointer;
+  transition: opacity 0.12s, background 0.15s;
+  white-space: nowrap;
+}
+.aic-btn-send:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.aic-btn-send:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.35;
 }
 
-.aic-input-bar__hint {
-  margin: 0;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  line-height: 1.4;
+/* Stop variant — shown while generating */
+.aic-btn-send--stop {
+  background: var(--color-danger, #e05252);
 }
-
-.aic-input-bar__hint code {
-  font-family: var(--font-mono, monospace);
-  font-size: 10.5px;
-  background: var(--bg-secondary);
-  padding: 1px 4px;
-  border-radius: 3px;
-  border: 1px solid var(--border-subtle);
+.aic-btn-send--stop:hover:not(:disabled) {
+  opacity: 0.88;
 }
 
 /* ----------------------------------------------------------------
@@ -356,8 +433,9 @@
   gap: 8px;
   padding: 7px 8px;
   border-radius: 6px;
-  cursor: not-allowed;
+  cursor: pointer;
   transition: background 0.12s;
+  user-select: none;
 }
 .aic-slice:hover {
   background: var(--bg-hover);
@@ -367,7 +445,16 @@
   margin-top: 1px;
   flex-shrink: 0;
   accent-color: var(--accent);
+  cursor: pointer;
+}
+.aic-slice__check:disabled {
   cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.aic-slice:has(.aic-slice__check:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .aic-slice__info {
@@ -392,7 +479,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Build context button */
+/* Build Context button */
 .aic-btn-build-ctx {
   display: flex;
   align-items: center;
@@ -405,10 +492,26 @@
   border-radius: 7px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
-  color: var(--text-tertiary);
-  cursor: not-allowed;
-  opacity: 0.6;
+  color: var(--text-secondary);
+  cursor: pointer;
   margin-bottom: 10px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.aic-btn-build-ctx:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.aic-btn-build-ctx:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Done flash state */
+.aic-btn-build-ctx--done {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-subtle));
+  color: var(--accent);
 }
 
 /* Token count */
