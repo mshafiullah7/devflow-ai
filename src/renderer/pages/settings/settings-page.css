@@ -208,11 +208,15 @@
   padding: 12px 16px;
   box-shadow: var(--card-shadow);
   transition: border-color 0.15s;
+  min-width: 0;
+  overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 .st-model-item:hover { border-color: var(--accent); }
 .st-model-item--clickable { cursor: pointer; }
 
-.st-model-item__info { flex: 1; min-width: 0; }
+.st-model-item__info { flex: 1; min-width: 0; overflow: hidden; }
 
 .st-model-item__top {
   display: flex;
