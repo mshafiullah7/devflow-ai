@@ -424,6 +424,18 @@
   border-color: var(--accent);
   color: #fff;
 }
+.st-type-readonly {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  background: var(--surface-header);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .st-type-btn--disabled {
   opacity: 0.45;
   cursor: not-allowed;

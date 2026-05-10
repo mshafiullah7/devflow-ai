@@ -171,13 +171,16 @@ export class SettingsPage {
 
             <div class="st-form__row">
               <label class="st-form__label">Type</label>
-              <div class="st-form__type-toggle">
-                <button type="button" class="st-type-btn ${(!config || config.type === 'cli') ? 'active' : ''}" data-type="cli">CLI</button>
-                <button type="button" class="st-type-btn ${config?.type === 'ollama' ? 'active' : ''}" data-type="ollama">Ollama</button>
-                <button type="button" class="st-type-btn st-type-btn--disabled" disabled title="Coming soon">
-                  API <span class="st-coming-soon">Soon</span>
-                </button>
-              </div>
+              ${isEdit
+                ? `<div class="st-type-readonly">${config.type === 'cli' ? 'CLI' : config.type === 'ollama' ? 'Ollama' : 'API'}</div>`
+                : `<div class="st-form__type-toggle">
+                    <button type="button" class="st-type-btn active" data-type="cli">CLI</button>
+                    <button type="button" class="st-type-btn" data-type="ollama">Ollama</button>
+                    <button type="button" class="st-type-btn st-type-btn--disabled" disabled title="Coming soon">
+                      API <span class="st-coming-soon">Soon</span>
+                    </button>
+                  </div>`
+              }
               <input type="hidden" id="stFType" value="${config?.type || 'cli'}"/>
             </div>
 
