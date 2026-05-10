@@ -369,25 +369,14 @@ function seedQuickCommands(db) {
 
   const commands = [
     // Status & history
-    ['git status',                                          'Show working tree status'],
+    ['git status',                                         'Show working tree status'],
     ['git log --oneline --graph --decorate -20',           'Recent commits — graph view'],
     ['git log --oneline -20',                              'Last 20 commits (compact)'],
-    ['git log --oneline --all --graph --decorate -30',     'All branches — graph view'],
-    ['git diff',                                           'Show unstaged changes'],
-    ['git diff --staged',                                  'Show staged changes'],
-    ['git diff HEAD~1 HEAD',                               'Diff between last two commits'],
-    ['git show HEAD',                                      'Show last commit details'],
-    ['git blame',                                          'Show who changed each line'],
     // Staging & committing
+    ['git add -A; git commit -m "{{input}}"', 'Commit all changes with message (replace {{input}})'],
     ['git add .',                                          'Stage all changes'],
-    ['git stash',                                          'Stash current changes'],
-    ['git stash pop',                                      'Apply most recent stash'],
-    ['git stash list',                                     'List all stashes'],
-    ['git stash drop',                                     'Delete most recent stash'],
     // Rollback & reset
     ['git revert HEAD --no-edit',                         'Revert last commit (new commit)'],
-    ['git reset --soft HEAD~1',                            'Undo last commit — keep changes staged'],
-    ['git reset --mixed HEAD~1',                           'Undo last commit — keep changes unstaged'],
     ['git reset --hard HEAD~1',                            'Undo last commit — discard all changes'],
     ['git checkout -- .',                                  'Discard all unstaged changes'],
     ['git clean -fd',                                      'Delete untracked files & folders'],
@@ -398,11 +387,6 @@ function seedQuickCommands(db) {
     ['git pull',                                           'Pull from remote'],
     ['git push',                                           'Push to remote'],
     ['git remote -v',                                      'Show remote URLs'],
-    // Utilities
-    ['git tag',                                            'List all tags'],
-    ['git shortlog -sn --no-merges',                       'Commit count per author'],
-    ['git ls-files --others --exclude-standard',           'List untracked files'],
-    ['cmd /c "tree . /f /a"',                              'Show project folder tree'],
   ];
 
   const insertAll = db.transaction((rows) => {

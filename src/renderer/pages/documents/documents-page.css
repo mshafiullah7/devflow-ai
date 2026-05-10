@@ -204,6 +204,26 @@
 .md-table tbody tr:hover {
   background: var(--surface-hover, var(--surface));
 }
+
+/* ------------------------------------------------------------------ */
+/* Task list checkboxes                                                  */
+/* ------------------------------------------------------------------ */
+.md-task-item {
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-left: -1.2em;
+}
+
+.md-task-checkbox {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  cursor: default;
+  accent-color: var(--accent, #6366f1);
+}
 /* ------------------------------------------------------------------ */
 /* Documents modal overlay                                              */
 /* ------------------------------------------------------------------ */
