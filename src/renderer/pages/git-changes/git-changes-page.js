@@ -3,13 +3,14 @@ import { applyStoredTheme } from '../../shared/theme-manager.js';
 
 export class GitChangesPage {
   constructor(container, params, router) {
-    this.container  = container;
-    this.router     = router;
-    this._projectId = params.projectId;
-    this._from      = params.from || 'project-home';
-    this._project   = null;
-    this._files     = [];
-    this._activeIdx = 0;
+    this.container    = container;
+    this.router       = router;
+    this._projectId   = params.projectId;
+    this._from        = params.from || 'project-home';
+    this._project     = null;
+    this._files       = [];
+    this._activeIdx   = 0;
+    this._consoleRunning = false;
   }
 
   // ----------------------------------------------------------------
@@ -29,6 +30,7 @@ export class GitChangesPage {
   unmount() {
     removeCss('pages/git-changes/git-changes-page.css');
     removeCss('components/git/git-diff.css');
+    window.db.terminal.removeListeners();
   }
 
   // ----------------------------------------------------------------
@@ -72,6 +74,42 @@ export class GitChangesPage {
               <div class="git-diff-loading">Select a file to view its diff.</div>
             </div>
           </div>
+
+          <div class="git-page__console-divider" id="gitConsoleDivider"></div>
+
+          <div class="git-page__console" id="gitConsole">
+            <div class="git-page__console-header">
+              <span class="git-page__console-title">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M4 6l3 3-3 3M8 12h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Console
+              </span>
+              <div class="git-page__console-actions">
+                <button class="git-page__console-btn" id="gitConsoleKill" title="Stop" disabled>
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <rect x="2" y="2" width="8" height="8" rx="1" fill="currentColor"/>
+                  </svg>
+                </button>
+                <button class="git-page__console-btn" id="gitConsoleClear" title="Clear">
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 10L10 2M2 2l8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="git-page__console-output" id="gitConsoleOutput">
+              <span class="git-page__console-hint">Run git commands or any shell command here.</span>
+            </div>
+            <div class="git-page__console-compose">
+              <span class="git-page__console-prompt">$</span>
+              <input class="git-page__console-input" id="gitConsoleInput"
+                placeholder="git status, git log --oneline, …"
+                autocomplete="off" spellcheck="false"/>
+              <button class="git-page__console-run" id="gitConsoleRun">Run</button>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -87,6 +125,117 @@ export class GitChangesPage {
 
     this.container.querySelector('#gitPageRefresh')
       .addEventListener('click', () => this._loadStatus());
+
+    this._bindConsole();
+    this._bindConsoleDivider();
+  }
+
+  // ----------------------------------------------------------------
+  // Console panel
+  // ----------------------------------------------------------------
+  _bindConsole() {
+    const input   = this.container.querySelector('#gitConsoleInput');
+    const runBtn  = this.container.querySelector('#gitConsoleRun');
+    const killBtn = this.container.querySelector('#gitConsoleKill');
+    const clearBtn = this.container.querySelector('#gitConsoleClear');
+
+    const run = () => {
+      const cmd = input.value.trim();
+      if (!cmd || this._consoleRunning) return;
+      input.value = '';
+      this._consoleRun(cmd);
+    };
+
+    runBtn.addEventListener('click', run);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+    killBtn.addEventListener('click', () => window.db.terminal.killActive());
+    clearBtn.addEventListener('click', () => {
+      const out = this.container.querySelector('#gitConsoleOutput');
+      if (out) out.innerHTML = '';
+    });
+  }
+
+  _consoleAppend(text, type = 'out') {
+    const out = this.container.querySelector('#gitConsoleOutput');
+    if (!out) return;
+    out.querySelector('.git-page__console-hint')?.remove();
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+      const el = document.createElement('div');
+      el.className = `git-page__console-line git-page__console-line--${type}`;
+      el.textContent = line;
+      out.appendChild(el);
+    }
+    out.scrollTop = out.scrollHeight;
+  }
+
+  async _consoleRun(cmd) {
+    const cwd     = this._project?.project_path || '';
+    const runBtn  = this.container.querySelector('#gitConsoleRun');
+    const killBtn = this.container.querySelector('#gitConsoleKill');
+    const input   = this.container.querySelector('#gitConsoleInput');
+
+    this._consoleAppend(`$ ${cmd}`, 'cmd');
+    this._consoleRunning = true;
+    if (runBtn)  { runBtn.disabled = true; runBtn.textContent = '…'; }
+    if (killBtn) killBtn.disabled = false;
+    if (input)   input.disabled = true;
+
+    window.db.terminal.removeListeners();
+    window.db.terminal.onData(({ text }) => this._consoleAppend(text, 'out'));
+    window.db.terminal.onDone(({ exitCode }) => {
+      window.db.terminal.removeListeners();
+      if (exitCode !== 0) {
+        this._consoleAppend(`[exited with code ${exitCode}]`, 'err');
+      }
+      this._consoleRunning = false;
+      if (runBtn)  { runBtn.disabled = false; runBtn.textContent = 'Run'; }
+      if (killBtn) killBtn.disabled = true;
+      if (input)   { input.disabled = false; input.focus(); }
+    });
+
+    try {
+      await window.db.terminal.execStart({ command: cmd, cwd });
+    } catch (err) {
+      window.db.terminal.removeListeners();
+      this._consoleAppend(`Error: ${err.message}`, 'err');
+      this._consoleRunning = false;
+      if (runBtn)  { runBtn.disabled = false; runBtn.textContent = 'Run'; }
+      if (killBtn) killBtn.disabled = true;
+      if (input)   { input.disabled = false; input.focus(); }
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Resizable divider between diff and console
+  // ----------------------------------------------------------------
+  _bindConsoleDivider() {
+    const divider     = this.container.querySelector('#gitConsoleDivider');
+    const consoleEl   = this.container.querySelector('#gitConsole');
+    const diffWrap    = this.container.querySelector('.git-page__diff-wrap');
+    if (!divider || !consoleEl || !diffWrap) return;
+
+    const onMouseMove = e => {
+      const bodyRect = this.container.querySelector('.git-page__body').getBoundingClientRect();
+      let w = bodyRect.right - e.clientX;
+      w = Math.max(220, Math.min(w, bodyRect.width - 300));
+      consoleEl.style.flex = `0 0 ${w}px`;
+    };
+    const onMouseUp = () => {
+      divider.classList.remove('git-page__console-divider--dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    divider.addEventListener('mousedown', e => {
+      e.preventDefault();
+      divider.classList.add('git-page__console-divider--dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
   }
 
   // ----------------------------------------------------------------
