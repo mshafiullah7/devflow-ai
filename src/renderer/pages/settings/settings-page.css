@@ -225,6 +225,11 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .st-model-item__badge {
@@ -233,6 +238,7 @@
   padding: 1px 6px;
   border-radius: 10px;
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 .st-model-item__badge--cli {
   background: rgba(99, 102, 241, 0.12);
