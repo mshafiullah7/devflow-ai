@@ -433,13 +433,15 @@
    Context panel (right sidebar)
 ---------------------------------------------------------------- */
 .aic-context {
-  width: 240px;
+  width: 260px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   padding: 16px 14px 20px;
   overflow-y: auto;
   gap: 0;
+  /* Reserve space for scrollbar so content never shifts */
+  scrollbar-gutter: stable;
 }
 
 .aic-context__heading {
@@ -572,7 +574,8 @@
   margin-bottom: 4px;
   border: 1px solid var(--border-subtle);
   border-radius: 7px;
-  overflow: hidden;
+  /* No overflow:hidden here — that was clipping the pre's scrollbar.
+     Instead each child carries its own border-radius. */
   background: var(--bg-primary);
 }
 
@@ -583,6 +586,8 @@
   padding: 6px 10px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
+  /* Top corners match wrapper */
+  border-radius: 7px 7px 0 0;
 }
 
 .aic-ctx-preview__copy {
@@ -607,6 +612,9 @@
 }
 
 .aic-ctx-preview__pre {
+  /* Reset box model so padding doesn't add width beyond the container */
+  box-sizing: border-box;
+  width: 100%;
   margin: 0;
   font-family: var(--font-mono, monospace);
   font-size: 10.5px;
@@ -615,8 +623,13 @@
   padding: 8px 10px;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 260px;
+  /* Cap height and scroll within the pre itself */
+  max-height: 240px;
   overflow-y: auto;
+  /* Stable gutter so text doesn't shift when scrollbar appears */
+  scrollbar-gutter: stable;
+  /* Bottom corners match wrapper */
+  border-radius: 0 0 7px 7px;
 }
 
 /* Apply actions legend */
