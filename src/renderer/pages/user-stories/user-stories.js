@@ -384,24 +384,31 @@ export class ProjectPage {
     const toggleBtn    = document.getElementById('btnRelatedToggle');
     const icon         = toggleBtn.querySelector('.related-toggle-icon');
 
-    let savedFlex = panel.style.flex || '0 0 22%';
+    let savedFlex = '0 0 22%';
+
+    const collapse = () => {
+      savedFlex = panel.style.flex || savedFlex;
+      panel.classList.add('project-related--collapsed');
+      resizeHandle.style.display = 'none';
+      toggleBtn.title = 'Expand panel';
+      toggleBtn.setAttribute('aria-label', 'Expand panel');
+      icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+    };
+
+    const expand = () => {
+      panel.classList.remove('project-related--collapsed');
+      panel.style.flex = savedFlex;
+      resizeHandle.style.display = '';
+      toggleBtn.title = 'Collapse panel';
+      toggleBtn.setAttribute('aria-label', 'Collapse panel');
+      icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+    };
+
+    collapse();
 
     toggleBtn.addEventListener('click', () => {
-      const isCollapsed = panel.classList.toggle('project-related--collapsed');
-
-      if (isCollapsed) {
-        savedFlex = panel.style.flex || '0 0 22%';
-        resizeHandle.style.display = 'none';
-        toggleBtn.title = 'Expand panel';
-        toggleBtn.setAttribute('aria-label', 'Expand panel');
-        icon.innerHTML = '<path d="M10 4l-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
-      } else {
-        panel.style.flex = savedFlex;
-        resizeHandle.style.display = '';
-        toggleBtn.title = 'Collapse panel';
-        toggleBtn.setAttribute('aria-label', 'Collapse panel');
-        icon.innerHTML = '<path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
-      }
+      if (panel.classList.contains('project-related--collapsed')) expand();
+      else collapse();
     });
   }
 
