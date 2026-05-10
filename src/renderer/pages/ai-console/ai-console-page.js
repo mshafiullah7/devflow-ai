@@ -206,11 +206,9 @@ export class AiConsolePage {
     if (!thread) return;
 
     const name = this._project?.name || 'your project';
-    const text = `Hello! I\'m ready to help with **${name}**. `
-      + `I can see ${this._features.length} features, ${this._stories.length} user stories, and ${this._issues.length} open issues. `
-      + `Select context slices on the right, pick a template, and ask me anything.`;
-
-    thread.innerHTML = this._bubbleHtml({ role: 'assistant', text });
+    thread.innerHTML = `<p class="aic-thread__loading">
+      Ready to help with <strong>${escHtml(name)}</strong>. ${this._features.length} features, ${this._stories.length} stories, ${this._issues.length} open issues. Select context slices on the right, then send a message.
+    </p>`;
   }
 
   // ----------------------------------------------------------------
@@ -303,11 +301,9 @@ export class AiConsolePage {
                 ></textarea>
                 <div class="aic-input-bar__actions">
                   <button class="aic-btn-ghost" id="aicBtnClear" disabled>Clear</button>
-                  <button class="aic-btn-send" id="aicBtnSend" disabled>
-                    <span id="aicBtnSendLabel">Send</span>
-                    <svg id="aicIconSend" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <line x1="22" y1="2" x2="11" y2="13"/>
-                      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  <button class="aic-btn-send" id="aicBtnSend" disabled title="Send (Enter)">
+                    <svg id="aicIconSend" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M3 2l11 6-11 6V9.5l8-1.5-8-1.5V2z"/>
                     </svg>
                     <svg id="aicIconStop" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
                       <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -423,37 +419,12 @@ export class AiConsolePage {
   // Message bubble renderer
   // ----------------------------------------------------------------
   _bubbleHtml(msg, streaming = false) {
-    const isUser   = msg.role === 'user';
     const bodyHtml = formatText(msg.text || '');
     const cursor   = streaming ? '<span class="aic-cursor">▋</span>' : '';
 
-    const modelName = this._selectedModel
-      ? this._selectedModel.label
-      : 'AI';
-
-    const senderLabel = isUser
-      ? `<span class="aic-msg__sender aic-msg__sender--user">You</span>`
-      : `<span class="aic-msg__sender aic-msg__sender--ai">${escapeHtml(modelName)}</span>`;
-
-    const userAvatar = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-      </svg>`;
-
-    const aiAvatar = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-      </svg>`;
-
     return `
       <div class="aic-msg aic-msg--${msg.role}${streaming ? ' aic-msg--streaming' : ''}">
-        <div class="aic-msg__avatar ${isUser ? 'aic-msg__avatar--user' : 'aic-msg__avatar--ai'}">
-          ${isUser ? userAvatar : aiAvatar}
-        </div>
-        <div class="aic-msg__body">
-          ${senderLabel}
-          <div class="aic-msg__bubble">${bodyHtml}${cursor}</div>
-        </div>
+        <div class="aic-msg__bubble">${bodyHtml}${cursor}</div>
       </div>
     `;
   }
@@ -552,6 +523,16 @@ export class AiConsolePage {
 
     // Draggable divider between chat and context panel
     this._initDividerDrag();
+
+    // Auto-resize textarea
+    const ta = q('#aicInput');
+    if (ta) {
+      const resize = () => {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+      };
+      ta.addEventListener('input', resize);
+    }
   }
 
   _initDividerDrag() {
@@ -855,24 +836,21 @@ export class AiConsolePage {
     this._isGenerating = on;
 
     const btnSend  = this.container.querySelector('#aicBtnSend');
-    const label    = this.container.querySelector('#aicBtnSendLabel');
     const iconSend = this.container.querySelector('#aicIconSend');
     const iconStop = this.container.querySelector('#aicIconStop');
     const ta       = this.container.querySelector('#aicInput');
     const btnClear = this.container.querySelector('#aicBtnClear');
 
     if (on) {
-      if (label)    label.textContent     = 'Stop';
       if (iconSend) iconSend.style.display = 'none';
       if (iconStop) iconStop.style.display = '';
-      if (btnSend)  btnSend.classList.add('aic-btn-send--stop');
+      if (btnSend)  { btnSend.classList.add('aic-btn-send--stop'); btnSend.title = 'Stop'; }
       if (ta)       ta.disabled            = true;
       if (btnClear) btnClear.disabled      = true;
     } else {
-      if (label)    label.textContent     = 'Send';
       if (iconSend) iconSend.style.display = '';
       if (iconStop) iconStop.style.display = 'none';
-      if (btnSend)  btnSend.classList.remove('aic-btn-send--stop');
+      if (btnSend)  { btnSend.classList.remove('aic-btn-send--stop'); btnSend.title = 'Send (Enter)'; }
       if (ta)       { ta.disabled = false; ta.focus(); }
       if (btnClear) btnClear.disabled = false;
     }
