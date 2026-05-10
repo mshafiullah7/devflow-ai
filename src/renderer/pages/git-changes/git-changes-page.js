@@ -122,6 +122,17 @@ export class GitChangesPage {
                 placeholder="git status, git log --oneline, …"
                 autocomplete="off" spellcheck="false"/>
               <button class="git-page__console-run" id="gitConsoleRun">Run</button>
+              <div class="git-page__qcmd-picker" id="gitQcmdPicker">
+                <button class="git-page__qcmd-picker-btn" id="gitQcmdPickerBtn" title="Quick Commands">
+                  <svg width="11" height="11" viewBox="0 0 20 20" fill="none">
+                    <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+                    <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+                    <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+                    <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                </button>
+                <div class="git-page__qcmd-menu" id="gitQcmdMenu" hidden></div>
+              </div>
             </div>
           </div>
         </div>
@@ -176,6 +187,47 @@ export class GitChangesPage {
       const out = this.container.querySelector('#gitConsoleOutput');
       if (out) out.innerHTML = '';
     });
+
+    this._bindQcmdPicker(input, run);
+  }
+
+  _bindQcmdPicker(input, run) {
+    const pickerBtn = this.container.querySelector('#gitQcmdPickerBtn');
+    const menu      = this.container.querySelector('#gitQcmdMenu');
+    if (!pickerBtn || !menu) return;
+
+    const closeMenu = () => { menu.hidden = true; };
+
+    pickerBtn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!menu.hidden) { closeMenu(); return; }
+
+      menu.innerHTML = '<div class="git-page__qcmd-menu-loading">Loading…</div>';
+      menu.hidden = false;
+
+      const cmds = await window.db.quickCommands.list().catch(() => []);
+      if (cmds.length === 0) {
+        menu.innerHTML = '<div class="git-page__qcmd-menu-empty">No quick commands saved</div>';
+        return;
+      }
+
+      menu.innerHTML = cmds.map(c => `
+        <button class="git-page__qcmd-menu-item" data-cmd="${escHtml(c.command)}">
+          <span class="git-page__qcmd-menu-cmd">${escHtml(c.command)}</span>
+          ${c.description ? `<span class="git-page__qcmd-menu-desc">${escHtml(c.description)}</span>` : ''}
+        </button>
+      `).join('');
+
+      menu.querySelectorAll('.git-page__qcmd-menu-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          input.value = btn.dataset.cmd;
+          closeMenu();
+          run();
+        });
+      });
+    });
+
+    document.addEventListener('click', closeMenu);
   }
 
   _consoleAppend(text, type = 'out') {
