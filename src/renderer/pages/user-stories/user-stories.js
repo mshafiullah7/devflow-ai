@@ -123,6 +123,11 @@ export class ProjectPage {
             </svg>
             <span class="project-page__git-badge" id="gitBadge" hidden></span>
           </button>
+          <button class="project-page__qcmd-btn" id="btnOpenVscode" title="Open in VS Code" hidden style="-webkit-app-region:no-drag;">
+            <svg width="14" height="14" viewBox="0 0 100 100" fill="none">
+              <path d="M74.9 6.6L51.7 27.3 32.4 11.6 6.3 22.8v54.4l26.1 11.2 19.3-15.7 23.2 20.7 19-8.2V14.8L74.9 6.6zm0 73.2L55.6 62.9v-25.8l19.3-17.8v60.5zM12 68.6V31.4l14.8-6.4 28.5 25L27 75l-15-6.4z" fill="currentColor"/>
+            </svg>
+          </button>
           <button class="project-page__qcmd-btn" id="btnExportProject" title="Export all features &amp; stories" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
@@ -268,6 +273,12 @@ export class ProjectPage {
 
     document.getElementById('btnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
+
+    document.getElementById('btnOpenVscode')
+      .addEventListener('click', () => {
+        const p = this._project?.project_path;
+        if (p) window.db.terminal.exec({ command: `code "${p}"`, cwd: p });
+      });
 
     document.getElementById('btnExportProject')
       .addEventListener('click', () => this._exportProject());
@@ -421,6 +432,8 @@ export class ProjectPage {
     if (!text || !display) return;
     text.textContent = folderPath;
     display.classList.add('project-page__folder-display--active');
+    const vsBtn = document.getElementById('btnOpenVscode');
+    if (vsBtn) vsBtn.hidden = false;
   }
 
   // ----------------------------------------------------------------
