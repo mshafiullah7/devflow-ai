@@ -118,7 +118,7 @@
 /* File list sidebar                                                    */
 /* ------------------------------------------------------------------ */
 .git-page__files {
-  width: 260px;
+  width: 300px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   overflow-y: auto;
