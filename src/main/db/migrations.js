@@ -336,10 +336,16 @@ function seedDocumentTemplates(db) {
       4,
     ],
     [
+      'Tasks',
+      'Checklist of to-do items with sections',
+      `# Tasks\n\n## To Do\n\n- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n\n## In Progress\n\n- [ ] Task 4\n\n## Done\n\n- [x] Completed task\n`,
+      5,
+    ],
+    [
       'Release Notes',
       'What changed in this version',
       `# Release Notes\n\n## Version X.Y.Z — \n\n### New Features\n\n- Feature 1\n\n### Bug Fixes\n\n- Fix 1\n\n### Breaking Changes\n\n_None_\n\n### Upgrade Notes\n\nDescribe any steps required to upgrade.\n`,
-      5,
+      6,
     ],
   ];
 
@@ -349,4 +355,60 @@ function seedDocumentTemplates(db) {
   insertAll(templates);
 }
 
-module.exports = { seedStatuses, runMigrations };
+/**
+ * Seeds the quick_commands table with common git commands.
+ * Uses WHERE NOT EXISTS so it's safe to call repeatedly.
+ * @param {import('better-sqlite3').Database} db
+ */
+function seedQuickCommands(db) {
+  const insert = db.prepare(`
+    INSERT INTO quick_commands (command, description)
+    SELECT ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM quick_commands WHERE command = ?)
+  `);
+
+  const commands = [
+    // Status & history
+    ['git status',                                          'Show working tree status'],
+    ['git log --oneline --graph --decorate -20',           'Recent commits — graph view'],
+    ['git log --oneline -20',                              'Last 20 commits (compact)'],
+    ['git log --oneline --all --graph --decorate -30',     'All branches — graph view'],
+    ['git diff',                                           'Show unstaged changes'],
+    ['git diff --staged',                                  'Show staged changes'],
+    ['git diff HEAD~1 HEAD',                               'Diff between last two commits'],
+    ['git show HEAD',                                      'Show last commit details'],
+    ['git blame',                                          'Show who changed each line'],
+    // Staging & committing
+    ['git add .',                                          'Stage all changes'],
+    ['git stash',                                          'Stash current changes'],
+    ['git stash pop',                                      'Apply most recent stash'],
+    ['git stash list',                                     'List all stashes'],
+    ['git stash drop',                                     'Delete most recent stash'],
+    // Rollback & reset
+    ['git revert HEAD --no-edit',                         'Revert last commit (new commit)'],
+    ['git reset --soft HEAD~1',                            'Undo last commit — keep changes staged'],
+    ['git reset --mixed HEAD~1',                           'Undo last commit — keep changes unstaged'],
+    ['git reset --hard HEAD~1',                            'Undo last commit — discard all changes'],
+    ['git checkout -- .',                                  'Discard all unstaged changes'],
+    ['git clean -fd',                                      'Delete untracked files & folders'],
+    // Branches
+    ['git branch -a',                                      'List all branches (local + remote)'],
+    ['git branch',                                         'List local branches'],
+    ['git fetch --all --prune',                            'Fetch all remotes, prune deleted'],
+    ['git pull',                                           'Pull from remote'],
+    ['git push',                                           'Push to remote'],
+    ['git remote -v',                                      'Show remote URLs'],
+    // Utilities
+    ['git tag',                                            'List all tags'],
+    ['git shortlog -sn --no-merges',                       'Commit count per author'],
+    ['git ls-files --others --exclude-standard',           'List untracked files'],
+    ['cmd /c "tree . /f /a"',                              'Show project folder tree'],
+  ];
+
+  const insertAll = db.transaction((rows) => {
+    for (const [cmd, desc] of rows) insert.run(cmd, desc, cmd);
+  });
+  insertAll(commands);
+}
+
+module.exports = { seedStatuses, runMigrations, seedQuickCommands };
