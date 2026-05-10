@@ -402,13 +402,23 @@ export class AiConsolePage {
     const bodyHtml = formatText(msg.text || '');
     const cursor   = streaming ? '<span class="aic-cursor">▋</span>' : '';
 
-    const userAvatar = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-    </svg>`;
+    const modelName = this._selectedModel
+      ? this._selectedModel.label
+      : 'AI';
 
-    const aiAvatar = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-    </svg>`;
+    const senderLabel = isUser
+      ? `<span class="aic-msg__sender aic-msg__sender--user">You</span>`
+      : `<span class="aic-msg__sender aic-msg__sender--ai">${escapeHtml(modelName)}</span>`;
+
+    const userAvatar = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>`;
+
+    const aiAvatar = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+      </svg>`;
 
     return `
       <div class="aic-msg aic-msg--${msg.role}${streaming ? ' aic-msg--streaming' : ''}">
@@ -416,6 +426,7 @@ export class AiConsolePage {
           ${isUser ? userAvatar : aiAvatar}
         </div>
         <div class="aic-msg__body">
+          ${senderLabel}
           <div class="aic-msg__bubble">${bodyHtml}${cursor}</div>
         </div>
       </div>
@@ -638,9 +649,16 @@ export class AiConsolePage {
     const parts = [];
 
     // ── Project summary ─────────────────────────────────────────────
+    // Source: db:projects:get → SELECT * from projects table
+    // Available fields: name, description, project_path, design_template
     if (slices.project && this._project) {
       let block = `PROJECT: ${this._project.name}`;
-      if (this._project.description) block += `\nDescription: ${this._project.description}`;
+      if (this._project.description)
+        block += `\nDescription: ${this._project.description}`;
+      if (this._project.project_path)
+        block += `\nCodebase path: ${this._project.project_path}`;
+      if (this._project.design_template)
+        block += `\nDesign template / style tokens:\n${this._project.design_template}`;
       parts.push(block);
     }
 

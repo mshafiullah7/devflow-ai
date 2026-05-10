@@ -145,75 +145,113 @@
 ---------------------------------------------------------------- */
 .aic-msg {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
+  gap: 9px;
+  align-items: flex-end;   /* avatars sit at bubble bottom */
 }
 
 .aic-msg--user {
   flex-direction: row-reverse;
 }
 
+/* ── Avatar ── */
 .aic-msg__avatar {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 2px;
 }
 
 .aic-msg__avatar--ai {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-secondary));
   color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .aic-msg__avatar--user {
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  background: var(--accent);
+  color: #fff;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
+/* ── Body (sender label + bubble) ── */
 .aic-msg__body {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  max-width: 72%;
+  gap: 3px;
+  max-width: 74%;
 }
 
 .aic-msg--user .aic-msg__body {
   align-items: flex-end;
 }
 
-.aic-msg__bubble {
-  font-size: 12.5px;
-  line-height: 1.65;
-  padding: 10px 13px;
-  border-radius: 10px;
-  color: var(--text-primary);
-  word-break: break-word;
+/* ── Sender label ── */
+.aic-msg__sender {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0 4px;
 }
 
+.aic-msg__sender--ai {
+  color: var(--accent);
+}
+
+.aic-msg__sender--user {
+  color: var(--text-tertiary);
+}
+
+/* ── Bubble ── */
+.aic-msg__bubble {
+  position: relative;
+  font-size: 13px;
+  line-height: 1.65;
+  padding: 10px 14px;
+  border-radius: 18px;
+  word-break: break-word;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+/* AI bubble — left side */
 .aic-msg--ai .aic-msg__bubble {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-top-left-radius: 3px;
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;   /* tail corner */
 }
 
+/* User bubble — right side, solid accent */
 .aic-msg--user .aic-msg__bubble {
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-secondary));
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
-  border-top-right-radius: 3px;
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  border-bottom-right-radius: 4px; /* tail corner */
 }
 
-.aic-msg__bubble code {
+/* Inline code inside AI bubble */
+.aic-msg--ai .aic-msg__bubble code {
   font-family: var(--font-mono, monospace);
   font-size: 11.5px;
   background: var(--bg-primary);
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
   border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+/* Inline code inside user bubble */
+.aic-msg--user .aic-msg__bubble code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 /* Streaming cursor animation */
@@ -232,7 +270,8 @@
 }
 
 .aic-msg--streaming .aic-msg__bubble {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-secondary));
 }
 
 /* Error message */
