@@ -1,3 +1,6 @@
+/* ================================================================
+   AI Console page
+================================================================ */
 .aic-page {
   display: flex;
   flex-direction: column;
@@ -5,6 +8,7 @@
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
+  overflow: hidden;
 }
 
 /* ----------------------------------------------------------------
@@ -14,8 +18,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 16px;
-  height: 48px;
+  padding: 0 14px;
+  height: 46px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
   -webkit-app-region: drag;
@@ -32,6 +36,7 @@
   color: var(--text-secondary);
   border-radius: 6px;
   cursor: pointer;
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
   transition: background 0.15s, color 0.15s;
 }
@@ -45,205 +50,382 @@
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 0.01em;
-}
-
-/* ----------------------------------------------------------------
-   Body
----------------------------------------------------------------- */
-.aic-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 32px 40px 48px;
-  max-width: 860px;
-  width: 100%;
-  margin: 0 auto;
-  box-sizing: border-box;
-}
-
-/* ----------------------------------------------------------------
-   Hero
----------------------------------------------------------------- */
-.aic-hero {
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-  margin-bottom: 32px;
-}
-
-.aic-hero__icon {
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
 }
 
-.aic-hero__heading {
-  margin: 0 0 6px;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.2;
-}
-
-.aic-hero__sub {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.55;
-  max-width: 560px;
-}
-
-.aic-coming-soon-pill {
-  margin-left: auto;
-  flex-shrink: 0;
-  align-self: flex-start;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 99px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-/* ----------------------------------------------------------------
-   Provider grid
----------------------------------------------------------------- */
-.aic-providers {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.aic-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 16px 18px;
-  border-radius: 10px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-secondary);
-  transition: border-color 0.15s;
-}
-.aic-card:hover {
-  border-color: var(--border-default);
-}
-
-.aic-card__icon {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-}
-
-.aic-card__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.aic-card__top {
+.aic-header__controls {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 1px;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
 }
 
-.aic-card__name {
-  font-size: 13px;
+.aic-header__model-wrap,
+.aic-header__tpl-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0 8px;
+  height: 28px;
+}
+
+.aic-header__ctrl-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.aic-select {
+  font-size: 12px;
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: not-allowed;
+  max-width: 160px;
+}
+
+.aic-coming-soon-pill {
+  font-size: 10px;
   font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------
+   Body: two-column layout
+---------------------------------------------------------------- */
+.aic-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ----------------------------------------------------------------
+   Chat column (left, flexible)
+---------------------------------------------------------------- */
+.aic-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--border-subtle);
+}
+
+/* Thread */
+.aic-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Messages */
+.aic-msg {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.aic-msg--user {
+  flex-direction: row-reverse;
+}
+
+.aic-msg__avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aic-msg__avatar--ai {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.aic-msg__avatar--user {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.aic-msg__body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: 72%;
+}
+
+.aic-msg--user .aic-msg__body {
+  align-items: flex-end;
+}
+
+.aic-msg__bubble {
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 10px 13px;
+  border-radius: 10px;
   color: var(--text-primary);
 }
 
-.aic-card__vendor {
-  display: block;
+.aic-msg--ai .aic-msg__bubble {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-top-left-radius: 3px;
+}
+
+.aic-msg--user .aic-msg__bubble {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
+  border-top-right-radius: 3px;
+}
+
+/* Inline apply-action chips on AI messages */
+.aic-msg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 2px;
+}
+
+/* ----------------------------------------------------------------
+   Action chips (both message actions and legend)
+---------------------------------------------------------------- */
+.aic-action-chip {
   font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.aic-action-chip--preview {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* ----------------------------------------------------------------
+   Input bar
+---------------------------------------------------------------- */
+.aic-input-bar {
+  flex-shrink: 0;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.aic-input-bar__inner {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.aic-input-bar__textarea {
+  flex: 1;
+  resize: none;
+  font-size: 12.5px;
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  padding: 8px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  outline: none;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.aic-input-bar__textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.aic-input-bar__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.aic-btn-ghost {
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.aic-btn-send {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.aic-input-bar__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.aic-input-bar__hint code {
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  background: var(--bg-secondary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+}
+
+/* ----------------------------------------------------------------
+   Context panel (right sidebar)
+---------------------------------------------------------------- */
+.aic-context {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px 20px;
+  overflow-y: auto;
+  gap: 0;
+}
+
+.aic-context__heading {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
   color: var(--text-tertiary);
   margin-bottom: 5px;
 }
 
-.aic-card__desc {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-secondary);
+.aic-context__desc {
+  margin: 0 0 12px;
+  font-size: 11px;
+  color: var(--text-tertiary);
   line-height: 1.5;
 }
 
-.aic-card__actions {
+/* Context slices list */
+.aic-context__slices {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 7px;
+  gap: 1px;
+  margin-bottom: 12px;
+}
+
+.aic-slice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: not-allowed;
+  transition: background 0.12s;
+}
+.aic-slice:hover {
+  background: var(--bg-hover);
+}
+
+.aic-slice__check {
+  margin-top: 1px;
   flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: not-allowed;
 }
 
-.aic-card__docs-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--accent);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 2px 0;
-  opacity: 0.85;
-  transition: opacity 0.15s;
+.aic-slice__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
-.aic-card__docs-btn:hover { opacity: 1; }
 
-.aic-card__connect-btn {
+.aic-slice__name {
   font-size: 12px;
   font-weight: 500;
-  padding: 5px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-primary);
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.aic-slice__meta {
+  font-size: 10.5px;
   color: var(--text-tertiary);
-  cursor: not-allowed;
-  opacity: 0.55;
 }
 
-/* ----------------------------------------------------------------
-   Badges
----------------------------------------------------------------- */
-.aic-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 99px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.aic-slice__meta--count {
+  font-variant-numeric: tabular-nums;
 }
 
-.aic-badge--api   { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
-.aic-badge--oauth { background: color-mix(in srgb, #7c3aed 12%, transparent); color: #7c3aed; }
-.aic-badge--local { background: color-mix(in srgb, #059669 12%, transparent); color: #059669; }
-.aic-badge--rest  { background: color-mix(in srgb, #d97706 12%, transparent); color: #d97706; }
-
-/* ----------------------------------------------------------------
-   Footer note
----------------------------------------------------------------- */
-.aic-footer-note {
+/* Build context button */
+.aic-btn-build-ctx {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  margin-top: 28px;
+  width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 0;
+  border-radius: 7px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.6;
+  margin-bottom: 10px;
+}
+
+/* Token count */
+.aic-context__tokens {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
   color: var(--text-tertiary);
-  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+/* Apply actions legend */
+.aic-actions-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
 }
