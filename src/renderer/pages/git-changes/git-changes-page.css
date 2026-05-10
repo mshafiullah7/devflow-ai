@@ -118,8 +118,8 @@
 /* File list sidebar                                                    */
 /* ------------------------------------------------------------------ */
 .git-page__files {
-  flex: 0 0 20%;
-  min-width: 0;
+  width: 260px;
+  flex-shrink: 0;
   border-right: 1px solid var(--border);
   overflow-y: auto;
   padding: 6px 0;
@@ -143,8 +143,7 @@
 /* Diff view                                                            */
 /* ------------------------------------------------------------------ */
 .git-page__diff-wrap {
-  flex: 0 0 60%;
-  min-width: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -175,7 +174,7 @@
 /* Console panel                                                        */
 /* ------------------------------------------------------------------ */
 .git-page__console {
-  flex: 0 0 20%;
+  flex: 0 0 320px;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border);
