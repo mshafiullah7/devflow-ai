@@ -300,7 +300,11 @@ export class AiConsolePage {
                   disabled
                 ></textarea>
                 <div class="aic-input-bar__actions">
-                  <button class="aic-btn-ghost" id="aicBtnClear" disabled>Clear</button>
+                  <button class="aic-btn-ghost" id="aicBtnClear" disabled title="Clear conversation">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 13h12M10.5 3L5 8.5l-2 4.5 4.5-2 5.5-5.5-2-2z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
                   <button class="aic-btn-send" id="aicBtnSend" disabled title="Send (Enter)">
                     <svg id="aicIconSend" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M3 2l11 6-11 6V9.5l8-1.5-8-1.5V2z"/>
