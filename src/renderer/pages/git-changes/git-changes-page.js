@@ -220,14 +220,66 @@ export class GitChangesPage {
 
       menu.querySelectorAll('.git-page__qcmd-menu-item').forEach(btn => {
         btn.addEventListener('click', () => {
-          input.value = btn.dataset.cmd;
+          const cmd = btn.dataset.cmd;
           closeMenu();
-          run();
+          if (cmd.includes('{{input}}')) {
+            this._showInputPrompt(cmd, resolved => {
+              input.value = resolved;
+              run();
+            });
+          } else {
+            input.value = cmd;
+            run();
+          }
         });
       });
     });
 
     document.addEventListener('click', closeMenu);
+  }
+
+  // ----------------------------------------------------------------
+  // {{input}} prompt popup
+  // ----------------------------------------------------------------
+  _showInputPrompt(cmdTemplate, onConfirm) {
+    document.querySelector('.git-input-prompt-overlay')?.remove();
+
+    const label = cmdTemplate.replace(/\{\{input\}\}/g, '<mark class="git-input-prompt__mark">{{input}}</mark>');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'git-input-prompt-overlay';
+    overlay.innerHTML = `
+      <div class="git-input-prompt">
+        <div class="git-input-prompt__header">Fill in value</div>
+        <div class="git-input-prompt__cmd">${label}</div>
+        <input class="git-input-prompt__input" id="gitInputPromptVal"
+          placeholder="Enter value…" autocomplete="off" spellcheck="false"/>
+        <div class="git-input-prompt__actions">
+          <button class="git-input-prompt__btn git-input-prompt__btn--cancel" id="gitInputPromptCancel">Cancel</button>
+          <button class="git-input-prompt__btn git-input-prompt__btn--run" id="gitInputPromptRun">Run</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const valInput = overlay.querySelector('#gitInputPromptVal');
+    const close = () => overlay.remove();
+
+    const confirm = () => {
+      const val = valInput.value.trim();
+      close();
+      onConfirm(cmdTemplate.replace(/\{\{input\}\}/g, val));
+    };
+
+    overlay.querySelector('#gitInputPromptRun').addEventListener('click', confirm);
+    overlay.querySelector('#gitInputPromptCancel').addEventListener('click', close);
+    valInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') confirm();
+      if (e.key === 'Escape') close();
+    });
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    requestAnimationFrame(() => valInput.focus());
   }
 
   _consoleAppend(text, type = 'out') {
