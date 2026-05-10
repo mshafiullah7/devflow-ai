@@ -457,6 +457,21 @@
   margin-bottom: 12px;
 }
 
+/* Per-document selection list */
+.aic-docs-slices {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.aic-slice--doc {
+  padding-left: 4px;
+}
+
 .aic-slice {
   display: flex;
   align-items: flex-start;

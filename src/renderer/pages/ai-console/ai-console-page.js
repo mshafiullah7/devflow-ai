@@ -170,13 +170,36 @@ export class AiConsolePage {
   }
 
   _updateContextCounts() {
-    const q = (id) => this.container.querySelector(id);
-    const set = (id, text) => { const el = q(id); if (el) el.textContent = text; };
+    const set = (id, text) => { const el = this.container.querySelector(id); if (el) el.textContent = text; };
 
     set('#aicCtxFeatures', `${this._features.length} feature${this._features.length !== 1 ? 's' : ''}`);
     set('#aicCtxStories',  `${this._stories.length} stor${this._stories.length !== 1 ? 'ies' : 'y'}`);
     set('#aicCtxIssues',   `${this._issues.length} open`);
-    set('#aicCtxDoc',      `${this._documents.length} document${this._documents.length !== 1 ? 's' : ''}`);
+
+    this._renderDocumentSlices();
+  }
+
+  _renderDocumentSlices() {
+    const container = this.container.querySelector('#aicDocsSlices');
+    if (!container) return;
+
+    if (this._documents.length === 0) {
+      container.innerHTML = '<span class="aic-slice__meta" style="padding:4px 8px;display:block;">No documents</span>';
+      return;
+    }
+
+    container.innerHTML = this._documents.map(d => `
+      <label class="aic-slice aic-slice--doc">
+        <input type="checkbox" class="aic-doc-check" data-doc-id="${d.id}" disabled>
+        <div class="aic-slice__info">
+          <span class="aic-slice__name">${escHtml(d.title)}</span>
+        </div>
+      </label>
+    `).join('');
+
+    container.querySelectorAll('.aic-doc-check').forEach(cb =>
+      cb.addEventListener('change', () => this._updateTokenEstimate())
+    );
   }
 
   _enableUi() {
@@ -198,7 +221,7 @@ export class AiConsolePage {
     });
 
     // Context checkboxes
-    this.container.querySelectorAll('.aic-slice__check')
+    this.container.querySelectorAll('.aic-slice__check, .aic-doc-check')
       .forEach(cb => { cb.disabled = false; });
   }
 
@@ -331,14 +354,6 @@ export class AiConsolePage {
             <div class="aic-context__slices">
 
               <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="project" disabled>
-                <div class="aic-slice__info">
-                  <span class="aic-slice__name">Project summary</span>
-                  <span class="aic-slice__meta">Name, description</span>
-                </div>
-              </label>
-
-              <label class="aic-slice">
                 <input type="checkbox" class="aic-slice__check" data-slice="features" disabled>
                 <div class="aic-slice__info">
                   <span class="aic-slice__name">Features</span>
@@ -362,14 +377,12 @@ export class AiConsolePage {
                 </div>
               </label>
 
-              <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="documents" disabled>
-                <div class="aic-slice__info">
-                  <span class="aic-slice__name">Documents</span>
-                  <span class="aic-slice__meta" id="aicCtxDoc">– documents</span>
-                </div>
-              </label>
+            </div>
 
+            <!-- Documents — per-document selection -->
+            <div class="aic-context__heading" style="margin-top:10px;">Documents</div>
+            <div class="aic-docs-slices" id="aicDocsSlices">
+              <span class="aic-slice__meta" style="padding:4px 8px;display:block;">Loading…</span>
             </div>
 
             <button class="aic-btn-build-ctx" id="aicBtnBuildCtx" disabled>
@@ -598,7 +611,7 @@ export class AiConsolePage {
     let autoBuilt = false;
     if (isFirst) {
       this._buildContext();
-      const anyChecked = [...this.container.querySelectorAll('.aic-slice__check')]
+      const anyChecked = [...this.container.querySelectorAll('.aic-slice__check, .aic-doc-check')]
         .some(cb => cb.checked);
       autoBuilt = anyChecked && !!this._builtContext;
     }
@@ -720,20 +733,6 @@ export class AiConsolePage {
 
     const parts = [];
 
-    // ── Project summary ─────────────────────────────────────────────
-    // Source: db:projects:get → SELECT * from projects table
-    // Available fields: name, description, project_path, design_template
-    if (slices.project && this._project) {
-      let block = `PROJECT: ${this._project.name}`;
-      if (this._project.description)
-        block += `\nDescription: ${this._project.description}`;
-      if (this._project.project_path)
-        block += `\nCodebase path: ${this._project.project_path}`;
-      if (this._project.design_template)
-        block += `\nDesign template / style tokens:\n${this._project.design_template}`;
-      parts.push(block);
-    }
-
     // ── Features ────────────────────────────────────────────────────
     // DB column is `name` (not `title`); status comes from `status_name` join
     if (slices.features && this._features.length > 0) {
@@ -776,15 +775,19 @@ export class AiConsolePage {
       parts.push(`OPEN ISSUES (${this._issues.length}):\n\n${list}`);
     }
 
-    // ── Documents ────────────────────────────────────────────────────
-    // DB SELECT * returns content field — include full document text
-    if (slices.documents && this._documents.length > 0) {
-      const list = this._documents.map(d => {
+    // ── Documents (individually selected) ───────────────────────────
+    const selectedDocIds = new Set(
+      [...this.container.querySelectorAll('.aic-doc-check:checked')]
+        .map(cb => parseInt(cb.dataset.docId, 10))
+    );
+    const selectedDocs = this._documents.filter(d => selectedDocIds.has(d.id));
+    if (selectedDocs.length > 0) {
+      const list = selectedDocs.map(d => {
         let block = `  [Document] ${d.title}`;
         if (d.content) block += `\n${d.content.split('\n').map(l => `    ${l}`).join('\n')}`;
         return block;
       }).join('\n\n---\n\n');
-      parts.push(`DOCUMENTS (${this._documents.length}):\n\n${list}`);
+      parts.push(`DOCUMENTS (${selectedDocs.length}):\n\n${list}`);
     }
 
     this._builtContext = parts.length > 0
