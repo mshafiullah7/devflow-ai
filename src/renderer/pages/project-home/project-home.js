@@ -405,7 +405,7 @@ export class ProjectHomePage {
       .addEventListener('click', () => this.router.navigate('launcher'));
 
     this.container.querySelector('#phBtnModelConfigs')
-      .addEventListener('click', () => this._modelConfigsModal.show());
+      .addEventListener('click', () => this.router.navigate('settings', { from: 'project-home', fromParams: { projectId: this.projectId } }));
 
     this.container.querySelector('#phModelSelect')
       .addEventListener('change', (e) => {
