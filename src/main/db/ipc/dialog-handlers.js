@@ -2,6 +2,7 @@
 
 const { ipcMain, dialog, BrowserWindow, screen } = require('electron');
 const fs = require('node:fs/promises');
+const { spawn } = require('node:child_process');
 
 function registerDialogHandlers() {
   ipcMain.handle('dialog:openFolder', async (event) => {
@@ -92,6 +93,12 @@ function registerDialogHandlers() {
     try { await fs.unlink(tmpFile); } catch {}
     await fs.writeFile(result.filePath, pdfData);
     return { success: true };
+  });
+
+  ipcMain.handle('shell:openVSCode', (_e, folderPath) => {
+    if (!folderPath) return;
+    const proc = spawn('code', [folderPath], { detached: true, stdio: 'ignore', shell: true });
+    proc.unref();
   });
 }
 

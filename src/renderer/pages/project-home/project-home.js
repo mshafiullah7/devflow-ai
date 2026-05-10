@@ -357,6 +357,16 @@ export class ProjectHomePage {
               <span class="ph-nav-item__label">Git Changes</span>
             </button>
 
+            <button class="ph-nav-item" id="navOpenVSCode" ${!this._project?.project_path ? 'disabled title="Select a folder first"' : `title="${escHtml(this._project.project_path)}"`}>
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 3l5 5-11 11H5v-5L16 3z"/>
+                  <path d="M14 5l5 5"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Open VS Code</span>
+            </button>
+
             <div class="ph-sidebar-section">Tools</div>
             <button class="ph-nav-item" id="navPromptQueue">
               <span class="ph-nav-item__icon">
@@ -432,6 +442,12 @@ export class ProjectHomePage {
     if (!text || !display) return;
     text.textContent = folderPath;
     display.classList.add('project-page__folder-display--active');
+
+    const vsCodeBtn = this.container.querySelector('#navOpenVSCode');
+    if (vsCodeBtn) {
+      vsCodeBtn.disabled = false;
+      vsCodeBtn.title = folderPath;
+    }
   }
 
   // ----------------------------------------------------------------
@@ -487,6 +503,12 @@ export class ProjectHomePage {
 
     this.container.querySelector('#navGitChanges')
       .addEventListener('click', () => this.router.navigate('git-changes', { projectId: this.projectId, from: 'project-home' }));
+
+    this.container.querySelector('#navOpenVSCode')
+      .addEventListener('click', () => {
+        const path = this._project?.project_path;
+        if (path) window.shell.openVSCode(path);
+      });
 
     this.container.querySelector('#navSettings')
       .addEventListener('click', () => this.router.navigate('settings', { from: 'project-home', fromParams: { projectId: this.projectId } }));
