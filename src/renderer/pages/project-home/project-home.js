@@ -363,6 +363,7 @@ export class ProjectHomePage {
               <span class="ph-nav-item__label">AI Console</span>
             </button>
 
+            <div class="ph-sidebar-section">Code</div>
             <button class="ph-nav-item" id="navGitChanges">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
@@ -376,6 +377,7 @@ export class ProjectHomePage {
               <span class="ph-nav-item__label">Git Changes</span>
             </button>
 
+            <div class="ph-sidebar-section">System</div>
             <button class="ph-nav-item" id="navSettings">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
