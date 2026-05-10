@@ -211,17 +211,27 @@ export class SettingsPage {
             <div id="stFFieldsOllama" style="display:none">
               <div class="st-form__row">
                 <label class="st-form__label">Base URL *</label>
-                <input class="st-form__input" id="stFBaseUrl" type="text"
-                  placeholder="http://localhost:11434"
-                  value="${escHtml(config?.type === 'ollama' ? (config?.base_url || '') : '')}"/>
+                <div class="st-input-row">
+                  <input class="st-form__input" id="stFBaseUrl" type="text"
+                    placeholder="http://localhost:11434"
+                    value="${escHtml(config?.type === 'ollama' ? (config?.base_url || '') : '')}"/>
+                  <button type="button" class="st-detect-btn" id="stBtnDetect" title="Detect installed models">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                  </button>
+                </div>
                 <span class="st-form__hint">Ollama server URL (default: http://localhost:11434)</span>
               </div>
               <div class="st-form__row">
-                <label class="st-form__label">Model name *</label>
-                <input class="st-form__input" id="stFOllamaModel" type="text"
-                  placeholder="llama3"
-                  value="${escHtml(config?.type === 'ollama' ? (config?.model_name || '') : '')}"/>
-                <span class="st-form__hint">e.g. llama3, mistral, codellama, phi3</span>
+                <label class="st-form__label">Model *</label>
+                <select class="st-form__select" id="stFOllamaModelSelect">
+                  <option value="">Detecting models…</option>
+                </select>
+                <input class="st-form__input" id="stFOllamaModelManual" type="text"
+                  placeholder="e.g. llama3, mistral, codellama"
+                  style="display:none; margin-top:6px"/>
+                <span class="st-ollama-status" id="stOllamaStatus"></span>
               </div>
             </div>
 
@@ -253,12 +263,57 @@ export class SettingsPage {
     const escFn = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escFn); } };
     document.addEventListener('keydown', escFn);
 
+    const loadOllamaModels = async () => {
+      const baseUrl  = (overlay.querySelector('#stFBaseUrl').value.trim() || 'http://localhost:11434').replace(/\/$/, '');
+      const select   = overlay.querySelector('#stFOllamaModelSelect');
+      const manual   = overlay.querySelector('#stFOllamaModelManual');
+      const status   = overlay.querySelector('#stOllamaStatus');
+      const detectBtn = overlay.querySelector('#stBtnDetect');
+
+      select.innerHTML = '<option value="">Detecting…</option>';
+      select.disabled  = true;
+      if (detectBtn) detectBtn.classList.add('st-detect-btn--loading');
+
+      try {
+        const res = await fetch(`${baseUrl}/api/tags`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { models } = await res.json();
+
+        if (!models || models.length === 0) {
+          select.innerHTML = '<option value="">No models installed</option>';
+          status.textContent = 'No models found. Run: ollama pull llama3';
+          status.className = 'st-ollama-status st-ollama-status--warn';
+        } else {
+          const current = config?.type === 'ollama' ? config.model_name : null;
+          select.innerHTML = models.map(m =>
+            `<option value="${escHtml(m.name)}" ${m.name === current ? 'selected' : ''}>${escHtml(m.name)}</option>`
+          ).join('');
+          status.textContent = `${models.length} model${models.length === 1 ? '' : 's'} detected`;
+          status.className = 'st-ollama-status st-ollama-status--ok';
+        }
+        select.style.display = '';
+        manual.style.display = 'none';
+      } catch {
+        select.style.display  = 'none';
+        manual.style.display  = '';
+        manual.value = config?.type === 'ollama' ? (config.model_name || '') : '';
+        status.textContent = 'Could not reach Ollama — enter model name manually.';
+        status.className = 'st-ollama-status st-ollama-status--err';
+      } finally {
+        select.disabled = false;
+        if (detectBtn) detectBtn.classList.remove('st-detect-btn--loading');
+      }
+    };
+
     const applyType = type => {
       overlay.querySelector('#stFFieldsCli').style.display    = type === 'cli'    ? '' : 'none';
       overlay.querySelector('#stFFieldsOllama').style.display = type === 'ollama' ? '' : 'none';
+      if (type === 'ollama') loadOllamaModels();
     };
 
     applyType(config?.type || 'cli');
+
+    overlay.querySelector('#stBtnDetect')?.addEventListener('click', loadOllamaModels);
 
     overlay.querySelectorAll('.st-type-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -283,8 +338,10 @@ export class SettingsPage {
         data.flags      = overlay.querySelector('#stFFlags')?.value.trim() || null;
         data.input_mode = overlay.querySelector('#stFInputMode')?.value || 'pipe';
       } else if (type === 'ollama') {
+        const manual = overlay.querySelector('#stFOllamaModelManual');
+        const select = overlay.querySelector('#stFOllamaModelSelect');
         data.base_url   = overlay.querySelector('#stFBaseUrl')?.value.trim() || 'http://localhost:11434';
-        data.model_name = overlay.querySelector('#stFOllamaModel')?.value.trim() || null;
+        data.model_name = (manual.style.display !== 'none' ? manual.value.trim() : select.value) || null;
       }
 
       if (config) {
