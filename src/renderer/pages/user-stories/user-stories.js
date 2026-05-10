@@ -1,7 +1,6 @@
 import { FeatureList } from '../../components/feature-list/feature-list.js';
 import { UserStoryList } from '../../components/user-story-list/user-story-list.js';
 import { GitController } from '../../components/git/git-controller.js';
-import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
@@ -50,8 +49,6 @@ export class ProjectPage {
       this._setHeaderFolderPath(this._project.project_path);
     }
 
-    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => {} });
-    this._qcmdModal.mount();
 
     this._modelConfigsModal = new ModelConfigsModal({
       onConfigsChanged: () => this._reloadModelDropdown(),
@@ -127,14 +124,6 @@ export class ProjectPage {
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <button class="project-page__qcmd-btn" id="btnHeaderQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
         </header>
@@ -285,9 +274,6 @@ export class ProjectPage {
 
     document.getElementById('btnExportProject')
       .addEventListener('click', () => this._exportProject());
-
-    document.getElementById('btnHeaderQcmd')
-      .addEventListener('click', () => this._qcmdModal.show());
 
     document.getElementById('btnConsoleGit')
       .addEventListener('click', () =>

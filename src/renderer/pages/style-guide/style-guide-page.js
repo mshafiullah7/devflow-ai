@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
-import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 
 const EXAMPLES = [
   {
@@ -193,8 +192,6 @@ export class StyleGuidePage {
     this._modelConfigsModal.mount();
     await this._reloadModelDropdown();
 
-    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
-    this._qcmdModal.mount();
 
     this._bindEvents();
   }
@@ -254,14 +251,6 @@ export class StyleGuidePage {
               <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
               <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <button class="project-page__qcmd-btn" id="sgBtnQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
           <span class="sg-page__badge${hasAny ? ' sg-page__badge--active' : ''}">
@@ -360,9 +349,6 @@ export class StyleGuidePage {
 
     this.container.querySelector('#sgBtnGit')
       .addEventListener('click', () => this.router.navigate(this._from, { projectId: this._projectId }));
-
-    this.container.querySelector('#sgBtnQcmd')
-      .addEventListener('click', () => this._qcmdModal.show());
 
     let exampleIdx  = -1;
     let activeTheme = 'dark';

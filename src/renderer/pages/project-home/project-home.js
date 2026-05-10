@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
-import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 import { GitController } from '../../components/git/git-controller.js';
 
 export class ProjectHomePage {
@@ -47,8 +46,6 @@ export class ProjectHomePage {
     this._modelConfigsModal.mount();
     await this._reloadModelDropdown();
 
-    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this.projectId }) });
-    this._qcmdModal.mount();
 
     this._git = new GitController({
       getTermCwd:           () => this._project?.project_path || '',
@@ -246,15 +243,6 @@ export class ProjectHomePage {
             </svg>
             <span class="project-page__git-badge" id="phGitBadge" hidden></span>
           </button>
-
-          <button class="project-page__qcmd-btn" id="phBtnQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
         </header>
 
         <div class="project-home__layout">
@@ -440,9 +428,6 @@ export class ProjectHomePage {
     this.container.querySelector('#phBtnGit')
       .addEventListener('click', () =>
         this.router.navigate('git-changes', { projectId: this.projectId, from: 'project-home' }));
-
-    this.container.querySelector('#phBtnQcmd')
-      .addEventListener('click', () => this._qcmdModal.show());
 
     // Sidebar navigation
     this.container.querySelector('#navMockups')

@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
-import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 import { GitController } from '../../components/git/git-controller.js';
 
 export class DocumentsPage {
@@ -47,8 +46,6 @@ export class DocumentsPage {
     this._modelConfigsModal.mount();
     await this._reloadModelDropdown();
 
-    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
-    this._qcmdModal.mount();
 
     this._git = new GitController({
       getTermCwd: () => this._project?.project_path || '',
@@ -122,14 +119,6 @@ export class DocumentsPage {
             </svg>
             <span class="project-page__git-badge" id="docGitBadge" hidden></span>
           </button>
-          <button class="project-page__qcmd-btn" id="docBtnQcmd" title="Quick Commands" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
         </header>
 
         <div class="documents-page__body">
@@ -200,9 +189,6 @@ export class DocumentsPage {
     this.container.querySelector('#docBtnGit')
       .addEventListener('click', () =>
         this.router.navigate('git-changes', { projectId: this._projectId, from: 'documents' }));
-
-    this.container.querySelector('#docBtnQcmd')
-      .addEventListener('click', () => this._qcmdModal.show());
 
     this.container.querySelector('#docAddBtn')
       .addEventListener('click', () => this._addDoc());
@@ -1340,7 +1326,18 @@ ${body}
       if (hm) { closeList(); out.push(`<h${hm[1].length}>${this._inlineMd(esc(hm[2]), attachMap)}</h${hm[1].length}>`); lastBlock = 'heading'; continue; }
       if (/^[-*_]{3,}\s*$/.test(line)) { closeList(); out.push('<hr>'); lastBlock = 'hr'; continue; }
       const ulm = line.match(/^[-*+]\s+(.*)/);
-      if (ulm) { if (inOl) { out.push('</ol>'); inOl = false; } if (!inUl) { out.push('<ul>'); inUl = true; } out.push(`<li>${this._inlineMd(esc(ulm[1]), attachMap)}</li>`); lastBlock = 'list'; continue; }
+      if (ulm) {
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        if (!inUl) { out.push('<ul>'); inUl = true; }
+        const taskMatch = ulm[1].match(/^\[([ xX])\]\s+(.*)/);
+        if (taskMatch) {
+          const checked = taskMatch[1].toLowerCase() === 'x';
+          out.push(`<li class="md-task-item"><input type="checkbox" class="md-task-checkbox"${checked ? ' checked' : ''} disabled> ${this._inlineMd(esc(taskMatch[2]), attachMap)}</li>`);
+        } else {
+          out.push(`<li>${this._inlineMd(esc(ulm[1]), attachMap)}</li>`);
+        }
+        lastBlock = 'list'; continue;
+      }
       const olm = line.match(/^\d+\.\s+(.*)/);
       if (olm) { if (inUl) { out.push('</ul>'); inUl = false; } if (!inOl) { out.push('<ol>'); inOl = true; } out.push(`<li>${this._inlineMd(esc(olm[1]), attachMap)}</li>`); lastBlock = 'list'; continue; }
       const bqm = line.match(/^>\s?(.*)/);

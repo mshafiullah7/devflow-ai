@@ -2,7 +2,6 @@ import { FeatureList } from '../../components/feature-list/feature-list.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
-import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 import { GitController } from '../../components/git/git-controller.js';
 
 const STATUS_META = {
@@ -51,8 +50,6 @@ export class TestCasesPage {
     this._modelConfigsModal.mount();
     await this._reloadModelDropdown();
 
-    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
-    this._qcmdModal.mount();
 
     this._git = new GitController({
       getTermCwd:           () => this._project?.project_path || '',
@@ -138,14 +135,6 @@ export class TestCasesPage {
                 <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
               <span class="project-page__git-badge" id="tcGitBadge" hidden></span>
-            </button>
-            <button class="project-page__qcmd-btn" id="tcBtnQcmd" title="Quick Commands">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-                <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-                <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-                <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
             </button>
           </div>
         </header>
@@ -279,9 +268,6 @@ export class TestCasesPage {
     this.container.querySelector('#tcBtnGit')
       .addEventListener('click', () =>
         this.router.navigate('git-changes', { projectId: this._projectId, from: 'test-cases' }));
-
-    this.container.querySelector('#tcBtnQcmd')
-      .addEventListener('click', () => this._qcmdModal.show());
 
     this.container.querySelector('#tcBtnAdd')
       .addEventListener('click', () => this._showAddForm());

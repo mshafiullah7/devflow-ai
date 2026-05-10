@@ -1,16 +1,18 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
 
 export class GitChangesPage {
   constructor(container, params, router) {
-    this.container    = container;
-    this.router       = router;
-    this._projectId   = params.projectId;
-    this._from        = params.from || 'project-home';
-    this._project     = null;
-    this._files       = [];
-    this._activeIdx   = 0;
+    this.container       = container;
+    this.router          = router;
+    this._projectId      = params.projectId;
+    this._from           = params.from || 'project-home';
+    this._project        = null;
+    this._files          = [];
+    this._activeIdx      = 0;
     this._consoleRunning = false;
+    this._qcmdModal      = null;
   }
 
   // ----------------------------------------------------------------
@@ -23,6 +25,10 @@ export class GitChangesPage {
 
     this._project = await window.db.projects.get(this._projectId);
     this.container.innerHTML = this._template();
+
+    this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
+    this._qcmdModal.mount();
+
     this._bindEvents();
     await this._loadStatus();
   }
@@ -60,6 +66,14 @@ export class GitChangesPage {
                 stroke-linecap="round"/>
               <path d="M4 2v4h4" stroke="currentColor" stroke-width="1.6"
                 stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="git-page__refresh" id="gitPageQcmd" title="Quick Commands">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
         </header>
@@ -125,6 +139,9 @@ export class GitChangesPage {
 
     this.container.querySelector('#gitPageRefresh')
       .addEventListener('click', () => this._loadStatus());
+
+    this.container.querySelector('#gitPageQcmd')
+      .addEventListener('click', () => this._qcmdModal.show());
 
     this._bindConsole();
     this._bindConsoleDivider();
