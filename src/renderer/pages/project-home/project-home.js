@@ -75,7 +75,8 @@ export class ProjectHomePage {
   _statsHtml() {
     const stories  = this._stories  || [];
     const features = this._features || [];
-    const issues   = this._issueCount?.total ?? 0;
+    const openIssues  = this._issueCount?.open  ?? 0;
+    const totalIssues = this._issueCount?.total ?? 0;
 
     const openStories  = stories.filter(s => s.status_name !== 'Done');
     const openFeatures = features.filter(f => f.status_name !== 'Done');
@@ -92,9 +93,10 @@ export class ProjectHomePage {
           <div class="ph-stat-box__label">Open Features</div>
           <div class="ph-stat-box__total">of ${features.length} total</div>
         </div>
-        <div class="ph-stat-box ${issues > 0 ? 'ph-stat-box--danger' : ''}">
-          <div class="ph-stat-box__value">${issues}</div>
+        <div class="ph-stat-box ${openIssues > 0 ? 'ph-stat-box--danger' : ''}">
+          <div class="ph-stat-box__value">${openIssues}</div>
           <div class="ph-stat-box__label">Open Issues</div>
+          <div class="ph-stat-box__total">of ${totalIssues} total</div>
         </div>
       </div>`;
   }
