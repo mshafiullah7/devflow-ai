@@ -50,6 +50,14 @@ export class SettingsPage {
               </span>
               <span class="st-nav-item__label">AI Config</span>
             </button>
+            <button class="st-nav-item" id="stNavModelMapping">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Model Mapping</span>
+            </button>
           </nav>
 
           <main class="settings-page__content" id="stMainContent"></main>
@@ -63,7 +71,21 @@ export class SettingsPage {
       .addEventListener('click', () => this.router.navigate(this._from, this._fromParams));
 
     this.container.querySelector('#stNavAiConfig')
-      .addEventListener('click', () => this._renderModelList());
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavAiConfig');
+        this._renderModelList();
+      });
+
+    this.container.querySelector('#stNavModelMapping')
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavModelMapping');
+        this._renderModelMapping();
+      });
+  }
+
+  _setActiveNav(id) {
+    this.container.querySelectorAll('.st-nav-item').forEach(el => el.classList.remove('active'));
+    this.container.querySelector(`#${id}`)?.classList.add('active');
   }
 
   // ----------------------------------------------------------------
@@ -77,7 +99,7 @@ export class SettingsPage {
       ? `<div class="st-model-empty">No model configurations yet. Click <strong>Add Model</strong> to get started.</div>`
       : `<div class="st-model-list">
           ${configs.map(c => `
-            <div class="st-model-item">
+            <div class="st-model-item st-model-item--clickable" data-id="${c.id}">
               <div class="st-model-item__info">
                 <div class="st-model-item__top">
                   <span class="st-model-item__label">${escHtml(c.label)}</span>
@@ -126,8 +148,18 @@ export class SettingsPage {
 
     main.querySelector('#stBtnAddModel').addEventListener('click', () => this._openModal(null));
 
+    // Card click → edit
+    main.querySelectorAll('.st-model-item--clickable').forEach(card => {
+      card.addEventListener('click', async () => {
+        const cfg = await window.db.modelConfigs.get(Number(card.dataset.id));
+        this._openModal(cfg);
+      });
+    });
+
+    // Action buttons — stop click bubbling to the card
     main.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         const id     = Number(btn.dataset.id);
         const action = btn.dataset.action;
         if (action === 'edit') {
@@ -145,6 +177,73 @@ export class SettingsPage {
   }
 
   // ----------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // Model Mapping (placeholder)
+  // ----------------------------------------------------------------
+  async _renderModelMapping() {
+    const main    = this.container.querySelector('#stMainContent');
+    const configs = await window.db.modelConfigs.list();
+
+    const modelOptions = configs.length === 0
+      ? `<option value="">No models configured</option>`
+      : `<option value="">Use default</option>` +
+        configs.map(c => `<option value="${c.id}">${escHtml(c.label)}</option>`).join('');
+
+    const sections = [
+      {
+        label: 'Pages',
+        features: [
+          { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`, name: 'Documents' },
+          { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`, name: 'Mockups' },
+          { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, name: 'User Stories' },
+          { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`, name: 'Extract Stories' },
+        ],
+      },
+      {
+        label: 'Quality',
+        features: [
+          { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>`, name: 'Test Runner' },
+          { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`, name: 'Issues' },
+        ],
+      },
+      {
+        label: 'Tools',
+        features: [
+          { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/></svg>`, name: 'Prompt Queue' },
+        ],
+      },
+    ];
+
+    main.innerHTML = `
+      <div class="st-content-title">Model Mapping</div>
+      <div class="st-content-sub">Assign a specific AI model to each feature — overrides the global default</div>
+
+      <div class="st-coming-soon-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+        </svg>
+        Coming Soon — this preview shows the planned layout. Selections are not saved yet.
+      </div>
+
+      ${sections.map(s => `
+        <div class="st-mapping-section">
+          <div class="st-section-label">${s.label}</div>
+          <div class="st-mapping-list">
+            ${s.features.map(f => `
+              <div class="st-mapping-row">
+                <span class="st-mapping-row__icon">${f.icon}</span>
+                <span class="st-mapping-row__name">${escHtml(f.name)}</span>
+                <select class="st-form__select st-mapping-row__select" disabled>
+                  ${modelOptions}
+                </select>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    `;
+  }
+
   // Add / Edit modal popup
   // ----------------------------------------------------------------
   _openModal(config) {
