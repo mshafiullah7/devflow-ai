@@ -363,6 +363,30 @@ export class ProjectHomePage {
               <span class="ph-nav-item__label">AI Console</span>
             </button>
 
+            <button class="ph-nav-item" id="navGitChanges">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                  <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Git Changes</span>
+            </button>
+
+            <button class="ph-nav-item" id="navSettings">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Settings</span>
+            </button>
+
           </nav>
 
           <!-- Main content -->
@@ -458,6 +482,12 @@ export class ProjectHomePage {
 
     this.container.querySelector('#navAiConsole')
       .addEventListener('click', () => this.router.navigate('ai-console', { projectId: this.projectId }));
+
+    this.container.querySelector('#navGitChanges')
+      .addEventListener('click', () => this.router.navigate('git-changes', { projectId: this.projectId, from: 'project-home' }));
+
+    this.container.querySelector('#navSettings')
+      .addEventListener('click', () => this.router.navigate('settings', { from: 'project-home', fromParams: { projectId: this.projectId } }));
 
     // Quick links
     this.container.querySelector('#phlOverview')
