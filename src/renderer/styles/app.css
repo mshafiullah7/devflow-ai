@@ -40,6 +40,10 @@
   --modal-overlay-bg:   rgba(10,8,4,0.5);
   --card-icon-bg:       rgba(30,58,95,0.10);
   --border-active:      #8a99bf;
+  --bg-secondary:       #eef0f5;
+  --border-default:     #d4dae8;
+  --bg-hover:           #e8edf5;
+  --text-tertiary:      #b0b8c8;
 }
 
 [data-theme="dark"] {
@@ -73,6 +77,10 @@
   --form-focus-shadow:  0 0 0 3px rgba(99,102,241,0.15);
   --modal-overlay-bg:   rgba(0,0,0,0.6);
   --card-icon-bg:       linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --bg-secondary:       #141720;
+  --border-default:     #2a2d3e;
+  --bg-hover:           #21253a;
+  --text-tertiary:      #4a5568;
 }
 
 [data-theme="midnight"] {
@@ -106,6 +114,10 @@
   --form-focus-shadow:  0 0 0 3px rgba(16,185,129,0.2);
   --modal-overlay-bg:   rgba(0,0,0,0.85);
   --card-icon-bg:       linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --bg-secondary:       #070910;
+  --border-default:     #1e3d2c;
+  --bg-hover:           #0d1a12;
+  --text-tertiary:      #374151;
 }
 
 html, body {
