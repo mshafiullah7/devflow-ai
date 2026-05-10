@@ -97,7 +97,7 @@ function registerDialogHandlers() {
 
   ipcMain.handle('shell:openVSCode', (_e, folderPath) => {
     if (!folderPath) return;
-    const proc = spawn('code', [folderPath], { detached: true, stdio: 'ignore', shell: true });
+    const proc = spawn('cmd.exe', ['/c', 'code', folderPath], { detached: true, stdio: 'ignore' });
     proc.unref();
   });
 }
