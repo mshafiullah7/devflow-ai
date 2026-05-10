@@ -125,7 +125,7 @@
 /* List panel                                                           */
 /* ------------------------------------------------------------------ */
 .pq-list-panel {
-  width: 35%;
+  width: 30%;
   min-width: 220px;
   border-right: 1px solid var(--border);
   overflow-y: auto;
