@@ -75,7 +75,7 @@ export class AiConsolePage {
             <!-- Model selector -->
             <div class="aic-header__model-wrap">
               <svg class="aic-header__ctrl-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
               <select class="aic-select" id="aicModelSelect" disabled title="Model selection — coming soon">
                 <option>Select model…</option>
