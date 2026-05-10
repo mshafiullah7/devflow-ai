@@ -340,11 +340,15 @@
   border-radius: var(--radius-sm);
   padding: 10px 14px;
   box-shadow: var(--card-shadow);
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .st-mapping-row__icon { color: var(--text-muted); flex-shrink: 0; }
-.st-mapping-row__name { flex: 1; font-size: 13px; color: var(--text-primary); }
-.st-mapping-row__select { width: 200px; flex-shrink: 0; opacity: 0.6; }
+.st-mapping-row__name { flex: 1; font-size: 13px; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-mapping-row__select { flex: 0 0 auto; width: min(200px, 45%); min-width: 0; opacity: 0.6; }
 
 /* ------------------------------------------------------------------ */
 /* Modal overlay                                                        */
