@@ -363,6 +363,21 @@ export class AiConsolePage {
               <span id="aicTokenCount">~0 tokens estimated</span>
             </div>
 
+            <!-- Context preview — shows full generated prompt text -->
+            <div id="aicCtxPreviewWrap" class="aic-ctx-preview-wrap" style="display:none">
+              <div class="aic-ctx-preview__header">
+                <span class="aic-context__heading" style="margin:0">Generated context</span>
+                <button class="aic-ctx-preview__copy" id="aicBtnCopyCtx" title="Copy to clipboard">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                  Copy
+                </button>
+              </div>
+              <pre id="aicCtxPreview" class="aic-ctx-preview__pre"></pre>
+            </div>
+
             <!-- Apply actions legend -->
             <div class="aic-context__heading" style="margin-top:20px;">Apply actions</div>
             <p class="aic-context__desc">After a response, use the action chips to write AI output back to your project.</p>
@@ -453,6 +468,19 @@ export class AiConsolePage {
 
     // Build Context
     q('#aicBtnBuildCtx').addEventListener('click', () => this._buildContext());
+
+    // Copy context to clipboard
+    this.container.addEventListener('click', (e) => {
+      if (!e.target.closest('#aicBtnCopyCtx')) return;
+      if (!this._builtContext) return;
+      navigator.clipboard.writeText(this._builtContext).then(() => {
+        const btn = this.container.querySelector('#aicBtnCopyCtx');
+        if (!btn) return;
+        const orig = btn.innerHTML;
+        btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
+        setTimeout(() => { btn.innerHTML = orig; }, 1800);
+      });
+    });
 
     // Context checkboxes → update token estimate live
     this.container.querySelectorAll('.aic-slice__check')
@@ -598,48 +626,86 @@ export class AiConsolePage {
 
     const parts = [];
 
+    // ── Project summary ─────────────────────────────────────────────
     if (slices.project && this._project) {
-      const desc = this._project.description ? `\n${this._project.description}` : '';
-      parts.push(`PROJECT: ${this._project.name}${desc}`);
+      let block = `PROJECT: ${this._project.name}`;
+      if (this._project.description) block += `\nDescription: ${this._project.description}`;
+      parts.push(block);
     }
 
+    // ── Features ────────────────────────────────────────────────────
+    // DB column is `name` (not `title`); status comes from `status_name` join
     if (slices.features && this._features.length > 0) {
-      const list = this._features
-        .map(f => `  - ${f.title}${f.description ? ': ' + f.description : ''}`)
-        .join('\n');
-      parts.push(`FEATURES (${this._features.length}):\n${list}`);
+      const list = this._features.map(f => {
+        let line = `  [Feature] ${f.name}`;                      // f.name — correct column
+        if (f.description) line += `\n    Description: ${f.description}`;
+        if (f.status_name)  line += `\n    Status: ${f.status_name}`;
+        return line;
+      }).join('\n\n');
+      parts.push(`FEATURES (${this._features.length}):\n\n${list}`);
     }
 
+    // ── User stories ─────────────────────────────────────────────────
+    // DB returns: title, description, acceptance_criteria, status_name (join), feature_id
     if (slices.stories && this._stories.length > 0) {
-      const list = this._stories
-        .map(s => {
-          const ac = s.acceptance_criteria
-            ? '\n    Acceptance: ' + s.acceptance_criteria.substring(0, 150)
-            : '';
-          return `  - [${s.status || 'Backlog'}] ${s.title}${ac}`;
-        })
-        .join('\n');
-      parts.push(`USER STORIES (${this._stories.length}):\n${list}`);
+      const list = this._stories.map(s => {
+        let block = `  [Story] ${s.title}`;
+        block += `\n    Status: ${s.status_name || 'Backlog'}`;   // status_name — correct column
+        if (s.description)          block += `\n    Description: ${s.description}`;
+        if (s.acceptance_criteria)  block += `\n    Acceptance Criteria:\n${
+          s.acceptance_criteria.split('\n').map(l => `      ${l}`).join('\n')
+        }`;
+        return block;
+      }).join('\n\n');
+      parts.push(`USER STORIES (${this._stories.length}):\n\n${list}`);
     }
 
+    // ── Open issues ──────────────────────────────────────────────────
+    // DB returns: title, severity, status, description, story_title, feature_name (joins)
     if (slices.issues && this._issues.length > 0) {
-      const list = this._issues
-        .map(i => `  - [${i.severity || 'medium'}] ${i.title}`)
-        .join('\n');
-      parts.push(`OPEN ISSUES (${this._issues.length}):\n${list}`);
+      const list = this._issues.map(i => {
+        let block = `  [Issue] ${i.title}`;
+        block += `\n    Severity: ${i.severity || 'medium'} | Status: ${i.status || 'open'}`;
+        if (i.feature_name)  block += `\n    Feature: ${i.feature_name}`;
+        if (i.story_title)   block += `\n    Story: ${i.story_title}`;
+        if (i.description)   block += `\n    Description: ${i.description}`;
+        if (i.steps_to_reproduce) block += `\n    Steps: ${i.steps_to_reproduce}`;
+        return block;
+      }).join('\n\n');
+      parts.push(`OPEN ISSUES (${this._issues.length}):\n\n${list}`);
     }
 
+    // ── Documents ────────────────────────────────────────────────────
+    // DB SELECT * returns content field — include full document text
     if (slices.documents && this._documents.length > 0) {
-      const list = this._documents.map(d => `  - ${d.title}`).join('\n');
-      parts.push(`DOCUMENTS (${this._documents.length}):\n${list}`);
+      const list = this._documents.map(d => {
+        let block = `  [Document] ${d.title}`;
+        if (d.content) block += `\n${d.content.split('\n').map(l => `    ${l}`).join('\n')}`;
+        return block;
+      }).join('\n\n---\n\n');
+      parts.push(`DOCUMENTS (${this._documents.length}):\n\n${list}`);
     }
 
     this._builtContext = parts.length > 0
-      ? `You are an AI assistant for the following software project. Use this context when answering.\n\n${parts.join('\n\n')}`
+      ? `You are an AI assistant for the following software project.\nUse this context accurately when answering. Do not invent details not present below.\n\n${parts.join('\n\n══════════════════════════════════════\n\n')}`
       : '';
 
     this._updateTokenEstimate();
+    this._updateContextPreview();
     this._flashBuildButton();
+  }
+
+  _updateContextPreview() {
+    const preview = this.container.querySelector('#aicCtxPreview');
+    const previewWrap = this.container.querySelector('#aicCtxPreviewWrap');
+    if (!preview || !previewWrap) return;
+
+    if (this._builtContext) {
+      preview.textContent = this._builtContext;
+      previewWrap.style.display = 'block';
+    } else {
+      previewWrap.style.display = 'none';
+    }
   }
 
   _flashBuildButton() {
