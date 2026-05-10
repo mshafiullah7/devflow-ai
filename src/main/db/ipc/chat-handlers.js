@@ -81,16 +81,22 @@ function extractHtml(text) {
 // ----------------------------------------------------------------
 // Anthropic SSE streaming
 // ----------------------------------------------------------------
-function runAnthropic(wc, prompt, editPayload, model) {
-  const content = editPayload
-    ? buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription)
-    : prompt;
+function runAnthropic(wc, prompt, editPayload, model, messages) {
+  let msgs;
+  if (editPayload) {
+    const content = buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
+    msgs = [{ role: 'user', content }];
+  } else if (messages && messages.length > 0) {
+    msgs = messages;
+  } else {
+    msgs = [{ role: 'user', content: prompt }];
+  }
 
   const body = JSON.stringify({
     model:      model.model_name || 'claude-sonnet-4-6',
     max_tokens: model.max_tokens || 8096,
     stream:     true,
-    messages:   [{ role: 'user', content }],
+    messages:   msgs,
   });
 
   const req = https.request({
@@ -134,15 +140,21 @@ function runAnthropic(wc, prompt, editPayload, model) {
 // ----------------------------------------------------------------
 // Ollama NDJSON streaming  (/api/chat)
 // ----------------------------------------------------------------
-function runOllama(wc, prompt, editPayload, model) {
-  const content = editPayload
-    ? buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription)
-    : prompt;
+function runOllama(wc, prompt, editPayload, model, messages) {
+  let msgs;
+  if (editPayload) {
+    const content = buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
+    msgs = [{ role: 'user', content }];
+  } else if (messages && messages.length > 0) {
+    msgs = messages;
+  } else {
+    msgs = [{ role: 'user', content: prompt }];
+  }
 
   const baseUrl = (model.base_url || 'http://localhost:11434').replace(/\/$/, '');
   const body    = JSON.stringify({
     model:    model.model_name,
-    messages: [{ role: 'user', content }],
+    messages: msgs,
     stream:   true,
   });
 
@@ -190,7 +202,7 @@ function runOllama(wc, prompt, editPayload, model) {
 // ----------------------------------------------------------------
 // CLI — hidden PowerShell spawn, prompt via temp file
 // ----------------------------------------------------------------
-function runCli(wc, prompt, editPayload, model) {
+function runCli(wc, prompt, editPayload, model, messages) {
   const exe       = model.executable || 'claude';
   const baseFlags = '--dangerously-skip-permissions --print';
   const ts        = Date.now();
@@ -199,7 +211,6 @@ function runCli(wc, prompt, editPayload, model) {
   let htmlTmpFile = null;
 
   if (editPayload) {
-    // Write the existing HTML to its own temp file so Claude reads it from disk
     htmlTmpFile = path.join(os.tmpdir(), `ai-sdlc-html-${ts}.html`);
     try {
       fs.writeFileSync(htmlTmpFile, editPayload.htmlContent, 'utf8');
@@ -208,6 +219,13 @@ function runCli(wc, prompt, editPayload, model) {
       return;
     }
     promptText = buildEditPromptWithRef(editPayload.instruction, htmlTmpFile, editPayload.projectDescription);
+  } else if (messages && messages.length > 1) {
+    // Format conversation history as plain text for stateless CLI tools
+    const lines = messages.slice(0, -1).map(m =>
+      `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
+    ).join('\n\n');
+    const last = messages[messages.length - 1];
+    promptText = `[Conversation so far]\n${lines}\n\n[Current message]\nUser: ${last.content}`;
   } else {
     promptText = prompt;
   }
@@ -275,17 +293,17 @@ function runCli(wc, prompt, editPayload, model) {
 function registerChatHandlers() {
   ipcMain.handle('chat:cancel', () => killActive());
 
-  ipcMain.handle('chat:generate', (event, { prompt, editPayload, model }) => {
+  ipcMain.handle('chat:generate', (event, { prompt, messages, editPayload, model }) => {
     if (_activeProc) killActive();
     _cancelled = false;
     const wc   = event.sender;
 
     if (model.type === 'anthropic') {
-      runAnthropic(wc, prompt, editPayload, model);
+      runAnthropic(wc, prompt, editPayload, model, messages);
     } else if (model.type === 'ollama') {
-      runOllama(wc, prompt, editPayload, model);
+      runOllama(wc, prompt, editPayload, model, messages);
     } else {
-      runCli(wc, prompt, editPayload, model);
+      runCli(wc, prompt, editPayload, model, messages);
     }
 
     return { started: true };

@@ -84,6 +84,7 @@ export class AiConsolePage {
     this._streamingEl    = null;   // current AI bubble DOM node
     this._streamingText  = '';     // accumulated text during streaming
     this._builtContext   = '';     // assembled context string
+    this._messages       = [];     // conversation history [{role, content}]
 
     // Project data (loaded once on mount)
     this._project   = null;
@@ -589,29 +590,34 @@ export class AiConsolePage {
       return;
     }
 
-    // Always rebuild context from currently checked slices before sending.
-    // This means the user never accidentally sends without context even if
-    // they forgot to click Build Context manually.
-    this._buildContext();
+    const isFirst = this._messages.length === 0;
 
-    // Check if any slices are selected but yielded no context
-    // (e.g. all selected lists are empty) — warn but don't block
-    const anyChecked = [...this.container.querySelectorAll('.aic-slice__check')]
-      .some(cb => cb.checked);
-    const autoBuilt = anyChecked && !!this._builtContext;
+    // On the first message of a session, (re)build context from checked slices
+    // and prepend it so the model has full project data for the whole thread.
+    // Follow-up messages skip this — the model already has it in history.
+    let autoBuilt = false;
+    if (isFirst) {
+      this._buildContext();
+      const anyChecked = [...this.container.querySelectorAll('.aic-slice__check')]
+        .some(cb => cb.checked);
+      autoBuilt = anyChecked && !!this._builtContext;
+    }
 
-    // Build full prompt: context block (if any) + separator + user message
-    const prefix     = this._builtContext ? `${this._builtContext}\n\n---\n\n` : '';
-    const fullPrompt = prefix + userText;
+    const content = isFirst && this._builtContext
+      ? `${this._builtContext}\n\n---\n\n${userText}`
+      : userText;
+
+    this._messages.push({ role: 'user', content });
 
     // Clear textarea
     if (ta) ta.value = '';
+    ta.style.height = '';
 
     // 1. User bubble — what they typed
     this._appendBubble({ role: 'user', text: userText });
 
     // 2. Prompt disclosure — full prompt sent to model
-    this._appendPromptDisclosure(fullPrompt, this._selectedModel, autoBuilt);
+    this._appendPromptDisclosure(content, this._selectedModel, autoBuilt);
 
     // 3. Start streaming AI bubble
     this._startStreaming();
@@ -621,8 +627,8 @@ export class AiConsolePage {
     window.app.chat.onToken((p) => this._onToken(p));
     window.app.chat.onDone((p)  => this._onDone(p));
 
-    // Fire
-    window.app.chat.generate({ prompt: fullPrompt, model: this._selectedModel });
+    // Fire with full conversation history
+    window.app.chat.generate({ messages: this._messages, model: this._selectedModel });
 
     this._setGenerating(true);
   }
@@ -642,7 +648,9 @@ export class AiConsolePage {
   _handleClear() {
     if (this._isGenerating) return;
     this._builtContext = '';
+    this._messages     = [];
     this._updateTokenEstimate();
+    this._updateContextPreview();
     const tplSel = this.container.querySelector('#aicTemplateSelect');
     if (tplSel) tplSel.value = '';
     this._renderWelcome();
@@ -676,12 +684,14 @@ export class AiConsolePage {
   }
 
   _onDone(payload) {
-    // Use raw for general chat (html extraction is for mockups, not console)
     const raw   = stripAnsi(payload.raw || this._streamingText || '').trim();
     const final = raw || '[No response received]';
 
     this._finalizeStream(final);
     this._setGenerating(false);
+
+    // Append assistant reply to history so follow-up questions have full context
+    if (raw) this._messages.push({ role: 'assistant', content: raw });
 
     if (payload.error && !raw) {
       this._showThreadError(`AI error: ${payload.error}`);
