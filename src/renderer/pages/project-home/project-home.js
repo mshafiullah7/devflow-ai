@@ -77,15 +77,20 @@ export class ProjectHomePage {
     const features = this._features || [];
     const issues   = this._issueCount?.total ?? 0;
 
+    const openStories  = stories.filter(s => s.status_name !== 'Done');
+    const openFeatures = features.filter(f => f.status_name !== 'Done');
+
     return `
       <div class="ph-stats-strip">
         <div class="ph-stat-box ph-stat-box--accent">
-          <div class="ph-stat-box__value">${stories.length}</div>
-          <div class="ph-stat-box__label">User Stories</div>
+          <div class="ph-stat-box__value">${openStories.length}</div>
+          <div class="ph-stat-box__label">Open Stories</div>
+          <div class="ph-stat-box__total">of ${stories.length} total</div>
         </div>
         <div class="ph-stat-box">
-          <div class="ph-stat-box__value">${features.length}</div>
-          <div class="ph-stat-box__label">Features</div>
+          <div class="ph-stat-box__value">${openFeatures.length}</div>
+          <div class="ph-stat-box__label">Open Features</div>
+          <div class="ph-stat-box__total">of ${features.length} total</div>
         </div>
         <div class="ph-stat-box ${issues > 0 ? 'ph-stat-box--danger' : ''}">
           <div class="ph-stat-box__value">${issues}</div>

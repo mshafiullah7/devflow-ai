@@ -235,6 +235,7 @@
 }
 
 .ph-stat-box__label { font-size: 11px; color: var(--text-muted); }
+.ph-stat-box__total { font-size: 10px; color: var(--text-muted); margin-top: 4px; opacity: 0.7; }
 .ph-stat-box--accent .ph-stat-box__value { color: var(--accent); }
 .ph-stat-box--danger .ph-stat-box__value { color: var(--danger); }
 
