@@ -171,8 +171,11 @@
   padding: 24px 28px 32px;
 }
 
-.ph-content-wrap {
-  max-width: 740px;
+.ph-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
 }
 
 .project-home__content::-webkit-scrollbar { width: 5px; }
@@ -291,7 +294,6 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 28px;
 }
 
 .ph-qlink {

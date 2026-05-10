@@ -347,18 +347,19 @@ export class ProjectHomePage {
 
           <!-- Main content -->
           <main class="project-home__content">
-            <div class="ph-content-wrap">
-              <div class="ph-content-title">Dashboard</div>
-              <div class="ph-content-sub">${escHtml(name)}</div>
+            <div class="ph-content-title">Dashboard</div>
+            <div class="ph-content-sub">${escHtml(name)}</div>
 
-              ${this._statsHtml()}
+            ${this._statsHtml()}
 
-              <div class="ph-section-label">Quick Links</div>
-              <div class="ph-qlinks-grid">
-                ${this._quickLinksHtml()}
+            <div class="ph-bottom-grid">
+              <div>
+                <div class="ph-section-label">Quick Links</div>
+                <div class="ph-qlinks-grid">
+                  ${this._quickLinksHtml()}
+                </div>
               </div>
-
-              <div class="ph-status-section">
+              <div>
                 <div class="ph-section-label">Stories by Status</div>
                 <div class="ph-status-rows">
                   ${this._statusBreakdownHtml()}
