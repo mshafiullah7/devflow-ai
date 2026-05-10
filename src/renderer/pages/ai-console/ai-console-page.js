@@ -516,7 +516,18 @@ export class AiConsolePage {
       return;
     }
 
-    // Build full prompt: optional context block + user message
+    // Always rebuild context from currently checked slices before sending.
+    // This means the user never accidentally sends without context even if
+    // they forgot to click Build Context manually.
+    this._buildContext();
+
+    // Check if any slices are selected but yielded no context
+    // (e.g. all selected lists are empty) — warn but don't block
+    const anyChecked = [...this.container.querySelectorAll('.aic-slice__check')]
+      .some(cb => cb.checked);
+    const autoBuilt = anyChecked && !!this._builtContext;
+
+    // Build full prompt: context block (if any) + separator + user message
     const prefix     = this._builtContext ? `${this._builtContext}\n\n---\n\n` : '';
     const fullPrompt = prefix + userText;
 
@@ -527,7 +538,7 @@ export class AiConsolePage {
     this._appendBubble({ role: 'user', text: userText });
 
     // 2. Prompt disclosure — full prompt sent to model
-    this._appendPromptDisclosure(fullPrompt, this._selectedModel);
+    this._appendPromptDisclosure(fullPrompt, this._selectedModel, autoBuilt);
 
     // 3. Start streaming AI bubble
     this._startStreaming();
@@ -767,16 +778,16 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   // Prompt disclosure — shows the full prompt sent to the model
   // ----------------------------------------------------------------
-  _appendPromptDisclosure(fullPrompt, model) {
+  _appendPromptDisclosure(fullPrompt, model, autoBuilt = false) {
     const thread = this.container.querySelector('#aicThread');
     if (!thread) return;
     const div = document.createElement('div');
-    div.innerHTML = this._promptDisclosureHtml(fullPrompt, model);
+    div.innerHTML = this._promptDisclosureHtml(fullPrompt, model, autoBuilt);
     thread.appendChild(div.firstElementChild);
     this._scrollThread();
   }
 
-  _promptDisclosureHtml(fullPrompt, model) {
+  _promptDisclosureHtml(fullPrompt, model, autoBuilt = false) {
     const tokens     = estimateTokens(fullPrompt);
     const modelLabel = model ? `${model.label} · ${model.type.toUpperCase()}` : 'model';
     const hasCtx     = this._builtContext && fullPrompt.startsWith(this._builtContext);
@@ -787,10 +798,21 @@ export class AiConsolePage {
       ? fullPrompt.slice(this._builtContext.length).replace(/^\n+---\n+/, '').trim()
       : fullPrompt;
 
+    const autoBadge = autoBuilt
+      ? `<span class="aic-prompt-disc__auto-badge">auto-context</span>`
+      : '';
+
+    const noContextNote = !contextBlock ? `
+      <div class="aic-prompt-disc__no-ctx">
+        No context slices selected — only the message was sent.
+        Check slices on the right to include project data.
+      </div>` : '';
+
     const contextSection = contextBlock ? `
       <div class="aic-prompt-disc__section">
         <div class="aic-prompt-disc__section-label">
           <span class="aic-prompt-disc__tag aic-prompt-disc__tag--ctx">CONTEXT</span>
+          <span class="aic-prompt-disc__section-meta">${estimateTokens(contextBlock).toLocaleString()} tokens</span>
         </div>
         <pre class="aic-prompt-disc__pre">${escapeHtml(contextBlock)}</pre>
       </div>` : '';
@@ -799,6 +821,7 @@ export class AiConsolePage {
       <div class="aic-prompt-disc__section">
         <div class="aic-prompt-disc__section-label">
           <span class="aic-prompt-disc__tag aic-prompt-disc__tag--msg">MESSAGE</span>
+          <span class="aic-prompt-disc__section-meta">${estimateTokens(userBlock).toLocaleString()} tokens</span>
         </div>
         <pre class="aic-prompt-disc__pre">${escapeHtml(userBlock)}</pre>
       </div>`;
@@ -815,9 +838,11 @@ export class AiConsolePage {
           <span class="aic-prompt-disc__label">
             Prompt sent to <strong>${escapeHtml(modelLabel)}</strong>
           </span>
-          <span class="aic-prompt-disc__meta">~${tokens.toLocaleString()} tokens${contextBlock ? ' · with context' : ''}</span>
+          ${autoBadge}
+          <span class="aic-prompt-disc__meta">~${tokens.toLocaleString()} tokens${contextBlock ? ' · with context' : ' · no context'}</span>
         </button>
         <div class="aic-prompt-disc__body" style="display:none">
+          ${noContextNote}
           ${contextSection}
           ${userSection}
         </div>
