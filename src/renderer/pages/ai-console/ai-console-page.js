@@ -60,6 +60,13 @@ function formatText(raw) {
     .replace(/\n/g, '<br>');
 }
 
+function escapeHtml(raw) {
+  return (raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // ----------------------------------------------------------------
 // Page class
 // ----------------------------------------------------------------
@@ -450,6 +457,21 @@ export class AiConsolePage {
     // Context checkboxes → update token estimate live
     this.container.querySelectorAll('.aic-slice__check')
       .forEach(cb => cb.addEventListener('change', () => this._updateTokenEstimate()));
+
+    // Prompt disclosure toggle — event delegation on thread
+    this.container.querySelector('#aicThread')
+      .addEventListener('click', (e) => {
+        const toggle = e.target.closest('.aic-prompt-disc__toggle');
+        if (!toggle) return;
+        const disc = toggle.closest('.aic-prompt-disc');
+        if (!disc) return;
+        const isOpen = disc.dataset.open === 'true';
+        disc.dataset.open = isOpen ? 'false' : 'true';
+        const body = disc.querySelector('.aic-prompt-disc__body');
+        if (body) body.style.display = isOpen ? 'none' : 'block';
+        const chevron = disc.querySelector('.aic-prompt-disc__chevron');
+        if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+      });
   }
 
   // ----------------------------------------------------------------
@@ -473,10 +495,13 @@ export class AiConsolePage {
     // Clear textarea
     if (ta) ta.value = '';
 
-    // Render user bubble
+    // 1. User bubble — what they typed
     this._appendBubble({ role: 'user', text: userText });
 
-    // Start streaming AI bubble
+    // 2. Prompt disclosure — full prompt sent to model
+    this._appendPromptDisclosure(fullPrompt, this._selectedModel);
+
+    // 3. Start streaming AI bubble
     this._startStreaming();
 
     // Wire up streaming callbacks
@@ -671,6 +696,67 @@ export class AiConsolePage {
       if (ta)       { ta.disabled = false; ta.focus(); }
       if (btnClear) btnClear.disabled = false;
     }
+  }
+
+  // ----------------------------------------------------------------
+  // Prompt disclosure — shows the full prompt sent to the model
+  // ----------------------------------------------------------------
+  _appendPromptDisclosure(fullPrompt, model) {
+    const thread = this.container.querySelector('#aicThread');
+    if (!thread) return;
+    const div = document.createElement('div');
+    div.innerHTML = this._promptDisclosureHtml(fullPrompt, model);
+    thread.appendChild(div.firstElementChild);
+    this._scrollThread();
+  }
+
+  _promptDisclosureHtml(fullPrompt, model) {
+    const tokens     = estimateTokens(fullPrompt);
+    const modelLabel = model ? `${model.label} · ${model.type.toUpperCase()}` : 'model';
+    const hasCtx     = this._builtContext && fullPrompt.startsWith(this._builtContext);
+
+    // Split prompt into context block and user message for display
+    const contextBlock = hasCtx ? this._builtContext : '';
+    const userBlock    = hasCtx
+      ? fullPrompt.slice(this._builtContext.length).replace(/^\n+---\n+/, '').trim()
+      : fullPrompt;
+
+    const contextSection = contextBlock ? `
+      <div class="aic-prompt-disc__section">
+        <div class="aic-prompt-disc__section-label">
+          <span class="aic-prompt-disc__tag aic-prompt-disc__tag--ctx">CONTEXT</span>
+        </div>
+        <pre class="aic-prompt-disc__pre">${escapeHtml(contextBlock)}</pre>
+      </div>` : '';
+
+    const userSection = `
+      <div class="aic-prompt-disc__section">
+        <div class="aic-prompt-disc__section-label">
+          <span class="aic-prompt-disc__tag aic-prompt-disc__tag--msg">MESSAGE</span>
+        </div>
+        <pre class="aic-prompt-disc__pre">${escapeHtml(userBlock)}</pre>
+      </div>`;
+
+    return `
+      <div class="aic-prompt-disc" data-open="false">
+        <button class="aic-prompt-disc__toggle">
+          <svg class="aic-prompt-disc__chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
+          <span class="aic-prompt-disc__label">
+            Prompt sent to <strong>${escapeHtml(modelLabel)}</strong>
+          </span>
+          <span class="aic-prompt-disc__meta">~${tokens.toLocaleString()} tokens${contextBlock ? ' · with context' : ''}</span>
+        </button>
+        <div class="aic-prompt-disc__body" style="display:none">
+          ${contextSection}
+          ${userSection}
+        </div>
+      </div>
+    `;
   }
 
   _appendBubble(msg) {
