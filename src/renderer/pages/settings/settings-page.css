@@ -420,8 +420,7 @@
   transition: background 0.15s, color 0.15s;
 }
 .st-detect-btn:hover { background: var(--surface-hover); color: var(--accent); }
-.st-detect-btn--loading { opacity: 0.5; pointer-events: none; animation: st-spin 0.8s linear infinite; }
-@keyframes st-spin { to { transform: rotate(360deg); } }
+.st-detect-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .st-ollama-status {
   font-size: 11px;
