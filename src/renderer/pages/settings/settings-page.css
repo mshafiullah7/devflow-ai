@@ -288,6 +288,66 @@
 .st-btn--delete:hover  { color: var(--danger); border-color: var(--danger); }
 
 /* ------------------------------------------------------------------ */
+/* Modal overlay                                                        */
+/* ------------------------------------------------------------------ */
+.st-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.st-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 520px;
+  max-width: 95vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+.st-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.st-modal__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.st-modal__close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 2px;
+  transition: color 0.15s;
+}
+.st-modal__close:hover { color: var(--text-primary); }
+
+.st-modal__body {
+  overflow-y: auto;
+  padding: 20px 18px;
+}
+.st-modal__body::-webkit-scrollbar { width: 4px; }
+.st-modal__body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ------------------------------------------------------------------ */
 /* Form                                                                 */
 /* ------------------------------------------------------------------ */
 .st-form-wrap {
