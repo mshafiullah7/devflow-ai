@@ -1,0 +1,249 @@
+.aic-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+/* ----------------------------------------------------------------
+   Header
+---------------------------------------------------------------- */
+.aic-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  height: 48px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.aic-header__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s, color 0.15s;
+}
+.aic-header__back:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.aic-header__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+/* ----------------------------------------------------------------
+   Body
+---------------------------------------------------------------- */
+.aic-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 40px 48px;
+  max-width: 860px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* ----------------------------------------------------------------
+   Hero
+---------------------------------------------------------------- */
+.aic-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 32px;
+}
+
+.aic-hero__icon {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.aic-hero__heading {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.aic-hero__sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  max-width: 560px;
+}
+
+.aic-coming-soon-pill {
+  margin-left: auto;
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ----------------------------------------------------------------
+   Provider grid
+---------------------------------------------------------------- */
+.aic-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aic-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  transition: border-color 0.15s;
+}
+.aic-card:hover {
+  border-color: var(--border-default);
+}
+
+.aic-card__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.aic-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.aic-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 1px;
+}
+
+.aic-card__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.aic-card__vendor {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 5px;
+}
+
+.aic-card__desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.aic-card__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.aic-card__docs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.aic-card__docs-btn:hover { opacity: 1; }
+
+.aic-card__connect-btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-primary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ----------------------------------------------------------------
+   Badges
+---------------------------------------------------------------- */
+.aic-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 99px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.aic-badge--api   { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.aic-badge--oauth { background: color-mix(in srgb, #7c3aed 12%, transparent); color: #7c3aed; }
+.aic-badge--local { background: color-mix(in srgb, #059669 12%, transparent); color: #059669; }
+.aic-badge--rest  { background: color-mix(in srgb, #d97706 12%, transparent); color: #d97706; }
+
+/* ----------------------------------------------------------------
+   Footer note
+---------------------------------------------------------------- */
+.aic-footer-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 28px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}

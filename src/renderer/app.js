@@ -48,4 +48,8 @@ router.register('settings', async () => {
   const { SettingsPage } = await import('./pages/settings/settings-page.js');
   return SettingsPage;
 });
+router.register('ai-console', async () => {
+  const { AiConsolePage } = await import('./pages/ai-console/ai-console-page.js');
+  return AiConsolePage;
+});
 router.navigate('launcher');

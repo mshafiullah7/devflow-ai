@@ -350,6 +350,15 @@ export class ProjectHomePage {
               ${this._queuePending > 0 ? `<span class="ph-nav-item__count">${this._queuePending}</span>` : ''}
             </button>
 
+            <button class="ph-nav-item" id="navAiConsole">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">AI Console</span>
+            </button>
+
           </nav>
 
           <!-- Main content -->
@@ -458,6 +467,9 @@ export class ProjectHomePage {
 
     this.container.querySelector('#navPromptQueue')
       .addEventListener('click', () => this.router.navigate('prompt-queue', { projectId: this.projectId, from: 'project-home' }));
+
+    this.container.querySelector('#navAiConsole')
+      .addEventListener('click', () => this.router.navigate('ai-console', { projectId: this.projectId }));
 
     // Quick links
     this.container.querySelector('#phlOverview')
