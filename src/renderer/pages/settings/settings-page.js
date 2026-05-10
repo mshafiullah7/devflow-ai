@@ -91,12 +91,16 @@ export class SettingsPage {
 
   async _renderAiConfigContent() {
     const main = this.container.querySelector('#stMainContent');
+    const header = `
+      <div class="st-content-title">AI Config</div>
+      <div class="st-content-sub">Manage AI model configurations used across the app</div>
+    `;
     if (this._view === 'form') {
-      main.innerHTML = this._aiConfigFormHtml(this._editConfig);
+      main.innerHTML = header + this._aiConfigFormHtml(this._editConfig);
       this._bindFormEvents(main);
     } else {
       const configs = await window.db.modelConfigs.list();
-      main.innerHTML = this._aiConfigListHtml(configs);
+      main.innerHTML = header + this._aiConfigListHtml(configs);
       this._bindListEvents(main);
     }
   }
@@ -142,8 +146,6 @@ export class SettingsPage {
         </div>`;
 
     return `
-      <div class="st-content-title">AI Config</div>
-      <div class="st-content-sub">Manage AI model configurations used across the app</div>
       <div class="st-section-header">
         <div class="st-section-label">Model Configurations</div>
         <button class="st-add-btn" id="stBtnAddModel">
@@ -192,8 +194,7 @@ export class SettingsPage {
   _aiConfigFormHtml(config) {
     const isEdit = !!config;
     return `
-      <div class="st-content-title">${isEdit ? 'Edit Model' : 'Add Model'}</div>
-      <div class="st-content-sub">Configure an AI model for use in the app</div>
+      <div class="st-section-label" style="margin-bottom:16px">${isEdit ? 'Edit Model' : 'Add Model'}</div>
 
       <div class="st-form-wrap">
         <form id="stModelForm" autocomplete="off">
