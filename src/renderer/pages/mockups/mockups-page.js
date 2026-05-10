@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss, timeAgo } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
+import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { GitController } from '../../components/git/git-controller.js';
 
 const TECH = 'Plain HTML / CSS';
@@ -108,7 +109,7 @@ export class MockupsPage {
     this._designTemplate = this._project?.design_template || '';
     this._activeTab      = 'preview';
 
-    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._reloadModelDropdown() });
+    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._picker?.reload() });
     this._modelConfigsModal.mount();
 
 
@@ -135,8 +136,17 @@ export class MockupsPage {
     this._selectedModelId = defCli?.id ?? null;
 
     this.container.innerHTML = this._pageTemplate();
+    this._picker = new ModelPicker({
+      anchor:   this.container.querySelector('#mockupsModelPicker'),
+      onSelect: model => {
+        this._selectedModelId = model?.id ?? null;
+        const nameEl = this.container.querySelector('#scrModelName');
+        if (nameEl) nameEl.textContent = model?.label || 'No model selected';
+        this._updateMockupBtns?.();
+      },
+    });
     this._bindShellEvents();
-    await this._reloadModelDropdown();
+    await this._picker.reload();
 
     if (this._project?.project_path) {
       this._setHeaderFolderPath(this._project.project_path);
@@ -151,6 +161,7 @@ export class MockupsPage {
   unmount() {
     removeCss('pages/mockups/mockups-page.css');
     removeCss('styles/screens.css');
+    this._picker?.unmount();
     this._git?.stopPoll();
     window.app.chat.offAll();
     window.app.chat.cancel();
@@ -178,11 +189,9 @@ export class MockupsPage {
   }
 
   _getSelectedModel() {
-    if (this._selectedModelId) {
-      const m = this._modelConfigs.find(c => c.id === this._selectedModelId);
-      if (m) return m;
-    }
-    return this._modelConfigs.find(c => c.is_default) || this._modelConfigs[0] || null;
+    if (this._picker) return this._picker.selectedModel;
+    const m = this._modelConfigs?.find(c => c.id === this._selectedModelId);
+    return m || this._modelConfigs?.find(c => c.is_default) || this._modelConfigs?.[0] || null;
   }
 
   // ----------------------------------------------------------------
@@ -212,10 +221,7 @@ export class MockupsPage {
             </div>
           </div>
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
-            <svg class="project-page__model-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-            <select class="project-page__model-select" id="mockupsModelSelect" title="AI Model">
-              <option value="">Loading…</option>
-            </select>
+            <div id="mockupsModelPicker"></div>
             <button class="project-page__model-cfg-btn" id="mockupsBtnModelConfigs" title="Configure AI models">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
@@ -292,17 +298,7 @@ export class MockupsPage {
   }
 
   async _reloadModelDropdown() {
-    const select = this.container.querySelector('#mockupsModelSelect');
-    if (!select) return;
-    this._modelConfigs = await window.db.modelConfigs.list();
-    const storedId = Number(localStorage.getItem('devflow-selected-model')) || null;
-    const prevId = storedId || (select.value ? Number(select.value) : this._selectedModelId);
-    select.innerHTML = this._modelConfigs.length === 0
-      ? `<option value="">No models configured</option>`
-      : this._modelConfigs.map(c => `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`).join('');
-    const def    = this._modelConfigs.find(c => c.is_default) || this._modelConfigs[0];
-    const target = this._modelConfigs.find(c => c.id === prevId) || def;
-    if (target) { select.value = target.id; this._selectedModelId = target.id; }
+    if (this._picker) await this._picker.reload();
   }
 
   _setHeaderFolderPath(folderPath) {
@@ -328,14 +324,6 @@ export class MockupsPage {
     this.container.querySelector('#mockupsBtnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
 
-    this.container.querySelector('#mockupsModelSelect')
-      .addEventListener('change', (e) => {
-        this._selectedModelId = Number(e.target.value) || null;
-        if (this._selectedModelId) localStorage.setItem('devflow-selected-model', this._selectedModelId);
-        const nameEl = this.container.querySelector('#scrModelName');
-        if (nameEl) nameEl.textContent = this._getSelectedModel()?.label || 'No model selected';
-        this._updateMockupBtns();
-      });
 
     this.container.querySelector('#headerFolderDisplay')
       .addEventListener('click', async () => {
@@ -2202,7 +2190,7 @@ Spacing:
   async _showExtractDialog(screen) {
     let m = this._getSelectedModel();
     if (!m || m.type === 'anthropic' || !m.executable) {
-      m = this._modelConfigs.find(c => c.type !== 'anthropic' && c.executable);
+      m = (this._picker?.models || this._modelConfigs || []).find(c => c.type !== 'anthropic' && c.executable);
     }
     if (!m) {
       alert('No CLI model configured. Add a CLI model in Model Settings first.');

@@ -390,17 +390,6 @@ html, body {
   align-items: center;
   gap: 3px;
   flex-shrink: 0;
-  position: relative;
-}
-
-.project-page__model-icon {
-  position: absolute;
-  left: 7px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgba(234, 179, 8, 0.55);
-  pointer-events: none;
-  z-index: 1;
 }
 
 .project-page__model-cfg-btn {
@@ -430,7 +419,7 @@ html, body {
   color: #eab308;
   font-size: 11px;
   font-family: inherit;
-  padding: 2px 6px 2px 26px;
+  padding: 2px 6px;
   height: 26px;
   cursor: pointer;
   outline: none;

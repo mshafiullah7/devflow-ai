@@ -2,6 +2,7 @@ import { FeatureList } from '../../components/feature-list/feature-list.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
+import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { GitController } from '../../components/git/git-controller.js';
 
 const STATUS_META = {
@@ -46,9 +47,13 @@ export class TestCasesPage {
     this._project = await window.db.projects.get(this._projectId);
     this.container.innerHTML = this._template();
 
-    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._reloadModelDropdown() });
+    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._picker.reload() });
     this._modelConfigsModal.mount();
-    await this._reloadModelDropdown();
+    this._picker = new ModelPicker({
+      anchor:   this.container.querySelector('#tcModelPicker'),
+      onSelect: model => { this._aiModelConfig = model; },
+    });
+    await this._picker.reload();
 
 
     this._git = new GitController({
@@ -73,6 +78,7 @@ export class TestCasesPage {
   unmount() {
     removeCss('pages/test-cases/test-cases-page.css');
     removeCss('components/user-story-list/user-story-list.css');
+    this._picker?.unmount();
     removeCss('components/feature-list/feature-list.css');
     removeCss('pages/user-stories/user-stories.css');
     this._git?.stopPoll();
@@ -115,10 +121,7 @@ export class TestCasesPage {
               </div>
             </div>
             <div class="project-page__model-group">
-              <svg class="project-page__model-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-              <select class="project-page__model-select" id="tcModelSelect" title="AI Model">
-                <option value="">Loading…</option>
-              </select>
+              <div id="tcModelPicker"></div>
               <button class="project-page__model-cfg-btn" id="tcBtnModelConfigs" title="Configure AI models">
                 <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                   <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
@@ -220,17 +223,7 @@ export class TestCasesPage {
   // Header events
   // ----------------------------------------------------------------
   async _reloadModelDropdown() {
-    const select = this.container.querySelector('#tcModelSelect');
-    if (!select) return;
-    const configs = await window.db.modelConfigs.list();
-    const storedId = Number(localStorage.getItem('devflow-selected-model')) || null;
-    const prevId   = storedId || (select.value ? Number(select.value) : null);
-    select.innerHTML = configs.length === 0
-      ? `<option value="">No models configured</option>`
-      : configs.map(c => `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`).join('');
-    const def    = configs.find(c => c.is_default) || configs[0];
-    const target = configs.find(c => c.id === prevId) || def;
-    if (target) { select.value = target.id; this._aiModelConfig = target; }
+    if (this._picker) await this._picker.reload();
   }
 
   _setHeaderFolderPath(folderPath) {
@@ -248,12 +241,6 @@ export class TestCasesPage {
     this.container.querySelector('#tcBtnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
 
-    this.container.querySelector('#tcModelSelect')
-      .addEventListener('change', (e) => {
-        const id = Number(e.target.value);
-        localStorage.setItem('devflow-selected-model', id);
-        window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
-      });
 
     this.container.querySelector('#headerFolderDisplay')
       .addEventListener('click', async () => {

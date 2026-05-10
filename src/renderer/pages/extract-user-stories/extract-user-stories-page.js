@@ -3,6 +3,7 @@ import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { UserStoryDetail } from '../../components/user-story-detail/user-story-detail.js';
 import { GitController } from '../../components/git/git-controller.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
+import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 
 export class ExtractUserStoriesPage {
   constructor(container, params, router) {
@@ -43,10 +44,14 @@ export class ExtractUserStoriesPage {
     }
 
     this._modelConfigsModal = new ModelConfigsModal({
-      onConfigsChanged: () => this._reloadModelDropdown(),
+      onConfigsChanged: () => this._picker.reload(),
     });
     this._modelConfigsModal.mount();
-    await this._reloadModelDropdown();
+    this._picker = new ModelPicker({
+      anchor:   this.container.querySelector('#eusModelPicker'),
+      onSelect: model => { this._aiModelConfig = model; },
+    });
+    await this._picker.reload();
 
 
     this._detail = new UserStoryDetail({
@@ -65,6 +70,7 @@ export class ExtractUserStoriesPage {
   unmount() {
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('pages/user-stories/user-stories.css');
+    this._picker?.unmount();
     this._git?.stopPoll();
   }
 
@@ -96,10 +102,7 @@ export class ExtractUserStoriesPage {
             Generate User Stories
           </button>
           <div class="project-page__model-group">
-            <svg class="project-page__model-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-            <select class="project-page__model-select" id="aiModelSelect" title="AI Model">
-              <option value="">Loading…</option>
-            </select>
+            <div id="eusModelPicker"></div>
             <button class="project-page__model-cfg-btn" id="btnModelConfigs" title="Configure AI models">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
@@ -235,22 +238,7 @@ export class ExtractUserStoriesPage {
   }
 
   async _reloadModelDropdown() {
-    const select = this.container.querySelector('#aiModelSelect');
-    if (!select) return;
-    const configs  = await window.db.modelConfigs.list();
-    const storedId   = Number(localStorage.getItem('devflow-selected-model')) || null;
-    const prevId     = storedId || (select.value ? Number(select.value) : null);
-    select.innerHTML = configs.length === 0
-      ? `<option value="">No models configured</option>`
-      : configs.map(c =>
-          `<option value="${c.id}">${escHtml(c.label)} [${c.type.toUpperCase()}]</option>`
-        ).join('');
-    const defaultCfg = configs.find(c => c.is_default) || configs[0];
-    const target     = configs.find(c => c.id === prevId) || defaultCfg;
-    if (target) {
-      select.value        = target.id;
-      this._aiModelConfig = target;
-    }
+    if (this._picker) await this._picker.reload();
   }
 
   _setHeaderFolderPath(folderPath) {
@@ -279,12 +267,6 @@ export class ExtractUserStoriesPage {
     this.container.querySelector('#btnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
 
-    this.container.querySelector('#aiModelSelect')
-      .addEventListener('change', e => {
-        const id = Number(e.target.value);
-        localStorage.setItem('devflow-selected-model', id);
-        window.db.modelConfigs.get(id).then(cfg => { this._aiModelConfig = cfg; });
-      });
 
     this.container.querySelector('#btnConsoleGit')
       .addEventListener('click', () =>
