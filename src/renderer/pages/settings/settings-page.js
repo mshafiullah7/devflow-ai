@@ -258,51 +258,48 @@ export class SettingsPage {
 
     overlay.querySelector('#stModalClose').addEventListener('click', close);
     overlay.querySelector('#stFBtnCancel').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
     const escFn = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escFn); } };
     document.addEventListener('keydown', escFn);
 
     const loadOllamaModels = async () => {
-      const baseUrl  = (overlay.querySelector('#stFBaseUrl').value.trim() || 'http://localhost:11434').replace(/\/$/, '');
-      const select   = overlay.querySelector('#stFOllamaModelSelect');
-      const manual   = overlay.querySelector('#stFOllamaModelManual');
-      const status   = overlay.querySelector('#stOllamaStatus');
+      const baseUrl   = (overlay.querySelector('#stFBaseUrl').value.trim() || 'http://localhost:11434');
+      const select    = overlay.querySelector('#stFOllamaModelSelect');
+      const manual    = overlay.querySelector('#stFOllamaModelManual');
+      const status    = overlay.querySelector('#stOllamaStatus');
       const detectBtn = overlay.querySelector('#stBtnDetect');
 
       select.innerHTML = '<option value="">Detecting…</option>';
       select.disabled  = true;
       if (detectBtn) detectBtn.classList.add('st-detect-btn--loading');
 
-      try {
-        const res = await fetch(`${baseUrl}/api/tags`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const { models } = await res.json();
+      const models = await window.ollama.listModels(baseUrl);
 
-        if (!models || models.length === 0) {
-          select.innerHTML = '<option value="">No models installed</option>';
-          status.textContent = 'No models found. Run: ollama pull llama3';
-          status.className = 'st-ollama-status st-ollama-status--warn';
-        } else {
-          const current = config?.type === 'ollama' ? config.model_name : null;
-          select.innerHTML = models.map(m =>
-            `<option value="${escHtml(m.name)}" ${m.name === current ? 'selected' : ''}>${escHtml(m.name)}</option>`
-          ).join('');
-          status.textContent = `${models.length} model${models.length === 1 ? '' : 's'} detected`;
-          status.className = 'st-ollama-status st-ollama-status--ok';
-        }
+      if (models && models.length > 0) {
+        const current = config?.type === 'ollama' ? config.model_name : null;
+        select.innerHTML = models.map(m =>
+          `<option value="${escHtml(m)}" ${m === current ? 'selected' : ''}>${escHtml(m)}</option>`
+        ).join('');
         select.style.display = '';
         manual.style.display = 'none';
-      } catch {
-        select.style.display  = 'none';
-        manual.style.display  = '';
-        manual.value = config?.type === 'ollama' ? (config.model_name || '') : '';
-        status.textContent = 'Could not reach Ollama — enter model name manually.';
-        status.className = 'st-ollama-status st-ollama-status--err';
-      } finally {
-        select.disabled = false;
-        if (detectBtn) detectBtn.classList.remove('st-detect-btn--loading');
+        status.textContent   = `${models.length} model${models.length === 1 ? '' : 's'} detected`;
+        status.className     = 'st-ollama-status st-ollama-status--ok';
+      } else if (models && models.length === 0) {
+        select.innerHTML     = '<option value="">No models installed</option>';
+        select.style.display = '';
+        manual.style.display = 'none';
+        status.textContent   = 'No models found. Run: ollama pull llama3';
+        status.className     = 'st-ollama-status st-ollama-status--warn';
+      } else {
+        select.style.display = 'none';
+        manual.style.display = '';
+        manual.value         = config?.type === 'ollama' ? (config.model_name || '') : '';
+        status.textContent   = 'Could not reach Ollama — enter model name manually.';
+        status.className     = 'st-ollama-status st-ollama-status--err';
       }
+
+      select.disabled = false;
+      if (detectBtn) detectBtn.classList.remove('st-detect-btn--loading');
     };
 
     const applyType = type => {

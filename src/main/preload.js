@@ -173,6 +173,10 @@ contextBridge.exposeInMainWorld('app', {
 });
 
 
+contextBridge.exposeInMainWorld('ollama', {
+  listModels: (host) => invoke('ollama:list-models', { host }),
+});
+
 contextBridge.exposeInMainWorld('shell', {
   openDrawio: (data)              => invoke('shell:openDrawio', data),
   readFile:   (filepath)          => invoke('shell:readFile', filepath),
