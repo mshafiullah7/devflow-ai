@@ -41,6 +41,90 @@ const TEMPLATES = [
 ];
 
 // ----------------------------------------------------------------
+// TemplatePicker — same visual pattern as ModelPicker
+// ----------------------------------------------------------------
+class TemplatePicker {
+  constructor({ anchor, templates, onSelect } = {}) {
+    this._anchor    = anchor;
+    this._templates = templates;
+    this._onSelect  = onSelect || null;
+    this._open      = false;
+    this._handleOutside = this._handleOutside.bind(this);
+  }
+
+  mount()   { this._render(); }
+  unmount() {
+    document.removeEventListener('click', this._handleOutside, true);
+    this._anchor.innerHTML = '';
+  }
+
+  _render() {
+    this._anchor.innerHTML = `
+      <div class="mp-wrap">
+        <button class="mp-trigger" type="button" aria-haspopup="listbox" aria-expanded="${this._open}">
+          <svg class="mp-trigger__icon" width="13" height="13" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="8" y1="13" x2="16" y2="13"/>
+            <line x1="8" y1="17" x2="12" y2="17"/>
+          </svg>
+          <span class="mp-trigger__label">Templates…</span>
+          <svg class="mp-trigger__caret${this._open ? ' mp-trigger__caret--open' : ''}"
+               width="10" height="10" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        ${this._open ? `
+          <div class="mp-menu" role="listbox">
+            ${this._templates.map(t => `
+              <button class="mp-menu__item" data-tpl-id="${t.id}" role="option" type="button">
+                <svg class="mp-menu__check" width="12" height="12" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2.5"
+                     stroke-linecap="round" stroke-linejoin="round"></svg>
+                <span class="mp-menu__label">${escHtml(t.label)}</span>
+              </button>`).join('')}
+          </div>` : ''}
+      </div>`;
+
+    this._anchor.querySelector('.mp-trigger')
+      .addEventListener('click', e => { e.stopPropagation(); this._toggleMenu(); });
+
+    if (this._open) {
+      this._anchor.querySelectorAll('.mp-menu__item[data-tpl-id]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const tpl = this._templates.find(t => t.id === btn.dataset.tplId);
+          if (!tpl) return;
+          this._open = false;
+          document.removeEventListener('click', this._handleOutside, true);
+          this._render();
+          if (this._onSelect) this._onSelect(tpl);
+        });
+      });
+    }
+  }
+
+  _toggleMenu() {
+    this._open = !this._open;
+    if (this._open) document.addEventListener('click', this._handleOutside, true);
+    else            document.removeEventListener('click', this._handleOutside, true);
+    this._render();
+  }
+
+  _handleOutside(e) {
+    if (!this._anchor.contains(e.target)) {
+      this._open = false;
+      document.removeEventListener('click', this._handleOutside, true);
+      this._render();
+    }
+  }
+}
+
+// ----------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------
 function estimateTokens(text) {
@@ -117,6 +201,20 @@ export class AiConsolePage {
       onSelect: () => {},
     });
 
+    this._tplPicker = new TemplatePicker({
+      anchor:    this.container.querySelector('#aicTplPicker'),
+      templates: TEMPLATES,
+      onSelect:  (tpl) => {
+        if (!tpl.prompt) return;
+        const ta = this.container.querySelector('#aicInput');
+        if (ta && !ta.value.trim()) {
+          ta.value = tpl.prompt;
+          ta.focus();
+        }
+      },
+    });
+    this._tplPicker.mount();
+
     this._git = new GitController({
       getTermCwd: () => this._project?.project_path || '',
       gitBtnId:   'aicBtnGit',
@@ -139,6 +237,7 @@ export class AiConsolePage {
   unmount() {
     window.app.chat.offAll();
     this._picker?.unmount();
+    this._tplPicker?.unmount();
     this._git?.stopPoll();
     removeCss('pages/ai-console/ai-console-page.css');
   }
@@ -266,18 +365,7 @@ export class AiConsolePage {
           </div>
 
           <!-- Template picker -->
-          <div class="aic-header__tpl-wrap" style="-webkit-app-region:no-drag;">
-            <svg class="aic-header__ctrl-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="8" y1="13" x2="16" y2="13"/>
-              <line x1="8" y1="17" x2="12" y2="17"/>
-            </svg>
-            <select class="aic-select" id="aicTemplateSelect" disabled>
-              <option value="">Templates…</option>
-              ${TEMPLATES.map(t => `<option value="${t.id}">${t.label}</option>`).join('')}
-            </select>
-          </div>
+          <div id="aicTplPicker" style="-webkit-app-region:no-drag;"></div>
 
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <div id="aicModelPicker"></div>
@@ -474,17 +562,6 @@ export class AiConsolePage {
       this._setHeaderFolderPath(folderPath);
       this._git.refreshStatus();
       this._git.startPoll();
-    });
-
-    // Template select → pre-fill textarea
-    q('#aicTemplateSelect').addEventListener('change', (e) => {
-      const tpl = TEMPLATES.find(t => t.id === e.target.value);
-      if (!tpl || tpl.id === 'custom') return;
-      const ta = q('#aicInput');
-      if (ta && !ta.value.trim()) {
-        ta.value = tpl.prompt;
-        ta.focus();
-      }
     });
 
     // Send / Stop (same button, toggled)
