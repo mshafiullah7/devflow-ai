@@ -58,6 +58,22 @@ export class SettingsPage {
               </span>
               <span class="st-nav-item__label">Model Mapping</span>
             </button>
+            <button class="st-nav-item" id="stNavBackupConfig">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Backup Config</span>
+            </button>
+            <button class="st-nav-item" id="stNavPromptsTemplate">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Prompts Template</span>
+            </button>
           </nav>
 
           <main class="settings-page__content" id="stMainContent"></main>
@@ -80,6 +96,18 @@ export class SettingsPage {
       .addEventListener('click', () => {
         this._setActiveNav('stNavModelMapping');
         this._renderModelMapping();
+      });
+
+    this.container.querySelector('#stNavBackupConfig')
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavBackupConfig');
+        this._renderBackupConfig();
+      });
+
+    this.container.querySelector('#stNavPromptsTemplate')
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavPromptsTemplate');
+        this._renderPromptsTemplate();
       });
   }
 
@@ -241,6 +269,104 @@ export class SettingsPage {
           </div>
         </div>
       `).join('')}
+    `;
+  }
+
+  // ----------------------------------------------------------------
+  // Backup Config (placeholder)
+  // ----------------------------------------------------------------
+  _renderBackupConfig() {
+    const main = this.container.querySelector('#stMainContent');
+    main.innerHTML = `
+      <div class="st-content-title">Backup Config</div>
+      <div class="st-content-sub">Export and restore your application configuration and project data</div>
+      <div class="st-coming-soon-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+        </svg>
+        Coming Soon — backup and restore functionality will be available in a future update.
+      </div>
+      <div class="st-placeholder-sections">
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">Export Backup</div>
+            <div class="st-placeholder-card__desc">Save all model configurations, project settings, and prompt history to a single backup file.</div>
+          </div>
+          <button class="st-add-btn" disabled>Export</button>
+        </div>
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">Restore Backup</div>
+            <div class="st-placeholder-card__desc">Import a previously exported backup file to restore your configurations and data.</div>
+          </div>
+          <button class="st-add-btn" disabled>Restore</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // ----------------------------------------------------------------
+  // Prompts Template (placeholder)
+  // ----------------------------------------------------------------
+  _renderPromptsTemplate() {
+    const main = this.container.querySelector('#stMainContent');
+    main.innerHTML = `
+      <div class="st-content-title">Prompts Template</div>
+      <div class="st-content-sub">Manage reusable prompt templates for AI interactions across your projects</div>
+      <div class="st-coming-soon-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+        </svg>
+        Coming Soon — prompt template management will be available in a future update.
+      </div>
+      <div class="st-placeholder-sections">
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">User Story Prompts</div>
+            <div class="st-placeholder-card__desc">Templates for generating and refining user stories with contextual AI prompts.</div>
+          </div>
+          <button class="st-add-btn" disabled>Manage</button>
+        </div>
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">Mockup Prompts</div>
+            <div class="st-placeholder-card__desc">Templates for UI/UX generation prompts used in the Mockups page.</div>
+          </div>
+          <button class="st-add-btn" disabled>Manage</button>
+        </div>
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">Test Case Prompts</div>
+            <div class="st-placeholder-card__desc">Templates for generating test cases and acceptance criteria from stories.</div>
+          </div>
+          <button class="st-add-btn" disabled>Manage</button>
+        </div>
+      </div>
     `;
   }
 

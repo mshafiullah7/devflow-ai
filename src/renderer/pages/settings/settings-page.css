@@ -586,3 +586,54 @@
   transition: opacity 0.15s;
 }
 .st-form__save-btn:hover { opacity: 0.88; }
+
+/* ------------------------------------------------------------------ */
+/* Placeholder cards (Backup Config, Prompts Template)                  */
+/* ------------------------------------------------------------------ */
+.st-placeholder-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.st-placeholder-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.st-placeholder-card__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.st-placeholder-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.st-placeholder-card__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.st-placeholder-card__desc {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
