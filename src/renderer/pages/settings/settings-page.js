@@ -81,13 +81,15 @@ export class SettingsPage {
               <div class="st-model-item__info">
                 <div class="st-model-item__top">
                   <span class="st-model-item__label">${escHtml(c.label)}</span>
-                  <span class="st-model-item__badge st-model-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : 'API'}</span>
+                  <span class="st-model-item__badge st-model-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : c.type === 'ollama' ? 'Ollama' : 'API'}</span>
                   ${c.is_default ? `<span class="st-model-item__badge st-model-item__badge--default">default</span>` : ''}
                 </div>
                 <div class="st-model-item__sub">
                   ${c.type === 'cli'
                     ? escHtml(c.executable || '') + (c.flags ? ` <span class="st-model-item__flags">${escHtml(c.flags)}</span>` : '')
-                    : escHtml(c.model_name || 'claude-sonnet-4-6')}
+                    : c.type === 'ollama'
+                      ? escHtml(c.base_url || 'http://localhost:11434') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '')
+                      : escHtml(c.model_name || '')}
                 </div>
               </div>
               <div class="st-model-item__actions">
@@ -171,7 +173,10 @@ export class SettingsPage {
               <label class="st-form__label">Type</label>
               <div class="st-form__type-toggle">
                 <button type="button" class="st-type-btn ${(!config || config.type === 'cli') ? 'active' : ''}" data-type="cli">CLI</button>
-                <button type="button" class="st-type-btn ${config?.type === 'anthropic' ? 'active' : ''}" data-type="anthropic">Anthropic API</button>
+                <button type="button" class="st-type-btn ${config?.type === 'ollama' ? 'active' : ''}" data-type="ollama">Ollama</button>
+                <button type="button" class="st-type-btn st-type-btn--disabled" disabled title="Coming soon">
+                  API <span class="st-coming-soon">Soon</span>
+                </button>
               </div>
               <input type="hidden" id="stFType" value="${config?.type || 'cli'}"/>
             </div>
@@ -200,26 +205,20 @@ export class SettingsPage {
               </div>
             </div>
 
-            <div id="stFFieldsApi" style="display:none">
+            <div id="stFFieldsOllama" style="display:none">
+              <div class="st-form__row">
+                <label class="st-form__label">Base URL *</label>
+                <input class="st-form__input" id="stFBaseUrl" type="text"
+                  placeholder="http://localhost:11434"
+                  value="${escHtml(config?.type === 'ollama' ? (config?.base_url || '') : '')}"/>
+                <span class="st-form__hint">Ollama server URL (default: http://localhost:11434)</span>
+              </div>
               <div class="st-form__row">
                 <label class="st-form__label">Model name *</label>
-                <input class="st-form__input" id="stFModelName" type="text"
-                  placeholder="claude-sonnet-4-6"
-                  value="${escHtml(config?.type === 'anthropic' ? (config?.model_name || '') : '')}"/>
-                <span class="st-form__hint">e.g. claude-sonnet-4-6, claude-opus-4-7, claude-haiku-4-5-20251001</span>
-              </div>
-              <div class="st-form__row">
-                <label class="st-form__label">API Key *</label>
-                <input class="st-form__input" id="stFApiKey" type="password"
-                  placeholder="sk-ant-…"
-                  value="${escHtml(config?.type === 'anthropic' ? (config?.api_key || '') : '')}"/>
-                <span class="st-form__hint">Your Anthropic API key from console.anthropic.com</span>
-              </div>
-              <div class="st-form__row">
-                <label class="st-form__label">Max tokens</label>
-                <input class="st-form__input st-form__input--short" id="stFMaxTokens" type="number"
-                  min="1" max="128000" placeholder="8192"
-                  value="${config?.type === 'anthropic' ? (config?.max_tokens || '') : ''}"/>
+                <input class="st-form__input" id="stFOllamaModel" type="text"
+                  placeholder="llama3"
+                  value="${escHtml(config?.type === 'ollama' ? (config?.model_name || '') : '')}"/>
+                <span class="st-form__hint">e.g. llama3, mistral, codellama, phi3</span>
               </div>
             </div>
 
@@ -252,8 +251,8 @@ export class SettingsPage {
     document.addEventListener('keydown', escFn);
 
     const applyType = type => {
-      overlay.querySelector('#stFFieldsCli').style.display = type === 'cli'       ? '' : 'none';
-      overlay.querySelector('#stFFieldsApi').style.display = type === 'anthropic' ? '' : 'none';
+      overlay.querySelector('#stFFieldsCli').style.display    = type === 'cli'    ? '' : 'none';
+      overlay.querySelector('#stFFieldsOllama').style.display = type === 'ollama' ? '' : 'none';
     };
 
     applyType(config?.type || 'cli');
@@ -280,11 +279,9 @@ export class SettingsPage {
         data.executable = overlay.querySelector('#stFExecutable')?.value.trim() || null;
         data.flags      = overlay.querySelector('#stFFlags')?.value.trim() || null;
         data.input_mode = overlay.querySelector('#stFInputMode')?.value || 'pipe';
-      } else if (type === 'anthropic') {
-        data.model_name = overlay.querySelector('#stFModelName')?.value.trim() || 'claude-sonnet-4-6';
-        data.api_key    = overlay.querySelector('#stFApiKey')?.value || null;
-        data.max_tokens = overlay.querySelector('#stFMaxTokens')?.value
-                            ? Number(overlay.querySelector('#stFMaxTokens').value) : null;
+      } else if (type === 'ollama') {
+        data.base_url   = overlay.querySelector('#stFBaseUrl')?.value.trim() || 'http://localhost:11434';
+        data.model_name = overlay.querySelector('#stFOllamaModel')?.value.trim() || null;
       }
 
       if (config) {

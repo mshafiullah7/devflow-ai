@@ -238,7 +238,13 @@
   color: #818cf8;
   border: 1px solid rgba(99, 102, 241, 0.25);
 }
-.st-model-item__badge--anthropic {
+.st-model-item__badge--ollama {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+.st-model-item__badge--anthropic,
+.st-model-item__badge--api {
   background: rgba(251, 146, 60, 0.12);
   color: #fb923c;
   border: 1px solid rgba(251, 146, 60, 0.25);
@@ -417,6 +423,25 @@
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+.st-type-btn--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.st-coming-soon {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border-radius: 3px;
+  padding: 1px 4px;
+  line-height: 1.4;
 }
 
 .st-form__check-label {
