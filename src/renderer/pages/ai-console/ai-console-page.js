@@ -252,7 +252,7 @@ export class AiConsolePage {
 
           <div class="aic-header__title-group">
             <div class="aic-header__title">${escHtml(this._project?.name ?? 'Project')}</div>
-            <div class="aic-header__subtitle">AI Console</div>
+            <div class="aic-header__subtitle">AI Chat</div>
           </div>
 
           <div class="project-page__folder-display" id="aicHeaderFolderDisplay" title="Select folder" style="-webkit-app-region:no-drag;">

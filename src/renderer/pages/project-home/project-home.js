@@ -384,7 +384,7 @@ export class ProjectHomePage {
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">AI Console</span>
+              <span class="ph-nav-item__label">AI Chat</span>
             </button>
 
             <div class="ph-sidebar-section">System</div>
