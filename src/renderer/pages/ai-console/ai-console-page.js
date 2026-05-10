@@ -1,5 +1,8 @@
-import { injectCss, removeCss } from '../../shared/helpers.js';
-import { applyStoredTheme }    from '../../shared/theme-manager.js';
+import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
+import { applyStoredTheme }              from '../../shared/theme-manager.js';
+import { ModelConfigsModal }             from '../../components/model-configs/model-configs-modal.js';
+import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
+import { GitController }                 from '../../components/git/git-controller.js';
 
 // ----------------------------------------------------------------
 // Templates — pre-built prompt starters
@@ -77,8 +80,6 @@ export class AiConsolePage {
     this.projectId = params.projectId;
 
     // Runtime state
-    this._models         = [];
-    this._selectedModel  = null;
     this._isGenerating   = false;
     this._streamingEl    = null;   // current AI bubble DOM node
     this._streamingText  = '';     // accumulated text during streaming
@@ -92,19 +93,52 @@ export class AiConsolePage {
     this._documents = [];
   }
 
+  get _selectedModel() { return this._picker?.selectedModel ?? null; }
+
   // ----------------------------------------------------------------
   // Lifecycle
   // ----------------------------------------------------------------
   async mount() {
     injectCss('pages/ai-console/ai-console-page.css');
     applyStoredTheme();
+
+    this._project = await window.db.projects.get(this.projectId);
+
     this.container.innerHTML = this._template();
+
+    this._modelConfigsModal = new ModelConfigsModal({
+      onConfigsChanged: () => this._picker?.reload(),
+    });
+    this._modelConfigsModal.mount();
+
+    this._picker = new ModelPicker({
+      anchor:   this.container.querySelector('#aicModelPicker'),
+      onSelect: () => {},
+    });
+
+    this._git = new GitController({
+      getTermCwd: () => this._project?.project_path || '',
+      gitBtnId:   'aicBtnGit',
+      gitBadgeId: 'aicGitBadge',
+    });
+    this._git.mount();
+
     this._bindEvents();
+    await this._picker.reload();
+
+    if (this._project?.project_path) {
+      this._setHeaderFolderPath(this._project.project_path);
+      this._git.refreshStatus();
+      this._git.startPoll();
+    }
+
     await this._loadData();
   }
 
   unmount() {
     window.app.chat.offAll();
+    this._picker?.unmount();
+    this._git?.stopPoll();
     removeCss('pages/ai-console/ai-console-page.css');
   }
 
@@ -113,58 +147,24 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   async _loadData() {
     try {
-      // Load project + supporting data in parallel
-      const [project, models, features, stories, allIssues, documents] = await Promise.all([
-        window.db.projects.get(this.projectId),
-        window.db.modelConfigs.list(),
+      const [features, stories, allIssues, documents] = await Promise.all([
         window.db.features.list(this.projectId),
         window.db.userStories.list({ project_id: this.projectId }),
         window.db.issues.list({ project_id: this.projectId }),
         window.db.documents.list(this.projectId),
       ]);
 
-      this._project   = project  || null;
-      this._models    = models   || [];
       this._features  = features || [];
       this._stories   = stories  || [];
       this._issues    = (allIssues || []).filter(i => i.status === 'open');
       this._documents = documents || [];
 
-      this._populateModelSelect();
       this._updateContextCounts();
       this._enableUi();
       this._renderWelcome();
     } catch (err) {
       console.error('[AI Console] load error:', err);
       this._showThreadError('Failed to load project data. Please go back and reopen this page.');
-    }
-  }
-
-  _populateModelSelect() {
-    const sel = this.container.querySelector('#aicModelSelect');
-    if (!sel) return;
-
-    if (this._models.length === 0) {
-      sel.innerHTML = '<option value="">No models configured — go to Settings</option>';
-      return;
-    }
-
-    sel.innerHTML = '<option value="">Select model…</option>';
-    for (const m of this._models) {
-      const opt = document.createElement('option');
-      opt.value       = m.id;
-      opt.textContent = `${m.label} (${m.type.toUpperCase()})`;
-      if (m.is_default) {
-        opt.selected        = true;
-        this._selectedModel = m;
-      }
-      sel.appendChild(opt);
-    }
-
-    // Fall back to first model if no default set
-    if (!this._selectedModel && this._models.length > 0) {
-      sel.value           = this._models[0].id;
-      this._selectedModel = this._models[0];
     }
   }
 
@@ -179,11 +179,9 @@ export class AiConsolePage {
   }
 
   _enableUi() {
-    // Model + template selects
-    ['#aicModelSelect', '#aicTemplateSelect'].forEach(id => {
-      const el = this.container.querySelector(id);
-      if (el) { el.disabled = false; el.removeAttribute('title'); }
-    });
+    // Template select
+    const tplSel = this.container.querySelector('#aicTemplateSelect');
+    if (tplSel) { tplSel.disabled = false; tplSel.removeAttribute('title'); }
 
     // Textarea
     const ta = this.container.querySelector('#aicInput');
@@ -229,33 +227,57 @@ export class AiConsolePage {
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <span class="aic-header__title">AI Console</span>
 
-          <div class="aic-header__controls">
-            <!-- Model selector -->
-            <div class="aic-header__model-wrap">
-              <svg class="aic-header__ctrl-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-              </svg>
-              <select class="aic-select" id="aicModelSelect" disabled>
-                <option value="">Loading…</option>
-              </select>
-            </div>
+          <div class="aic-header__title-group">
+            <div class="aic-header__title">${escHtml(this._project?.name ?? 'Project')}</div>
+            <div class="aic-header__subtitle">AI Console</div>
+          </div>
 
-            <!-- Template picker -->
-            <div class="aic-header__tpl-wrap">
-              <svg class="aic-header__ctrl-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="8" y1="13" x2="16" y2="13"/>
-                <line x1="8" y1="17" x2="12" y2="17"/>
+          <div class="project-page__folder-display" id="aicHeaderFolderDisplay" title="Select folder" style="-webkit-app-region:no-drag;">
+            <div class="project-page__folder-pill">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
               </svg>
-              <select class="aic-select" id="aicTemplateSelect" disabled>
-                <option value="">Templates…</option>
-                ${TEMPLATES.map(t => `<option value="${t.id}">${t.label}</option>`).join('')}
-              </select>
+              <span class="project-page__folder-text" id="aicHeaderFolderText">Select folder</span>
             </div>
           </div>
+
+          <!-- Template picker -->
+          <div class="aic-header__tpl-wrap" style="-webkit-app-region:no-drag;">
+            <svg class="aic-header__ctrl-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="8" y1="13" x2="16" y2="13"/>
+              <line x1="8" y1="17" x2="12" y2="17"/>
+            </svg>
+            <select class="aic-select" id="aicTemplateSelect" disabled>
+              <option value="">Templates…</option>
+              ${TEMPLATES.map(t => `<option value="${t.id}">${t.label}</option>`).join('')}
+            </select>
+          </div>
+
+          <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
+            <div id="aicModelPicker"></div>
+            <button class="project-page__model-cfg-btn" id="aicBtnModelConfigs" title="Configure AI models">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
+                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <button class="project-page__git-btn" id="aicBtnGit" title="Git changes" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="project-page__git-badge" id="aicGitBadge" hidden></span>
+          </button>
         </header>
 
         <!-- Body: chat + context panel -->
@@ -443,10 +465,23 @@ export class AiConsolePage {
     q('#aicBtnBack').addEventListener('click', () =>
       this.router.navigate('project-home', { projectId: this.projectId }));
 
-    // Model select
-    q('#aicModelSelect').addEventListener('change', (e) => {
-      const id = parseInt(e.target.value, 10);
-      this._selectedModel = this._models.find(m => m.id === id) || null;
+    // Model config button
+    q('#aicBtnModelConfigs').addEventListener('click', () =>
+      this._modelConfigsModal?.open());
+
+    // Git button
+    q('#aicBtnGit').addEventListener('click', () =>
+      this.router.navigate('git-changes', { projectId: this.projectId, from: 'ai-console' }));
+
+    // Folder display — open folder picker
+    q('#aicHeaderFolderDisplay').addEventListener('click', async () => {
+      const folderPath = await window.db.dialog.openFolder();
+      if (!folderPath) return;
+      await window.db.projects.setPath({ id: this.projectId, project_path: folderPath });
+      if (this._project) this._project.project_path = folderPath;
+      this._setHeaderFolderPath(folderPath);
+      this._git.refreshStatus();
+      this._git.startPoll();
     });
 
     // Template select → pre-fill textarea
@@ -766,6 +801,14 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   // UI helpers
   // ----------------------------------------------------------------
+  _setHeaderFolderPath(folderPath) {
+    const text    = this.container.querySelector('#aicHeaderFolderText');
+    const display = this.container.querySelector('#aicHeaderFolderDisplay');
+    if (!text || !display) return;
+    text.textContent = folderPath;
+    display.classList.add('project-page__folder-display--active');
+  }
+
   _setGenerating(on) {
     this._isGenerating = on;
 
