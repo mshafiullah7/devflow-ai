@@ -923,7 +923,7 @@ export class MockupsPage {
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
             </svg>
-            <u>S</u>ave &amp; Open
+            <span><u>S</u>ave &amp; Open</span>
           </button>
           <button class="scr-btn scr-btn--primary" id="scrEditSave">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -1148,7 +1148,7 @@ export class MockupsPage {
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
-              <u>E</u>dit
+              <span><u>E</u>dit</span>
             </button>
           </div>
           <div class="scr-viewer__actions">
@@ -1208,7 +1208,7 @@ export class MockupsPage {
                   <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                   <path d="M13.5 2.5v2.7H10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <u>R</u>efresh
+                <span><u>R</u>efresh</span>
               </button>
             </div>
             <div class="scr-viewer__content" id="scrViewerContent">
@@ -1388,7 +1388,7 @@ export class MockupsPage {
 
     const VIEWPORT_KEY  = 'mockups_preview_mode';
     const mobileIcon   = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="1" width="7" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="12.5" r=".7" fill="currentColor"/></svg> Desktop`;
-    const desktopIcon  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> <u>M</u>obile`;
+    const desktopIcon  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> <span><u>M</u>obile</span>`;
     const viewportBtn  = main.querySelector('#scrViewportToggle');
     const previewPane  = main.querySelector('#scrPreviewPane');
 
