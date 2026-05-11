@@ -524,14 +524,13 @@ export class ProjectHomePage {
       : stRows.map(r => {
           const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
           return `
-            <div class="ph-hrow">
-              <span class="ph-hrow-lbl ph-hrow-lbl--wide">${escHtml(r.label)}</span>
-              <div class="ph-hrow-bars">
-                <div class="ph-hrow-track ph-hrow-track--full" style="width:${pct}%">
-                  <div class="ph-hrow-rem ph-hrow-rem--status" style="width:100%"></div>
-                </div>
+            <div class="ph-status-row">
+              <span class="ph-status-dot"></span>
+              <span class="ph-status-name">${escHtml(r.label)}</span>
+              <div class="ph-status-bar-wrap">
+                <div class="ph-status-bar" style="width:${pct}%"></div>
               </div>
-              <span class="ph-hrow-val ph-hrow-val--neutral">${r.count} of ${total}</span>
+              <span class="ph-status-count">${r.count} of ${total}</span>
             </div>`;
         }).join('');
 
