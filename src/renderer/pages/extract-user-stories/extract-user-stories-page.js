@@ -251,7 +251,10 @@ export class ExtractUserStoriesPage {
 
   _bindEvents() {
     this.container.querySelector('#eusBtnBack')
-      .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
+      .addEventListener('click', async () => {
+        await this._detail.save();
+        this.router.navigate('project-home', { projectId: this._projectId });
+      });
 
     this.container.querySelector('#headerFolderDisplay')
       .addEventListener('click', async () => {
@@ -290,17 +293,18 @@ export class ExtractUserStoriesPage {
       });
 
     this.container.querySelector('#eusExistingList')
-      .addEventListener('click', e => {
+      .addEventListener('click', async e => {
         const item = e.target.closest('.eus-src-item');
         if (!item) return;
         const story = this._existingStories.find(s => s.id === Number(item.dataset.id));
         if (!story) return;
+        await this._detail.save();
         this._highlightStory(item);
         this._detail.showEditForm(story);
       });
 
     this.container.querySelector('#eusExtractedList')
-      .addEventListener('click', e => {
+      .addEventListener('click', async e => {
         const btn = e.target.closest('[data-action]');
         if (btn) {
           const id = Number(btn.closest('.eus-src-item')?.dataset.id);
@@ -313,6 +317,7 @@ export class ExtractUserStoriesPage {
         if (!item) return;
         const story = this._extractedStories.find(s => s.id === Number(item.dataset.id));
         if (!story) return;
+        await this._detail.save();
         this._highlightStory(item);
         this._detail.showEditForm(story);
       });
@@ -401,6 +406,7 @@ export class ExtractUserStoriesPage {
   }
 
   async _selectFeature(id) {
+    await this._detail.save();
     this._selectedFeatureId = this._selectedFeatureId === id ? null : id;
     this._renderFeatures();
     this._detail.setContext(this._selectedFeatureId, this._statuses);
@@ -548,6 +554,7 @@ export class ExtractUserStoriesPage {
   }
 
   async _promoteToUserStory(id) {
+    await this._detail.save();
     await window.db.userStories.update({ id, is_extracted: 0 });
     await Promise.all([this._loadExistingStories(), this._loadExtractedStories()]);
     const story = this._existingStories.find(s => s.id === id);
