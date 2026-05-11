@@ -157,7 +157,10 @@ export class DocumentsPage {
 
   _bindShellEvents() {
     this.container.querySelector('#btnBack')
-      .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
+      .addEventListener('click', async () => {
+        await this._saveActive();
+        this.router.navigate('project-home', { projectId: this._projectId });
+      });
 
     this.container.querySelector('#docBtnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
@@ -239,10 +242,25 @@ export class DocumentsPage {
     `;
   }
 
+  async _saveActive() {
+    if (!this._dirty || !this._activeId) return;
+    const panel = this.container.querySelector('#docPanel');
+    if (!panel) return;
+    const title   = panel.querySelector('#docTitleInput')?.value.trim();
+    const content = panel.querySelector('#docContentTA')?.value ?? '';
+    if (!title) return;
+    await window.db.documents.update({ id: this._activeId, title, content });
+    const idx = this._docs.findIndex(d => d.id === this._activeId);
+    if (idx !== -1) { this._docs[idx].title = title; this._docs[idx].content = content; }
+    this._dirty = false;
+    this._refreshList();
+  }
+
   // ----------------------------------------------------------------
   // Editor
   // ----------------------------------------------------------------
   async _selectDoc(id, switchToEdit = false) {
+    if (id !== this._activeId) await this._saveActive();
     this._activeId = id;
     const doc = this._docs.find(d => d.id === id);
     if (!doc) return;
