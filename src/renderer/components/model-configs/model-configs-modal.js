@@ -160,6 +160,11 @@ export class ModelConfigsModal {
             <span class="mcfg-form__hint">Binary name available in PATH (e.g. claude, gemini, aider)</span>
           </div>
           <div class="mcfg-form__row">
+            <label class="mcfg-form__label">Model</label>
+            <input class="mcfg-form__input" id="mcfgCliModel" type="text" placeholder="e.g. claude-sonnet-4-6, gemini-2.0-flash" value="${escHtml(config?.type === 'cli' ? (config?.model_name || '') : '')}" autocomplete="off"/>
+            <span class="mcfg-form__hint">Passed as --model &lt;value&gt; to the CLI (optional)</span>
+          </div>
+          <div class="mcfg-form__row">
             <label class="mcfg-form__label">Flags</label>
             <input class="mcfg-form__input" id="mcfgFlags" type="text" placeholder="--dangerously-skip-permissions --print" value="${escHtml(config?.flags || '')}"/>
             <span class="mcfg-form__hint">Flags appended when running inline in the console</span>
@@ -236,9 +241,10 @@ export class ModelConfigsModal {
       let data = { label, type, is_default: isDefault, input_mode: 'pipe' };
 
       if (type === 'cli') {
-        data.executable = body.querySelector('#mcfgExecutable')?.value.trim() || null;
-        data.flags      = body.querySelector('#mcfgFlags')?.value.trim() || null;
-        data.input_mode = body.querySelector('#mcfgInputMode')?.value || 'pipe';
+        data.executable  = body.querySelector('#mcfgExecutable')?.value.trim() || null;
+        data.model_name  = body.querySelector('#mcfgCliModel')?.value.trim() || null;
+        data.flags       = body.querySelector('#mcfgFlags')?.value.trim() || null;
+        data.input_mode  = body.querySelector('#mcfgInputMode')?.value || 'pipe';
       } else if (type === 'anthropic') {
         data.model_name = body.querySelector('#mcfgModelName')?.value.trim() || 'claude-sonnet-4-6';
         data.api_key    = body.querySelector('#mcfgApiKey')?.value || null;

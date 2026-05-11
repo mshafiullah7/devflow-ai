@@ -65,8 +65,9 @@ function registerQueueHandlers() {
 // ----------------------------------------------------------------
 function _runCli(send, messages, modelConfig, cwd) {
   const ts    = Date.now();
-  const exe   = modelConfig?.executable || 'claude';
-  const flags = modelConfig?.flags || '--dangerously-skip-permissions --print';
+  const exe       = modelConfig?.executable || 'claude';
+  const modelFlag = modelConfig?.model_name ? ` --model ${modelConfig.model_name}` : '';
+  const flags     = `${modelConfig?.flags || '--dangerously-skip-permissions --print'}${modelFlag}`;
 
   const promptText = messagesToText(messages);
 

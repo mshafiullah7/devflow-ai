@@ -204,7 +204,8 @@ function runOllama(wc, prompt, editPayload, model, messages) {
 // ----------------------------------------------------------------
 function runCli(wc, prompt, editPayload, model, messages) {
   const exe       = model.executable || 'claude';
-  const baseFlags = '--dangerously-skip-permissions --print';
+  const modelFlag = model.model_name ? ` --model ${model.model_name}` : '';
+  const baseFlags = `--dangerously-skip-permissions --print${modelFlag}`;
   const ts        = Date.now();
 
   let promptText;
