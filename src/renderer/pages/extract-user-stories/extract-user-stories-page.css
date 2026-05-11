@@ -511,8 +511,7 @@
 }
 
 /* Hide execution-only controls inside the detail panel on this page */
-#eusDetailContent .usl-pl-item__btn--mark-executed,
-#eusDetailContent .usl-pl-item__btn--run-ext {
+#eusDetailContent .usl-pl-item__btn--mark-executed {
   display: none;
 }
 
