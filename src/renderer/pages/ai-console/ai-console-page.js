@@ -164,11 +164,15 @@ export class AiConsolePage {
     this.projectId = params.projectId;
 
     // Runtime state
-    this._isGenerating   = false;
-    this._streamingEl    = null;   // current AI bubble DOM node
-    this._streamingText  = '';     // accumulated text during streaming
-    this._builtContext   = '';     // assembled context string
-    this._messages       = [];     // conversation history [{role, content}]
+    this._isGenerating        = false;
+    this._streamingEl         = null;   // current AI bubble DOM node
+    this._streamingText       = '';     // accumulated text during streaming
+    this._builtContext        = '';     // assembled context string
+    this._messages            = [];     // conversation history [{role, content}]
+    this._conversationSummary = '';     // rolling compressed context (≤500 lines)
+    this._lastUserMsg         = '';     // tracks last user text for summary generation
+    this._isSummarizing       = false;  // true while background summary is generating
+    this._summaryAccum        = '';     // accumulates silent summary tokens
 
     // Project data (loaded once on mount)
     this._project   = null;
@@ -788,11 +792,17 @@ export class AiConsolePage {
       return;
     }
 
+    // If a background summary is running, cancel it — we'll use the last stored summary
+    if (this._isSummarizing) {
+      window.app.chat.cancel();
+      this._isSummarizing = false;
+      this._summaryAccum  = '';
+    }
+
     const isFirst = this._messages.length === 0;
 
     // On the first message of a session, (re)build context from checked slices
     // and prepend it so the model has full project data for the whole thread.
-    // Follow-up messages skip this — the model already has it in history.
     let autoBuilt = false;
     if (isFirst) {
       this._buildContext();
@@ -805,7 +815,13 @@ export class AiConsolePage {
       ? `${this._builtContext}\n\n---\n\n${userText}`
       : userText;
 
+    this._lastUserMsg = userText;
     this._messages.push({ role: 'user', content });
+
+    // For follow-ups, send only the rolling summary + new message instead of full history
+    const apiMessages = (!isFirst && this._conversationSummary)
+      ? [{ role: 'user', content: `[Conversation Summary]\n${this._conversationSummary}\n\n---\n\n${userText}` }]
+      : this._messages;
 
     // Clear textarea
     if (ta) ta.value = '';
@@ -825,8 +841,7 @@ export class AiConsolePage {
     window.app.chat.onToken((p) => this._onToken(p));
     window.app.chat.onDone((p)  => this._onDone(p));
 
-    // Fire with full conversation history
-    window.app.chat.generate({ messages: this._messages, model: this._selectedModel });
+    window.app.chat.generate({ messages: apiMessages, model: this._selectedModel });
 
     this._setGenerating(true);
   }
@@ -845,8 +860,12 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   _handleClear() {
     if (this._isGenerating) return;
-    this._builtContext = '';
-    this._messages     = [];
+    this._builtContext        = '';
+    this._messages            = [];
+    this._conversationSummary = '';
+    this._lastUserMsg         = '';
+    this._isSummarizing       = false;
+    this._summaryAccum        = '';
     this._updateTokenEstimate();
     this._updateContextPreview();
     const tplSel = this.container.querySelector('#aicTemplateSelect');
@@ -870,6 +889,10 @@ export class AiConsolePage {
   }
 
   _onToken(payload) {
+    if (this._isSummarizing) {
+      this._summaryAccum += stripAnsi(payload.text || '');
+      return;
+    }
     if (!this._streamingEl) return;
     const token = stripAnsi(payload.text || '');
     this._streamingText += token;
@@ -882,18 +905,50 @@ export class AiConsolePage {
   }
 
   _onDone(payload) {
+    if (this._isSummarizing) {
+      this._conversationSummary = this._summaryAccum.trim();
+      this._summaryAccum  = '';
+      this._isSummarizing = false;
+      return;
+    }
+
     const raw   = stripAnsi(payload.raw || this._streamingText || '').trim();
     const final = raw || '[No response received]';
 
     this._finalizeStream(final);
     this._setGenerating(false);
 
-    // Append assistant reply to history so follow-up questions have full context
-    if (raw) this._messages.push({ role: 'assistant', content: raw });
+    if (raw) {
+      this._messages.push({ role: 'assistant', content: raw });
+      // Trigger background summary compression after each response
+      this._triggerSummaryUpdate(this._lastUserMsg, raw);
+    }
 
     if (payload.error && !raw) {
       this._showThreadError(`AI error: ${payload.error}`);
     }
+  }
+
+  _triggerSummaryUpdate(userMsg, assistantText) {
+    const prev   = this._conversationSummary;
+    const prompt = [
+      'Condense the following into a concise conversation summary under 500 lines.',
+      'Preserve all key facts, decisions, code snippets, and outputs. Remove filler.',
+      'Output only the summary — no preamble or explanation.\n',
+      prev ? `[Previous Summary]\n${prev}\n` : '',
+      `[Latest Exchange]\nUser: ${userMsg}\nAssistant: ${assistantText}`,
+    ].filter(Boolean).join('\n');
+
+    this._isSummarizing = true;
+    this._summaryAccum  = '';
+
+    window.app.chat.offAll();
+    window.app.chat.onToken((p) => this._onToken(p));
+    window.app.chat.onDone((p)  => this._onDone(p));
+    window.app.chat.generate({
+      messages: [{ role: 'user', content: prompt }],
+      model:    this._selectedModel,
+    });
   }
 
   _finalizeStream(text) {
