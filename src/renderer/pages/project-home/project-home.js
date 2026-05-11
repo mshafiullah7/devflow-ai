@@ -144,7 +144,7 @@ export class ProjectHomePage {
           <div class="ph-status-bar-wrap">
             <div class="ph-status-bar" style="width:${pct}%"></div>
           </div>
-          <span class="ph-status-count">${r.count}</span>
+          <span class="ph-status-count">${r.count} of ${total}</span>
         </div>`;
     }).join('');
   }
