@@ -278,7 +278,11 @@ export class SettingsPage {
   // ----------------------------------------------------------------
   async _renderBackupConfig() {
     const main = this.container.querySelector('#stMainContent');
-    const saved = (await window.app.config.get('backupPath')) || '';
+    const [saved, defaultPath] = await Promise.all([
+      window.app.config.get('backupPath'),
+      window.app.backupDefaultPath(),
+    ]);
+    const effective = saved || '';
     main.innerHTML = `
       <div class="st-content-title">Backup</div>
       <div class="st-content-sub">Configure where automatic daily backups are stored</div>
@@ -287,13 +291,13 @@ export class SettingsPage {
       </div>
       <div class="st-input-row">
         <input class="st-form__input" id="stBackupPathInput" type="text"
-          placeholder="Default: &lt;userData&gt;/backup"
-          value="${escHtml(saved)}"/>
+          placeholder="${escHtml(defaultPath)}"
+          value="${escHtml(effective)}"/>
         <button class="st-add-btn" id="stBtnBrowseBackup">Browse</button>
         <button class="st-add-btn" id="stBtnSaveBackup">Save</button>
       </div>
       <span class="st-form__hint" id="stBackupHint">
-        The app creates a daily snapshot of the database here. Leave blank to use the default location.
+        Default location: ${escHtml(defaultPath)}
       </span>
     `;
 

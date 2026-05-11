@@ -40,6 +40,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:config:get', (_e, key) => getConfigValue(key));
   ipcMain.handle('app:config:set', (_e, key, value) => { setConfigValue(key, value); });
+  ipcMain.handle('app:backup-default-path', () => path.join(app.getPath('userData'), 'backup'));
 
   ipcMain.handle('app:screens-dir', (event, projectName) => {
     const base = app.isPackaged

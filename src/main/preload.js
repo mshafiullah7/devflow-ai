@@ -165,6 +165,7 @@ contextBridge.exposeInMainWorld('app', {
     get: (key)        => invoke('app:config:get', key),
     set: (key, value) => invoke('app:config:set', key, value),
   },
+  backupDefaultPath: () => invoke('app:backup-default-path'),
   screensDir:       (projectName) => invoke('app:screens-dir', projectName),
   prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),
   writeTempFiles:   (files)       => invoke('app:writeTempFiles', files),
