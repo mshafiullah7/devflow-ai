@@ -294,8 +294,9 @@ export class UserStoryList {
         this._listEl.querySelectorAll('.usl-card')
           .forEach(el => el.classList.remove('usl-card--active'));
         card.classList.add('usl-card--active');
-        this._detail.showEditForm(s);
-        this._onSelect(s);
+        const fresh = await window.db.userStories.get(s.id);
+        this._detail.showEditForm(fresh || s);
+        this._onSelect(fresh || s);
       });
 
       this._listEl.appendChild(card);

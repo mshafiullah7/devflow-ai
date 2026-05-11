@@ -46,6 +46,7 @@ export class UserStoryDetail {
         description:         this._descEl?.value.trim()  || null,
         acceptance_criteria: this._acEl?.value.trim()    || null,
       });
+      this._onStoryUpdated();
     } catch { /* silent */ }
   }
 
