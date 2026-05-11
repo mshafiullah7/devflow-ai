@@ -90,6 +90,11 @@ contextBridge.exposeInMainWorld('db', {
     update: (data)       => invoke('db:screen_designs:update', data),
     delete: (id)         => invoke('db:screen_designs:delete', id),
   },
+  promptQueueMessages: {
+    list:  (queue_item_id) => invoke('db:pq_messages:list', queue_item_id),
+    add:   (data)          => invoke('db:pq_messages:add', data),
+    clear: (queue_item_id) => invoke('db:pq_messages:clear', queue_item_id),
+  },
   promptQueue: {
     list:            (data) => invoke('db:prompt_queue:list', data),
     add:             (data) => invoke('db:prompt_queue:add', data),

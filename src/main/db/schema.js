@@ -269,6 +269,14 @@ function applySchema(db) {
       ran_at        TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS prompt_queue_messages (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      queue_item_id INTEGER NOT NULL REFERENCES prompt_queue(id) ON DELETE CASCADE,
+      role          TEXT    NOT NULL,
+      content       TEXT    NOT NULL,
+      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- ----------------------------------------------------------------
     -- AUDIT / LOG TABLES
     -- ----------------------------------------------------------------

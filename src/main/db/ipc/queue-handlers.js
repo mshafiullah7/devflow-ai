@@ -19,33 +19,56 @@ function killTree(proc) {
   }
 }
 
+// Trim oldest messages when total content exceeds maxChars (~200K tokens)
+function trimMessages(messages, maxChars = 800_000) {
+  let total = messages.reduce((s, m) => s + m.content.length, 0);
+  let i = 0;
+  while (total > maxChars && i < messages.length - 1) {
+    total -= messages[i].content.length;
+    i++;
+  }
+  return messages.slice(i);
+}
+
+// Format a messages array as a plain-text conversation for CLI backends
+function messagesToText(messages) {
+  return messages.map(m => {
+    const label = m.role === 'user' ? 'User' : 'Assistant';
+    return `[${label}]\n${m.content}`;
+  }).join('\n\n');
+}
+
 function registerQueueHandlers() {
   ipcMain.handle('promptQueue:kill', () => {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
   });
 
-  ipcMain.handle('promptQueue:run', (event, { promptText, modelConfig, cwd }) => {
+  ipcMain.handle('promptQueue:run', (event, { messages, modelConfig, cwd }) => {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
 
     const wc   = event.sender;
     const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
     const type = modelConfig?.type || 'cli';
 
-    if (type === 'anthropic') { _runAnthropic(send, promptText, modelConfig); return { pid: null }; }
-    if (type === 'ollama')    { _runOllama(send, promptText, modelConfig);    return { pid: null }; }
-    if (type === 'api')       { _runApi(send, promptText, modelConfig);       return { pid: null }; }
+    const trimmed = trimMessages(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }]);
 
-    return _runCli(send, promptText, modelConfig, cwd);
+    if (type === 'anthropic') { _runAnthropic(send, trimmed, modelConfig); return { pid: null }; }
+    if (type === 'ollama')    { _runOllama(send, trimmed, modelConfig);    return { pid: null }; }
+    if (type === 'api')       { _runApi(send, trimmed, modelConfig);       return { pid: null }; }
+
+    return _runCli(send, trimmed, modelConfig, cwd);
   });
 }
 
 // ----------------------------------------------------------------
 // CLI (PowerShell spawn)
 // ----------------------------------------------------------------
-function _runCli(send, promptText, modelConfig, cwd) {
+function _runCli(send, messages, modelConfig, cwd) {
   const ts    = Date.now();
   const exe   = modelConfig?.executable || 'claude';
   const flags = modelConfig?.flags || '--dangerously-skip-permissions --print';
+
+  const promptText = messagesToText(messages);
 
   const tmpPrompt = path.join(os.tmpdir(), `ai-sdlc-qprompt-${ts}.txt`);
   const tmpScript = path.join(os.tmpdir(), `ai-sdlc-qscript-${ts}.ps1`);
@@ -99,7 +122,7 @@ function _runCli(send, promptText, modelConfig, cwd) {
 // ----------------------------------------------------------------
 // Anthropic SSE streaming
 // ----------------------------------------------------------------
-function _runAnthropic(send, promptText, modelConfig) {
+function _runAnthropic(send, messages, modelConfig) {
   let doneSent = false;
   const finish = (code) => { if (!doneSent) { doneSent = true; send('promptQueue:done', { exitCode: code }); } };
 
@@ -107,7 +130,7 @@ function _runAnthropic(send, promptText, modelConfig) {
     model:      modelConfig.model_name || 'claude-sonnet-4-6',
     max_tokens: modelConfig.max_tokens || 8096,
     stream:     true,
-    messages:   [{ role: 'user', content: promptText }],
+    messages,
   });
 
   const req = https.request({
@@ -148,14 +171,14 @@ function _runAnthropic(send, promptText, modelConfig) {
 // ----------------------------------------------------------------
 // Ollama NDJSON streaming
 // ----------------------------------------------------------------
-function _runOllama(send, promptText, modelConfig) {
+function _runOllama(send, messages, modelConfig) {
   let doneSent = false;
   const finish = (code) => { if (!doneSent) { doneSent = true; send('promptQueue:done', { exitCode: code }); } };
 
   const baseUrl = (modelConfig.base_url || 'http://localhost:11434').replace(/\/$/, '');
   const body    = JSON.stringify({
     model:    modelConfig.model_name,
-    messages: [{ role: 'user', content: promptText }],
+    messages,
     stream:   true,
   });
 
@@ -197,7 +220,7 @@ function _runOllama(send, promptText, modelConfig) {
 // ----------------------------------------------------------------
 // Generic API (OpenAI-compatible, non-streaming)
 // ----------------------------------------------------------------
-function _runApi(send, promptText, modelConfig) {
+function _runApi(send, messages, modelConfig) {
   const baseUrl = (modelConfig.base_url || '').replace(/\/$/, '');
   if (!baseUrl) {
     send('promptQueue:data', { text: 'Error: API base_url not configured\n' });
@@ -207,7 +230,7 @@ function _runApi(send, promptText, modelConfig) {
 
   const bodyObj = {
     model:    modelConfig.model_name || 'default',
-    messages: [{ role: 'user', content: promptText }],
+    messages,
     stream:   false,
   };
   if (modelConfig.max_tokens) bodyObj.max_tokens = modelConfig.max_tokens;

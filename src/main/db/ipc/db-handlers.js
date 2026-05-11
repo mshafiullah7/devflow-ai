@@ -779,6 +779,27 @@ function registerDbHandlers() {
     return db.prepare(`SELECT COUNT(*) AS count FROM prompt_queue WHERE project_id = ? AND status = 'pending'`).get(project_id)?.count ?? 0;
   });
 
+  // ----------------------------------------------------------------
+  // prompt_queue_messages
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:pq_messages:list', (_e, queue_item_id) => {
+    return db.prepare(
+      'SELECT * FROM prompt_queue_messages WHERE queue_item_id = ? ORDER BY id ASC'
+    ).all(queue_item_id);
+  });
+
+  ipcMain.handle('db:pq_messages:add', (_e, { queue_item_id, role, content }) => {
+    const res = db.prepare(
+      'INSERT INTO prompt_queue_messages (queue_item_id, role, content) VALUES (?, ?, ?)'
+    ).run(queue_item_id, role, content);
+    return db.prepare('SELECT * FROM prompt_queue_messages WHERE id = ?').get(res.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:pq_messages:clear', (_e, queue_item_id) => {
+    db.prepare('DELETE FROM prompt_queue_messages WHERE queue_item_id = ?').run(queue_item_id);
+    return { success: true };
+  });
+
   ipcMain.handle('app:writeTempFiles', (_e, files) => {
     const dir = path.join(os.tmpdir(), 'electron-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });

@@ -24,6 +24,7 @@ export class PromptQueuePage {
     this._isRunning  = false;
     this._runAll     = false;
     this._modelCfg   = null;
+    this._messages   = {};  // { [itemId]: [{role, content, created_at}] }
   }
 
   async mount() {
@@ -166,6 +167,7 @@ export class PromptQueuePage {
         if (this._isRunning && this._selectedId === id) return;
         await window.db.promptQueue.delete(id);
         this._queue = this._queue.filter(q => q.id !== id);
+        delete this._messages[id];
         el.remove();
         if (this._queue.length === 0) {
           panel.innerHTML = `<div class="pq-list-empty">No prompts queued yet.<br>Use the queue button on prompts in User Stories.</div>`;
@@ -242,6 +244,7 @@ export class PromptQueuePage {
       if (this._isRunning && this._selectedId === id) return;
       await window.db.promptQueue.delete(id);
       this._queue = this._queue.filter(q => q.id !== id);
+      delete this._messages[id];
       newEl.remove();
       if (this._selectedId === id) {
         this._selectedId = null;
@@ -252,11 +255,17 @@ export class PromptQueuePage {
     });
   }
 
-  _selectItem(item) {
+  async _selectItem(item) {
     this._selectedId = item.id;
     const panel = this.container.querySelector('#pqListPanel');
     panel?.querySelectorAll('.pq-item').forEach(el => el.classList.remove('pq-item--selected'));
     panel?.querySelector(`[data-id="${item.id}"]`)?.classList.add('pq-item--selected');
+
+    // Load history from DB if not yet cached
+    if (!this._messages[item.id]) {
+      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
+    }
+
     this._renderDetail(item);
   }
 
@@ -291,27 +300,71 @@ export class PromptQueuePage {
         if (!this._isRunning) this._runItem(item);
       });
     } else {
-      const output = this._outputBuf[item.id] || item.output || '';
+      // running / done / failed — show conversation thread + follow-up bar
+      const msgs = this._messages[item.id] || [];
+      const isRunning = item.status === 'running';
+
       panel.innerHTML = `
-        <div class="pq-detail">
+        <div class="pq-detail pq-detail--convo">
           <div class="pq-detail__meta">
             <span class="pq-detail__status pq-detail__status--${item.status}">${item.status}</span>
             ${item.story_title ? `<span class="pq-detail__story">${escHtml(item.story_title)}</span>` : ''}
             ${item.tag ? `<span class="pq-detail__tag">${escHtml(item.tag)}</span>` : ''}
             ${item.ran_at ? `<span class="pq-detail__time">${new Date(item.ran_at + (item.ran_at.endsWith('Z') ? '' : 'Z')).toLocaleString()}</span>` : ''}
           </div>
-          <pre class="pq-detail__output" id="pqOutputEl">${escHtml(output)}</pre>
+          <div class="pq-convo" id="pqConvo">
+            ${this._renderConvoHtml(msgs)}
+            ${isRunning ? `<div class="pq-turn pq-turn--assistant" id="pqLiveTurn">
+              <span class="pq-turn__label">Assistant</span>
+              <div class="pq-turn__bubble pq-turn__bubble--live" id="pqLiveBubble">${escHtml(this._outputBuf[item.id] || '')}</div>
+            </div>` : ''}
+          </div>
+          <div class="pq-followup" id="pqFollowup"${isRunning ? ' style="display:none"' : ''}>
+            <textarea class="pq-followup__input" id="pqFollowupInput" placeholder="Send a follow-up…" rows="3"></textarea>
+            <button class="pq-toolbar__btn pq-toolbar__btn--primary pq-followup__btn" id="pqBtnSendFollowup">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Send
+            </button>
+          </div>
         </div>`;
+
+      // Scroll to bottom of convo
+      const convo = panel.querySelector('#pqConvo');
+      if (convo) convo.scrollTop = convo.scrollHeight;
+
+      // Bind follow-up send
+      const sendBtn = panel.querySelector('#pqBtnSendFollowup');
+      const input   = panel.querySelector('#pqFollowupInput');
+      sendBtn?.addEventListener('click', () => this._sendFollowup(item));
+      input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._sendFollowup(item);
+      });
     }
+  }
+
+  _renderConvoHtml(msgs) {
+    if (!msgs.length) return '';
+    return msgs.map(m => {
+      const isUser = m.role === 'user';
+      const bubble = isUser
+        ? `<div class="pq-turn__bubble">${escHtml(m.content)}</div>`
+        : `<div class="pq-turn__bubble">${this._renderMarkdown(m.content)}</div>`;
+      return `
+        <div class="pq-turn pq-turn--${isUser ? 'user' : 'assistant'}">
+          <span class="pq-turn__label">${isUser ? 'You' : 'Assistant'}</span>
+          ${bubble}
+        </div>`;
+    }).join('');
   }
 
   _appendOutput(id, text) {
     this._outputBuf[id] = (this._outputBuf[id] || '') + text;
     if (this._selectedId === id) {
-      const el = this.container.querySelector('#pqOutputEl');
+      const el = this.container.querySelector('#pqLiveBubble');
       if (el) {
         el.textContent += text;
-        el.scrollTop    = el.scrollHeight;
+        const convo = this.container.querySelector('#pqConvo');
+        if (convo) convo.scrollTop = convo.scrollHeight;
       }
     }
   }
@@ -324,6 +377,11 @@ export class PromptQueuePage {
     this._isRunning = true;
     this._outputBuf[item.id] = '';
 
+    // Clear prior messages for a fresh initial run
+    await window.db.promptQueueMessages.clear(item.id);
+    this._messages[item.id] = [];
+
+    item._pendingUserContent = item.prompt_text;
     item.status = 'running';
     const ranAt  = new Date().toISOString().replace('T', ' ').slice(0, 19);
     item.ran_at  = ranAt;
@@ -344,6 +402,11 @@ export class PromptQueuePage {
       item.status     = succeeded ? 'done' : 'failed';
       item.exit_code  = exitCode;
       item.output     = this._outputBuf[item.id] || '';
+
+      // Persist the conversation turn
+      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent || item.prompt_text });
+      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
+      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
 
       await window.db.promptQueue.update({
         id:        item.id,
@@ -373,7 +436,66 @@ export class PromptQueuePage {
 
     const cfg = this._modelCfg || {};
     window.db.promptQueue.run({
-      promptText:  item.prompt_text,
+      messages:    [{ role: 'user', content: item.prompt_text }],
+      modelConfig: cfg,
+      cwd:         this._project?.project_path || null,
+    });
+  }
+
+  async _sendFollowup(item) {
+    const input   = this.container.querySelector('#pqFollowupInput');
+    const userMsg = input?.value.trim();
+    if (!userMsg || this._isRunning) return;
+    input.value = '';
+
+    const history  = this._messages[item.id] || [];
+    const messages = [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }];
+
+    item._pendingUserContent = userMsg;
+
+    this._isRunning = true;
+    this._outputBuf[item.id] = '';
+
+    // Optimistically show the new user turn
+    this._messages[item.id] = [...history, { role: 'user', content: userMsg, created_at: new Date().toISOString() }];
+
+    const prevStatus = item.status;
+    item.status = 'running';
+    this._updateToolbarRunState(true);
+    if (this._selectedId === item.id) this._renderDetail(item);
+
+    window.db.promptQueue.removeListeners();
+    window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
+    window.db.promptQueue.onDone(async ({ exitCode }) => {
+      window.db.promptQueue.removeListeners();
+      this._isRunning = false;
+
+      const succeeded = exitCode === 0;
+      item.status     = succeeded ? 'done' : 'failed';
+      item.exit_code  = exitCode;
+      item.output     = this._outputBuf[item.id] || '';
+
+      // Persist: save user + assistant turns
+      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: userMsg });
+      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
+      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
+
+      await window.db.promptQueue.update({
+        id:        item.id,
+        status:    item.status,
+        output:    item.output,
+        exit_code: exitCode,
+      });
+
+      this._refreshItemEl(item.id);
+      this._updateSummary();
+      this._updateToolbarRunState(false);
+      if (this._selectedId === item.id) this._renderDetail(item);
+    });
+
+    const cfg = this._modelCfg || {};
+    window.db.promptQueue.run({
+      messages,
       modelConfig: cfg,
       cwd:         this._project?.project_path || null,
     });
@@ -561,6 +683,8 @@ export class PromptQueuePage {
     this.container.querySelector('#pqBtnClearDone')
       .addEventListener('click', async () => {
         await window.db.promptQueue.clearDone(this.projectId);
+        const removed = this._queue.filter(q => ['done', 'failed', 'skipped'].includes(q.status));
+        removed.forEach(q => delete this._messages[q.id]);
         this._queue = this._queue.filter(q => !['done', 'failed', 'skipped'].includes(q.status));
         if (this._selectedId) {
           const stillExists = this._queue.find(q => q.id === this._selectedId);
