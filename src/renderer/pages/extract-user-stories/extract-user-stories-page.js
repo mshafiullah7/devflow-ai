@@ -822,8 +822,10 @@ export class ExtractUserStoriesPage {
     const prompt   = promptTa?.value?.trim();
     if (!prompt) return;
 
-    const cfg = this._aiModelConfig;
-    const exe = cfg?.executable || 'claude';
+    const cfg       = this._aiModelConfig;
+    const exe       = cfg?.executable || 'claude';
+    const flags     = cfg?.flags ? ` ${cfg.flags}` : '';
+    const modelFlag = cfg?.model_name ? ` --model ${cfg.model_name}` : '';
 
     // Create the output file in the temp dir to get its path
     const [outputPath] = await window.app.writeTempFiles([
@@ -840,7 +842,7 @@ export class ExtractUserStoriesPage {
 
     // Same command style as Mockups: here-string, no stdout piping — Claude writes the file
     const safe = terminalPrompt.replace(/'/g, "''");
-    const cmd  = `$p = @'\n${safe}\n'@\n${exe} $p`;
+    const cmd  = `$p = @'\n${safe}\n'@\n${exe}${flags}${modelFlag} $p`;
 
     await window.db.terminal.openExternal({ command: cmd, cwd: this._project?.project_path || undefined });
   }

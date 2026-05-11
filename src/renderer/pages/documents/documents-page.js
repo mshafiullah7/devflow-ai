@@ -1148,11 +1148,12 @@ export class DocumentsPage {
   async _runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent) {
     const exe        = cfg.executable || 'claude';
     const flags      = cfg.flags ? ` ${cfg.flags}` : '';
+    const modelFlag  = cfg.model_name ? ` --model ${cfg.model_name}` : '';
     const cwd        = this._project?.project_path || '';
     const safePrompt = prompt.replace(/'/g, "''");
     const command    = cfg.input_mode === 'heredoc'
-      ? `$p = @'\n${safePrompt}\n'@\n${exe}${flags} $p`
-      : `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}`;
+      ? `$p = @'\n${safePrompt}\n'@\n${exe}${flags}${modelFlag} $p`
+      : `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}${modelFlag}`;
 
     return new Promise(resolve => {
       let fullOutput = '';
