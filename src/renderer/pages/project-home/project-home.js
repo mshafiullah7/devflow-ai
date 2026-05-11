@@ -527,10 +527,11 @@ export class ProjectHomePage {
             <div class="ph-status-row">
               <span class="ph-status-dot"></span>
               <span class="ph-status-name">${escHtml(r.label)}</span>
+              <span class="ph-status-count">${r.count}</span>
               <div class="ph-status-bar-wrap">
                 <div class="ph-status-bar" style="width:${pct}%"></div>
               </div>
-              <span class="ph-status-count">${r.count}</span>
+              <span class="ph-status-total">${total}</span>
             </div>`;
         }).join('');
 
@@ -572,7 +573,7 @@ export class ProjectHomePage {
         </div>
 
         <div class="ph-mc-card ph-mc-card--full">
-          <div class="ph-mc-title">Stories by Status <span class="ph-mc-title-total">${total}</span></div>
+          <div class="ph-mc-title">Stories by Status</div>
           <div class="ph-hrows ph-hrows--grid">${statusBars}</div>
         </div>
       </div>`;
