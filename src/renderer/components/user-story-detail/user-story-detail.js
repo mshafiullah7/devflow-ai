@@ -19,6 +19,10 @@ export class UserStoryDetail {
     this._titleEl                = null;
     this._descEl                 = null;
     this._acEl                   = null;
+    this._priorityEl             = null;
+    this._targetDateEl           = null;
+    this._estHoursEl             = null;
+    this._remHoursEl             = null;
   }
 
   // ----------------------------------------------------------------
@@ -43,8 +47,14 @@ export class UserStoryDetail {
       await window.db.userStories.update({
         id:                  this._currentStory.id,
         title,
-        description:         this._descEl?.value.trim()  || null,
-        acceptance_criteria: this._acEl?.value.trim()    || null,
+        description:         this._descEl?.value.trim()      || null,
+        acceptance_criteria: this._acEl?.value.trim()        || null,
+        priority:            this._priorityEl?.value         || 'medium',
+        target_date:         this._targetDateEl?.value       || null,
+        estimated_hours:     this._estHoursEl?.value !== '' && this._estHoursEl?.value != null
+                               ? parseFloat(this._estHoursEl.value) : null,
+        remaining_hours:     this._remHoursEl?.value !== '' && this._remHoursEl?.value != null
+                               ? parseFloat(this._remHoursEl.value) : null,
       });
       this._onStoryUpdated();
     } catch { /* silent */ }
@@ -54,9 +64,13 @@ export class UserStoryDetail {
   showEmpty() {
     if (!this._detailEl) return;
     this._currentStory = null;
-    this._titleEl = null;
-    this._descEl  = null;
-    this._acEl    = null;
+    this._titleEl      = null;
+    this._descEl       = null;
+    this._acEl         = null;
+    this._priorityEl   = null;
+    this._targetDateEl = null;
+    this._estHoursEl   = null;
+    this._remHoursEl   = null;
     const headerActions = this._headerActionsEl || document.getElementById('storyDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '';
     this._detailEl.innerHTML = `
@@ -74,9 +88,13 @@ export class UserStoryDetail {
   showAddForm() {
     if (!this._detailEl) return;
     this._currentStory = null;
-    this._titleEl = null;
-    this._descEl  = null;
-    this._acEl    = null;
+    this._titleEl      = null;
+    this._descEl       = null;
+    this._acEl         = null;
+    this._priorityEl   = null;
+    this._targetDateEl = null;
+    this._estHoursEl   = null;
+    this._remHoursEl   = null;
     const headerActions = this._headerActionsEl || document.getElementById('storyDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '';
 
@@ -124,6 +142,30 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="6"></textarea>
           </div>
 
+          <div class="usl-add-form__planning-grid">
+            <div class="usl-add-form__planning-cell">
+              <label class="usl-add-form__label" for="uslAddPriority">Priority</label>
+              <select class="usl-add-form__select usl-priority-select" id="uslAddPriority" data-priority="medium">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+            <div class="usl-add-form__planning-cell">
+              <label class="usl-add-form__label" for="uslAddTargetDate">Target Date</label>
+              <input class="usl-add-form__input" id="uslAddTargetDate" type="date" />
+            </div>
+            <div class="usl-add-form__planning-cell">
+              <label class="usl-add-form__label" for="uslAddEstHours">Est. Hours</label>
+              <input class="usl-add-form__input" id="uslAddEstHours" type="number" min="0" step="0.5" placeholder="—" />
+            </div>
+            <div class="usl-add-form__planning-cell">
+              <label class="usl-add-form__label" for="uslAddRemHours">Rem. Hours</label>
+              <input class="usl-add-form__input" id="uslAddRemHours" type="number" min="0" step="0.5" placeholder="—" />
+            </div>
+          </div>
+
           <div class="usl-prompts-section">
             <div class="usl-prompts-section__header">
               <span class="usl-prompts-section__title">Prompts</span>
@@ -152,11 +194,17 @@ export class UserStoryDetail {
       </div>
     `;
 
-    const titleEl  = this._detailEl.querySelector('#uslAddTitle');
-    const descEl   = this._detailEl.querySelector('#uslAddDesc');
-    const acEl     = this._detailEl.querySelector('#uslAddAC');
-    const statusEl = this._detailEl.querySelector('#uslAddStatus');
-    const saveBtn  = this._detailEl.querySelector('.usl-add-form__btn--save');
+    const titleEl      = this._detailEl.querySelector('#uslAddTitle');
+    const descEl       = this._detailEl.querySelector('#uslAddDesc');
+    const acEl         = this._detailEl.querySelector('#uslAddAC');
+    const statusEl     = this._detailEl.querySelector('#uslAddStatus');
+    const priorityEl   = this._detailEl.querySelector('#uslAddPriority');
+    const targetDateEl = this._detailEl.querySelector('#uslAddTargetDate');
+    const estHoursEl   = this._detailEl.querySelector('#uslAddEstHours');
+    const remHoursEl   = this._detailEl.querySelector('#uslAddRemHours');
+    const saveBtn      = this._detailEl.querySelector('.usl-add-form__btn--save');
+
+    priorityEl.addEventListener('change', () => { priorityEl.dataset.priority = priorityEl.value; });
 
     this._bindPromptsSection(this._detailEl, null);
     titleEl.focus();
@@ -178,9 +226,13 @@ export class UserStoryDetail {
           feature_id:          this._featureId,
           project_id:          this._projectId,
           title,
-          description:         descEl.value.trim()   || null,
-          acceptance_criteria: acEl.value.trim()     || null,
+          description:         descEl.value.trim()        || null,
+          acceptance_criteria: acEl.value.trim()          || null,
           status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
+          priority:            priorityEl.value            || 'medium',
+          target_date:         targetDateEl.value          || null,
+          estimated_hours:     estHoursEl.value !== ''     ? parseFloat(estHoursEl.value)  : null,
+          remaining_hours:     remHoursEl.value !== ''     ? parseFloat(remHoursEl.value)  : null,
         });
         this.showEmpty();
         this._onStoryUpdated();
@@ -251,6 +303,30 @@ export class UserStoryDetail {
             <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="6">${escHtml(story.acceptance_criteria || '')}</textarea>
           </div>
 
+          <div class="usl-add-form__planning-grid">
+            <div class="usl-add-form__planning-cell">
+              <label class="usl-add-form__label" for="uslEditPriority">Priority</label>
+              <select class="usl-add-form__select usl-priority-select" id="uslEditPriority" data-priority="${escHtml(story.priority || 'medium')}">
+                <option value="low"${(story.priority || 'medium') === 'low' ? ' selected' : ''}>Low</option>
+                <option value="medium"${(!story.priority || story.priority === 'medium') ? ' selected' : ''}>Medium</option>
+                <option value="high"${story.priority === 'high' ? ' selected' : ''}>High</option>
+                <option value="critical"${story.priority === 'critical' ? ' selected' : ''}>Critical</option>
+              </select>
+            </div>
+            <div class="usl-add-form__planning-cell">
+              <label class="usl-add-form__label" for="uslEditTargetDate">Target Date</label>
+              <input class="usl-add-form__input" id="uslEditTargetDate" type="date" value="${escHtml(story.target_date || '')}" />
+            </div>
+            <div class="usl-add-form__planning-cell">
+              <label class="usl-add-form__label" for="uslEditEstHours">Est. Hours</label>
+              <input class="usl-add-form__input" id="uslEditEstHours" type="number" min="0" step="0.5" placeholder="—" value="${story.estimated_hours ?? ''}" />
+            </div>
+            <div class="usl-add-form__planning-cell">
+              <label class="usl-add-form__label" for="uslEditRemHours">Rem. Hours</label>
+              <input class="usl-add-form__input" id="uslEditRemHours" type="number" min="0" step="0.5" placeholder="—" value="${story.remaining_hours ?? ''}" />
+            </div>
+          </div>
+
           <div class="usl-prompts-section">
             <div class="usl-prompts-section__header">
               <span class="usl-prompts-section__title">Prompts</span>
@@ -266,15 +342,25 @@ export class UserStoryDetail {
       </div>
     `;
 
-    const titleEl  = this._detailEl.querySelector('#uslEditTitle');
-    const descEl   = this._detailEl.querySelector('#uslEditDesc');
-    const acEl     = this._detailEl.querySelector('#uslEditAC');
-    const statusEl = this._detailEl.querySelector('#uslEditStatus');
+    const titleEl      = this._detailEl.querySelector('#uslEditTitle');
+    const descEl       = this._detailEl.querySelector('#uslEditDesc');
+    const acEl         = this._detailEl.querySelector('#uslEditAC');
+    const statusEl     = this._detailEl.querySelector('#uslEditStatus');
+    const priorityEl   = this._detailEl.querySelector('#uslEditPriority');
+    const targetDateEl = this._detailEl.querySelector('#uslEditTargetDate');
+    const estHoursEl   = this._detailEl.querySelector('#uslEditEstHours');
+    const remHoursEl   = this._detailEl.querySelector('#uslEditRemHours');
 
     this._currentStory = story;
     this._titleEl      = titleEl;
     this._descEl       = descEl;
     this._acEl         = acEl;
+    this._priorityEl   = priorityEl;
+    this._targetDateEl = targetDateEl;
+    this._estHoursEl   = estHoursEl;
+    this._remHoursEl   = remHoursEl;
+
+    priorityEl.addEventListener('change', () => { priorityEl.dataset.priority = priorityEl.value; });
 
     if (headerActions && this._onExport) {
       const exportBtn = document.createElement('button');
@@ -331,9 +417,13 @@ export class UserStoryDetail {
         await window.db.userStories.update({
           id:                  story.id,
           title,
-          description:         descEl.value.trim()   || null,
-          acceptance_criteria: acEl.value.trim()     || null,
+          description:         descEl.value.trim()        || null,
+          acceptance_criteria: acEl.value.trim()          || null,
           status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
+          priority:            priorityEl.value            || 'medium',
+          target_date:         targetDateEl.value          || null,
+          estimated_hours:     estHoursEl.value !== ''     ? parseFloat(estHoursEl.value)  : null,
+          remaining_hours:     remHoursEl.value !== ''     ? parseFloat(remHoursEl.value)  : null,
         });
         saveBtn.disabled    = false;
         saveBtn.textContent = 'Save Changes';

@@ -770,6 +770,38 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Planning row — 2×2 grid of planning fields                          */
+/* ------------------------------------------------------------------ */
+.usl-add-form__planning-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.usl-add-form__planning-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Compact inputs inside planning cells */
+.usl-add-form__planning-cell .usl-add-form__input,
+.usl-add-form__planning-cell .usl-add-form__select {
+  font-size: 13px;
+  padding: 5px 8px;
+}
+
+/* Priority select — colour coded via data-priority attribute */
+.usl-priority-select[data-priority="low"]      { color: #60a5fa; border-color: rgba(96,165,250,0.5); }
+.usl-priority-select[data-priority="medium"]   { color: #fbbf24; border-color: rgba(251,191,36,0.5); }
+.usl-priority-select[data-priority="high"]     { color: #fb923c; border-color: rgba(251,146,60,0.5); }
+.usl-priority-select[data-priority="critical"] { color: #f87171; border-color: rgba(248,113,113,0.5); }
+[data-theme="light"] .usl-priority-select[data-priority="low"]      { color: #1d4ed8; }
+[data-theme="light"] .usl-priority-select[data-priority="medium"]   { color: #92400e; }
+[data-theme="light"] .usl-priority-select[data-priority="high"]     { color: #c2410c; }
+[data-theme="light"] .usl-priority-select[data-priority="critical"] { color: #b91c1c; }
+
+/* ------------------------------------------------------------------ */
 /* Additional Prompts section                                           */
 /* ------------------------------------------------------------------ */
 .usl-prompts-section {

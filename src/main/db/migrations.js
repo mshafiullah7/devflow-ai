@@ -138,6 +138,21 @@ function runMigrations(db) {
     db.exec('ALTER TABLE user_stories ADD COLUMN is_extracted INTEGER NOT NULL DEFAULT 0');
   }
 
+  // Add planning fields to user_stories
+  const usColsPlanning = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
+  if (!usColsPlanning.includes('priority')) {
+    db.exec("ALTER TABLE user_stories ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
+  }
+  if (!usColsPlanning.includes('estimated_hours')) {
+    db.exec('ALTER TABLE user_stories ADD COLUMN estimated_hours REAL');
+  }
+  if (!usColsPlanning.includes('remaining_hours')) {
+    db.exec('ALTER TABLE user_stories ADD COLUMN remaining_hours REAL');
+  }
+  if (!usColsPlanning.includes('target_date')) {
+    db.exec('ALTER TABLE user_stories ADD COLUMN target_date TEXT');
+  }
+
   // Add screen_prompt_history table for existing databases
   const sphCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='screen_prompt_history'").get();
   if (!sphCheck) {

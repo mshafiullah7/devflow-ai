@@ -150,17 +150,19 @@ function registerDbHandlers() {
 
   ipcMain.handle(
     'db:user_stories:create',
-    (_e, { feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted = 0 }) => {
+    (_e, { feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted = 0, priority, estimated_hours, remaining_hours, target_date }) => {
       const result = db
         .prepare(
           `INSERT INTO user_stories
-            (feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+            (feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted, priority, estimated_hours, remaining_hours, target_date)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           feature_id, project_id, title,
           description ?? null, acceptance_criteria ?? null,
-          status_id ?? null, is_extracted
+          status_id ?? null, is_extracted,
+          priority ?? 'medium',
+          estimated_hours ?? null, remaining_hours ?? null, target_date ?? null
         );
       return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(result.lastInsertRowid);
     }
@@ -168,21 +170,23 @@ function registerDbHandlers() {
 
   ipcMain.handle(
     'db:user_stories:update',
-    (_e, { id, title, description, acceptance_criteria, status_id, is_active, is_extracted }) => {
-      db.prepare(
-        `UPDATE user_stories
-            SET title = coalesce(?, title),
-                description = coalesce(?, description),
-                acceptance_criteria = coalesce(?, acceptance_criteria),
-                status_id = coalesce(?, status_id),
-                is_active = coalesce(?, is_active),
-                is_extracted = coalesce(?, is_extracted),
-                updated_at = datetime('now')
-          WHERE id = ?`
-      ).run(
-        title ?? null, description ?? null, acceptance_criteria ?? null,
-        status_id ?? null, is_active ?? null, is_extracted ?? null, id
-      );
+    (_e, data) => {
+      const { id, title, description, acceptance_criteria, status_id, is_active, is_extracted,
+              priority, estimated_hours, remaining_hours, target_date } = data;
+      const sets = ["updated_at = datetime('now')"];
+      const params = [];
+      if (title             !== undefined) { sets.push('title = ?');               params.push(title ?? null); }
+      if ('description'     in data)       { sets.push('description = ?');          params.push(description ?? null); }
+      if ('acceptance_criteria' in data)   { sets.push('acceptance_criteria = ?');  params.push(acceptance_criteria ?? null); }
+      if (status_id         !== undefined) { sets.push('status_id = ?');            params.push(status_id ?? null); }
+      if (is_active         !== undefined) { sets.push('is_active = ?');            params.push(is_active ?? null); }
+      if (is_extracted      !== undefined) { sets.push('is_extracted = ?');         params.push(is_extracted ?? null); }
+      if (priority          !== undefined) { sets.push('priority = ?');             params.push(priority ?? 'medium'); }
+      if ('estimated_hours' in data)       { sets.push('estimated_hours = ?');      params.push(estimated_hours ?? null); }
+      if ('remaining_hours' in data)       { sets.push('remaining_hours = ?');      params.push(remaining_hours ?? null); }
+      if ('target_date'     in data)       { sets.push('target_date = ?');          params.push(target_date ?? null); }
+      params.push(id);
+      db.prepare(`UPDATE user_stories SET ${sets.join(', ')} WHERE id = ?`).run(...params);
       return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(id);
     }
   );

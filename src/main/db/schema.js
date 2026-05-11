@@ -60,6 +60,10 @@ function applySchema(db) {
       description         TEXT,
       acceptance_criteria TEXT,
       status_id           INTEGER REFERENCES status_master(id),
+      priority            TEXT    NOT NULL DEFAULT 'medium',
+      estimated_hours     REAL,
+      remaining_hours     REAL,
+      target_date         TEXT,
       is_active           INTEGER NOT NULL DEFAULT 1,
       created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
