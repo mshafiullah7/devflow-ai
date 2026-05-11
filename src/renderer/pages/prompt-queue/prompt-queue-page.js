@@ -480,6 +480,8 @@ export class PromptQueuePage {
     const input   = this.container.querySelector('#pqFollowupInput');
     const userMsg = input?.value.trim();
     if (!userMsg || this._isRunning) return;
+    // Lock immediately — before any await — so a second tap cannot race through
+    this._isRunning = true;
     input.value = '';
 
     // Always fetch from DB so the full history is present even after a restart
@@ -488,8 +490,6 @@ export class PromptQueuePage {
     const messages = [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }];
 
     item._pendingUserContent = userMsg;
-
-    this._isRunning = true;
     this._outputBuf[item.id] = '';
 
     // Optimistically show the new user turn
