@@ -604,7 +604,6 @@ export class MockupsPage {
     const close = () => dlg.remove();
     dlg.querySelector('#scrNsClose').addEventListener('click', close);
     dlg.querySelector('#scrNsCancel').addEventListener('click', close);
-    dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
 
     dlg.addEventListener('keydown', (e) => {
       if (e.key === 's' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
@@ -945,7 +944,6 @@ export class MockupsPage {
     const close = () => dlg.remove();
     dlg.querySelector('#scrEditClose').addEventListener('click', close);
     dlg.querySelector('#scrEditCancel').addEventListener('click', close);
-    dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
 
     const doSave = async () => {
       const title = dlg.querySelector('#scrEditTitle').value.trim();
