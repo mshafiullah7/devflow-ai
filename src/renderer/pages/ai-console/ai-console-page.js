@@ -525,7 +525,8 @@ export class AiConsolePage {
   // Message bubble renderer
   // ----------------------------------------------------------------
   _bubbleHtml(msg, streaming = false) {
-    const bodyHtml = formatText(msg.text || '');
+    const isAi     = msg.role === 'assistant' || msg.role === 'ai';
+    const bodyHtml = isAi ? this._renderMarkdown(msg.text || '') : escapeHtml(msg.text || '');
     const cursor   = streaming ? '<span class="aic-cursor">▋</span>' : '';
 
     return `
@@ -533,6 +534,97 @@ export class AiConsolePage {
         <div class="aic-msg__bubble">${bodyHtml}${cursor}</div>
       </div>
     `;
+  }
+
+  // ----------------------------------------------------------------
+  // Markdown renderer (mirrors Prompt Queue implementation)
+  // ----------------------------------------------------------------
+  _renderMarkdown(text) {
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const lines = text.split('\n');
+    const out = [];
+    let inCode = false, codeLines = [], inUl = false, inOl = false, lastBlock = '';
+    let inTable = false, tableLines = [];
+    let inSvg = false, svgLines = [];
+
+    const closeList = () => {
+      if (inUl) { out.push('</ul>'); inUl = false; lastBlock = 'list'; }
+      if (inOl) { out.push('</ol>'); inOl = false; lastBlock = 'list'; }
+    };
+    const flushTable = () => {
+      if (!inTable) return;
+      inTable = false;
+      if (tableLines.length < 2) {
+        tableLines.forEach(l => out.push(`<p>${this._inlineMarkdown(esc(l))}</p>`));
+        tableLines = []; lastBlock = 'p'; return;
+      }
+      const parseRow = r => r.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      const isSep = r => /^\|?[\s\-|:]+\|?$/.test(r) && r.includes('-');
+      const sepIdx = tableLines.findIndex(isSep);
+      const headRows = sepIdx > 0 ? tableLines.slice(0, sepIdx) : [];
+      const bodyRows = tableLines.slice(sepIdx + 1);
+      let html = '<table class="md-table">';
+      if (headRows.length) {
+        html += '<thead>';
+        headRows.forEach(r => { html += '<tr>' + parseRow(r).map(c => `<th>${this._inlineMarkdown(esc(c))}</th>`).join('') + '</tr>'; });
+        html += '</thead>';
+      }
+      if (bodyRows.length) {
+        html += '<tbody>';
+        bodyRows.forEach(r => { html += '<tr>' + parseRow(r).map(c => `<td>${this._inlineMarkdown(esc(c))}</td>`).join('') + '</tr>'; });
+        html += '</tbody>';
+      }
+      html += '</table>';
+      out.push(html); tableLines = []; lastBlock = 'table';
+    };
+
+    for (const line of lines) {
+      if (!inCode && !inSvg && line.trimStart().toLowerCase().startsWith('<svg')) {
+        closeList(); inSvg = true; svgLines = [line];
+        if (line.includes('</svg>')) { out.push(`<div class="md-svg">${svgLines.join('\n')}</div>`); svgLines = []; inSvg = false; lastBlock = 'svg'; }
+        continue;
+      }
+      if (inSvg) {
+        svgLines.push(line);
+        if (line.includes('</svg>')) { out.push(`<div class="md-svg">${svgLines.join('\n')}</div>`); svgLines = []; inSvg = false; lastBlock = 'svg'; }
+        continue;
+      }
+      if (line.trimStart().startsWith('```')) {
+        closeList();
+        if (inCode) { out.push(`<pre><code>${codeLines.join('\n')}</code></pre>`); codeLines = []; inCode = false; lastBlock = 'code'; }
+        else { inCode = true; }
+        continue;
+      }
+      if (inCode) { codeLines.push(esc(line)); continue; }
+      const hm = line.match(/^(#{1,6})\s+(.*)/);
+      if (hm) { closeList(); out.push(`<h${hm[1].length}>${esc(hm[2])}</h${hm[1].length}>`); lastBlock = 'heading'; continue; }
+      if (/^[-*_]{3,}\s*$/.test(line)) { closeList(); out.push('<hr>'); lastBlock = 'hr'; continue; }
+      const ulm = line.match(/^[-*+]\s+(.*)/);
+      if (ulm) { if (inOl) { out.push('</ol>'); inOl = false; } if (!inUl) { out.push('<ul>'); inUl = true; } out.push(`<li>${this._inlineMarkdown(esc(ulm[1]))}</li>`); lastBlock = 'list'; continue; }
+      const olm = line.match(/^\d+\.\s+(.*)/);
+      if (olm) { if (inUl) { out.push('</ul>'); inUl = false; } if (!inOl) { out.push('<ol>'); inOl = true; } out.push(`<li>${this._inlineMarkdown(esc(olm[1]))}</li>`); lastBlock = 'list'; continue; }
+      const bqm = line.match(/^>\s?(.*)/);
+      if (bqm) { closeList(); out.push(`<blockquote>${this._inlineMarkdown(esc(bqm[1]))}</blockquote>`); lastBlock = 'blockquote'; continue; }
+      if (line.trim().startsWith('|')) { closeList(); inTable = true; tableLines.push(line.trim()); continue; }
+      if (inTable) flushTable();
+      if (line.trim() === '') { closeList(); if (lastBlock === 'p') { out.push('<br>'); lastBlock = 'br'; } continue; }
+      closeList();
+      out.push(`<p>${this._inlineMarkdown(esc(line))}</p>`); lastBlock = 'p';
+    }
+    closeList();
+    if (inTable) flushTable();
+    if (inCode) out.push(`<pre><code>${codeLines.join('\n')}</code></pre>`);
+    return out.join('');
+  }
+
+  _inlineMarkdown(s) {
+    return s
+      .replace(/`([^`]+)`/g,          '<code>$1</code>')
+      .replace(/\*\*\*(.+?)\*\*\*/g,  '<strong><em>$1</em></strong>')
+      .replace(/\*\*(.+?)\*\*/g,      '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,          '<em>$1</em>')
+      .replace(/~~(.+?)~~/g,          '<del>$1</del>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
   }
 
   // ----------------------------------------------------------------
@@ -768,7 +860,7 @@ export class AiConsolePage {
 
     const bubble = this._streamingEl.querySelector('.aic-msg__bubble');
     if (bubble) {
-      bubble.innerHTML = formatText(this._streamingText) + '<span class="aic-cursor">▋</span>';
+      bubble.innerHTML = this._renderMarkdown(this._streamingText) + '<span class="aic-cursor">▋</span>';
     }
     this._scrollThread();
   }
@@ -793,7 +885,7 @@ export class AiConsolePage {
 
     this._streamingEl.classList.remove('aic-msg--streaming');
     const bubble = this._streamingEl.querySelector('.aic-msg__bubble');
-    if (bubble) bubble.innerHTML = formatText(text);
+    if (bubble) bubble.innerHTML = this._renderMarkdown(text);
 
     this._streamingEl  = null;
     this._streamingText = '';
