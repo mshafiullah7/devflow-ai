@@ -919,19 +919,13 @@ export class MockupsPage {
         </div>
         <div class="scr-ns-dialog__footer">
           <button class="scr-btn scr-btn--secondary" id="scrEditCancel">Cancel</button>
-          <button class="scr-btn" id="scrEditSaveOpen" title="Save and open in terminal (Ctrl+S)">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-            </svg>
-            <span><u>S</u>ave &amp; Open</span>
-          </button>
-          <button class="scr-btn scr-btn--primary" id="scrEditSave">
+          <button class="scr-btn scr-btn--primary" id="scrEditSave" title="Save (Ctrl+S)">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
               <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
             </svg>
-            Save
+            <span><u>S</u>ave</span>
           </button>
         </div>
       </div>
@@ -976,18 +970,11 @@ export class MockupsPage {
       if (await doSave()) close();
     });
 
-    dlg.querySelector('#scrEditSaveOpen').addEventListener('click', async () => {
-      if (await doSave()) {
-        close();
-        this._openEdits(screen.title, screen.id);
-      }
-    });
-
-    // Ctrl+S → Save & Open
+    // Ctrl+S → Save
     dlg.addEventListener('keydown', async (e) => {
       if (e.key === 's' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
         e.preventDefault();
-        if (await doSave()) { close(); this._openEdits(screen.title, screen.id); }
+        if (await doSave()) close();
       }
       if (e.key === 'Escape') close();
     });
@@ -1149,6 +1136,14 @@ export class MockupsPage {
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
               <span><u>E</u>dit</span>
+            </button>
+            <button class="scr-btn scr-btn--sm" id="scrSaveOpenBtn" title="Save & Open in terminal (Ctrl+S)">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                <rect x="5.5" y="3" width="3.5" height="2.5" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+                <rect x="4.5" y="9" width="7" height="3.5" rx=".5" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
+              <span><u>S</u>ave &amp; Open</span>
             </button>
           </div>
           <div class="scr-viewer__actions">
@@ -1414,6 +1409,7 @@ export class MockupsPage {
     });
 
     main.querySelector('#scrEditDetailsBtn').addEventListener('click', () => this._showEditScreenModal(screen));
+    main.querySelector('#scrSaveOpenBtn').addEventListener('click', () => this._openEdits(screen.title, screen.id));
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {
       const title       = screen.title;
@@ -1529,6 +1525,12 @@ export class MockupsPage {
     // Viewer keyboard shortcuts — skip when focus is in an input/textarea
     const viewerKeyHandler = (e) => {
       if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      // Ctrl+S → Save & Open
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        main.querySelector('#scrSaveOpenBtn')?.click();
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (e.key === 'e' || e.key === 'E') {
         e.preventDefault();
