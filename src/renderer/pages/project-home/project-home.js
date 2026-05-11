@@ -422,11 +422,139 @@ export class ProjectHomePage {
                 </div>
               </div>
             </div>
+
+            ${this._chartsHtml()}
           </main>
 
         </div>
       </div>
     `;
+  }
+
+  // ----------------------------------------------------------------
+  // Metrics charts — burndown + priority distribution + hours bars
+  // ----------------------------------------------------------------
+  _chartsHtml() {
+    const stories = this._stories || [];
+
+    const PRIOS  = ['critical', 'high', 'medium', 'low'];
+    const COLORS = { critical: '#f87171', high: '#fb923c', medium: '#fbbf24', low: '#60a5fa' };
+    const LABELS = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+
+    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+    const est    = { critical: 0, high: 0, medium: 0, low: 0 };
+    const rem    = { critical: 0, high: 0, medium: 0, low: 0 };
+
+    for (const s of stories) {
+      const p = PRIOS.includes(s.priority) ? s.priority : 'medium';
+      counts[p]++;
+      est[p] += (s.estimated_hours  || 0);
+      rem[p] += (s.remaining_hours  || 0);
+    }
+
+    const total    = stories.length;
+    const totalEst = PRIOS.reduce((a, p) => a + est[p], 0);
+    const totalRem = PRIOS.reduce((a, p) => a + rem[p], 0);
+    const burnPct  = totalEst > 0 ? Math.min(100, Math.round(((totalEst - totalRem) / totalEst) * 100)) : 0;
+
+    // ── Donut SVG ──────────────────────────────────────────────────
+    const cx = 60, cy = 60, R = 50, r = 32;
+    const ptOuter = (deg) => {
+      const rad = (deg - 90) * Math.PI / 180;
+      return { x: +(cx + R * Math.cos(rad)).toFixed(3), y: +(cy + R * Math.sin(rad)).toFixed(3) };
+    };
+    const ptInner = (deg) => {
+      const rad = (deg - 90) * Math.PI / 180;
+      return { x: +(cx + r * Math.cos(rad)).toFixed(3), y: +(cy + r * Math.sin(rad)).toFixed(3) };
+    };
+
+    let cursor = 0;
+    const donutPaths = total === 0
+      ? `<circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="var(--border)" stroke-width="${R - r}"/>`
+      : PRIOS.map(p => {
+          if (!counts[p]) return '';
+          const sweep = Math.min((counts[p] / total) * 360, 359.99);
+          const end   = cursor + sweep;
+          const large = sweep > 180 ? 1 : 0;
+          const o1 = ptOuter(cursor), o2 = ptOuter(end);
+          const i2 = ptInner(cursor), i1 = ptInner(end);
+          const d  = `M${o1.x} ${o1.y} A${R} ${R} 0 ${large} 1 ${o2.x} ${o2.y} L${i1.x} ${i1.y} A${r} ${r} 0 ${large} 0 ${i2.x} ${i2.y}Z`;
+          cursor   = end;
+          return `<path d="${d}" fill="${COLORS[p]}"/>`;
+        }).join('');
+
+    const legend = PRIOS.map(p => `
+      <div class="ph-dleg-item">
+        <span class="ph-dleg-dot" style="background:${COLORS[p]}"></span>
+        <span class="ph-dleg-name">${LABELS[p]}</span>
+        <span class="ph-dleg-cnt">${counts[p]}</span>
+      </div>`).join('');
+
+    // ── Hours-by-priority bars ─────────────────────────────────────
+    const maxEst = Math.max(...PRIOS.map(p => est[p]), 0.01);
+
+    const burnRows = PRIOS.map(p => {
+      const e  = est[p];
+      const rr = rem[p];
+      if (e === 0 && rr === 0) return `
+        <div class="ph-hrow">
+          <span class="ph-hrow-lbl ph-hrow-lbl--${p}">${LABELS[p]}</span>
+          <div class="ph-hrow-bars"><span class="ph-hrow-none">—</span></div>
+          <span class="ph-hrow-val">—</span>
+        </div>`;
+      const trackPct = Math.round((e / maxEst) * 100);
+      const remPct   = e > 0 ? Math.round((rr / e) * 100) : 0;
+      const donePct  = 100 - remPct;
+      return `
+        <div class="ph-hrow">
+          <span class="ph-hrow-lbl ph-hrow-lbl--${p}">${LABELS[p]}</span>
+          <div class="ph-hrow-bars">
+            <div class="ph-hrow-track" style="width:${trackPct}%">
+              <div class="ph-hrow-rem" style="width:${remPct}%;background:${COLORS[p]}"></div>
+            </div>
+            <span class="ph-hrow-pct">${donePct}%</span>
+          </div>
+          <span class="ph-hrow-val" style="color:${COLORS[p]}">${rr > 0 ? rr.toFixed(1) + 'h' : '0h'}</span>
+        </div>`;
+    }).join('');
+
+    const bdStatText = totalEst > 0
+      ? `${totalRem.toFixed(1)}h remaining of ${totalEst.toFixed(1)}h estimated`
+      : 'No hours tracked yet';
+
+    return `
+      <div class="ph-metrics-wrap">
+        <div class="ph-section-label" style="margin-top:28px">Metrics</div>
+
+        <div class="ph-bd-card">
+          <div class="ph-bd-hdr">
+            <span class="ph-bd-title">Burndown</span>
+            <span class="ph-bd-stat">${bdStatText}</span>
+            <span class="ph-bd-pct">${burnPct}%</span>
+          </div>
+          <div class="ph-bd-track">
+            <div class="ph-bd-fill" style="width:${burnPct}%"></div>
+          </div>
+        </div>
+
+        <div class="ph-mc-grid">
+          <div class="ph-mc-card">
+            <div class="ph-mc-title">Priority Distribution</div>
+            <div class="ph-donut-layout">
+              <svg viewBox="0 0 120 120" class="ph-donut-svg" xmlns="http://www.w3.org/2000/svg">
+                ${donutPaths}
+                <text x="60" y="55" class="ph-donut-num" text-anchor="middle" dominant-baseline="middle">${total}</text>
+                <text x="60" y="70" class="ph-donut-sub" text-anchor="middle">stories</text>
+              </svg>
+              <div class="ph-donut-legend">${legend}</div>
+            </div>
+          </div>
+          <div class="ph-mc-card">
+            <div class="ph-mc-title">Hours by Priority</div>
+            <div class="ph-hrows">${burnRows}</div>
+          </div>
+        </div>
+      </div>`;
   }
 
   // ----------------------------------------------------------------
