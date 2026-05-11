@@ -285,8 +285,6 @@ export class PromptQueuePage {
     panel?.querySelectorAll('.pq-item').forEach(el => el.classList.remove('pq-item--selected'));
     panel?.querySelector(`[data-id="${item.id}"]`)?.classList.add('pq-item--selected');
 
-    // Always reload from DB so the follow-up always has fresh history
-    // (skip only if this exact item is mid-stream; the live buffer is authoritative then)
     if (!this._isRunning || this._selectedId !== item.id) {
       this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
     }
@@ -350,37 +348,12 @@ export class PromptQueuePage {
               </div>
             </div>` : ''}
           </div>
-          <div class="pq-followup" id="pqFollowup"${isRunning ? ' style="display:none"' : ''}>
-            <textarea class="pq-followup__input" id="pqFollowupInput" placeholder="Send a follow-up…" rows="3"></textarea>
-            <div class="pq-followup__actions">
-              <button class="pq-toolbar__btn pq-followup__preview-btn" id="pqBtnPreview" title="Preview full context before sending">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-                  <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/>
-                </svg>
-                Preview
-              </button>
-              <button class="pq-toolbar__btn pq-toolbar__btn--primary pq-followup__btn" id="pqBtnSendFollowup">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Send
-              </button>
-            </div>
-          </div>
         </div>`;
 
       // Scroll to bottom of convo
       const convo = panel.querySelector('#pqConvo');
       if (convo) convo.scrollTop = convo.scrollHeight;
 
-      // Bind follow-up controls
-      const sendBtn    = panel.querySelector('#pqBtnSendFollowup');
-      const previewBtn = panel.querySelector('#pqBtnPreview');
-      const input      = panel.querySelector('#pqFollowupInput');
-      sendBtn?.addEventListener('click',    () => this._sendFollowup(item));
-      previewBtn?.addEventListener('click', () => this._showContextPreview(item));
-      input?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._sendFollowup(item);
-      });
     }
   }
 
@@ -484,134 +457,6 @@ export class PromptQueuePage {
       messages:    [{ role: 'user', content: item.prompt_text }],
       modelConfig: cfg,
       cwd:         this._project?.project_path || null,
-    });
-  }
-
-  async _sendFollowup(item) {
-    const input   = this.container.querySelector('#pqFollowupInput');
-    const userMsg = input?.value.trim();
-    if (!userMsg || this._isRunning) return;
-    // Lock immediately — before any await — so a second tap cannot race through
-    this._isRunning = true;
-    input.value = '';
-
-    // Always fetch from DB so the full history is present even after a restart
-    const history = await window.db.promptQueueMessages.list(item.id);
-    this._messages[item.id] = history;
-    const messages = [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }];
-
-    item._pendingUserContent = userMsg;
-    this._outputBuf[item.id] = '';
-
-    // Optimistically show the new user turn
-    this._messages[item.id] = [...history, { role: 'user', content: userMsg, created_at: new Date().toISOString() }];
-
-    item.status = 'running';
-    this._updateToolbarRunState(true);
-    this._startRunTimer();
-    if (this._selectedId === item.id) this._renderDetail(item);
-
-    window.db.promptQueue.removeListeners();
-    window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
-    window.db.promptQueue.onDone(async ({ exitCode }) => {
-      window.db.promptQueue.removeListeners();
-      this._stopRunTimer();
-
-      const succeeded = exitCode === 0;
-      item.status     = succeeded ? 'done' : 'failed';
-      item.exit_code  = exitCode;
-      item.output     = this._outputBuf[item.id] || '';
-
-      // Persist: save user + assistant turns — set _isRunning false only after saves
-      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: userMsg });
-      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
-      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
-      this._isRunning = false;
-
-      await window.db.promptQueue.update({
-        id:        item.id,
-        status:    item.status,
-        output:    item.output,
-        exit_code: exitCode,
-      });
-
-      this._refreshItemEl(item.id);
-      this._updateSummary();
-      this._updateToolbarRunState(false);
-      if (this._selectedId === item.id) this._renderDetail(item);
-    });
-
-    const cfg = this._modelCfg || {};
-    window.db.promptQueue.run({
-      messages,
-      modelConfig: cfg,
-      cwd:         this._project?.project_path || null,
-    });
-  }
-
-  // ----------------------------------------------------------------
-  // Context preview modal
-  // ----------------------------------------------------------------
-  async _showContextPreview(item) {
-    const input   = this.container.querySelector('#pqFollowupInput');
-    const userMsg = input?.value.trim();
-    if (!userMsg) return;
-
-    const history     = await window.db.promptQueueMessages.list(item.id);
-    const allMessages = [...history, { role: 'user', content: userMsg, _isNew: true }];
-    const totalChars  = allMessages.reduce((s, m) => s + m.content.length, 0);
-
-    const overlay = document.createElement('div');
-    overlay.className = 'pq-preview-overlay';
-    overlay.innerHTML = `
-      <div class="pq-preview-modal">
-        <div class="pq-preview-header">
-          <span class="pq-preview-title">Full Context Preview</span>
-          <span class="pq-preview-stats">${allMessages.length} message${allMessages.length !== 1 ? 's' : ''} &nbsp;·&nbsp; ${totalChars.toLocaleString()} chars</span>
-          <button class="pq-preview-close" id="pqPreviewClose" title="Close">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          </button>
-        </div>
-        <div class="pq-preview-body">
-          ${allMessages.map((m) => {
-            const isUser = m.role === 'user';
-            const isNew  = !!m._isNew;
-            return `
-              <div class="pq-preview-msg pq-preview-msg--${isUser ? 'user' : 'assistant'}${isNew ? ' pq-preview-msg--new' : ''}">
-                <div class="pq-preview-msg__label">
-                  ${isUser ? 'You' : 'Assistant'}
-                  ${isNew ? '<span class="pq-preview-msg__badge">new</span>' : ''}
-                </div>
-                <pre class="pq-preview-msg__content">${escHtml(m.content)}</pre>
-              </div>`;
-          }).join('')}
-        </div>
-        <div class="pq-preview-footer">
-          <button class="pq-toolbar__btn" id="pqPreviewCancel">Cancel</button>
-          <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqPreviewSend">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Send
-          </button>
-        </div>
-      </div>`;
-
-    document.body.appendChild(overlay);
-
-    const close = () => overlay.remove();
-
-    overlay.querySelector('#pqPreviewClose').addEventListener('click', close);
-    overlay.querySelector('#pqPreviewCancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-
-    overlay.querySelector('#pqPreviewSend').addEventListener('click', () => {
-      close();
-      this._sendFollowup(item);
-    });
-
-    // Scroll to bottom so the new message is visible first
-    requestAnimationFrame(() => {
-      const body = overlay.querySelector('.pq-preview-body');
-      if (body) body.scrollTop = body.scrollHeight;
     });
   }
 
