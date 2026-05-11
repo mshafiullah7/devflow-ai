@@ -386,11 +386,12 @@
   min-width: 2px;
 }
 
-/* Three-column metrics grid */
+/* Three-column metrics grid — cards align to top, not stretched */
 .ph-mc-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
+  align-items: start;
 }
 
 .ph-mc-card {
@@ -466,12 +467,17 @@
   text-align: right;
 }
 
-/* Hours by Priority bars */
+/* Hours by Priority / Stories by Status rows — scrollable if many items */
 .ph-hrows {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  max-height: 192px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
+.ph-hrows::-webkit-scrollbar { width: 3px; }
+.ph-hrows::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .ph-hrow {
   display: flex;
   align-items: center;
