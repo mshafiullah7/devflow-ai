@@ -482,7 +482,9 @@ export class PromptQueuePage {
     if (!userMsg || this._isRunning) return;
     input.value = '';
 
-    const history  = this._messages[item.id] || [];
+    // Always fetch from DB so the full history is present even after a restart
+    const history = await window.db.promptQueueMessages.list(item.id);
+    this._messages[item.id] = history;
     const messages = [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }];
 
     item._pendingUserContent = userMsg;
