@@ -573,10 +573,11 @@ export class ProjectHomePage {
             <div class="ph-mc-title">Hours by Priority</div>
             <div class="ph-hrows">${burnRows}</div>
           </div>
-          <div class="ph-mc-card">
-            <div class="ph-mc-title">Stories by Status</div>
-            <div class="ph-hrows">${statusBars}</div>
-          </div>
+        </div>
+
+        <div class="ph-mc-card ph-mc-card--full">
+          <div class="ph-mc-title">Stories by Status</div>
+          <div class="ph-hrows ph-hrows--grid">${statusBars}</div>
         </div>
       </div>`;
   }

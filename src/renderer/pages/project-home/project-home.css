@@ -386,10 +386,10 @@
   min-width: 2px;
 }
 
-/* Three-column metrics grid — cards align to top, not stretched */
+/* Two-column metrics grid */
 .ph-mc-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
   align-items: start;
 }
@@ -403,6 +403,9 @@
   flex-direction: column;
   gap: 12px;
   box-shadow: var(--card-shadow);
+}
+.ph-mc-card--full {
+  width: 100%;
 }
 
 .ph-mc-title {
@@ -467,17 +470,19 @@
   text-align: right;
 }
 
-/* Hours by Priority / Stories by Status rows — scrollable if many items */
+/* Hours-by-priority rows — simple column stack */
 .ph-hrows {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 192px;
-  overflow-y: auto;
-  padding-right: 2px;
 }
-.ph-hrows::-webkit-scrollbar { width: 3px; }
-.ph-hrows::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Stories-by-status rows — 2-column grid so many statuses stay compact */
+.ph-hrows--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+}
 .ph-hrow {
   display: flex;
   align-items: center;
