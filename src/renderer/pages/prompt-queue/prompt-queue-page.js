@@ -408,9 +408,9 @@ export class PromptQueuePage {
     this._isRunning = true;
     this._outputBuf[item.id] = '';
 
-    // Clear prior messages for a fresh initial run
+    // Clear prior messages and optimistically show the user prompt immediately
     await window.db.promptQueueMessages.clear(item.id);
-    this._messages[item.id] = [];
+    this._messages[item.id] = [{ role: 'user', content: item.prompt_text, created_at: new Date().toISOString() }];
 
     item._pendingUserContent = item.prompt_text;
     item.status = 'running';
