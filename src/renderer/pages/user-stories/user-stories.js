@@ -257,7 +257,10 @@ export class ProjectPage {
   // ----------------------------------------------------------------
   _bindEvents() {
     document.getElementById('btnBack')
-      .addEventListener('click', () => this.router.navigate('project-home', { projectId: this.projectId }));
+      .addEventListener('click', async () => {
+        await this._storyList?.save();
+        this.router.navigate('project-home', { projectId: this.projectId });
+      });
 
     document.getElementById('headerFolderDisplay')
       .addEventListener('click', async () => {

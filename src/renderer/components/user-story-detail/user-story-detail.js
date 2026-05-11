@@ -15,6 +15,10 @@ export class UserStoryDetail {
     this._featureId              = null;
     this._statuses               = [];
     this._ctrlSHandler           = null;
+    this._currentStory           = null;
+    this._titleEl                = null;
+    this._descEl                 = null;
+    this._acEl                   = null;
   }
 
   // ----------------------------------------------------------------
@@ -30,9 +34,28 @@ export class UserStoryDetail {
     this._statuses  = statuses || [];
   }
 
+  /** Save the currently open edit form silently (used before navigation) */
+  async save() {
+    if (!this._currentStory || !this._titleEl) return;
+    const title = this._titleEl.value.trim();
+    if (!title) return;
+    try {
+      await window.db.userStories.update({
+        id:                  this._currentStory.id,
+        title,
+        description:         this._descEl?.value.trim()  || null,
+        acceptance_criteria: this._acEl?.value.trim()    || null,
+      });
+    } catch { /* silent */ }
+  }
+
   /** Show placeholder when no story is selected */
   showEmpty() {
     if (!this._detailEl) return;
+    this._currentStory = null;
+    this._titleEl = null;
+    this._descEl  = null;
+    this._acEl    = null;
     const headerActions = this._headerActionsEl || document.getElementById('storyDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '';
     this._detailEl.innerHTML = `
@@ -49,6 +72,10 @@ export class UserStoryDetail {
   /** Render inline add form inside the detail panel */
   showAddForm() {
     if (!this._detailEl) return;
+    this._currentStory = null;
+    this._titleEl = null;
+    this._descEl  = null;
+    this._acEl    = null;
     const headerActions = this._headerActionsEl || document.getElementById('storyDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '';
 
@@ -242,6 +269,11 @@ export class UserStoryDetail {
     const descEl   = this._detailEl.querySelector('#uslEditDesc');
     const acEl     = this._detailEl.querySelector('#uslEditAC');
     const statusEl = this._detailEl.querySelector('#uslEditStatus');
+
+    this._currentStory = story;
+    this._titleEl      = titleEl;
+    this._descEl       = descEl;
+    this._acEl         = acEl;
 
     if (headerActions && this._onExport) {
       const exportBtn = document.createElement('button');

@@ -68,11 +68,16 @@ export class UserStoryList {
 
   /** Load stories for the given featureId */
   async load(featureId) {
+    await this._detail.save();
     this._featureId = featureId;
     this._activeId  = null;
     this._detail.setContext(featureId, this._statuses);
     this._detail.showEmpty();
     await this._load();
+  }
+
+  async save() {
+    await this._detail.save();
   }
 
   async refresh() {
@@ -282,7 +287,9 @@ export class UserStoryList {
         </div>
       `;
 
-      card.addEventListener('click', () => {
+      card.addEventListener('click', async () => {
+        if (this._activeId === s.id) return;
+        await this._detail.save();
         this._activeId = s.id;
         this._listEl.querySelectorAll('.usl-card')
           .forEach(el => el.classList.remove('usl-card--active'));
