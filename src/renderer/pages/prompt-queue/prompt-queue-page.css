@@ -466,8 +466,6 @@
 .pq-turn--user .pq-turn__bubble {
   background: color-mix(in srgb, var(--accent) 12%, var(--bg-secondary));
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-  max-height: calc(5 * 1.6em + 18px); /* 5 lines + top/bottom padding */
-  overflow-y: auto;
 }
 
 .pq-turn__bubble--live {
