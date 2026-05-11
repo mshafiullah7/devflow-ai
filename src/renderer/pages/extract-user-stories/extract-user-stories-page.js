@@ -58,7 +58,6 @@ export class ExtractUserStoriesPage {
       detailEl:        this.container.querySelector('#eusDetailContent'),
       headerActionsEl: this.container.querySelector('#eusDetailActions'),
       projectId:       this._projectId,
-      getModel:        () => this._aiModelConfig,
     });
     await this._detail.mount();
     this._detail.showEmpty();
