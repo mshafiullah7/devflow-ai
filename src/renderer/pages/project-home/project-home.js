@@ -408,19 +408,9 @@ export class ProjectHomePage {
 
             ${this._statsHtml()}
 
-            <div class="ph-bottom-grid">
-              <div>
-                <div class="ph-section-label">Quick Links</div>
-                <div class="ph-qlinks-grid">
-                  ${this._quickLinksHtml()}
-                </div>
-              </div>
-              <div>
-                <div class="ph-section-label">Stories by Status</div>
-                <div class="ph-status-rows">
-                  ${this._statusBreakdownHtml()}
-                </div>
-              </div>
+            <div class="ph-section-label">Quick Links</div>
+            <div class="ph-qlinks-grid" style="margin-bottom:28px">
+              ${this._quickLinksHtml()}
             </div>
 
             ${this._chartsHtml()}
@@ -518,6 +508,36 @@ export class ProjectHomePage {
         </div>`;
     }).join('');
 
+    // ── Stories by status bars ─────────────────────────────────────
+    const statuses  = this._statuses || [];
+    const stCounts  = {};
+    for (const s of stories) {
+      const lbl = s.status_name || 'No Status';
+      stCounts[lbl] = (stCounts[lbl] || 0) + 1;
+    }
+    const stRows = [
+      ...statuses.filter(st => stCounts[st.name]).map(st => ({ label: st.name, count: stCounts[st.name] })),
+      ...(stCounts['No Status'] ? [{ label: 'No Status', count: stCounts['No Status'] }] : []),
+    ];
+    const maxStCount = Math.max(...stRows.map(r => r.count), 1);
+    const statusBars = stRows.length === 0
+      ? `<span class="ph-hrow-none">No stories yet</span>`
+      : stRows.map(r => {
+          const barPct  = Math.round((r.count / maxStCount) * 100);
+          const ofTotal = total > 0 ? Math.round((r.count / total) * 100) : 0;
+          return `
+            <div class="ph-hrow">
+              <span class="ph-hrow-lbl ph-hrow-lbl--wide">${escHtml(r.label)}</span>
+              <div class="ph-hrow-bars">
+                <div class="ph-hrow-track ph-hrow-track--full" style="width:${barPct}%">
+                  <div class="ph-hrow-rem ph-hrow-rem--status" style="width:100%"></div>
+                </div>
+                <span class="ph-hrow-pct">${ofTotal}%</span>
+              </div>
+              <span class="ph-hrow-val ph-hrow-val--neutral">${r.count}</span>
+            </div>`;
+        }).join('');
+
     const bdStatText = totalEst > 0
       ? `${totalRem.toFixed(1)}h remaining of ${totalEst.toFixed(1)}h estimated`
       : 'No hours tracked yet';
@@ -552,6 +572,10 @@ export class ProjectHomePage {
           <div class="ph-mc-card">
             <div class="ph-mc-title">Hours by Priority</div>
             <div class="ph-hrows">${burnRows}</div>
+          </div>
+          <div class="ph-mc-card">
+            <div class="ph-mc-title">Stories by Status</div>
+            <div class="ph-hrows">${statusBars}</div>
           </div>
         </div>
       </div>`;
