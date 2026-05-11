@@ -261,8 +261,9 @@ export class PromptQueuePage {
     panel?.querySelectorAll('.pq-item').forEach(el => el.classList.remove('pq-item--selected'));
     panel?.querySelector(`[data-id="${item.id}"]`)?.classList.add('pq-item--selected');
 
-    // Load history from DB if not yet cached
-    if (!this._messages[item.id]) {
+    // Always reload from DB so the follow-up always has fresh history
+    // (skip only if this exact item is mid-stream; the live buffer is authoritative then)
+    if (!this._isRunning || this._selectedId !== item.id) {
       this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
     }
 
@@ -396,17 +397,18 @@ export class PromptQueuePage {
     window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
     window.db.promptQueue.onDone(async ({ exitCode }) => {
       window.db.promptQueue.removeListeners();
-      this._isRunning = false;
 
       const succeeded = exitCode === 0;
       item.status     = succeeded ? 'done' : 'failed';
       item.exit_code  = exitCode;
       item.output     = this._outputBuf[item.id] || '';
 
-      // Persist the conversation turn
+      // Persist the conversation turn — set _isRunning false only after saves
+      // so the follow-up bar cannot appear with a stale empty history
       await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent || item.prompt_text });
       await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
       this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
+      this._isRunning = false;
 
       await window.db.promptQueue.update({
         id:        item.id,
@@ -468,17 +470,17 @@ export class PromptQueuePage {
     window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
     window.db.promptQueue.onDone(async ({ exitCode }) => {
       window.db.promptQueue.removeListeners();
-      this._isRunning = false;
 
       const succeeded = exitCode === 0;
       item.status     = succeeded ? 'done' : 'failed';
       item.exit_code  = exitCode;
       item.output     = this._outputBuf[item.id] || '';
 
-      // Persist: save user + assistant turns
+      // Persist: save user + assistant turns — set _isRunning false only after saves
       await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: userMsg });
       await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
       this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
+      this._isRunning = false;
 
       await window.db.promptQueue.update({
         id:        item.id,
