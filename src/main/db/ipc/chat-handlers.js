@@ -226,6 +226,8 @@ function runCli(wc, prompt, editPayload, model, messages) {
     ).join('\n\n');
     const last = messages[messages.length - 1];
     promptText = `[Conversation so far]\n${lines}\n\n[Current message]\nUser: ${last.content}`;
+  } else if (messages && messages.length === 1) {
+    promptText = messages[0].content;
   } else {
     promptText = prompt;
   }
