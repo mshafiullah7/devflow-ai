@@ -361,9 +361,7 @@ export class PromptQueuePage {
     if (!msgs.length) return '';
     return msgs.map(m => {
       const isUser = m.role === 'user';
-      const bubble = isUser
-        ? `<div class="pq-turn__bubble">${escHtml(m.content)}</div>`
-        : `<div class="pq-turn__bubble">${this._renderMarkdown(m.content)}</div>`;
+      const bubble = `<div class="pq-turn__bubble">${this._renderMarkdown(m.content)}</div>`;
       return `
         <div class="pq-turn pq-turn--${isUser ? 'user' : 'assistant'}">
           <span class="pq-turn__label">${isUser ? 'You' : 'Assistant'}</span>
