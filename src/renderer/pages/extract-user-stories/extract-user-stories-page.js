@@ -296,11 +296,11 @@ export class ExtractUserStoriesPage {
       .addEventListener('click', async e => {
         const item = e.target.closest('.eus-src-item');
         if (!item) return;
-        const story = this._existingStories.find(s => s.id === Number(item.dataset.id));
-        if (!story) return;
         await this._detail.save();
+        const fresh = await window.db.userStories.get(Number(item.dataset.id));
+        if (!fresh) return;
         this._highlightStory(item);
-        this._detail.showEditForm(story);
+        this._detail.showEditForm(fresh);
       });
 
     this.container.querySelector('#eusExtractedList')
@@ -315,11 +315,11 @@ export class ExtractUserStoriesPage {
         }
         const item = e.target.closest('.eus-src-item');
         if (!item) return;
-        const story = this._extractedStories.find(s => s.id === Number(item.dataset.id));
-        if (!story) return;
         await this._detail.save();
+        const fresh = await window.db.userStories.get(Number(item.dataset.id));
+        if (!fresh) return;
         this._highlightStory(item);
-        this._detail.showEditForm(story);
+        this._detail.showEditForm(fresh);
       });
 
     this.container.querySelector('#eusDocumentsList')
