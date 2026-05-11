@@ -919,7 +919,13 @@ export class MockupsPage {
         </div>
         <div class="scr-ns-dialog__footer">
           <button class="scr-btn scr-btn--secondary" id="scrEditCancel">Cancel</button>
-          <button class="scr-btn scr-btn--primary" id="scrEditSave">
+          <button class="scr-btn" id="scrEditSaveOpen" title="Save and open in terminal (Ctrl+Shift+S)">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+            </svg>
+            Save &amp; Open
+          </button>
+          <button class="scr-btn scr-btn--primary" id="scrEditSave" title="Save (Ctrl+S)">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
@@ -939,10 +945,10 @@ export class MockupsPage {
     dlg.querySelector('#scrEditCancel').addEventListener('click', close);
     dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
 
-    dlg.querySelector('#scrEditSave').addEventListener('click', async () => {
+    const doSave = async () => {
       const title = dlg.querySelector('#scrEditTitle').value.trim();
       const desc  = dlg.querySelector('#scrEditDesc').value.trim();
-      if (!title) { dlg.querySelector('#scrEditTitle').focus(); return; }
+      if (!title) { dlg.querySelector('#scrEditTitle').focus(); return false; }
 
       await window.db.screenDesigns.update({
         id:          screen.id,
@@ -963,7 +969,31 @@ export class MockupsPage {
 
       this._screens = await window.db.screenDesigns.list(this._projectId);
       this._refreshSidebar();
-      close();
+      return true;
+    };
+
+    dlg.querySelector('#scrEditSave').addEventListener('click', async () => {
+      if (await doSave()) close();
+    });
+
+    dlg.querySelector('#scrEditSaveOpen').addEventListener('click', async () => {
+      if (await doSave()) {
+        close();
+        this._openEdits(screen.title, screen.id);
+      }
+    });
+
+    // Ctrl+S → Save, Ctrl+Shift+S → Save & Open
+    dlg.addEventListener('keydown', async (e) => {
+      if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (await doSave()) { close(); this._openEdits(screen.title, screen.id); }
+        } else {
+          if (await doSave()) close();
+        }
+      }
+      if (e.key === 'Escape') close();
     });
   }
 
@@ -1118,7 +1148,7 @@ export class MockupsPage {
           <div class="scr-viewer__meta">
             <span class="scr-viewer__title">${escHtml(screen.title)}</span>
             <span class="scr-viewer__tech-badge">${TECH}</span>
-            <button class="scr-btn scr-btn--sm" id="scrEditDetailsBtn" title="Edit title & description">
+            <button class="scr-btn scr-btn--sm" id="scrEditDetailsBtn" title="Edit title & description (E)">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
@@ -1177,7 +1207,7 @@ export class MockupsPage {
             <div class="scr-viewer__preview-bar">
               <span class="scr-viewer__preview-label">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></span>
               <button class="scr-btn scr-btn--sm" id="scrViewportToggle"></button>
-              <button class="scr-btn scr-btn--sm" id="scrRefreshBtn" title="Refresh preview">
+              <button class="scr-btn scr-btn--sm" id="scrRefreshBtn" title="Refresh preview (R)">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                   <path d="M13.5 2.5v2.7H10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1372,12 +1402,12 @@ export class MockupsPage {
         previewPane.style.flex = '0 0 500px';
         editPane.style.flex    = '1 1 0';
         viewportBtn.innerHTML  = mobileIcon;
-        viewportBtn.title      = 'Switch to desktop preview';
+        viewportBtn.title      = 'Switch to desktop preview (M)';
       } else {
         previewPane.style.flex = '';
         editPane.style.flex    = '0 0 25%';
         viewportBtn.innerHTML  = desktopIcon;
-        viewportBtn.title      = 'Switch to mobile preview';
+        viewportBtn.title      = 'Switch to mobile preview (M)';
       }
       requestAnimationFrame(updatePct);
     };
@@ -1499,6 +1529,31 @@ export class MockupsPage {
         else                this._showEmptyState();
       });
     });
+
+    // Viewer keyboard shortcuts — skip when focus is in an input/textarea
+    const viewerKeyHandler = (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        main.querySelector('#scrEditDetailsBtn')?.click();
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        main.querySelector('#scrViewportToggle')?.click();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        main.querySelector('#scrRefreshBtn')?.click();
+      }
+    };
+    document.addEventListener('keydown', viewerKeyHandler);
+    // Clean up when this viewer is replaced
+    const observer = new MutationObserver(() => {
+      if (!document.contains(main)) {
+        document.removeEventListener('keydown', viewerKeyHandler);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
 
     this._loadInitialHistory(screen.id, main);
     this._updateMockupBtns();
