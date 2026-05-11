@@ -475,9 +475,6 @@ export class UserStoryDetail {
             <button class="usl-pl-item__btn usl-pl-item__btn--mark-executed${isExecuted ? ' is-executed' : ''}" type="button" title="${isExecuted ? 'Executed' : 'Mark as Executed'}">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <button class="usl-pl-item__btn usl-pl-item__btn--run-ext" type="button" title="Run in external PowerShell window">
-              <svg width="13" height="11" viewBox="0 0 20 16" fill="none"><path d="M2 3l7 5-7 5V3z" fill="currentColor"/><path d="M9 3l7 5-7 5V3z" fill="currentColor" opacity="0.5"/></svg>
-            </button>
             <button class="usl-pl-item__btn usl-pl-item__btn--queue" type="button" title="Add to prompt queue"${!userStoryId ? ' disabled' : ''}>
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
@@ -599,27 +596,6 @@ export class UserStoryDetail {
       statusEl.innerHTML = nowExecuted ? statusIconExecuted : statusIconPending;
       if (item.dataset.rowId) {
         await window.db.prompts.update({ id: parseInt(item.dataset.rowId), is_executed: nowExecuted ? 1 : 0 });
-      }
-    });
-
-    // Run external
-    item.querySelector('.usl-pl-item__btn--run-ext').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (markExecBtn.classList.contains('is-executed')) {
-        const ok = await this._showConfirm(
-          'This prompt has already been marked as executed. Run again?', 'Run Again'
-        );
-        if (!ok) return;
-      }
-      await save();
-      const prompt = taEl.value.trim();
-      if (!prompt) return;
-      const cfg = this._resolvedConfig();
-      if (cfg.type === 'api') {
-        this._runApiPrompt(prompt, userStoryId);
-      } else {
-        const cmd = this._buildExternalCmd(prompt);
-        if (cmd) await this._showRunDirModal(cmd);
       }
     });
 
