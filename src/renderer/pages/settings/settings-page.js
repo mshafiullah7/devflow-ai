@@ -282,7 +282,6 @@ export class SettingsPage {
       window.app.config.get('backupPath'),
       window.app.backupDefaultPath(),
     ]);
-    const effective = saved || '';
     main.innerHTML = `
       <div class="st-content-title">Backup</div>
       <div class="st-content-sub">Configure where automatic daily backups are stored</div>
@@ -291,14 +290,24 @@ export class SettingsPage {
       </div>
       <div class="st-input-row">
         <input class="st-form__input" id="stBackupPathInput" type="text"
-          placeholder="${escHtml(defaultPath)}"
-          value="${escHtml(effective)}"/>
+          placeholder="Select a folder…"
+          value="${escHtml(saved || '')}"/>
         <button class="st-add-btn" id="stBtnBrowseBackup">Browse</button>
         <button class="st-add-btn" id="stBtnSaveBackup">Save</button>
       </div>
-      <span class="st-form__hint" id="stBackupHint">
-        Default location: ${escHtml(defaultPath)}
-      </span>
+      <div class="st-backup-paths" id="stBackupPaths">
+        <div class="st-backup-path-row">
+          <span class="st-backup-path-label">Primary (always on)</span>
+          <span class="st-backup-path-value">${escHtml(defaultPath)}</span>
+        </div>
+        <div class="st-backup-path-row">
+          <span class="st-backup-path-label">Secondary (configured)</span>
+          <span class="st-backup-path-value ${saved ? '' : 'st-backup-path-value--none'}" id="stSecondaryPathDisplay">
+            ${saved ? escHtml(saved) : 'Not set'}
+          </span>
+        </div>
+      </div>
+      <span class="st-form__hint" id="stBackupHint"></span>
     `;
 
     main.querySelector('#stBtnBrowseBackup').addEventListener('click', async () => {
@@ -309,11 +318,14 @@ export class SettingsPage {
     main.querySelector('#stBtnSaveBackup').addEventListener('click', async () => {
       const val = main.querySelector('#stBackupPathInput').value.trim();
       await window.app.config.set('backupPath', val);
+
+      const display = main.querySelector('#stSecondaryPathDisplay');
+      display.textContent = val || 'Not set';
+      display.className = `st-backup-path-value${val ? '' : ' st-backup-path-value--none'}`;
+
       const hint = main.querySelector('#stBackupHint');
       hint.textContent = 'Saved';
-      setTimeout(() => {
-        hint.textContent = 'The app creates a daily snapshot of the database here. Leave blank to use the default location.';
-      }, 1500);
+      setTimeout(() => { hint.textContent = ''; }, 1500);
     });
   }
 
