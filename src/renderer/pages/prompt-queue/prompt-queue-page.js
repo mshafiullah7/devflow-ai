@@ -24,7 +24,9 @@ export class PromptQueuePage {
     this._isRunning  = false;
     this._runAll     = false;
     this._modelCfg   = null;
-    this._messages   = {};  // { [itemId]: [{role, content, created_at}] }
+    this._messages      = {};   // { [itemId]: [{role, content, created_at}] }
+    this._runTimer      = null;
+    this._runStartTime  = null;
   }
 
   async mount() {
@@ -58,8 +60,30 @@ export class PromptQueuePage {
     this._picker?.unmount();
     if (this._isRunning) window.db.promptQueue.kill();
     window.db.promptQueue.removeListeners();
+    this._stopRunTimer();
     this._runAll    = false;
     this._isRunning = false;
+  }
+
+  // ----------------------------------------------------------------
+  // Run timer helpers
+  // ----------------------------------------------------------------
+  _startRunTimer() {
+    this._stopRunTimer();
+    this._runStartTime = Date.now();
+    this._runTimer = setInterval(() => {
+      const el = this.container.querySelector('#pqLiveTimer');
+      if (el) el.textContent = this._formatElapsed();
+    }, 1000);
+  }
+
+  _stopRunTimer() {
+    if (this._runTimer) { clearInterval(this._runTimer); this._runTimer = null; }
+  }
+
+  _formatElapsed() {
+    const secs = Math.floor((Date.now() - (this._runStartTime || Date.now())) / 1000);
+    return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
   }
 
   // ----------------------------------------------------------------
@@ -317,7 +341,13 @@ export class PromptQueuePage {
             ${this._renderConvoHtml(msgs)}
             ${isRunning ? `<div class="pq-turn pq-turn--assistant" id="pqLiveTurn">
               <span class="pq-turn__label">Assistant</span>
-              <div class="pq-turn__bubble pq-turn__bubble--live" id="pqLiveBubble">${escHtml(this._outputBuf[item.id] || '')}</div>
+              <div class="pq-turn__bubble pq-turn__bubble--live">
+                <div class="pq-live-status">
+                  <span class="pq-live-dots"><span></span><span></span><span></span></span>
+                  <span class="pq-live-timer" id="pqLiveTimer">${this._formatElapsed()}</span>
+                </div>
+                <pre class="pq-live-output" id="pqLiveBubble">${escHtml(this._outputBuf[item.id] || '')}</pre>
+              </div>
             </div>` : ''}
           </div>
           <div class="pq-followup" id="pqFollowup"${isRunning ? ' style="display:none"' : ''}>
@@ -391,12 +421,14 @@ export class PromptQueuePage {
     this._refreshItemEl(item.id);
     this._updateSummary();
     this._updateToolbarRunState(true);
+    this._startRunTimer();
     if (this._selectedId === item.id) this._renderDetail(item);
 
     window.db.promptQueue.removeListeners();
     window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
     window.db.promptQueue.onDone(async ({ exitCode }) => {
       window.db.promptQueue.removeListeners();
+      this._stopRunTimer();
 
       const succeeded = exitCode === 0;
       item.status     = succeeded ? 'done' : 'failed';
@@ -461,15 +493,16 @@ export class PromptQueuePage {
     // Optimistically show the new user turn
     this._messages[item.id] = [...history, { role: 'user', content: userMsg, created_at: new Date().toISOString() }];
 
-    const prevStatus = item.status;
     item.status = 'running';
     this._updateToolbarRunState(true);
+    this._startRunTimer();
     if (this._selectedId === item.id) this._renderDetail(item);
 
     window.db.promptQueue.removeListeners();
     window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
     window.db.promptQueue.onDone(async ({ exitCode }) => {
       window.db.promptQueue.removeListeners();
+      this._stopRunTimer();
 
       const succeeded = exitCode === 0;
       item.status     = succeeded ? 'done' : 'failed';

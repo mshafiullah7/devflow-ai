@@ -469,10 +469,59 @@
 }
 
 .pq-turn__bubble--live {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Dots + timer row */
+.pq-live-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pq-live-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pq-live-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pq-dot-bounce 1.2s ease-in-out infinite;
+}
+.pq-live-dots span:nth-child(2) { animation-delay: 0.2s; }
+.pq-live-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pq-dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%           { transform: scale(1);   opacity: 1;   }
+}
+
+.pq-live-timer {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  opacity: 0.75;
+  min-width: 2.5ch;
+}
+
+/* Streaming output inside the live bubble */
+.pq-live-output {
+  margin: 0;
   font-family: var(--font-mono, monospace);
   font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+  line-height: 1.5;
   opacity: 0.9;
 }
+.pq-live-output:empty { display: none; }
 
 /* Markdown inside assistant bubbles */
 .pq-turn--assistant .pq-turn__bubble p { margin: 0.35em 0; }
