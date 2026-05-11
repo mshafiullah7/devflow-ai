@@ -530,9 +530,8 @@ export class ProjectHomePage {
                 <div class="ph-hrow-track ph-hrow-track--full" style="width:${pct}%">
                   <div class="ph-hrow-rem ph-hrow-rem--status" style="width:100%"></div>
                 </div>
-                <span class="ph-hrow-pct">${pct}%</span>
               </div>
-              <span class="ph-hrow-val ph-hrow-val--neutral">${r.count}</span>
+              <span class="ph-hrow-val ph-hrow-val--neutral">${r.count} of ${total}</span>
             </div>`;
         }).join('');
 
