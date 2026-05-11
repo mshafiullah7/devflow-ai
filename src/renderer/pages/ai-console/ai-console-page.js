@@ -790,18 +790,13 @@ export class AiConsolePage {
 
     const isFirst = this._messages.length === 0;
 
-    // On the first message of a session, (re)build context from checked slices
-    // and prepend it so the model has full project data for the whole thread.
-    // Follow-up messages skip this — the model already has it in history.
-    let autoBuilt = false;
-    if (isFirst) {
-      this._buildContext();
-      const anyChecked = [...this.container.querySelectorAll('.aic-slice__check, .aic-doc-check')]
-        .some(cb => cb.checked);
-      autoBuilt = anyChecked && !!this._builtContext;
-    }
+    // Rebuild context on every send so newly checked items are always included
+    this._buildContext();
+    const anyChecked = [...this.container.querySelectorAll('.aic-slice__check, .aic-doc-check')]
+      .some(cb => cb.checked);
+    const autoBuilt = anyChecked && !!this._builtContext;
 
-    const content = isFirst && this._builtContext
+    const content = this._builtContext
       ? `${this._builtContext}\n\n---\n\n${userText}`
       : userText;
 
