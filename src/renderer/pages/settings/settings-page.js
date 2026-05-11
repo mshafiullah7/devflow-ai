@@ -58,14 +58,6 @@ export class SettingsPage {
               </span>
               <span class="st-nav-item__label">Model Mapping</span>
             </button>
-            <button class="st-nav-item" id="stNavBackupConfig">
-              <span class="st-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                </svg>
-              </span>
-              <span class="st-nav-item__label">Backup Config</span>
-            </button>
             <button class="st-nav-item" id="stNavPromptsTemplate">
               <span class="st-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -73,6 +65,15 @@ export class SettingsPage {
                 </svg>
               </span>
               <span class="st-nav-item__label">Prompts Template</span>
+            </button>
+            <div class="st-sidebar-section">Backup</div>
+            <button class="st-nav-item" id="stNavBackupConfig">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Configuration</span>
             </button>
           </nav>
 
@@ -273,46 +274,43 @@ export class SettingsPage {
   }
 
   // ----------------------------------------------------------------
-  // Backup Config (placeholder)
+  // Backup Configuration
   // ----------------------------------------------------------------
   _renderBackupConfig() {
     const main = this.container.querySelector('#stMainContent');
+    const saved = localStorage.getItem('backupPath') || '';
     main.innerHTML = `
-      <div class="st-content-title">Backup Config</div>
-      <div class="st-content-sub">Export and restore your application configuration and project data</div>
-      <div class="st-coming-soon-banner">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
-        </svg>
-        Coming Soon — backup and restore functionality will be available in a future update.
+      <div class="st-content-title">Backup</div>
+      <div class="st-content-sub">Configure where automatic daily backups are stored</div>
+      <div class="st-section-header">
+        <div class="st-section-label">Backup Path</div>
       </div>
-      <div class="st-placeholder-sections">
-        <div class="st-placeholder-card">
-          <div class="st-placeholder-card__icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-          </div>
-          <div class="st-placeholder-card__body">
-            <div class="st-placeholder-card__title">Export Backup</div>
-            <div class="st-placeholder-card__desc">Save all model configurations, project settings, and prompt history to a single backup file.</div>
-          </div>
-          <button class="st-add-btn" disabled>Export</button>
-        </div>
-        <div class="st-placeholder-card">
-          <div class="st-placeholder-card__icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </div>
-          <div class="st-placeholder-card__body">
-            <div class="st-placeholder-card__title">Restore Backup</div>
-            <div class="st-placeholder-card__desc">Import a previously exported backup file to restore your configurations and data.</div>
-          </div>
-          <button class="st-add-btn" disabled>Restore</button>
-        </div>
+      <div class="st-input-row">
+        <input class="st-form__input" id="stBackupPathInput" type="text"
+          placeholder="Default: &lt;userData&gt;/backup"
+          value="${escHtml(saved)}"/>
+        <button class="st-add-btn" id="stBtnBrowseBackup">Browse</button>
+        <button class="st-add-btn" id="stBtnSaveBackup">Save</button>
       </div>
+      <span class="st-form__hint" id="stBackupHint">
+        The app creates a daily snapshot of the database here. Leave blank to use the default location.
+      </span>
     `;
+
+    main.querySelector('#stBtnBrowseBackup').addEventListener('click', async () => {
+      const folder = await window.db.dialog.openFolder();
+      if (folder) main.querySelector('#stBackupPathInput').value = folder;
+    });
+
+    main.querySelector('#stBtnSaveBackup').addEventListener('click', () => {
+      const val = main.querySelector('#stBackupPathInput').value.trim();
+      localStorage.setItem('backupPath', val);
+      const hint = main.querySelector('#stBackupHint');
+      hint.textContent = 'Saved';
+      setTimeout(() => {
+        hint.textContent = 'The app creates a daily snapshot of the database here. Leave blank to use the default location.';
+      }, 1500);
+    });
   }
 
   // ----------------------------------------------------------------
