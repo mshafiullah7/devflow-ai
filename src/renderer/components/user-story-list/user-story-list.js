@@ -206,7 +206,6 @@ export class UserStoryList {
 
     const close = () => this._closeConfirm();
     overlay.querySelector('.usl-modal__btn--cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     const escHandler = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', escHandler);
@@ -330,7 +329,6 @@ export class UserStoryList {
 
     const close = () => this._closeConfirm();
     overlay.querySelector('.usl-modal__btn--cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     const escHandler = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', escHandler);

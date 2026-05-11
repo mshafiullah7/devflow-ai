@@ -647,7 +647,6 @@ export class IssuesPage {
       const cleanup = (r) => { overlay.remove(); resolve(r); };
       overlay.querySelector('.is-confirm-btn--cancel').addEventListener('click', () => cleanup(false));
       overlay.querySelector('.is-confirm-btn--ok').addEventListener('click',    () => cleanup(true));
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
     });
   }
 }

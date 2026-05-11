@@ -606,7 +606,6 @@ export class TestRunnerPage {
 
     overlay.querySelector('#trModalClose').addEventListener('click', close);
     overlay.querySelector('#trModalCancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     featureEl.addEventListener('change', async () => {
       const fid = parseInt(featureEl.value);

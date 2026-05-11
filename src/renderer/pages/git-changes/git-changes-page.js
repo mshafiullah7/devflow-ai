@@ -277,7 +277,6 @@ export class GitChangesPage {
       if (e.key === 'Enter') confirm();
       if (e.key === 'Escape') close();
     });
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
     requestAnimationFrame(() => valInput.focus());
   }

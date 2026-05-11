@@ -365,7 +365,6 @@ export class UserStoryDetail {
       const cleanup = (result) => { overlay.remove(); resolve(result); };
       overlay.querySelector('.usl-confirm-btn--cancel').addEventListener('click', () => cleanup(false));
       overlay.querySelector('.usl-confirm-btn--ok').addEventListener('click', () => cleanup(true));
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
     });
   }
 
@@ -403,7 +402,6 @@ export class UserStoryDetail {
       });
 
       overlay.querySelector('.usl-confirm-btn--cancel').addEventListener('click', () => { cleanup(); resolve(); });
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) { cleanup(); resolve(); } });
     });
   }
 

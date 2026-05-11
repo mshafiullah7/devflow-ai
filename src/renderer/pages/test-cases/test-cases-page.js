@@ -714,7 +714,6 @@ export class TestCasesPage {
       const cleanup = (r) => { overlay.remove(); resolve(r); };
       overlay.querySelector('.tc-confirm-btn--cancel').addEventListener('click', () => cleanup(false));
       overlay.querySelector('.tc-confirm-btn--ok').addEventListener('click',    () => cleanup(true));
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
     });
   }
 }

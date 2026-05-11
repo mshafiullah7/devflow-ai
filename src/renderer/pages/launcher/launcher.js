@@ -277,7 +277,6 @@ export class LauncherPage {
     const close = () => overlay.remove();
 
     overlay.querySelector('.proj-edit-btn--cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     overlay.querySelector('.proj-edit-btn--save').addEventListener('click', async () => {
       const name = nameInput.value.trim();

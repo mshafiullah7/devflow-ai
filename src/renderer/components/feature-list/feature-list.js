@@ -211,7 +211,6 @@ export class FeatureList {
     const close = () => this._closeModal();
     overlay.querySelector('.fl-modal__close').addEventListener('click', close);
     overlay.querySelector('.fl-modal__btn--cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     const escHandler = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', escHandler);
@@ -294,7 +293,6 @@ export class FeatureList {
 
     const close = () => this._closeConfirm();
     overlay.querySelector('.fl-modal__btn--cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     const escHandler = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', escHandler);
@@ -469,7 +467,6 @@ export class FeatureList {
 
     const close = () => this._closeConfirm();
     overlay.querySelector('.fl-modal__btn--cancel').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     const escHandler = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', escHandler);

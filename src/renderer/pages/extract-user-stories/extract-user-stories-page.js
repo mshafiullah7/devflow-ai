@@ -566,7 +566,6 @@ export class ExtractUserStoriesPage {
       const close = (val) => { overlay.remove(); resolve(val); };
       overlay.querySelector('.usl-confirm-btn--cancel').addEventListener('click', () => close(false));
       overlay.querySelector(isDanger ? '.usl-confirm-btn--danger' : '.usl-confirm-btn--ok').addEventListener('click', () => close(true));
-      overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
     });
   }
 
@@ -599,7 +598,6 @@ export class ExtractUserStoriesPage {
     document.body.appendChild(overlay);
     const close = () => overlay.remove();
     overlay.querySelector('.usl-confirm-btn--ok').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   }
 
   async _showGenerateModal() {
@@ -688,7 +686,6 @@ export class ExtractUserStoriesPage {
     };
     overlay.querySelector('.eus-gen-close').addEventListener('click', close);
     overlay.querySelector('.eus-gen-btn--close').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
     const runBtn      = overlay.querySelector('.eus-gen-btn--run');
     const terminalBtn = overlay.querySelector('#eusTerminalBtn');

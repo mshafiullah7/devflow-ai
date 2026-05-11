@@ -44,7 +44,6 @@ export class QuickCommandsModal {
 
     const close = () => overlay.remove();
     overlay.querySelector('.qcmd-close').addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     const escFn = (e) => {
       if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escFn); }
     };
