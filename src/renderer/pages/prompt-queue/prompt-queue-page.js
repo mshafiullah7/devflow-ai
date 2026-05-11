@@ -352,10 +352,19 @@ export class PromptQueuePage {
           </div>
           <div class="pq-followup" id="pqFollowup"${isRunning ? ' style="display:none"' : ''}>
             <textarea class="pq-followup__input" id="pqFollowupInput" placeholder="Send a follow-up…" rows="3"></textarea>
-            <button class="pq-toolbar__btn pq-toolbar__btn--primary pq-followup__btn" id="pqBtnSendFollowup">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Send
-            </button>
+            <div class="pq-followup__actions">
+              <button class="pq-toolbar__btn pq-followup__preview-btn" id="pqBtnPreview" title="Preview full context before sending">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                  <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/>
+                </svg>
+                Preview
+              </button>
+              <button class="pq-toolbar__btn pq-toolbar__btn--primary pq-followup__btn" id="pqBtnSendFollowup">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Send
+              </button>
+            </div>
           </div>
         </div>`;
 
@@ -363,10 +372,12 @@ export class PromptQueuePage {
       const convo = panel.querySelector('#pqConvo');
       if (convo) convo.scrollTop = convo.scrollHeight;
 
-      // Bind follow-up send
-      const sendBtn = panel.querySelector('#pqBtnSendFollowup');
-      const input   = panel.querySelector('#pqFollowupInput');
-      sendBtn?.addEventListener('click', () => this._sendFollowup(item));
+      // Bind follow-up controls
+      const sendBtn    = panel.querySelector('#pqBtnSendFollowup');
+      const previewBtn = panel.querySelector('#pqBtnPreview');
+      const input      = panel.querySelector('#pqFollowupInput');
+      sendBtn?.addEventListener('click',    () => this._sendFollowup(item));
+      previewBtn?.addEventListener('click', () => this._showContextPreview(item));
       input?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._sendFollowup(item);
       });
@@ -535,6 +546,72 @@ export class PromptQueuePage {
       messages,
       modelConfig: cfg,
       cwd:         this._project?.project_path || null,
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Context preview modal
+  // ----------------------------------------------------------------
+  async _showContextPreview(item) {
+    const input   = this.container.querySelector('#pqFollowupInput');
+    const userMsg = input?.value.trim();
+    if (!userMsg) return;
+
+    const history     = await window.db.promptQueueMessages.list(item.id);
+    const allMessages = [...history, { role: 'user', content: userMsg, _isNew: true }];
+    const totalChars  = allMessages.reduce((s, m) => s + m.content.length, 0);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'pq-preview-overlay';
+    overlay.innerHTML = `
+      <div class="pq-preview-modal">
+        <div class="pq-preview-header">
+          <span class="pq-preview-title">Full Context Preview</span>
+          <span class="pq-preview-stats">${allMessages.length} message${allMessages.length !== 1 ? 's' : ''} &nbsp;·&nbsp; ${totalChars.toLocaleString()} chars</span>
+          <button class="pq-preview-close" id="pqPreviewClose" title="Close">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="pq-preview-body">
+          ${allMessages.map((m) => {
+            const isUser = m.role === 'user';
+            const isNew  = !!m._isNew;
+            return `
+              <div class="pq-preview-msg pq-preview-msg--${isUser ? 'user' : 'assistant'}${isNew ? ' pq-preview-msg--new' : ''}">
+                <div class="pq-preview-msg__label">
+                  ${isUser ? 'You' : 'Assistant'}
+                  ${isNew ? '<span class="pq-preview-msg__badge">new</span>' : ''}
+                </div>
+                <pre class="pq-preview-msg__content">${escHtml(m.content)}</pre>
+              </div>`;
+          }).join('')}
+        </div>
+        <div class="pq-preview-footer">
+          <button class="pq-toolbar__btn" id="pqPreviewCancel">Cancel</button>
+          <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqPreviewSend">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Send
+          </button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+
+    overlay.querySelector('#pqPreviewClose').addEventListener('click', close);
+    overlay.querySelector('#pqPreviewCancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('#pqPreviewSend').addEventListener('click', () => {
+      close();
+      this._sendFollowup(item);
+    });
+
+    // Scroll to bottom so the new message is visible first
+    requestAnimationFrame(() => {
+      const body = overlay.querySelector('.pq-preview-body');
+      if (body) body.scrollTop = body.scrollHeight;
     });
   }
 
