@@ -432,7 +432,7 @@ export class AiConsolePage {
               <span class="aic-slice__meta" style="padding:4px 8px;display:block;">Loading…</span>
             </div>
 
-            <button class="aic-btn-build-ctx" id="aicBtnBuildCtx" disabled>
+            <button class="aic-btn-build-ctx" id="aicBtnBuildCtx" disabled title="Build Context (Ctrl+B)">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="16 18 22 12 16 6"/>
                 <polyline points="8 6 2 12 8 18"/>
@@ -736,6 +736,15 @@ export class AiConsolePage {
       };
       ta.addEventListener('input', resize);
     }
+
+    // Ctrl+B → Build Context
+    document.addEventListener('keydown', (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        q('#aicBtnBuildCtx')?.click();
+      }
+    });
   }
 
   _initDividerDrag() {

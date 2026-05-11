@@ -60,7 +60,7 @@ export class GitChangesPage {
           <div class="git-page__center">
             <div class="git-page__status-label" id="gitStatusLabel">Loading…</div>
           </div>
-          <button class="git-page__refresh" id="gitPageRefresh" title="Refresh">
+          <button class="git-page__refresh" id="gitPageRefresh" title="Refresh (Ctrl+R)">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
               <path d="M4 4a8 8 0 1 1 0 12" stroke="currentColor" stroke-width="1.6"
                 stroke-linecap="round"/>
@@ -106,7 +106,7 @@ export class GitChangesPage {
                     <rect x="2" y="2" width="8" height="8" rx="1" fill="currentColor"/>
                   </svg>
                 </button>
-                <button class="git-page__console-btn" id="gitConsoleClear" title="Clear">
+                <button class="git-page__console-btn" id="gitConsoleClear" title="Clear (Ctrl+L)">
                   <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                     <path d="M2 10L10 2M2 2l8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                   </svg>
@@ -156,6 +156,18 @@ export class GitChangesPage {
 
     this._bindConsole();
     this._bindConsoleDivider();
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        this.container.querySelector('#gitPageRefresh')?.click();
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'l' || e.key === 'L')) {
+        e.preventDefault();
+        this.container.querySelector('#gitConsoleClear')?.click();
+      }
+    });
   }
 
   // ----------------------------------------------------------------

@@ -98,7 +98,7 @@ export class ExtractUserStoriesPage {
               <span class="project-page__folder-text" id="headerFolderText">Select folder</span>
             </div>
           </div>
-          <button class="eus-generate-btn" id="eusBtnGenerate" style="-webkit-app-region:no-drag;">
+          <button class="eus-generate-btn" id="eusBtnGenerate" style="-webkit-app-region:no-drag;" title="Generate User Stories (Ctrl+Enter)">
             Generate User Stories
           </button>
           <div class="project-page__model-group">
@@ -323,6 +323,14 @@ export class ExtractUserStoriesPage {
         if (!item) return;
         this._toggleDocument(Number(item.dataset.id));
       });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'Enter') {
+        e.preventDefault();
+        this.container.querySelector('#eusBtnGenerate')?.click();
+      }
+    });
   }
 
   async _loadMockups() {

@@ -153,7 +153,7 @@ export class ProjectPage {
                       <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
                     </svg>
                   </button>
-                  <button class="project-panel__add" id="btnAddFeature" aria-label="Add feature" title="Add feature">
+                  <button class="project-panel__add" id="btnAddFeature" aria-label="Add feature" title="Add feature (Ctrl+Shift+N)">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                       <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                     </svg>
@@ -182,7 +182,7 @@ export class ProjectPage {
                       <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
                     </svg>
                   </button>
-                  <button class="project-panel__add" id="btnAddStory" aria-label="Add user story" title="Add user story">
+                  <button class="project-panel__add" id="btnAddStory" aria-label="Add user story" title="Add user story (Ctrl+N)">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                       <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                     </svg>
@@ -286,6 +286,19 @@ export class ProjectPage {
     document.getElementById('btnConsoleGit')
       .addEventListener('click', () =>
         this.router.navigate('git-changes', { projectId: this.projectId, from: 'user-stories' }));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'n' || e.key === 'N')) {
+        if (e.shiftKey) {
+          e.preventDefault();
+          document.getElementById('btnAddFeature')?.click();
+        } else {
+          e.preventDefault();
+          document.getElementById('btnAddStory')?.click();
+        }
+      }
+    });
   }
 
   // ----------------------------------------------------------------

@@ -180,7 +180,7 @@ export class TestCasesPage {
             <div class="project-panel__header">
               <span class="project-panel__title">Test Cases</span>
               <div class="project-panel__actions">
-                <button class="project-panel__add" id="tcBtnAdd" title="Add test case" aria-label="Add test case">
+                <button class="project-panel__add" id="tcBtnAdd" title="Add test case (Ctrl+N)" aria-label="Add test case">
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                     <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                   </svg>
@@ -259,6 +259,14 @@ export class TestCasesPage {
 
     this.container.querySelector('#tcBtnAdd')
       .addEventListener('click', () => this._showAddForm());
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        this.container.querySelector('#tcBtnAdd')?.click();
+      }
+    });
 
     this.container.querySelector('#tcStatusFilter')
       .addEventListener('change', async (e) => {

@@ -125,19 +125,19 @@ export class PromptQueuePage {
         <div class="pq-toolbar">
           <span class="pq-toolbar__summary" id="pqSummary"></span>
           <div class="pq-toolbar__actions">
-            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunNext">
+            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunNext" title="Run Next">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
               Run Next
             </button>
-            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunAll">
+            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunAll" title="Run All (Ctrl+Enter)">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3l5 5-5 5V3zM9 3l5 5-5 5V3z" fill="currentColor"/></svg>
               Run All
             </button>
-            <button class="pq-toolbar__btn pq-toolbar__btn--stop" id="pqBtnStop" hidden>
+            <button class="pq-toolbar__btn pq-toolbar__btn--stop" id="pqBtnStop" hidden title="Stop (Escape)">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
               Stop
             </button>
-            <button class="pq-toolbar__btn" id="pqBtnClearDone">
+            <button class="pq-toolbar__btn" id="pqBtnClearDone" title="Clear Done (Ctrl+D)">
               Clear Done
             </button>
           </div>
@@ -653,5 +653,21 @@ export class PromptQueuePage {
         }
         this._renderList();
       });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'Enter') {
+        e.preventDefault();
+        this.container.querySelector('#pqBtnRunAll')?.click();
+      }
+      if (e.key === 'Escape' && !e.ctrlKey && !e.metaKey) {
+        const stop = this.container.querySelector('#pqBtnStop');
+        if (stop && !stop.hidden) { e.preventDefault(); stop.click(); }
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        this.container.querySelector('#pqBtnClearDone')?.click();
+      }
+    });
   }
 }

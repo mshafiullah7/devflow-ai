@@ -144,7 +144,7 @@ export class IssuesPage {
                 <option value="closed">Closed</option>
                 <option value="wont_fix">Won't Fix</option>
               </select>
-              <button class="is-add-btn" id="isBtnAdd" title="Add issue" aria-label="Add issue">
+              <button class="is-add-btn" id="isBtnAdd" title="Add issue (Ctrl+N)" aria-label="Add issue">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                   <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                 </svg>
@@ -218,6 +218,14 @@ export class IssuesPage {
 
     this.container.querySelector('#isBtnAdd')
       .addEventListener('click', () => this._showAddForm());
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        this.container.querySelector('#isBtnAdd')?.click();
+      }
+    });
 
     this.container.querySelector('#isStatusFilter')
       .addEventListener('change', async (e) => {

@@ -181,13 +181,13 @@ export class TestRunnerPage {
               <option value="">Select a command…</option>
             </select>
             <div class="tr-run-controls">
-              <button class="tr-run-btn" id="trRunBtn" disabled>
+              <button class="tr-run-btn" id="trRunBtn" disabled title="Run Tests (Ctrl+Enter)">
                 <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                   <polygon points="4 3 18 10 4 17" fill="currentColor"/>
                 </svg>
                 Run Tests
               </button>
-              <button class="tr-stop-btn" id="trStopBtn" hidden>
+              <button class="tr-stop-btn" id="trStopBtn" hidden title="Stop (Escape)">
                 <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
                   <rect x="2" y="2" width="10" height="10" rx="1" fill="currentColor"/>
                 </svg>
@@ -296,6 +296,19 @@ export class TestRunnerPage {
 
     this.container.querySelector('#trStopBtn')
       .addEventListener('click', () => this._stopTests());
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'Enter') {
+        e.preventDefault();
+        const runBtn = this.container.querySelector('#trRunBtn');
+        if (runBtn && !runBtn.hidden && !runBtn.disabled) runBtn.click();
+      }
+      if (e.key === 'Escape' && !e.ctrlKey && !e.metaKey) {
+        const stopBtn = this.container.querySelector('#trStopBtn');
+        if (stopBtn && !stopBtn.hidden) { e.preventDefault(); stopBtn.click(); }
+      }
+    });
   }
 
   _setHeaderFolderPath(folderPath) {
