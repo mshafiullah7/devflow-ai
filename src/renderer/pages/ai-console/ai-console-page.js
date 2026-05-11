@@ -390,51 +390,10 @@ export class AiConsolePage {
           </button>
         </header>
 
-        <!-- Body: chat + context panel -->
+        <!-- Body: context panel + chat -->
         <div class="aic-body">
 
-          <!-- Chat column -->
-          <div class="aic-chat" id="aicChat">
-
-            <!-- Thread -->
-            <div class="aic-thread" id="aicThread">
-              <div class="aic-thread__loading">Loading project data…</div>
-            </div>
-
-            <!-- Input bar -->
-            <div class="aic-input-bar">
-              <div class="aic-input-bar__inner">
-                <textarea
-                  class="aic-input-bar__textarea"
-                  id="aicInput"
-                  placeholder="Loading…"
-                  rows="2"
-                  disabled
-                ></textarea>
-                <div class="aic-input-bar__actions">
-                  <button class="aic-btn-ghost" id="aicBtnClear" disabled title="Clear conversation">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 13h12M10.5 3L5 8.5l-2 4.5 4.5-2 5.5-5.5-2-2z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                  <button class="aic-btn-send" id="aicBtnSend" disabled title="Send (Enter)">
-                    <svg id="aicIconSend" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M3 2l11 6-11 6V9.5l8-1.5-8-1.5V2z"/>
-                    </svg>
-                    <svg id="aicIconStop" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Draggable divider -->
-          <div class="aic-divider" id="aicDivider"></div>
-
-          <!-- Context panel -->
+          <!-- Context panel (left) -->
           <aside class="aic-context" id="aicContext">
             <div class="aic-context__heading">Context</div>
             <p class="aic-context__desc">Choose what project data is injected into the AI prompt.</p>
@@ -515,6 +474,47 @@ export class AiConsolePage {
               <span class="aic-action-chip aic-action-chip--preview">Queue prompt</span>
             </div>
           </aside>
+
+          <!-- Draggable divider -->
+          <div class="aic-divider" id="aicDivider"></div>
+
+          <!-- Chat column (right) -->
+          <div class="aic-chat" id="aicChat">
+
+            <!-- Thread -->
+            <div class="aic-thread" id="aicThread">
+              <div class="aic-thread__loading">Loading project data…</div>
+            </div>
+
+            <!-- Input bar -->
+            <div class="aic-input-bar">
+              <div class="aic-input-bar__inner">
+                <textarea
+                  class="aic-input-bar__textarea"
+                  id="aicInput"
+                  placeholder="Loading…"
+                  rows="2"
+                  disabled
+                ></textarea>
+                <div class="aic-input-bar__actions">
+                  <button class="aic-btn-ghost" id="aicBtnClear" disabled title="Clear conversation">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 13h12M10.5 3L5 8.5l-2 4.5 4.5-2 5.5-5.5-2-2z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="aic-btn-send" id="aicBtnSend" disabled title="Send (Enter)">
+                    <svg id="aicIconSend" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M3 2l11 6-11 6V9.5l8-1.5-8-1.5V2z"/>
+                    </svg>
+                    <svg id="aicIconStop" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
 
         </div>
       </div>
@@ -741,7 +741,7 @@ export class AiConsolePage {
       divider.classList.add('aic-divider--dragging');
 
       const onMove = (mv) => {
-        const newWidth = Math.min(Math.max(startWidth - (mv.clientX - startX), minW), maxW);
+        const newWidth = Math.min(Math.max(startWidth + (mv.clientX - startX), minW), maxW);
         contextPane.style.flex = `0 0 ${newWidth}px`;
       };
 
