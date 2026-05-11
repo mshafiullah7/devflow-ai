@@ -3,6 +3,7 @@
 const fs   = require('node:fs');
 const path = require('node:path');
 const { app } = require('electron');
+const { getConfigValue } = require('../app-config');
 
 const MAX_BACKUPS = 5;
 
@@ -53,12 +54,15 @@ function runBackup() {
     console.error('[backup] Primary backup failed:', err);
   }
 
-  // Secondary backup — Windows-only, failures are non-fatal
-  try {
-    const name = _runBackup(dbPath, 'C:\\dev_flow_ai_backup');
-    if (name) console.log(`[backup] C-drive copy: ${name}`);
-  } catch (err) {
-    console.warn('[backup] C-drive backup skipped:', err.message);
+  // Secondary backup — user-configured path, failures are non-fatal
+  const userBackupPath = getConfigValue('backupPath');
+  if (userBackupPath) {
+    try {
+      const name = _runBackup(dbPath, userBackupPath);
+      if (name) console.log(`[backup] User-path copy: ${name}`);
+    } catch (err) {
+      console.warn('[backup] User-path backup skipped:', err.message);
+    }
   }
 }
 

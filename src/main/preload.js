@@ -161,6 +161,10 @@ contextBridge.exposeInMainWorld('db', {
 
 contextBridge.exposeInMainWorld('app', {
   agentCliPath:     () => invoke('app:agent-cli-path'),
+  config: {
+    get: (key)        => invoke('app:config:get', key),
+    set: (key, value) => invoke('app:config:set', key, value),
+  },
   screensDir:       (projectName) => invoke('app:screens-dir', projectName),
   prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),
   writeTempFiles:   (files)       => invoke('app:writeTempFiles', files),

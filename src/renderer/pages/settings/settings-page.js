@@ -102,7 +102,7 @@ export class SettingsPage {
     this.container.querySelector('#stNavBackupConfig')
       .addEventListener('click', () => {
         this._setActiveNav('stNavBackupConfig');
-        this._renderBackupConfig();
+        this._renderBackupConfig(); // async, fire-and-forget is fine
       });
 
     this.container.querySelector('#stNavPromptsTemplate')
@@ -276,9 +276,9 @@ export class SettingsPage {
   // ----------------------------------------------------------------
   // Backup Configuration
   // ----------------------------------------------------------------
-  _renderBackupConfig() {
+  async _renderBackupConfig() {
     const main = this.container.querySelector('#stMainContent');
-    const saved = localStorage.getItem('backupPath') || '';
+    const saved = (await window.app.config.get('backupPath')) || '';
     main.innerHTML = `
       <div class="st-content-title">Backup</div>
       <div class="st-content-sub">Configure where automatic daily backups are stored</div>
@@ -302,9 +302,9 @@ export class SettingsPage {
       if (folder) main.querySelector('#stBackupPathInput').value = folder;
     });
 
-    main.querySelector('#stBtnSaveBackup').addEventListener('click', () => {
+    main.querySelector('#stBtnSaveBackup').addEventListener('click', async () => {
       const val = main.querySelector('#stBackupPathInput').value.trim();
-      localStorage.setItem('backupPath', val);
+      await window.app.config.set('backupPath', val);
       const hint = main.querySelector('#stBackupHint');
       hint.textContent = 'Saved';
       setTimeout(() => {

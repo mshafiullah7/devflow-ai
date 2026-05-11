@@ -6,6 +6,7 @@ const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
 const { closeDb } = require('./db/database');
 const { runBackup } = require('./db/backup');
+const { getConfigValue, setConfigValue } = require('./app-config');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -36,6 +37,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:agent-cli-path', () =>
     path.join(app.getAppPath(), 'agent-cli', 'index.js')
   );
+
+  ipcMain.handle('app:config:get', (_e, key) => getConfigValue(key));
+  ipcMain.handle('app:config:set', (_e, key, value) => { setConfigValue(key, value); });
 
   ipcMain.handle('app:screens-dir', (event, projectName) => {
     const base = app.isPackaged
