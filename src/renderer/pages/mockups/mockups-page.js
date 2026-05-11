@@ -919,13 +919,13 @@ export class MockupsPage {
         </div>
         <div class="scr-ns-dialog__footer">
           <button class="scr-btn scr-btn--secondary" id="scrEditCancel">Cancel</button>
-          <button class="scr-btn" id="scrEditSaveOpen" title="Save and open in terminal (Ctrl+Shift+S)">
+          <button class="scr-btn" id="scrEditSaveOpen" title="Save and open in terminal (Ctrl+S)">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
             </svg>
             Save &amp; Open
           </button>
-          <button class="scr-btn scr-btn--primary" id="scrEditSave" title="Save (Ctrl+S)">
+          <button class="scr-btn scr-btn--primary" id="scrEditSave">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
@@ -983,15 +983,11 @@ export class MockupsPage {
       }
     });
 
-    // Ctrl+S → Save, Ctrl+Shift+S → Save & Open
+    // Ctrl+S → Save & Open
     dlg.addEventListener('keydown', async (e) => {
-      if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+      if (e.key === 's' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
         e.preventDefault();
-        if (e.shiftKey) {
-          if (await doSave()) { close(); this._openEdits(screen.title, screen.id); }
-        } else {
-          if (await doSave()) close();
-        }
+        if (await doSave()) { close(); this._openEdits(screen.title, screen.id); }
       }
       if (e.key === 'Escape') close();
     });
