@@ -414,6 +414,20 @@
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ph-mc-title-total {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* Donut chart */
