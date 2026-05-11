@@ -589,12 +589,25 @@
 .aic-ctx-preview__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
+  justify-content: flex-start;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
-  /* Top corners match wrapper */
+  border-radius: 7px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+.aic-ctx-preview__header:hover { background: var(--bg-hover); }
+.aic-ctx-preview-wrap--expanded .aic-ctx-preview__header {
+  border-bottom: 1px solid var(--border-subtle);
   border-radius: 7px 7px 0 0;
+}
+.aic-ctx-preview__header .aic-context__heading { flex: 1; }
+.aic-ctx-preview__chevron {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
 }
 
 .aic-ctx-preview__copy {

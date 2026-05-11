@@ -451,7 +451,10 @@ export class AiConsolePage {
 
             <!-- Context preview — shows full generated prompt text -->
             <div id="aicCtxPreviewWrap" class="aic-ctx-preview-wrap" style="display:none">
-              <div class="aic-ctx-preview__header">
+              <div class="aic-ctx-preview__header" id="aicCtxPreviewToggle" title="Toggle context preview">
+                <svg class="aic-ctx-preview__chevron" width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
                 <span class="aic-context__heading" style="margin:0">Generated context</span>
                 <button class="aic-ctx-preview__copy" id="aicBtnCopyCtx" title="Copy to clipboard">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -461,7 +464,7 @@ export class AiConsolePage {
                   Copy
                 </button>
               </div>
-              <pre id="aicCtxPreview" class="aic-ctx-preview__pre"></pre>
+              <pre id="aicCtxPreview" class="aic-ctx-preview__pre" style="display:none"></pre>
             </div>
 
             <!-- Apply actions legend -->
@@ -675,6 +678,19 @@ export class AiConsolePage {
 
     // Build Context
     q('#aicBtnBuildCtx').addEventListener('click', () => this._buildContext());
+
+    // Toggle context preview expand/collapse
+    q('#aicCtxPreviewToggle').addEventListener('click', (e) => {
+      if (e.target.closest('#aicBtnCopyCtx')) return;
+      const pre     = this.container.querySelector('#aicCtxPreview');
+      const chevron = this.container.querySelector('.aic-ctx-preview__chevron');
+      const wrap    = this.container.querySelector('#aicCtxPreviewWrap');
+      if (!pre) return;
+      const expanded = pre.style.display !== 'none';
+      pre.style.display = expanded ? 'none' : '';
+      wrap.classList.toggle('aic-ctx-preview-wrap--expanded', !expanded);
+      if (chevron) chevron.style.transform = expanded ? '' : 'rotate(180deg)';
+    });
 
     // Copy context to clipboard
     this.container.addEventListener('click', (e) => {
@@ -976,6 +992,11 @@ export class AiConsolePage {
     if (this._builtContext) {
       preview.textContent = this._builtContext;
       previewWrap.style.display = 'block';
+      // Keep pre collapsed — user expands by clicking the header
+      preview.style.display = 'none';
+      previewWrap.classList.remove('aic-ctx-preview-wrap--expanded');
+      const chevron = this.container.querySelector('.aic-ctx-preview__chevron');
+      if (chevron) chevron.style.transform = '';
     } else {
       previewWrap.style.display = 'none';
     }
