@@ -431,6 +431,10 @@ export class PromptQueuePage {
         exit_code: exitCode,
       });
 
+      if (succeeded && item.prompt_id) {
+        await window.db.prompts.update({ id: item.prompt_id, is_executed: 1 });
+      }
+
       this._refreshItemEl(item.id);
       this._updateSummary();
       this._updateToolbarRunState(false);
