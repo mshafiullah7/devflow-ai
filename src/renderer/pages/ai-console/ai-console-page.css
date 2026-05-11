@@ -209,6 +209,7 @@
   color: var(--text-secondary);
   font-style: italic;
 }
+.aic-msg--assistant .aic-msg__bubble hr { border: none; border-top: 1px solid var(--border); margin: 0.75em 0; }
 .aic-msg--assistant .aic-msg__bubble strong { font-weight: 700; }
 .aic-msg--assistant .aic-msg__bubble em { font-style: italic; }
 .aic-msg--assistant .aic-msg__bubble a { color: var(--accent); text-decoration: underline; }
