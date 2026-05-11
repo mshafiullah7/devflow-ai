@@ -727,8 +727,8 @@ export class UserStoryDetail {
           <span class="usl-expand-title">${escHtml(label)}</span>
           ${isPrompt ? `
           <div class="usl-expand-tabs">
-            <button class="usl-expand-tab" data-tab="edit">Edit</button>
-            <button class="usl-expand-tab usl-expand-tab--active" data-tab="preview">Preview</button>
+            <button class="usl-expand-tab usl-expand-tab--active" data-tab="edit">Edit</button>
+            <button class="usl-expand-tab" data-tab="preview">Preview</button>
           </div>` : ''}
           <button class="usl-expand-close" aria-label="Close">&times;</button>
         </div>
@@ -771,10 +771,10 @@ export class UserStoryDetail {
       expandTA.addEventListener('scroll', () => { bd.scrollTop = expandTA.scrollTop; });
       syncBd();
 
-      // Default to Preview tab on open
-      previewPane.innerHTML = this._renderMarkdown(expandTA.value);
-      editPane.hidden    = true;
-      previewPane.hidden = false;
+      // Default to Edit tab on open
+      editPane.hidden    = false;
+      previewPane.hidden = true;
+      expandTA.focus();
 
       tabs.forEach(tab => {
         tab.addEventListener('click', () => {
