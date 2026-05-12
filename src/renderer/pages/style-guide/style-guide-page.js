@@ -603,14 +603,17 @@ export class StyleGuidePage {
       window.app.chat.offAll();
       setGenerating(false);
 
-      if (error) {
+      // The chat system always tries to extract HTML and sets error when none is
+      // found — that is expected here since we generate plain text, not HTML.
+      // Only treat it as a real error when there is also no raw text at all.
+      const finalText = raw || rawResponse;
+      if (!finalText && error) {
         genStatus.style.display = '';
         genStatus.textContent   = `Error: ${error}`;
         setTimeout(() => { genStatus.style.display = 'none'; }, 4000);
         return;
       }
 
-      const finalText = raw || rawResponse;
       const { light, dark } = this._splitThemeResponse(finalText);
 
       if (light) lightTa.value = light;
