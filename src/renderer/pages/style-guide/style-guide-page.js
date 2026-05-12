@@ -274,24 +274,6 @@ export class StyleGuidePage {
             Both are injected into every screen generation prompt.
           </p>
 
-          <!-- AI Generation Bar -->
-          <div class="sg-page__gen-bar">
-            <input
-              type="text"
-              class="form-input sg-page__gen-input"
-              id="sgGenPrompt"
-              placeholder="Describe your aesthetic (e.g. minimal dark with purple accents, warm earth tones, corporate blue)…"
-            />
-            <button class="scr-btn scr-btn--accent" id="sgGenerateBtn">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
-              Generate
-            </button>
-            <button class="scr-btn scr-btn--sm" id="sgCancelBtn" style="display:none">Cancel</button>
-            <span class="sg-page__gen-status" id="sgGenStatus" style="display:none"></span>
-          </div>
-
           <div class="sg-page__editor">
 
             <div class="scr-ds-templates">
@@ -334,6 +316,35 @@ export class StyleGuidePage {
                 </button>
               </div>
               <iframe class="scr-ds-preview-frame" id="sgPreviewFrame" sandbox="allow-scripts"></iframe>
+            </div>
+
+            <div class="sg-ai-card" id="sgAiCard">
+              <div class="sg-ai-card__header">
+                <span class="sg-ai-card__title">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 1v3M8 12v3M1 8h3M12 8h3M3.05 3.05l2.12 2.12M10.83 10.83l2.12 2.12M3.05 12.95l2.12-2.12M10.83 5.17l2.12-2.12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <circle cx="8" cy="8" r="2" fill="currentColor"/>
+                  </svg>
+                  AI Edits
+                </span>
+                <button class="sg-ai-card__icon-btn" id="sgAiClear" title="Clear conversation">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 13h12M10.5 3L5 8.5l-2 4.5 4.5-2 5.5-5.5-2-2z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="sg-ai-card__messages" id="sgAiMessages">
+                <p class="sg-ai-card__welcome">Describe your aesthetic or request changes — e.g. "warm earth tones", "make it more minimal", "swap to purple accents".</p>
+              </div>
+              <div class="sg-ai-card__compose">
+                <textarea class="sg-ai-card__input" id="sgAiInput" rows="2" maxlength="4000"
+                  placeholder="e.g. minimal dark with purple accents…"></textarea>
+                <button class="sg-ai-card__send" id="sgAiSend" title="Send (Enter) — Alt+Enter for new line">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M14 2L2 8l4 2 2 4 6-12z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
             </div>
 
           </div>
@@ -468,54 +479,7 @@ export class StyleGuidePage {
       saveBtn.textContent = 'Save Style Guide';
     });
 
-    /* ---------------------------------------------------------------- */
-    /* AI Generation                                                     */
-    /* ---------------------------------------------------------------- */
-    const generateBtn  = this.container.querySelector('#sgGenerateBtn');
-    const cancelBtn    = this.container.querySelector('#sgCancelBtn');
-    const genStatus    = this.container.querySelector('#sgGenStatus');
-    const genPromptEl  = this.container.querySelector('#sgGenPrompt');
-    const lightTa      = this.container.querySelector('#sgTplLight');
-    const darkTa       = this.container.querySelector('#sgTplDark');
-
-    const setGenerating = (on) => {
-      this._generating      = on;
-      generateBtn.disabled  = on;
-      generateBtn.innerHTML = on
-        ? 'Generating…'
-        : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate`;
-      cancelBtn.style.display = on ? '' : 'none';
-      genStatus.style.display = on ? '' : 'none';
-      lightTa.disabled        = on;
-      darkTa.disabled         = on;
-    };
-
-    generateBtn.addEventListener('click', () => {
-      const userInput = genPromptEl.value.trim();
-      if (!userInput) { genPromptEl.focus(); return; }
-      if (!this._aiModelConfig) {
-        genStatus.style.display = '';
-        genStatus.textContent   = 'Please select an AI model first.';
-        setTimeout(() => { genStatus.style.display = 'none'; }, 3000);
-        return;
-      }
-      const existingLight = lightTa.value.trim();
-      const existingDark  = darkTa.value.trim();
-      this._runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview, existingLight, existingDark });
-    });
-
-    genPromptEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !this._generating) generateBtn.click();
-    });
-
-    cancelBtn.addEventListener('click', () => {
-      window.app.chat.cancel();
-      window.app.chat.offAll();
-      setGenerating(false);
-      genStatus.style.display = '';
-      genStatus.textContent   = 'Generation cancelled.';
-      setTimeout(() => { genStatus.style.display = 'none'; }, 2000);
-    });
+    this._renderPreview = renderPreview;
 
     /* ---------------------------------------------------------------- */
     /* Theme Library                                                     */
@@ -551,8 +515,8 @@ export class StyleGuidePage {
     libSaveConfirm.addEventListener('click', async () => {
       const name  = libNameInput.value.trim();
       if (!name) { libNameInput.focus(); return; }
-      const light = lightTa.value.trim();
-      const dark  = darkTa.value.trim();
+      const light = this.container.querySelector('#sgTplLight').value.trim();
+      const dark  = this.container.querySelector('#sgTplDark').value.trim();
       libSaveConfirm.disabled    = true;
       libSaveConfirm.textContent = 'Saving…';
       await window.db.savedThemes.create({ name, light, dark });
@@ -568,43 +532,124 @@ export class StyleGuidePage {
       if (e.key === 'Escape') libSaveCancel.click();
     });
 
+    this._bindAiPane();
+
     /* ---- Initial render ---- */
     setActiveCol();
     renderPreview();
   }
 
   /* ------------------------------------------------------------------ */
-  /* AI Generation logic                                                 */
+  /* AI Edits chat pane                                                  */
   /* ------------------------------------------------------------------ */
-  _runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview, existingLight = '', existingDark = '' }) {
-    const prompt = this._buildGenerationPrompt(userInput, existingLight, existingDark);
+  _bindAiPane() {
+    const card    = this.container.querySelector('#sgAiCard');
+    const inputEl = card.querySelector('#sgAiInput');
+    const msgsEl  = card.querySelector('#sgAiMessages');
+    const sendBtn = card.querySelector('#sgAiSend');
+    const lightTa = this.container.querySelector('#sgTplLight');
+    const darkTa  = this.container.querySelector('#sgTplDark');
 
-    setGenerating(true);
-    genStatus.textContent = 'Generating…';
+    inputEl.addEventListener('input', () => {
+      inputEl.style.height = 'auto';
+      const capped = Math.min(inputEl.scrollHeight, 160);
+      inputEl.style.height = capped + 'px';
+      inputEl.style.overflowY = inputEl.scrollHeight > 160 ? 'auto' : 'hidden';
+    });
+
+    card.querySelector('#sgAiClear').addEventListener('click', () => {
+      msgsEl.innerHTML = '<p class="sg-ai-card__welcome">Conversation cleared.</p>';
+    });
+
+    const submit = () => {
+      const instruction = inputEl.value.trim();
+      if (!instruction) { inputEl.focus(); return; }
+      this._runAiEdit(instruction, { msgsEl, sendBtn, inputEl, lightTa, darkTa });
+      inputEl.value = '';
+      inputEl.style.height = '';
+      inputEl.style.overflowY = '';
+    };
+
+    card.querySelector('#sgAiSend').addEventListener('click', submit);
+    inputEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); submit(); }
+    });
+  }
+
+  _appendChatMsg(msgsEl, role, text, isError = false) {
+    msgsEl.querySelector('.sg-ai-card__welcome')?.remove();
+    const el = document.createElement('div');
+    el.className = `sg-ai-msg sg-ai-msg--${role}`;
+    el.innerHTML = `<div class="sg-ai-msg__bubble${isError ? ' sg-ai-msg__bubble--error' : ''}">${escHtml(text)}</div>`;
+    msgsEl.appendChild(el);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+    return el;
+  }
+
+  _updateChatMsg(msgEl, text, state = '') {
+    const bubble = msgEl?.querySelector('.sg-ai-msg__bubble');
+    if (!bubble) return;
+    bubble.textContent = text;
+    bubble.className = 'sg-ai-msg__bubble' + (state ? ` sg-ai-msg__bubble--${state}` : '');
+    msgEl.closest('.sg-ai-card__messages')?.scrollTo({ top: 99999, behavior: 'smooth' });
+  }
+
+  _setChatMsgApplied(msgEl, light, dark, prevLight, prevDark, lightTa, darkTa) {
+    const bubble = msgEl?.querySelector('.sg-ai-msg__bubble');
+    if (!bubble) return;
+    const previewSrc = (light || dark).trim().split('\n').filter(l => l.trim()).slice(0, 3).join('\n');
+    const preview = previewSrc.length > 200 ? previewSrc.slice(0, 200) + '…' : previewSrc;
+    bubble.className = 'sg-ai-msg__bubble sg-ai-msg__bubble--success';
+    bubble.innerHTML = `<span class="sg-ai-msg__preview">${escHtml(preview)}</span><div class="sg-ai-msg__status-row"><span class="sg-ai-msg__applied">✓ Applied — review and save</span><button class="sg-ai-msg__revert-btn" title="Revert"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 9a6 6 0 1 0 1-3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M2 4v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`;
+    bubble.querySelector('.sg-ai-msg__revert-btn').addEventListener('click', () => {
+      lightTa.value = prevLight;
+      darkTa.value  = prevDark;
+      this._renderPreview?.();
+      const row = bubble.querySelector('.sg-ai-msg__status-row');
+      if (row) row.innerHTML = '<span class="sg-ai-msg__reverted">↩ Reverted</span>';
+    });
+    msgEl.closest('.sg-ai-card__messages')?.scrollTo({ top: 99999, behavior: 'smooth' });
+  }
+
+  _runAiEdit(instruction, { msgsEl, sendBtn, inputEl, lightTa, darkTa }) {
+    const cfg = this._aiModelConfig;
+    this._appendChatMsg(msgsEl, 'user', instruction);
+
+    if (!cfg) {
+      this._appendChatMsg(msgsEl, 'ai', 'No model selected — choose one in the header.', true);
+      return;
+    }
+
+    const existingLight = lightTa.value.trim();
+    const existingDark  = darkTa.value.trim();
+    const prompt        = this._buildGenerationPrompt(instruction, existingLight, existingDark);
+
+    const aiMsgEl = this._appendChatMsg(msgsEl, 'ai', 'Generating…');
+    this._updateChatMsg(aiMsgEl, 'Generating…', 'thinking');
+
+    sendBtn.disabled = true;
+    inputEl.disabled = true;
 
     let rawResponse = '';
-    let tokenCount  = 0;
+    let charCount   = 0;
 
     window.app.chat.offAll();
 
     window.app.chat.onToken(({ text }) => {
-      rawResponse  += text;
-      tokenCount   += text.length;
-      genStatus.textContent = `Generating… (${tokenCount} chars)`;
+      rawResponse += text;
+      charCount   += text.length;
+      this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
     });
 
     window.app.chat.onDone(({ raw, error }) => {
       window.app.chat.offAll();
-      setGenerating(false);
+      sendBtn.disabled = false;
+      inputEl.disabled = false;
+      inputEl.focus();
 
-      // The chat system always tries to extract HTML and sets error when none is
-      // found — that is expected here since we generate plain text, not HTML.
-      // Only treat it as a real error when there is also no raw text at all.
       const finalText = raw || rawResponse;
       if (!finalText && error) {
-        genStatus.style.display = '';
-        genStatus.textContent   = `Error: ${error}`;
-        setTimeout(() => { genStatus.style.display = 'none'; }, 4000);
+        this._updateChatMsg(aiMsgEl, `Error: ${error}`, 'error');
         return;
       }
 
@@ -613,14 +658,15 @@ export class StyleGuidePage {
       if (light) lightTa.value = light;
       if (dark)  darkTa.value  = dark;
 
-      genStatus.style.display = '';
-      genStatus.textContent   = light || dark ? '✓ Done — review and save when ready.' : 'No content returned. Try rephrasing.';
-      setTimeout(() => { genStatus.style.display = 'none'; }, 4000);
-
-      renderPreview();
+      if (light || dark) {
+        this._renderPreview?.();
+        this._setChatMsgApplied(aiMsgEl, light, dark, existingLight, existingDark, lightTa, darkTa);
+      } else {
+        this._updateChatMsg(aiMsgEl, 'No theme content returned. Try rephrasing.', 'error');
+      }
     });
 
-    window.app.chat.generate({ prompt, model: this._aiModelConfig });
+    window.app.chat.generate({ prompt, model: cfg });
   }
 
   _buildGenerationPrompt(userInput, existingLight = '', existingDark = '') {
