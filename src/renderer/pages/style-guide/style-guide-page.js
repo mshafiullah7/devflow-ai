@@ -181,7 +181,6 @@ export class StyleGuidePage {
     this._from          = params.from || 'project-home';
     this._project       = null;
     this._aiModelConfig = null;
-    this._libraryOpen   = false;
     this._libraryThemes = [];
     this._generating    = false;
   }
@@ -358,14 +357,6 @@ export class StyleGuidePage {
                 <option value="">— Select a theme —</option>
               </select>
               <button class="scr-btn scr-btn--sm" id="sgNewBtn">New</button>
-              <button class="scr-btn scr-btn--sm" id="sgLibraryToggle">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                </svg>
-                Library
-                <span id="sgLibraryChevron">▾</span>
-              </button>
             </div>
             <div class="sg-page__actions-right">
               <button class="scr-btn scr-btn--sm scr-btn--accent" id="sgSaveToLibraryBtn">Save to Library</button>
@@ -384,13 +375,6 @@ export class StyleGuidePage {
             />
             <button class="scr-btn scr-btn--primary scr-btn--sm" id="sgLibSaveConfirm">Save</button>
             <button class="scr-btn scr-btn--sm" id="sgLibSaveCancel">Cancel</button>
-          </div>
-
-          <!-- Global Theme Library panel (hidden by default) -->
-          <div class="sg-page__library" id="sgLibraryPanel" style="display:none">
-            <div class="sg-page__library-inner" id="sgLibraryList">
-              <p class="sg-page__lib-empty">Loading…</p>
-            </div>
           </div>
 
         </div>
@@ -492,20 +476,6 @@ export class StyleGuidePage {
 
     this._renderPreview = renderPreview;
 
-    /* ---------------------------------------------------------------- */
-    /* Theme Library                                                     */
-    /* ---------------------------------------------------------------- */
-    const libraryPanel   = this.container.querySelector('#sgLibraryPanel');
-    const libraryToggle  = this.container.querySelector('#sgLibraryToggle');
-    const libraryChevron = this.container.querySelector('#sgLibraryChevron');
-
-    libraryToggle.addEventListener('click', async () => {
-      this._libraryOpen = !this._libraryOpen;
-      libraryPanel.style.display  = this._libraryOpen ? '' : 'none';
-      libraryChevron.textContent  = this._libraryOpen ? '▴' : '▾';
-      if (this._libraryOpen) await this._loadLibrary();
-    });
-
     /* ---- Save to Library ---- */
     const saveToLibBtn   = this.container.querySelector('#sgSaveToLibraryBtn');
     const libSaveForm    = this.container.querySelector('#sgLibSaveForm');
@@ -535,7 +505,6 @@ export class StyleGuidePage {
       libSaveConfirm.textContent = 'Save';
       libSaveForm.style.display  = 'none';
       await this._loadThemeDropdown();
-      if (this._libraryOpen) await this._loadLibrary();
     });
 
     libNameInput.addEventListener('keydown', e => {
@@ -814,64 +783,6 @@ Rules:
     select.innerHTML = '<option value="">— Select a theme —</option>' +
       this._libraryThemes.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
     if (current && this._libraryThemes.some(t => String(t.id) === current)) select.value = current;
-  }
-
-  async _loadLibrary() {
-    const list = this.container.querySelector('#sgLibraryList');
-    list.innerHTML = '<p class="sg-page__lib-empty">Loading…</p>';
-    try {
-      await this._loadThemeDropdown();
-      list.innerHTML = this._renderLibraryHtml(this._libraryThemes);
-      this._bindLibraryEvents(list);
-    } catch (err) {
-      list.innerHTML = `<p class="sg-page__lib-empty">Failed to load library: ${escHtml(String(err))}</p>`;
-    }
-  }
-
-  _renderLibraryHtml(themes) {
-    if (!themes.length) {
-      return `<p class="sg-page__lib-empty">No saved themes yet. Edit a style guide above and click <strong>Save to Library</strong>.</p>`;
-    }
-    return themes.map(t => {
-      const date = new Date(t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-      return `
-        <div class="sg-lib-item" data-id="${t.id}">
-          <div class="sg-lib-item__info">
-            <span class="sg-lib-item__name">${escHtml(t.name)}</span>
-            <span class="sg-lib-item__date">${date}</span>
-          </div>
-          <div class="sg-lib-item__actions">
-            <button class="scr-btn scr-btn--sm scr-btn--accent sg-lib-item__load" data-id="${t.id}">Load</button>
-            <button class="scr-btn scr-btn--sm scr-btn--danger sg-lib-item__delete" data-id="${t.id}" title="Remove from library">✕</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  _bindLibraryEvents(list) {
-    list.querySelectorAll('.sg-lib-item__load').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id    = Number(btn.dataset.id);
-        const theme = this._libraryThemes.find(t => t.id === id);
-        if (!theme) return;
-        this.container.querySelector('#sgTplLight').value = theme.light || '';
-        this.container.querySelector('#sgTplDark').value  = theme.dark  || '';
-        const select = this.container.querySelector('#sgThemeSelect');
-        if (select) select.value = String(id);
-        this.container.querySelector('#sgRefreshBtn').click();
-      });
-    });
-
-    list.querySelectorAll('.sg-lib-item__delete').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = Number(btn.dataset.id);
-        btn.disabled    = true;
-        btn.textContent = '…';
-        await window.db.savedThemes.delete(id);
-        await this._loadLibrary();
-      });
-    });
   }
 
   /* ------------------------------------------------------------------ */
