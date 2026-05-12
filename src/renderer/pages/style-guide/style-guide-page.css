@@ -123,6 +123,12 @@
   height: 100%;
 }
 
+/* Save button confirmed state */
+.sg-page__save-btn--saved {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+}
+
 /* Theme select dropdown */
 .sg-page__theme-select {
   height: 30px;

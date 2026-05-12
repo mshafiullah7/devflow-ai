@@ -471,7 +471,12 @@ export class StyleGuidePage {
         badge.textContent = 'Active — applied to all screens';
       }
       saveBtn.disabled    = false;
-      saveBtn.textContent = 'Save';
+      saveBtn.textContent = '✓ Saved';
+      saveBtn.classList.add('sg-page__save-btn--saved');
+      setTimeout(() => {
+        saveBtn.textContent = 'Save';
+        saveBtn.classList.remove('sg-page__save-btn--saved');
+      }, 2000);
     });
 
     this._renderPreview = renderPreview;
