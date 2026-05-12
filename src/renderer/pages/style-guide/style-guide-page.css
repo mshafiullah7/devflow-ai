@@ -123,6 +123,24 @@
   height: 100%;
 }
 
+/* Theme select dropdown */
+.sg-page__theme-select {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  outline: none;
+  max-width: 200px;
+}
+.sg-page__theme-select:focus {
+  border-color: var(--accent);
+}
+
 /* Actions bar */
 .sg-page__actions {
   flex-shrink: 0;

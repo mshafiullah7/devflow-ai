@@ -204,6 +204,8 @@ export class StyleGuidePage {
     await this._picker.reload();
 
     this._bindEvents();
+    await this._seedBuiltinThemes();
+    await this._loadThemeDropdown();
   }
 
   unmount() {
@@ -352,7 +354,10 @@ export class StyleGuidePage {
           <!-- Actions bar -->
           <div class="sg-page__actions">
             <div class="sg-page__actions-left">
-              <button class="scr-btn scr-btn--sm" id="sgExampleBtn">Example: ${BUILTIN_PRESETS[0].label} ↻</button>
+              <select class="sg-page__theme-select" id="sgThemeSelect">
+                <option value="">— Select a theme —</option>
+              </select>
+              <button class="scr-btn scr-btn--sm" id="sgNewBtn">New</button>
               <button class="scr-btn scr-btn--sm" id="sgLibraryToggle">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
@@ -364,7 +369,7 @@ export class StyleGuidePage {
             </div>
             <div class="sg-page__actions-right">
               <button class="scr-btn scr-btn--sm scr-btn--accent" id="sgSaveToLibraryBtn">Save to Library</button>
-              <button class="scr-btn scr-btn--primary" id="sgSaveBtn">Save Style Guide</button>
+              <button class="scr-btn scr-btn--primary" id="sgSaveBtn">Save</button>
             </div>
           </div>
 
@@ -405,7 +410,6 @@ export class StyleGuidePage {
       .addEventListener('click', () => this.router.navigate(this._from, { projectId: this._projectId }));
 
     /* ---- Preview state ---- */
-    let exampleIdx  = -1;
     let activeTheme = 'dark';
 
     const frame = this.container.querySelector('#sgPreviewFrame');
@@ -432,15 +436,22 @@ export class StyleGuidePage {
         : blankHtml(activeTheme);
     };
 
-    /* ---- Built-in example cycle ---- */
-    const cycleBtn = this.container.querySelector('#sgExampleBtn');
-    cycleBtn.addEventListener('click', () => {
-      exampleIdx = (exampleIdx + 1) % BUILTIN_PRESETS.length;
-      const ex   = BUILTIN_PRESETS[exampleIdx];
-      const next = BUILTIN_PRESETS[(exampleIdx + 1) % BUILTIN_PRESETS.length];
-      this.container.querySelector('#sgTplLight').value = ex.light;
-      this.container.querySelector('#sgTplDark').value  = ex.dark;
-      cycleBtn.textContent = `Example: ${ex.label} — Next: ${next.label} ↻`;
+    /* ---- Theme dropdown ---- */
+    this.container.querySelector('#sgThemeSelect').addEventListener('change', e => {
+      const id = Number(e.target.value);
+      if (!id) return;
+      const theme = this._libraryThemes.find(t => t.id === id);
+      if (!theme) return;
+      this.container.querySelector('#sgTplLight').value = theme.light || '';
+      this.container.querySelector('#sgTplDark').value  = theme.dark  || '';
+      renderPreview();
+    });
+
+    /* ---- New button ---- */
+    this.container.querySelector('#sgNewBtn').addEventListener('click', () => {
+      this.container.querySelector('#sgTplLight').value = '';
+      this.container.querySelector('#sgTplDark').value  = '';
+      this.container.querySelector('#sgThemeSelect').value = '';
       renderPreview();
     });
 
@@ -476,7 +487,7 @@ export class StyleGuidePage {
         badge.textContent = 'Active — applied to all screens';
       }
       saveBtn.disabled    = false;
-      saveBtn.textContent = 'Save Style Guide';
+      saveBtn.textContent = 'Save';
     });
 
     this._renderPreview = renderPreview;
@@ -523,7 +534,7 @@ export class StyleGuidePage {
       libSaveConfirm.disabled    = false;
       libSaveConfirm.textContent = 'Save';
       libSaveForm.style.display  = 'none';
-      // Refresh library panel if it's open
+      await this._loadThemeDropdown();
       if (this._libraryOpen) await this._loadLibrary();
     });
 
@@ -786,11 +797,30 @@ Rules:
   /* ------------------------------------------------------------------ */
   /* Theme Library                                                       */
   /* ------------------------------------------------------------------ */
+  async _seedBuiltinThemes() {
+    const existing = await window.db.savedThemes.list();
+    if (existing.length === 0) {
+      for (const preset of BUILTIN_PRESETS) {
+        await window.db.savedThemes.create({ name: preset.label, light: preset.light, dark: preset.dark });
+      }
+    }
+  }
+
+  async _loadThemeDropdown() {
+    const select = this.container.querySelector('#sgThemeSelect');
+    if (!select) return;
+    this._libraryThemes = await window.db.savedThemes.list();
+    const current = select.value;
+    select.innerHTML = '<option value="">— Select a theme —</option>' +
+      this._libraryThemes.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
+    if (current && this._libraryThemes.some(t => String(t.id) === current)) select.value = current;
+  }
+
   async _loadLibrary() {
     const list = this.container.querySelector('#sgLibraryList');
     list.innerHTML = '<p class="sg-page__lib-empty">Loading…</p>';
     try {
-      this._libraryThemes = await window.db.savedThemes.list();
+      await this._loadThemeDropdown();
       list.innerHTML = this._renderLibraryHtml(this._libraryThemes);
       this._bindLibraryEvents(list);
     } catch (err) {
@@ -827,9 +857,8 @@ Rules:
         if (!theme) return;
         this.container.querySelector('#sgTplLight').value = theme.light || '';
         this.container.querySelector('#sgTplDark').value  = theme.dark  || '';
-        // re-render preview via a manual input event
-        this.container.querySelector('#sgTplLight').dispatchEvent(new Event('input'));
-        this.container.querySelector('#sgTplDark').dispatchEvent(new Event('input'));
+        const select = this.container.querySelector('#sgThemeSelect');
+        if (select) select.value = String(id);
         this.container.querySelector('#sgRefreshBtn').click();
       });
     });
