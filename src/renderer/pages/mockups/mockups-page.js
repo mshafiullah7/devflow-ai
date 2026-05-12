@@ -727,14 +727,22 @@ export class MockupsPage {
         <div class="scr-chat-msg__generating">
           <span class="scr-chat-stream-dot"></span>
           <div class="scr-chat-msg__gen-info">
-            <span class="scr-chat-msg__gen-label">Generating…</span>
-            <span class="scr-chat-msg__gen-hint">This may take 5 minutes or more</span>
+            <span class="scr-chat-msg__gen-label">Generating… 0s</span>
           </div>
           <button class="scr-chat-cancel-btn">Cancel</button>
         </div>
         <pre class="scr-chat-stream-preview"></pre>
       `;
       messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      const genStart = Date.now();
+      const genTimer = setInterval(() => {
+        const labelEl = previewBubble.querySelector('.scr-chat-msg__gen-label');
+        if (!labelEl) { clearInterval(genTimer); return; }
+        const elapsed = Math.floor((Date.now() - genStart) / 1000);
+        const display = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+        labelEl.textContent = `Generating… ${display}`;
+      }, 1000);
 
       window.app.chat.offAll();
 
@@ -747,6 +755,7 @@ export class MockupsPage {
       });
 
       window.app.chat.onDone(async ({ html, raw, error }) => {
+        clearInterval(genTimer);
         window.app.chat.offAll();
         const rawText = raw || '';
 
@@ -784,6 +793,7 @@ export class MockupsPage {
       });
 
       previewBubble.querySelector('.scr-chat-cancel-btn').addEventListener('click', () => {
+        clearInterval(genTimer);
         window.app.chat.cancel();
         window.app.chat.offAll();
         previewBubble.innerHTML = `<div class="scr-chat-msg__cancelled">Cancelled</div>`;
