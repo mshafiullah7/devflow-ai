@@ -266,6 +266,10 @@ export class StyleGuidePage {
           <span class="sg-page__badge${hasAny ? ' sg-page__badge--active' : ''}">
             ${hasAny ? 'Active — applied to all screens' : 'Not set'}
           </span>
+          <div class="sg-page__header-actions" style="-webkit-app-region:no-drag;">
+            <button class="scr-btn scr-btn--sm" id="sgNewBtn">New</button>
+            <button class="scr-btn scr-btn--primary scr-btn--sm" id="sgSaveBtn">Save Style Guide</button>
+          </div>
         </header>
 
         <div class="sg-page__body">
@@ -364,7 +368,6 @@ export class StyleGuidePage {
             </div>
             <div class="sg-page__actions-right">
               <button class="scr-btn scr-btn--sm scr-btn--accent" id="sgSaveToLibraryBtn">Save to Library</button>
-              <button class="scr-btn scr-btn--primary" id="sgSaveBtn">Save Style Guide</button>
             </div>
           </div>
 

@@ -63,6 +63,13 @@
   margin-top: 1px;
 }
 
+.sg-page__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .sg-page__badge {
   flex-shrink: 0;
   font-size: 11px;
