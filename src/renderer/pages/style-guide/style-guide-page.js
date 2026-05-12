@@ -505,7 +505,9 @@ export class StyleGuidePage {
         setTimeout(() => { genStatus.style.display = 'none'; }, 3000);
         return;
       }
-      this._runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview });
+      const existingLight = lightTa.value.trim();
+      const existingDark  = darkTa.value.trim();
+      this._runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview, existingLight, existingDark });
     });
 
     genPromptEl.addEventListener('keydown', e => {
@@ -580,8 +582,8 @@ export class StyleGuidePage {
   /* ------------------------------------------------------------------ */
   /* AI Generation logic                                                 */
   /* ------------------------------------------------------------------ */
-  _runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview }) {
-    const prompt = this._buildGenerationPrompt(userInput);
+  _runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview, existingLight = '', existingDark = '' }) {
+    const prompt = this._buildGenerationPrompt(userInput, existingLight, existingDark);
 
     setGenerating(true);
     genStatus.textContent = 'Generating…';
@@ -624,11 +626,23 @@ export class StyleGuidePage {
     window.app.chat.generate({ prompt, model: this._aiModelConfig });
   }
 
-  _buildGenerationPrompt(userInput) {
+  _buildGenerationPrompt(userInput, existingLight = '', existingDark = '') {
+    const hasExisting = existingLight || existingDark;
+    const existingSection = hasExisting ? `
+Current theme (use as reference and evolve/refine it based on the request — keep the same structure):
+
+--- EXISTING LIGHT THEME ---
+${existingLight || '(none)'}
+
+--- EXISTING DARK THEME ---
+${existingDark || '(none)'}
+
+` : '';
+
     return `You are a UI/UX design expert specializing in desktop application themes. Generate a complete style guide for a desktop app.
 
-User's aesthetic request: "${userInput}"
-
+User's request: "${userInput}"
+${existingSection}
 Output EXACTLY in this format — no extra commentary, no markdown fences, no preamble:
 
 --- LIGHT THEME ---
