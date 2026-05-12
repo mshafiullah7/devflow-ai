@@ -65,15 +65,19 @@ ${existingHtml}`;
 }
 
 function buildExtractPsCommand(instruction, model) {
-  const exe      = model.executable || 'claude';
-  const safeInst = instruction.replace(/'/g, "''");
-  return `$p = @'\n${safeInst}\n'@\n${exe} $p`;
+  const exe       = model.executable || 'claude';
+  const flags     = model.flags ? ` ${model.flags}` : '';
+  const modelFlag = model.model_name ? ` --model ${model.model_name}` : '';
+  const safeInst  = instruction.replace(/'/g, "''");
+  return `$p = @'\n${safeInst}\n'@\n${exe}${flags}${modelFlag} $p`;
 }
 
 function buildPsCommand(prompt, model) {
-  const exe  = model.executable || 'claude';
-  const safe = prompt.replace(/'/g, "''");
-  return `$p = @'\n${safe}\n'@\n${exe} $p`;
+  const exe       = model.executable || 'claude';
+  const flags     = model.flags ? ` ${model.flags}` : '';
+  const modelFlag = model.model_name ? ` --model ${model.model_name}` : '';
+  const safe      = prompt.replace(/'/g, "''");
+  return `$p = @'\n${safe}\n'@\n${exe}${flags}${modelFlag} $p`;
 }
 
 // ----------------------------------------------------------------
@@ -2189,7 +2193,9 @@ Spacing:
       }
     }
 
-    const cmd = `${model.executable} "${filePath}"`;
+    const flags     = model.flags ? ` ${model.flags}` : '';
+    const modelFlag = model.model_name ? ` --model ${model.model_name}` : '';
+    const cmd = `${model.executable}${flags}${modelFlag} "${filePath}"`;
     this._showPromptPreviewModal(cmd, async () => {
       await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
     });
