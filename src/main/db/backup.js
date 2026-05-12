@@ -88,10 +88,16 @@ async function exportDb(win) {
 }
 
 async function restoreDb(win) {
+  const configuredPath = getConfigValue('backupPath');
+  const defaultPath    = configuredPath && fs.existsSync(configuredPath)
+    ? configuredPath
+    : path.join(app.getPath('userData'), 'backup');
+
   const pick = await dialog.showOpenDialog(win, {
-    title:      'Restore Database Backup',
-    properties: ['openFile'],
-    filters:    [{ name: 'SQLite Database', extensions: ['db'] }],
+    title:       'Restore Database Backup',
+    defaultPath,
+    properties:  ['openFile'],
+    filters:     [{ name: 'SQLite Database', extensions: ['db'] }],
   });
   if (pick.canceled || pick.filePaths.length === 0) return { success: false };
 
