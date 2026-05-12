@@ -756,3 +756,65 @@
   line-height: 1.5;
 }
 
+/* ------------------------------------------------------------------ */
+/* Backup action cards                                                   */
+/* ------------------------------------------------------------------ */
+.st-backup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 580px;
+}
+
+.st-backup-action-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+}
+
+.st-backup-action-card__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.st-backup-action-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.st-backup-action-card__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.st-backup-action-card__desc {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.st-backup-action-card__desc code {
+  font-family: monospace;
+  background: var(--surface-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.st-add-btn--danger {
+  background: var(--danger, #ef4444);
+}
+

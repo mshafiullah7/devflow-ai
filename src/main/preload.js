@@ -174,6 +174,10 @@ contextBridge.exposeInMainWorld('app', {
     get: ()     => invoke('app:cloudsync:get'),
     set: (data) => invoke('app:cloudsync:set', data),
   },
+  db: {
+    export:  () => invoke('app:db:export'),
+    restore: () => invoke('app:db:restore'),
+  },
   backupDefaultPath: () => invoke('app:backup-default-path'),
   screensDir:       (projectName) => invoke('app:screens-dir', projectName),
   prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),

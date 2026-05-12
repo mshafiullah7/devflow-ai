@@ -299,9 +299,41 @@ export class SettingsPage {
     ]);
     main.innerHTML = `
       <div class="st-content-title">Backup</div>
-      <div class="st-content-sub">Configure where automatic daily backups are stored</div>
+      <div class="st-content-sub">Automatic daily backups run on launch. Export or restore a backup manually at any time.</div>
+
       <div class="st-section-header">
-        <div class="st-section-label">Backup Path</div>
+        <div class="st-section-label">Manual Backup</div>
+      </div>
+      <div class="st-backup-actions">
+        <div class="st-backup-action-card">
+          <div class="st-backup-action-card__icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <div class="st-backup-action-card__body">
+            <div class="st-backup-action-card__title">Export Backup</div>
+            <div class="st-backup-action-card__desc">Save a copy of the current database to any location.</div>
+          </div>
+          <button class="st-add-btn" id="stBtnExport">Export</button>
+        </div>
+        <div class="st-backup-action-card">
+          <div class="st-backup-action-card__icon" style="color:var(--danger)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="st-backup-action-card__body">
+            <div class="st-backup-action-card__title">Restore Backup</div>
+            <div class="st-backup-action-card__desc">Replace current data with a previously exported <code>.db</code> file. The app will reload automatically.</div>
+          </div>
+          <button class="st-add-btn st-add-btn--danger" id="stBtnRestore">Restore</button>
+        </div>
+      </div>
+      <span class="st-form__hint" id="stBackupActionHint" style="display:block;margin-top:8px"></span>
+
+      <div class="st-section-header" style="margin-top:28px">
+        <div class="st-section-label">Auto-Backup Path</div>
       </div>
       <div class="st-input-row">
         <input class="st-form__input" id="stBackupPathInput" type="text"
@@ -324,6 +356,26 @@ export class SettingsPage {
       </div>
       <span class="st-form__hint" id="stBackupHint"></span>
     `;
+
+    const actionHint = main.querySelector('#stBackupActionHint');
+
+    main.querySelector('#stBtnExport').addEventListener('click', async () => {
+      actionHint.textContent = 'Exporting…';
+      const result = await window.app.db.export();
+      actionHint.textContent = result.success ? `Exported to ${result.filePath}` : 'Export cancelled.';
+      setTimeout(() => { actionHint.textContent = ''; }, 4000);
+    });
+
+    main.querySelector('#stBtnRestore').addEventListener('click', async () => {
+      actionHint.textContent = '';
+      const result = await window.app.db.restore();
+      if (!result.success) {
+        if (result.reason === 'corrupt')  actionHint.textContent = 'Restore failed — selected file failed integrity check.';
+        else if (result.reason === 'invalid') actionHint.textContent = 'Restore failed — file is not a valid SQLite database.';
+        // cancelled: show nothing
+      }
+      // On success the window reloads automatically
+    });
 
     main.querySelector('#stBtnBrowseBackup').addEventListener('click', async () => {
       const folder = await window.db.dialog.openFolder();
