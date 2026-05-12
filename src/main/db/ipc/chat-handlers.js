@@ -245,10 +245,12 @@ function runCli(wc, prompt, editPayload, model, messages) {
   }
 
   const safeTmp = tmpFile.replace(/'/g, "''");
+  // Pipe file content via stdin instead of passing as a CLI argument.
+  // Passing $p unquoted splits multi-line strings into separate tokens and
+  // causes "---" section markers to be interpreted as end-of-flags by the CLI.
   const psCmd = [
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null;',
-    `$p = Get-Content -Path '${safeTmp}' -Raw`,
-    `${exe} ${baseFlags} $p`,
+    `Get-Content -Path '${safeTmp}' -Raw | ${exe} ${baseFlags}`,
   ].join('\n');
 
   let accumulated = '';
