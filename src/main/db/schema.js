@@ -254,6 +254,18 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- SAVED THEMES (global library, shared across all projects)
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS saved_themes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT    NOT NULL,
+      light      TEXT    NOT NULL DEFAULT '',
+      dark       TEXT    NOT NULL DEFAULT '',
+      is_active  INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- PROMPT QUEUE
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS prompt_queue (

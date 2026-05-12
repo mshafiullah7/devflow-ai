@@ -804,6 +804,25 @@ function registerDbHandlers() {
     return { success: true };
   });
 
+  // ----------------------------------------------------------------
+  // saved_themes (global library, shared across all projects)
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:saved_themes:list', () => {
+    return db.prepare('SELECT * FROM saved_themes WHERE is_active = 1 ORDER BY created_at DESC').all();
+  });
+
+  ipcMain.handle('db:saved_themes:create', (_e, { name, light, dark }) => {
+    const result = db
+      .prepare('INSERT INTO saved_themes (name, light, dark) VALUES (?, ?, ?)')
+      .run(name, light ?? '', dark ?? '');
+    return db.prepare('SELECT * FROM saved_themes WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  ipcMain.handle('db:saved_themes:delete', (_e, id) => {
+    db.prepare('UPDATE saved_themes SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
+  });
+
   ipcMain.handle('app:writeTempFiles', (_e, files) => {
     const dir = path.join(os.tmpdir(), 'electron-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });

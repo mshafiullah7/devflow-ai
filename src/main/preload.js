@@ -134,6 +134,11 @@ contextBridge.exposeInMainWorld('db', {
     delete: (id)         => invoke('db:issues:delete', id),
     count:  (project_id) => invoke('db:issues:count', project_id),
   },
+  savedThemes: {
+    list:   ()     => invoke('db:saved_themes:list'),
+    create: (data) => invoke('db:saved_themes:create', data),
+    delete: (id)   => invoke('db:saved_themes:delete', id),
+  },
   dialog: {
     openFolder:   ()     => invoke('dialog:openFolder'),
     openJsonFile: ()     => invoke('dialog:openJsonFile'),

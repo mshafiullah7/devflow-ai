@@ -3,7 +3,10 @@ import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 
-const EXAMPLES = [
+/* ------------------------------------------------------------------ */
+/* Built-in preset examples (shipped with the app)                     */
+/* ------------------------------------------------------------------ */
+const BUILTIN_PRESETS = [
   {
     label: 'DevFlow Default',
     light:
@@ -178,6 +181,9 @@ export class StyleGuidePage {
     this._from          = params.from || 'project-home';
     this._project       = null;
     this._aiModelConfig = null;
+    this._libraryOpen   = false;
+    this._libraryThemes = [];
+    this._generating    = false;
   }
 
   async mount() {
@@ -197,11 +203,11 @@ export class StyleGuidePage {
     });
     await this._picker.reload();
 
-
     this._bindEvents();
   }
 
   unmount() {
+    window.app.chat.offAll();
     removeCss('pages/style-guide/style-guide-page.css');
     removeCss('pages/mockups/mockups-page.css');
     this._picker?.unmount();
@@ -268,6 +274,24 @@ export class StyleGuidePage {
             Both are injected into every screen generation prompt.
           </p>
 
+          <!-- AI Generation Bar -->
+          <div class="sg-page__gen-bar">
+            <input
+              type="text"
+              class="form-input sg-page__gen-input"
+              id="sgGenPrompt"
+              placeholder="Describe your aesthetic (e.g. minimal dark with purple accents, warm earth tones, corporate blue)…"
+            />
+            <button class="scr-btn scr-btn--accent" id="sgGenerateBtn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              Generate
+            </button>
+            <button class="scr-btn scr-btn--sm" id="sgCancelBtn" style="display:none">Cancel</button>
+            <span class="sg-page__gen-status" id="sgGenStatus" style="display:none"></span>
+          </div>
+
           <div class="sg-page__editor">
 
             <div class="scr-ds-templates">
@@ -314,30 +338,62 @@ export class StyleGuidePage {
 
           </div>
 
+          <!-- Actions bar -->
           <div class="sg-page__actions">
-            <button class="scr-btn scr-btn--sm" id="sgExampleBtn">Example: ${EXAMPLES[0].label} ↻</button>
-            <button class="scr-btn scr-btn--primary" id="sgSaveBtn">Save Style Guide</button>
+            <div class="sg-page__actions-left">
+              <button class="scr-btn scr-btn--sm" id="sgExampleBtn">Example: ${BUILTIN_PRESETS[0].label} ↻</button>
+              <button class="scr-btn scr-btn--sm" id="sgLibraryToggle">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+                Library
+                <span id="sgLibraryChevron">▾</span>
+              </button>
+            </div>
+            <div class="sg-page__actions-right">
+              <button class="scr-btn scr-btn--sm scr-btn--accent" id="sgSaveToLibraryBtn">Save to Library</button>
+              <button class="scr-btn scr-btn--primary" id="sgSaveBtn">Save Style Guide</button>
+            </div>
           </div>
+
+          <!-- Save to Library inline form (hidden by default) -->
+          <div class="sg-page__lib-save-form" id="sgLibSaveForm" style="display:none">
+            <input
+              type="text"
+              class="form-input sg-page__lib-name-input"
+              id="sgLibNameInput"
+              placeholder="Theme name (e.g. My Dark Indigo)…"
+              maxlength="60"
+            />
+            <button class="scr-btn scr-btn--primary scr-btn--sm" id="sgLibSaveConfirm">Save</button>
+            <button class="scr-btn scr-btn--sm" id="sgLibSaveCancel">Cancel</button>
+          </div>
+
+          <!-- Global Theme Library panel (hidden by default) -->
+          <div class="sg-page__library" id="sgLibraryPanel" style="display:none">
+            <div class="sg-page__library-inner" id="sgLibraryList">
+              <p class="sg-page__lib-empty">Loading…</p>
+            </div>
+          </div>
+
         </div>
       </div>
     `;
   }
 
-  async _reloadModelDropdown() {
-    if (this._picker) await this._picker.reload();
-  }
-
   _bindEvents() {
+    /* ---- Navigation ---- */
     this.container.querySelector('#sgBtnBack')
       .addEventListener('click', () => this.router.navigate(this._from, { projectId: this._projectId }));
 
     this.container.querySelector('#sgBtnModelConfigs')
       .addEventListener('click', () => this._modelConfigsModal.show());
 
-
     this.container.querySelector('#sgBtnGit')
       .addEventListener('click', () => this.router.navigate(this._from, { projectId: this._projectId }));
 
+    /* ---- Preview state ---- */
     let exampleIdx  = -1;
     let activeTheme = 'dark';
 
@@ -365,21 +421,24 @@ export class StyleGuidePage {
         : blankHtml(activeTheme);
     };
 
+    /* ---- Built-in example cycle ---- */
     const cycleBtn = this.container.querySelector('#sgExampleBtn');
     cycleBtn.addEventListener('click', () => {
-      exampleIdx = (exampleIdx + 1) % EXAMPLES.length;
-      const ex   = EXAMPLES[exampleIdx];
-      const next = EXAMPLES[(exampleIdx + 1) % EXAMPLES.length];
+      exampleIdx = (exampleIdx + 1) % BUILTIN_PRESETS.length;
+      const ex   = BUILTIN_PRESETS[exampleIdx];
+      const next = BUILTIN_PRESETS[(exampleIdx + 1) % BUILTIN_PRESETS.length];
       this.container.querySelector('#sgTplLight').value = ex.light;
       this.container.querySelector('#sgTplDark').value  = ex.dark;
       cycleBtn.textContent = `Example: ${ex.label} — Next: ${next.label} ↻`;
       renderPreview();
     });
 
+    /* ---- Textarea live preview ---- */
     this.container.querySelector('#sgTplLight').addEventListener('input', () => { if (activeTheme === 'light') renderPreview(); });
     this.container.querySelector('#sgTplDark').addEventListener('input',  () => { if (activeTheme === 'dark')  renderPreview(); });
     this.container.querySelector('#sgRefreshBtn').addEventListener('click', renderPreview);
 
+    /* ---- Theme toggle buttons ---- */
     this.container.querySelectorAll('.scr-ds-theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         this.container.querySelectorAll('.scr-ds-theme-btn').forEach(b => b.classList.remove('scr-ds-theme-btn--active'));
@@ -390,6 +449,7 @@ export class StyleGuidePage {
       });
     });
 
+    /* ---- Save Style Guide ---- */
     this.container.querySelector('#sgSaveBtn').addEventListener('click', async () => {
       const saveBtn  = this.container.querySelector('#sgSaveBtn');
       const tplLight = this.container.querySelector('#sgTplLight').value.trim();
@@ -408,10 +468,311 @@ export class StyleGuidePage {
       saveBtn.textContent = 'Save Style Guide';
     });
 
+    /* ---------------------------------------------------------------- */
+    /* AI Generation                                                     */
+    /* ---------------------------------------------------------------- */
+    const generateBtn  = this.container.querySelector('#sgGenerateBtn');
+    const cancelBtn    = this.container.querySelector('#sgCancelBtn');
+    const genStatus    = this.container.querySelector('#sgGenStatus');
+    const genPromptEl  = this.container.querySelector('#sgGenPrompt');
+    const lightTa      = this.container.querySelector('#sgTplLight');
+    const darkTa       = this.container.querySelector('#sgTplDark');
+
+    const setGenerating = (on) => {
+      this._generating        = on;
+      generateBtn.disabled    = on;
+      generateBtn.textContent = on ? 'Generating…' : 'Generate';
+      if (on) {
+        // re-add the bolt icon when not generating
+        generateBtn.innerHTML = on
+          ? 'Generating…'
+          : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate`;
+      } else {
+        generateBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate`;
+      }
+      cancelBtn.style.display   = on ? '' : 'none';
+      genStatus.style.display   = on ? '' : 'none';
+      lightTa.disabled          = on;
+      darkTa.disabled           = on;
+    };
+
+    generateBtn.addEventListener('click', () => {
+      const userInput = genPromptEl.value.trim();
+      if (!userInput) { genPromptEl.focus(); return; }
+      if (!this._aiModelConfig) {
+        genStatus.style.display   = '';
+        genStatus.textContent     = 'Please select an AI model first.';
+        setTimeout(() => { genStatus.style.display = 'none'; }, 3000);
+        return;
+      }
+      this._runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview });
+    });
+
+    genPromptEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !this._generating) generateBtn.click();
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      window.app.chat.cancel();
+      window.app.chat.offAll();
+      setGenerating(false);
+      genStatus.style.display = '';
+      genStatus.textContent   = 'Generation cancelled.';
+      setTimeout(() => { genStatus.style.display = 'none'; }, 2000);
+    });
+
+    /* ---------------------------------------------------------------- */
+    /* Theme Library                                                     */
+    /* ---------------------------------------------------------------- */
+    const libraryPanel   = this.container.querySelector('#sgLibraryPanel');
+    const libraryToggle  = this.container.querySelector('#sgLibraryToggle');
+    const libraryChevron = this.container.querySelector('#sgLibraryChevron');
+
+    libraryToggle.addEventListener('click', async () => {
+      this._libraryOpen = !this._libraryOpen;
+      libraryPanel.style.display  = this._libraryOpen ? '' : 'none';
+      libraryChevron.textContent  = this._libraryOpen ? '▴' : '▾';
+      if (this._libraryOpen) await this._loadLibrary();
+    });
+
+    /* ---- Save to Library ---- */
+    const saveToLibBtn   = this.container.querySelector('#sgSaveToLibraryBtn');
+    const libSaveForm    = this.container.querySelector('#sgLibSaveForm');
+    const libNameInput   = this.container.querySelector('#sgLibNameInput');
+    const libSaveConfirm = this.container.querySelector('#sgLibSaveConfirm');
+    const libSaveCancel  = this.container.querySelector('#sgLibSaveCancel');
+
+    saveToLibBtn.addEventListener('click', () => {
+      libSaveForm.style.display = '';
+      libNameInput.value = '';
+      libNameInput.focus();
+    });
+
+    libSaveCancel.addEventListener('click', () => {
+      libSaveForm.style.display = 'none';
+    });
+
+    libSaveConfirm.addEventListener('click', async () => {
+      const name  = libNameInput.value.trim();
+      if (!name) { libNameInput.focus(); return; }
+      const light = lightTa.value.trim();
+      const dark  = darkTa.value.trim();
+      libSaveConfirm.disabled    = true;
+      libSaveConfirm.textContent = 'Saving…';
+      await window.db.savedThemes.create({ name, light, dark });
+      libSaveConfirm.disabled    = false;
+      libSaveConfirm.textContent = 'Save';
+      libSaveForm.style.display  = 'none';
+      // Refresh library panel if it's open
+      if (this._libraryOpen) await this._loadLibrary();
+    });
+
+    libNameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') libSaveConfirm.click();
+      if (e.key === 'Escape') libSaveCancel.click();
+    });
+
+    /* ---- Initial render ---- */
     setActiveCol();
     renderPreview();
   }
 
+  /* ------------------------------------------------------------------ */
+  /* AI Generation logic                                                 */
+  /* ------------------------------------------------------------------ */
+  _runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview }) {
+    const prompt = this._buildGenerationPrompt(userInput);
+
+    setGenerating(true);
+    genStatus.textContent = 'Generating…';
+
+    let rawResponse = '';
+    let tokenCount  = 0;
+
+    window.app.chat.offAll();
+
+    window.app.chat.onToken(({ text }) => {
+      rawResponse  += text;
+      tokenCount   += text.length;
+      genStatus.textContent = `Generating… (${tokenCount} chars)`;
+    });
+
+    window.app.chat.onDone(({ raw, error }) => {
+      window.app.chat.offAll();
+      setGenerating(false);
+
+      if (error) {
+        genStatus.style.display = '';
+        genStatus.textContent   = `Error: ${error}`;
+        setTimeout(() => { genStatus.style.display = 'none'; }, 4000);
+        return;
+      }
+
+      const finalText = raw || rawResponse;
+      const { light, dark } = this._splitThemeResponse(finalText);
+
+      if (light) lightTa.value = light;
+      if (dark)  darkTa.value  = dark;
+
+      genStatus.style.display = '';
+      genStatus.textContent   = light || dark ? '✓ Done — review and save when ready.' : 'No content returned. Try rephrasing.';
+      setTimeout(() => { genStatus.style.display = 'none'; }, 4000);
+
+      renderPreview();
+    });
+
+    window.app.chat.generate({ prompt, model: this._aiModelConfig });
+  }
+
+  _buildGenerationPrompt(userInput) {
+    return `You are a UI/UX design expert specializing in desktop application themes. Generate a complete style guide for a desktop app.
+
+User's aesthetic request: "${userInput}"
+
+Output EXACTLY in this format — no extra commentary, no markdown fences, no preamble:
+
+--- LIGHT THEME ---
+Color Palette:
+- Primary: #hex
+- Background: #hex
+- Surface: #hex
+- Text primary: #hex
+- Text secondary: #hex
+- Border: #hex
+- Danger: #ef4444
+
+Typography:
+- Font family: 'Font Name', system-ui, sans-serif
+- Heading: font-weight 600, font-size 24px
+- Body: font-weight 400, font-size 14px, line-height 1.5
+
+Components:
+- Buttons: border-radius 8px, padding 8px 18px, font-weight 500
+- Cards: border-radius 12px, border 1px solid [border-color], background [surface-color]
+- Inputs: border-radius 8px, background [background-color], border 1px solid [border-color]
+
+--- DARK THEME ---
+Color Palette:
+- Primary: #hex
+- Background: #hex
+- Surface: #hex
+- Text primary: #hex
+- Text secondary: #hex
+- Border: #hex
+- Danger: #ef4444
+
+Typography:
+- Font family: 'Font Name', system-ui, sans-serif
+- Heading: font-weight 600, font-size 24px
+- Body: font-weight 400, font-size 14px, line-height 1.5
+
+Components:
+- Buttons: border-radius 8px, padding 8px 18px, font-weight 500
+- Cards: border-radius 12px, border 1px solid [border-color], background [surface-color]
+- Inputs: border-radius 8px, background [background-color], border 1px solid [border-color]
+
+Rules:
+- Use only real hex color codes (e.g. #1e3a5f, not "navy" or "var(--something)")
+- Light theme: bright backgrounds, dark text, good contrast
+- Dark theme: dark backgrounds, light text, matching aesthetic to the light theme
+- Keep the exact section headers "--- LIGHT THEME ---" and "--- DARK THEME ---"
+- Do not add any text outside the two theme blocks`;
+  }
+
+  _splitThemeResponse(raw) {
+    if (!raw) return { light: '', dark: '' };
+
+    const darkMarkerRe  = /---\s*DARK\s*THEME\s*---/i;
+    const lightMarkerRe = /---\s*LIGHT\s*THEME\s*---/i;
+
+    const darkIdx  = raw.search(darkMarkerRe);
+    const lightIdx = raw.search(lightMarkerRe);
+
+    let light = '';
+    let dark  = '';
+
+    if (darkIdx !== -1) {
+      // Everything between LIGHT marker (or start) and DARK marker
+      const lightEnd = darkIdx;
+      const rawLight = lightIdx !== -1 ? raw.slice(lightIdx, lightEnd) : raw.slice(0, lightEnd);
+      // Strip the LIGHT header line itself
+      light = rawLight.replace(lightMarkerRe, '').trim();
+      // Everything after the DARK marker header line
+      const afterDark = raw.slice(darkIdx);
+      dark = afterDark.replace(darkMarkerRe, '').trim();
+    } else {
+      // No DARK marker found — put everything in dark (fallback)
+      dark = raw.replace(lightMarkerRe, '').trim();
+    }
+
+    return { light, dark };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Theme Library                                                       */
+  /* ------------------------------------------------------------------ */
+  async _loadLibrary() {
+    const list = this.container.querySelector('#sgLibraryList');
+    list.innerHTML = '<p class="sg-page__lib-empty">Loading…</p>';
+    try {
+      this._libraryThemes = await window.db.savedThemes.list();
+      list.innerHTML = this._renderLibraryHtml(this._libraryThemes);
+      this._bindLibraryEvents(list);
+    } catch (err) {
+      list.innerHTML = `<p class="sg-page__lib-empty">Failed to load library: ${escHtml(String(err))}</p>`;
+    }
+  }
+
+  _renderLibraryHtml(themes) {
+    if (!themes.length) {
+      return `<p class="sg-page__lib-empty">No saved themes yet. Edit a style guide above and click <strong>Save to Library</strong>.</p>`;
+    }
+    return themes.map(t => {
+      const date = new Date(t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      return `
+        <div class="sg-lib-item" data-id="${t.id}">
+          <div class="sg-lib-item__info">
+            <span class="sg-lib-item__name">${escHtml(t.name)}</span>
+            <span class="sg-lib-item__date">${date}</span>
+          </div>
+          <div class="sg-lib-item__actions">
+            <button class="scr-btn scr-btn--sm scr-btn--accent sg-lib-item__load" data-id="${t.id}">Load</button>
+            <button class="scr-btn scr-btn--sm scr-btn--danger sg-lib-item__delete" data-id="${t.id}" title="Remove from library">✕</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  _bindLibraryEvents(list) {
+    list.querySelectorAll('.sg-lib-item__load').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id    = Number(btn.dataset.id);
+        const theme = this._libraryThemes.find(t => t.id === id);
+        if (!theme) return;
+        this.container.querySelector('#sgTplLight').value = theme.light || '';
+        this.container.querySelector('#sgTplDark').value  = theme.dark  || '';
+        // re-render preview via a manual input event
+        this.container.querySelector('#sgTplLight').dispatchEvent(new Event('input'));
+        this.container.querySelector('#sgTplDark').dispatchEvent(new Event('input'));
+        this.container.querySelector('#sgRefreshBtn').click();
+      });
+    });
+
+    list.querySelectorAll('.sg-lib-item__delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = Number(btn.dataset.id);
+        btn.disabled    = true;
+        btn.textContent = '…';
+        await window.db.savedThemes.delete(id);
+        await this._loadLibrary();
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Preview rendering                                                   */
+  /* ------------------------------------------------------------------ */
   _parseDesignTemplate(text) {
     const lines = text.split('\n');
     const hexRe = /#[0-9a-fA-F]{6,8}\b|#[0-9a-fA-F]{3,4}\b/;

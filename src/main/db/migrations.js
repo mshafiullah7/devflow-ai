@@ -221,6 +221,21 @@ function runMigrations(db) {
     db.exec('ALTER TABLE test_run_history ADD COLUMN output TEXT');
   }
 
+  // Add saved_themes table for existing databases
+  const allTablesST = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+  if (!allTablesST.includes('saved_themes')) {
+    db.exec(`
+      CREATE TABLE saved_themes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL,
+        light      TEXT    NOT NULL DEFAULT '',
+        dark       TEXT    NOT NULL DEFAULT '',
+        is_active  INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
   // Add document_attachments table for existing databases
   const allTables4 = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
   if (!allTables4.includes('document_attachments')) {
