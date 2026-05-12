@@ -360,7 +360,7 @@ export class StyleGuidePage {
             </div>
             <div class="sg-page__actions-right">
               <button class="scr-btn scr-btn--sm scr-btn--accent" id="sgSaveToLibraryBtn">Save to Library</button>
-              <button class="scr-btn scr-btn--primary" id="sgSaveBtn">Save</button>
+              <button class="scr-btn scr-btn--primary" id="sgSaveBtn">Apply</button>
             </div>
           </div>
 
@@ -462,7 +462,7 @@ export class StyleGuidePage {
       const tplDark  = this.container.querySelector('#sgTplDark').value.trim();
       const tpl      = JSON.stringify({ light: tplLight, dark: tplDark });
       saveBtn.disabled    = true;
-      saveBtn.textContent = 'Saving…';
+      saveBtn.textContent = 'Applying…';
       await window.db.projects.update({ id: this._projectId, design_template: tpl });
       if (this._project) this._project.design_template = tpl;
       const badge = this.container.querySelector('.sg-page__badge');
@@ -471,10 +471,10 @@ export class StyleGuidePage {
         badge.textContent = 'Active — applied to all screens';
       }
       saveBtn.disabled    = false;
-      saveBtn.textContent = '✓ Saved';
+      saveBtn.textContent = '✓ Applied';
       saveBtn.classList.add('sg-page__save-btn--saved');
       setTimeout(() => {
-        saveBtn.textContent = 'Save';
+        saveBtn.textContent = 'Apply';
         saveBtn.classList.remove('sg-page__save-btn--saved');
       }, 2000);
     });
