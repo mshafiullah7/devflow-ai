@@ -849,10 +849,9 @@ Rules:
       return [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16)).join(',');
     };
     const primaryRgb = toRgb(v.primary);
-    const ctxBg = { dark: '#0f1117', light: '#f0ece6' }[contextTheme] || '#0f1117';
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{background:${ctxBg};color:${v.textPrimary};font-family:${v.fontFamily};font-size:13px;padding:16px;display:flex;flex-direction:column;gap:12px;min-height:100vh}
+body{background:${v.background};color:${v.textPrimary};font-family:${v.fontFamily};font-size:13px;padding:16px;display:flex;flex-direction:column;gap:12px;min-height:100vh}
 .card{background:${v.surface};border:1px solid ${v.border};border-radius:${v.borderRadius};padding:14px}
 h3{font-size:14px;font-weight:600;margin-bottom:5px}
 p{color:${v.textSecondary};font-size:12px;line-height:1.6;margin-bottom:10px}
