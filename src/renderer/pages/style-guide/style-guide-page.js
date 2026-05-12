@@ -631,21 +631,43 @@ export class StyleGuidePage {
 
   _buildGenerationPrompt(userInput, existingLight = '', existingDark = '') {
     const hasExisting = existingLight || existingDark;
-    const existingSection = hasExisting ? `
-Current theme (use as reference and evolve/refine it based on the request — keep the same structure):
 
---- EXISTING LIGHT THEME ---
-${existingLight || '(none)'}
-
---- EXISTING DARK THEME ---
-${existingDark || '(none)'}
-
-` : '';
-
-    return `You are a UI/UX design expert specializing in desktop application themes. Generate a complete style guide for a desktop app.
+    if (hasExisting) {
+      // Refine mode: keep exact structure, only swap hex color values
+      return `You are a UI/UX design expert. The user wants to adjust their existing theme colors.
 
 User's request: "${userInput}"
-${existingSection}
+
+Below are the current light and dark theme definitions. Your ONLY job is to replace the hex color values (#xxxxxx) to match the requested aesthetic. Every other character — labels, typography, font sizes, font weights, border-radius values, padding, spacing, line-height, and all non-color text — must remain EXACTLY as it is, word for word.
+
+--- EXISTING LIGHT THEME ---
+${existingLight || '(empty)'}
+
+--- EXISTING DARK THEME ---
+${existingDark || '(empty)'}
+
+Output the updated themes using EXACTLY the same structure and text as above, with ONLY hex color codes changed. Use these exact section headers and nothing else outside them:
+
+--- LIGHT THEME ---
+[full light theme text with only hex colors updated]
+
+--- DARK THEME ---
+[full dark theme text with only hex colors updated]
+
+Rules:
+- Replace ONLY lines that contain a hex color code (#xxxxxx). Do not touch any other lines.
+- Use only real hex codes (e.g. #1e3a5f). No color names, no CSS variables.
+- Light theme: bright backgrounds, dark text, strong contrast.
+- Dark theme: dark backgrounds, light text, same aesthetic as light.
+- Do not add, remove, or reword any labels, sections, or non-color values.
+- Output nothing outside the two theme blocks.`;
+    }
+
+    // Fresh generation mode: no existing theme to reference
+    return `You are a UI/UX design expert specializing in desktop application themes. Generate a complete style guide for a desktop app.
+
+User's aesthetic request: "${userInput}"
+
 Output EXACTLY in this format — no extra commentary, no markdown fences, no preamble:
 
 --- LIGHT THEME ---
@@ -665,8 +687,8 @@ Typography:
 
 Components:
 - Buttons: border-radius 8px, padding 8px 18px, font-weight 500
-- Cards: border-radius 12px, border 1px solid [border-color], background [surface-color]
-- Inputs: border-radius 8px, background [background-color], border 1px solid [border-color]
+- Cards: border-radius 12px, border 1px solid [border-hex], background [surface-hex]
+- Inputs: border-radius 8px, background [background-hex], border 1px solid [border-hex]
 
 --- DARK THEME ---
 Color Palette:
@@ -685,8 +707,8 @@ Typography:
 
 Components:
 - Buttons: border-radius 8px, padding 8px 18px, font-weight 500
-- Cards: border-radius 12px, border 1px solid [border-color], background [surface-color]
-- Inputs: border-radius 8px, background [background-color], border 1px solid [border-color]
+- Cards: border-radius 12px, border 1px solid [border-hex], background [surface-hex]
+- Inputs: border-radius 8px, background [background-hex], border 1px solid [border-hex]
 
 Rules:
 - Use only real hex color codes (e.g. #1e3a5f, not "navy" or "var(--something)")
