@@ -6,7 +6,7 @@ const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
 const { closeDb } = require('./db/database');
 const { runBackup } = require('./db/backup');
-const { getConfigValue, setConfigValue } = require('./app-config');
+const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig } = require('./app-config');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -40,6 +40,8 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:config:get', (_e, key) => getConfigValue(key));
   ipcMain.handle('app:config:set', (_e, key, value) => { setConfigValue(key, value); });
+  ipcMain.handle('app:cloudsync:get', () => getCloudSyncConfig());
+  ipcMain.handle('app:cloudsync:set', (_e, data) => { setCloudSyncConfig(data); });
   ipcMain.handle('app:backup-default-path', () => path.join(app.getPath('userData'), 'backup'));
 
   ipcMain.handle('app:screens-dir', (event, projectName) => {

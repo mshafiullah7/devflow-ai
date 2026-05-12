@@ -2,7 +2,7 @@
 
 const fs   = require('node:fs');
 const path = require('node:path');
-const { app } = require('electron');
+const { app, safeStorage } = require('electron');
 
 function _configPath() {
   return path.join(app.getPath('userData'), 'app-config.json');
@@ -30,4 +30,44 @@ function setConfigValue(key, value) {
   writeConfig(cfg);
 }
 
-module.exports = { getConfigValue, setConfigValue };
+function _encrypt(plain) {
+  if (safeStorage.isAvailable()) {
+    return safeStorage.encryptString(plain).toString('base64');
+  }
+  // safeStorage unavailable (headless/test) — base64 only, not secure
+  return Buffer.from(plain).toString('base64');
+}
+
+function _decrypt(enc) {
+  if (safeStorage.isAvailable()) {
+    return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+  }
+  return Buffer.from(enc, 'base64').toString('utf8');
+}
+
+function getCloudSyncConfig() {
+  const sync = { ...(readConfig().cloudSync || {}) };
+  if (sync.password_enc) {
+    try { sync.password = _decrypt(sync.password_enc); } catch { sync.password = ''; }
+    delete sync.password_enc;
+  }
+  return sync;
+}
+
+function setCloudSyncConfig(data) {
+  const cfg  = readConfig();
+  const prev = cfg.cloudSync || {};
+  const { password, ...rest } = data;
+
+  const next = { ...rest };
+  if (password) {
+    next.password_enc = _encrypt(password);
+  } else if (prev.password_enc) {
+    next.password_enc = prev.password_enc;
+  }
+
+  cfg.cloudSync = next;
+  writeConfig(cfg);
+}
+
+module.exports = { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig };

@@ -66,6 +66,15 @@ export class SettingsPage {
               </span>
               <span class="st-nav-item__label">Prompts Template</span>
             </button>
+            <div class="st-sidebar-section">Sync</div>
+            <button class="st-nav-item" id="stNavCloudSync">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 17 21 12 16 7"/><path d="M21 12H9"/><path d="M3 12a9 9 0 0 1 9-9"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Cloud Sync</span>
+            </button>
             <div class="st-sidebar-section">Backup</div>
             <button class="st-nav-item" id="stNavBackupConfig">
               <span class="st-nav-item__icon">
@@ -97,6 +106,12 @@ export class SettingsPage {
       .addEventListener('click', () => {
         this._setActiveNav('stNavModelMapping');
         this._renderModelMapping();
+      });
+
+    this.container.querySelector('#stNavCloudSync')
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavCloudSync');
+        this._renderCloudSync();
       });
 
     this.container.querySelector('#stNavBackupConfig')
@@ -382,6 +397,204 @@ export class SettingsPage {
         </div>
       </div>
     `;
+  }
+
+  // ----------------------------------------------------------------
+  // Cloud Sync (placeholder)
+  // ----------------------------------------------------------------
+  async _renderCloudSync() {
+    const main   = this.container.querySelector('#stMainContent');
+    const saved  = await window.app.cloudSync.get();
+    const prov   = saved.provider || 'supabase';
+
+    main.innerHTML = `
+      <div class="st-content-title">Cloud Sync</div>
+      <div class="st-content-sub">Connect to a cloud database to sync project data across devices</div>
+
+      <div class="st-coming-soon-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+        </svg>
+        Sync functionality coming soon — save your connection now and sync will activate when released.
+      </div>
+
+      <div class="st-section-header" style="margin-top:20px">
+        <div class="st-section-label">Connection</div>
+      </div>
+
+      <div class="st-cloud-form">
+
+        <div class="st-form__row">
+          <label class="st-form__label">Provider</label>
+          <select class="st-form__select" id="csProvider">
+            <option value="supabase"  ${prov === 'supabase'  ? 'selected' : ''}>Supabase</option>
+            <option value="postgres"  ${prov === 'postgres'  ? 'selected' : ''}>PostgreSQL (self-hosted / on-premises)</option>
+          </select>
+          <span class="st-form__hint">
+            Both use the same PostgreSQL wire protocol — switching later only requires updating credentials.
+            <a class="st-hint-link" id="csLearnMore" href="#">Learn more</a>
+          </span>
+        </div>
+
+        <!-- Supabase fields -->
+        <div id="csFieldsSupabase">
+          <div class="st-form__row">
+            <label class="st-form__label">Project URL</label>
+            <input class="st-form__input" id="csSupabaseUrl" type="text"
+              placeholder="https://xxxxxxxxxxxx.supabase.co"
+              value="${escHtml(saved.supabaseUrl || '')}"/>
+            <span class="st-form__hint">Found in your Supabase project → Settings → API</span>
+          </div>
+          <div class="st-form__row">
+            <label class="st-form__label">Database Password</label>
+            <input class="st-form__input" id="csPassword" type="password"
+              placeholder="${saved.password_enc ? '••••••••  (saved)' : 'Enter database password'}"
+              autocomplete="new-password"/>
+            <span class="st-form__hint">Project database password — stored encrypted on this device</span>
+          </div>
+        </div>
+
+        <!-- PostgreSQL fields -->
+        <div id="csFieldsPostgres" style="display:none">
+          <div class="st-form__row">
+            <label class="st-form__label">Host</label>
+            <input class="st-form__input" id="csPgHost" type="text"
+              placeholder="192.168.1.10 or db.example.com"
+              value="${escHtml(saved.host || '')}"/>
+          </div>
+          <div class="st-form__row st-form__row--inline">
+            <div>
+              <label class="st-form__label">Port</label>
+              <input class="st-form__input" id="csPgPort" type="number"
+                placeholder="5432"
+                value="${escHtml(String(saved.port || '5432'))}"/>
+            </div>
+            <div>
+              <label class="st-form__label">Database</label>
+              <input class="st-form__input" id="csPgDatabase" type="text"
+                placeholder="sdlc_db"
+                value="${escHtml(saved.database || '')}"/>
+            </div>
+          </div>
+          <div class="st-form__row">
+            <label class="st-form__label">Username</label>
+            <input class="st-form__input" id="csPgUsername" type="text"
+              placeholder="postgres"
+              value="${escHtml(saved.username || '')}"/>
+          </div>
+          <div class="st-form__row">
+            <label class="st-form__label">Password</label>
+            <input class="st-form__input" id="csPassword" type="password"
+              placeholder="${saved.password_enc ? '••••••••  (saved)' : 'Enter password'}"
+              autocomplete="new-password"/>
+            <span class="st-form__hint">Stored encrypted on this device using OS credential storage</span>
+          </div>
+          <div class="st-form__row">
+            <label class="st-form__check-label">
+              <input type="checkbox" id="csPgSsl" ${saved.ssl !== false ? 'checked' : ''}/>
+              Require SSL / TLS
+            </label>
+          </div>
+        </div>
+
+        <div class="st-cloud-actions">
+          <button class="st-add-btn" id="csBtnTest" disabled title="Available when sync is released">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            Test Connection
+          </button>
+          <button class="st-add-btn st-add-btn--primary" id="csBtnSave">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Save
+          </button>
+          <span class="st-form__hint" id="csSaveHint" style="line-height:30px"></span>
+        </div>
+
+      </div>
+
+      <div class="st-section-header" style="margin-top:28px">
+        <div class="st-section-label">Schema</div>
+      </div>
+      <div class="st-cloud-info-card">
+        <div class="st-cloud-info-card__icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+        </div>
+        <div class="st-cloud-info-card__body">
+          <div class="st-cloud-info-card__title">Initialize Cloud Schema</div>
+          <div class="st-cloud-info-card__desc">
+            When sync is available, this will create the required tables in your cloud database automatically,
+            or provide a SQL script you can run manually. No manual setup needed.
+          </div>
+        </div>
+        <button class="st-add-btn" disabled title="Available when sync is released">Initialize Schema</button>
+      </div>
+
+      <div class="st-section-header" style="margin-top:28px">
+        <div class="st-section-label">Project Lock</div>
+      </div>
+      <div class="st-cloud-info-card">
+        <div class="st-cloud-info-card__icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div class="st-cloud-info-card__body">
+          <div class="st-cloud-info-card__title">Project-Level Locking</div>
+          <div class="st-cloud-info-card__desc">
+            When a user opens a project, it will be locked so others cannot edit it simultaneously.
+            Locks expire automatically if the app is closed without releasing them.
+          </div>
+        </div>
+      </div>
+    `;
+
+    const applyProvider = (p) => {
+      main.querySelector('#csFieldsSupabase').style.display = p === 'supabase' ? '' : 'none';
+      main.querySelector('#csFieldsPostgres').style.display = p === 'postgres' ? '' : 'none';
+    };
+
+    applyProvider(prov);
+
+    main.querySelector('#csProvider').addEventListener('change', e => applyProvider(e.target.value));
+
+    main.querySelector('#csLearnMore').addEventListener('click', e => {
+      e.preventDefault();
+      window.shell?.openExternal?.('https://supabase.com/docs/guides/database/connecting-to-postgres');
+    });
+
+    main.querySelector('#csBtnSave').addEventListener('click', async () => {
+      const provider  = main.querySelector('#csProvider').value;
+      const password  = main.querySelector('#csPassword').value;
+      const hint      = main.querySelector('#csSaveHint');
+
+      const data = { provider };
+
+      if (provider === 'supabase') {
+        data.supabaseUrl = main.querySelector('#csSupabaseUrl').value.trim();
+        data.ssl         = true;
+        data.host        = `db.${(data.supabaseUrl.match(/https:\/\/([^.]+)/) || [])[1] || ''}.supabase.co`;
+        data.port        = 5432;
+        data.database    = 'postgres';
+        data.username    = 'postgres';
+      } else {
+        data.host     = main.querySelector('#csPgHost').value.trim();
+        data.port     = Number(main.querySelector('#csPgPort').value) || 5432;
+        data.database = main.querySelector('#csPgDatabase').value.trim();
+        data.username = main.querySelector('#csPgUsername').value.trim();
+        data.ssl      = main.querySelector('#csPgSsl').checked;
+      }
+
+      if (password) data.password = password;
+
+      await window.app.cloudSync.set(data);
+      hint.textContent = 'Saved';
+      setTimeout(() => { hint.textContent = ''; }, 1500);
+    });
   }
 
   // Add / Edit modal popup

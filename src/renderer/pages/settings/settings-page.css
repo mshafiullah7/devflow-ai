@@ -667,3 +667,92 @@
   line-height: 1.5;
 }
 
+/* ------------------------------------------------------------------ */
+/* Cloud Sync page                                                       */
+/* ------------------------------------------------------------------ */
+.st-cloud-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 20px 24px 8px;
+  box-shadow: var(--card-shadow);
+  max-width: 580px;
+}
+
+.st-form__row--inline {
+  flex-direction: row;
+  gap: 12px;
+}
+.st-form__row--inline > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.st-hint-link {
+  color: var(--accent);
+  text-decoration: none;
+  margin-left: 4px;
+}
+.st-hint-link:hover { text-decoration: underline; }
+
+.st-cloud-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.st-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.st-add-btn--primary {
+  background: var(--accent);
+}
+
+.st-cloud-info-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 580px;
+  box-shadow: var(--card-shadow);
+}
+
+.st-cloud-info-card__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.st-cloud-info-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.st-cloud-info-card__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.st-cloud-info-card__desc {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
