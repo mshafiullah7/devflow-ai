@@ -379,49 +379,6 @@ export class StyleGuidePage {
 
         </div>
       </div>
-
-      <!-- Generation debug modal -->
-      <div class="sg-gen-modal-overlay" id="sgGenModal" style="display:none">
-        <div class="sg-gen-modal">
-          <div class="sg-gen-modal__header">
-            <span class="sg-gen-modal__title">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
-              Generation Preview
-            </span>
-            <button class="sg-gen-modal__close-btn" id="sgGenModalClose" title="Close">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-
-          <div class="sg-gen-modal__body">
-            <div class="sg-gen-modal__pane">
-              <div class="sg-gen-modal__pane-label">Prompt <span class="sg-gen-modal__pane-hint">(editable — tweak before running)</span></div>
-              <textarea class="sg-gen-modal__textarea" id="sgGenModalPromptText"></textarea>
-            </div>
-            <div class="sg-gen-modal__pane">
-              <div class="sg-gen-modal__pane-label">
-                Response
-                <span class="sg-gen-modal__status" id="sgGenModalStatus"></span>
-              </div>
-              <pre class="sg-gen-modal__response" id="sgGenModalResponse">Click Run to execute the prompt…</pre>
-            </div>
-          </div>
-
-          <div class="sg-gen-modal__footer">
-            <button class="scr-btn scr-btn--sm scr-btn--danger" id="sgGenModalCancel" style="display:none">Cancel</button>
-            <div style="flex:1"></div>
-            <button class="scr-btn scr-btn--sm" id="sgGenModalClose2">Close</button>
-            <button class="scr-btn scr-btn--primary scr-btn--sm" id="sgGenModalRun">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
-              Run
-            </button>
-          </div>
-        </div>
-      </div>
     `;
   }
 
@@ -522,44 +479,15 @@ export class StyleGuidePage {
     const darkTa       = this.container.querySelector('#sgTplDark');
 
     const setGenerating = (on) => {
-      this._generating        = on;
-      generateBtn.disabled    = on;
-      generateBtn.textContent = on ? 'Generating…' : 'Generate';
-      if (on) {
-        // re-add the bolt icon when not generating
-        generateBtn.innerHTML = on
-          ? 'Generating…'
-          : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate`;
-      } else {
-        generateBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate`;
-      }
-      cancelBtn.style.display   = on ? '' : 'none';
-      genStatus.style.display   = on ? '' : 'none';
-      lightTa.disabled          = on;
-      darkTa.disabled           = on;
-    };
-
-    /* ---- modal elements ---- */
-    const genModal         = this.container.querySelector('#sgGenModal');
-    const genModalPrompt   = this.container.querySelector('#sgGenModalPromptText');
-    const genModalResponse = this.container.querySelector('#sgGenModalResponse');
-    const genModalStatus   = this.container.querySelector('#sgGenModalStatus');
-    const genModalRunBtn   = this.container.querySelector('#sgGenModalRun');
-    const genModalCancelBtn= this.container.querySelector('#sgGenModalCancel');
-
-    const openGenModal = (promptText) => {
-      genModalPrompt.value       = promptText;
-      genModalResponse.textContent = 'Click Run to execute the prompt…';
-      genModalStatus.textContent  = '';
-      genModalRunBtn.disabled     = false;
-      genModalRunBtn.innerHTML    = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Run`;
-      genModalCancelBtn.style.display = 'none';
-      genModal.style.display     = '';
-    };
-
-    const closeGenModal = () => {
-      if (this._generating) return;  // prevent closing while running
-      genModal.style.display = 'none';
+      this._generating      = on;
+      generateBtn.disabled  = on;
+      generateBtn.innerHTML = on
+        ? 'Generating…'
+        : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate`;
+      cancelBtn.style.display = on ? '' : 'none';
+      genStatus.style.display = on ? '' : 'none';
+      lightTa.disabled        = on;
+      darkTa.disabled         = on;
     };
 
     generateBtn.addEventListener('click', () => {
@@ -573,64 +501,21 @@ export class StyleGuidePage {
       }
       const existingLight = lightTa.value.trim();
       const existingDark  = darkTa.value.trim();
-      const builtPrompt   = this._buildGenerationPrompt(userInput, existingLight, existingDark);
-      openGenModal(builtPrompt);
+      this._runGeneration(userInput, { setGenerating, genStatus, lightTa, darkTa, renderPreview, existingLight, existingDark });
     });
 
     genPromptEl.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !this._generating) generateBtn.click();
     });
 
-    /* no-op — cancel is now handled inside the modal */
-    cancelBtn.style.display = 'none';
-
-    /* ---- modal Run ---- */
-    genModalRunBtn.addEventListener('click', () => {
-      const promptToRun = genModalPrompt.value.trim();
-      if (!promptToRun || !this._aiModelConfig) return;
-
-      genModalRunBtn.disabled  = true;
-      genModalRunBtn.innerHTML = 'Running…';
-      genModalCancelBtn.style.display = '';
-      genModalResponse.textContent    = '';
-      genModalStatus.textContent      = 'Generating…';
-      this._generating = true;
-      lightTa.disabled = true;
-      darkTa.disabled  = true;
-
-      this._runGenerationFromModal(promptToRun, {
-        responseEl: genModalResponse,
-        statusEl:   genModalStatus,
-        runBtn:     genModalRunBtn,
-        cancelBtn:  genModalCancelBtn,
-        lightTa,
-        darkTa,
-        renderPreview,
-        onDone: () => {
-          this._generating = false;
-          lightTa.disabled = false;
-          darkTa.disabled  = false;
-        },
-      });
-    });
-
-    /* ---- modal Cancel ---- */
-    genModalCancelBtn.addEventListener('click', () => {
+    cancelBtn.addEventListener('click', () => {
       window.app.chat.cancel();
       window.app.chat.offAll();
-      this._generating = false;
-      lightTa.disabled = false;
-      darkTa.disabled  = false;
-      genModalRunBtn.disabled  = false;
-      genModalRunBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Run`;
-      genModalCancelBtn.style.display = 'none';
-      genModalStatus.textContent = 'Cancelled.';
+      setGenerating(false);
+      genStatus.style.display = '';
+      genStatus.textContent   = 'Generation cancelled.';
+      setTimeout(() => { genStatus.style.display = 'none'; }, 2000);
     });
-
-    /* ---- modal Close buttons ---- */
-    this.container.querySelector('#sgGenModalClose').addEventListener('click',  closeGenModal);
-    this.container.querySelector('#sgGenModalClose2').addEventListener('click', closeGenModal);
-    genModal.addEventListener('click', e => { if (e.target === genModal) closeGenModal(); });
 
     /* ---------------------------------------------------------------- */
     /* Theme Library                                                     */
@@ -738,58 +623,6 @@ export class StyleGuidePage {
     window.app.chat.generate({ prompt, model: this._aiModelConfig });
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Modal generation — streams directly into the modal response pane  */
-  /* ------------------------------------------------------------------ */
-  _runGenerationFromModal(prompt, { responseEl, statusEl, runBtn, cancelBtn, lightTa, darkTa, renderPreview, onDone }) {
-    let rawResponse = '';
-    let tokenCount  = 0;
-
-    window.app.chat.offAll();
-
-    window.app.chat.onToken(({ text }) => {
-      rawResponse += text;
-      tokenCount  += text.length;
-      responseEl.textContent = rawResponse;
-      // Auto-scroll to bottom as tokens arrive
-      responseEl.scrollTop   = responseEl.scrollHeight;
-      statusEl.textContent   = `${tokenCount} chars…`;
-    });
-
-    window.app.chat.onDone(({ raw, error }) => {
-      window.app.chat.offAll();
-      onDone();
-
-      runBtn.disabled  = false;
-      runBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Run`;
-      cancelBtn.style.display = 'none';
-
-      const finalText = raw || rawResponse;
-
-      if (!finalText && error) {
-        statusEl.textContent = `Error: ${error}`;
-        return;
-      }
-
-      // Show final raw text in response pane
-      responseEl.textContent = finalText;
-
-      const { light, dark } = this._splitThemeResponse(finalText);
-
-      if (light) lightTa.value = light;
-      if (dark)  darkTa.value  = dark;
-
-      const populated = light || dark;
-      statusEl.textContent = populated
-        ? `✓ Done — ${tokenCount} chars. Textareas updated.`
-        : 'Response received but could not split into light/dark sections.';
-
-      renderPreview();
-    });
-
-    window.app.chat.generate({ prompt, model: this._aiModelConfig });
-  }
-
   _buildGenerationPrompt(userInput, existingLight = '', existingDark = '') {
     const hasExisting = existingLight || existingDark;
 
@@ -818,8 +651,6 @@ Output the updated themes using EXACTLY the same structure and text as above, wi
 Rules:
 - Replace ONLY lines that contain a hex color code (#xxxxxx). Do not touch any other lines.
 - Use only real hex codes (e.g. #1e3a5f). No color names, no CSS variables.
-- Light theme: bright backgrounds, dark text, strong contrast.
-- Dark theme: dark backgrounds, light text, same aesthetic as light.
 - Do not add, remove, or reword any labels, sections, or non-color values.
 - Output nothing outside the two theme blocks.`;
     }
@@ -873,8 +704,6 @@ Components:
 
 Rules:
 - Use only real hex color codes (e.g. #1e3a5f, not "navy" or "var(--something)")
-- Light theme: bright backgrounds, dark text, good contrast
-- Dark theme: dark backgrounds, light text, matching aesthetic to the light theme
 - Keep the exact section headers "--- LIGHT THEME ---" and "--- DARK THEME ---"
 - Do not add any text outside the two theme blocks`;
   }
