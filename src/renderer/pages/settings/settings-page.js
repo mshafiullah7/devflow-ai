@@ -66,6 +66,15 @@ export class SettingsPage {
               </span>
               <span class="st-nav-item__label">Prompts Template</span>
             </button>
+            <div class="st-sidebar-section">Notifications</div>
+            <button class="st-nav-item" id="stNavTelegram">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Telegram</span>
+            </button>
             <div class="st-sidebar-section">Sync</div>
             <button class="st-nav-item" id="stNavCloudSync">
               <span class="st-nav-item__icon">
@@ -106,6 +115,12 @@ export class SettingsPage {
       .addEventListener('click', () => {
         this._setActiveNav('stNavModelMapping');
         this._renderModelMapping();
+      });
+
+    this.container.querySelector('#stNavTelegram')
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavTelegram');
+        this._renderNotifications();
       });
 
     this.container.querySelector('#stNavCloudSync')
@@ -446,6 +461,101 @@ export class SettingsPage {
             <div class="st-placeholder-card__desc">Templates for generating test cases and acceptance criteria from stories.</div>
           </div>
           <button class="st-add-btn" disabled>Manage</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // ----------------------------------------------------------------
+  // Notifications — Telegram (placeholder)
+  // ----------------------------------------------------------------
+  _renderNotifications() {
+    const main = this.container.querySelector('#stMainContent');
+    main.innerHTML = `
+      <div class="st-content-title">Notifications</div>
+      <div class="st-content-sub">Send alerts and updates to a Telegram chat when events occur in your projects</div>
+
+      <div class="st-coming-soon-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+        </svg>
+        Coming Soon — save your credentials now and notifications will activate when released.
+      </div>
+
+      <div class="st-section-header">
+        <div class="st-section-label">Telegram Bot</div>
+      </div>
+      <div class="st-cloud-form">
+        <div class="st-form__row">
+          <label class="st-form__label">Bot Token</label>
+          <input class="st-form__input" type="password" disabled
+            placeholder="1234567890:ABCDefgh…"
+            autocomplete="new-password"/>
+          <span class="st-form__hint">
+            Create a bot via <strong>@BotFather</strong> on Telegram and paste the token here.
+            Stored encrypted on this device.
+          </span>
+        </div>
+        <div class="st-form__row">
+          <label class="st-form__label">Chat ID</label>
+          <input class="st-form__input" type="text" disabled
+            placeholder="-100123456789"/>
+          <span class="st-form__hint">
+            Your personal chat ID or a group/channel ID the bot has been added to.
+          </span>
+        </div>
+        <div class="st-cloud-actions">
+          <button class="st-add-btn" disabled title="Available when notifications are released">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            Send Test Message
+          </button>
+          <button class="st-add-btn st-add-btn--primary" disabled title="Available when notifications are released">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Save
+          </button>
+        </div>
+      </div>
+
+      <div class="st-section-header" style="margin-top:28px">
+        <div class="st-section-label">Planned Triggers</div>
+      </div>
+      <div class="st-placeholder-sections">
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">Prompt Queue Completed</div>
+            <div class="st-placeholder-card__desc">Notify when a queued AI prompt finishes running.</div>
+          </div>
+        </div>
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">New Issue Logged</div>
+            <div class="st-placeholder-card__desc">Notify when an issue is created in any project.</div>
+          </div>
+        </div>
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">Test Run Finished</div>
+            <div class="st-placeholder-card__desc">Notify with pass/fail summary after a test run completes.</div>
+          </div>
         </div>
       </div>
     `;
