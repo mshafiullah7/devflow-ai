@@ -414,11 +414,35 @@ export class StyleGuidePage {
       this.container.querySelector('#sgTplColDark').classList.toggle('scr-ds-tpl-col--active',  activeTheme === 'dark');
     };
 
+    /* ---- Theme tab colour swatches ---- */
+    const lightBtn = this.container.querySelector('.scr-ds-theme-btn[data-theme="light"]');
+    const darkBtn  = this.container.querySelector('.scr-ds-theme-btn[data-theme="dark"]');
+
+    const updateTabColors = () => {
+      const lightVal = this.container.querySelector('#sgTplLight').value.trim();
+      const darkVal  = this.container.querySelector('#sgTplDark').value.trim();
+
+      const applyTab = (btn, text) => {
+        if (!text) { btn.style.removeProperty('background'); btn.style.removeProperty('color'); return; }
+        const { background } = this._parseDesignTemplate(text);
+        btn.style.background = background;
+        btn.style.color      = this._contrastColor(background);
+        // Active ring uses the same bg color but with a stronger outline
+        btn.style.outline    = btn.classList.contains('scr-ds-theme-btn--active')
+          ? `2px solid ${this._contrastColor(background)}`
+          : 'none';
+      };
+
+      applyTab(lightBtn, lightVal);
+      applyTab(darkBtn,  darkVal);
+    };
+
     const renderPreview = () => {
       const tpl = getActiveTpl();
       frame.srcdoc = tpl
         ? this._buildPreviewHtml(this._parseDesignTemplate(tpl), activeTheme)
         : blankHtml(activeTheme);
+      updateTabColors();
     };
 
     /* ---- Built-in example cycle ---- */
@@ -434,8 +458,8 @@ export class StyleGuidePage {
     });
 
     /* ---- Textarea live preview ---- */
-    this.container.querySelector('#sgTplLight').addEventListener('input', () => { if (activeTheme === 'light') renderPreview(); });
-    this.container.querySelector('#sgTplDark').addEventListener('input',  () => { if (activeTheme === 'dark')  renderPreview(); });
+    this.container.querySelector('#sgTplLight').addEventListener('input', () => { if (activeTheme === 'light') renderPreview(); else updateTabColors(); });
+    this.container.querySelector('#sgTplDark').addEventListener('input',  () => { if (activeTheme === 'dark')  renderPreview(); else updateTabColors(); });
     this.container.querySelector('#sgRefreshBtn').addEventListener('click', renderPreview);
 
     /* ---- Theme toggle buttons ---- */
@@ -445,7 +469,7 @@ export class StyleGuidePage {
         btn.classList.add('scr-ds-theme-btn--active');
         activeTheme = btn.dataset.theme;
         setActiveCol();
-        renderPreview();
+        renderPreview(); // also calls updateTabColors to re-apply active ring
       });
     });
 
@@ -802,6 +826,22 @@ Rules:
   /* ------------------------------------------------------------------ */
   /* Preview rendering                                                   */
   /* ------------------------------------------------------------------ */
+  /** Returns '#fff' or '#111' whichever contrasts better against the given hex bg. */
+  _contrastColor(hex) {
+    try {
+      const h   = hex.replace('#', '');
+      const full = h.length <= 4 ? h.split('').map(c => c + c).join('') : h;
+      const r = parseInt(full.slice(0, 2), 16);
+      const g = parseInt(full.slice(2, 4), 16);
+      const b = parseInt(full.slice(4, 6), 16);
+      // Perceived luminance (sRGB)
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      return lum > 140 ? '#111111' : '#ffffff';
+    } catch {
+      return '#ffffff';
+    }
+  }
+
   _parseDesignTemplate(text) {
     const lines = text.split('\n');
     const hexRe = /#[0-9a-fA-F]{6,8}\b|#[0-9a-fA-F]{3,4}\b/;
