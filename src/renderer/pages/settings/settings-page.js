@@ -137,7 +137,7 @@ export class SettingsPage {
                 </div>
                 <div class="st-model-item__sub">
                   ${c.type === 'cli'
-                    ? escHtml(c.executable || '') + (c.flags ? ` <span class="st-model-item__flags">${escHtml(c.flags)}</span>` : '')
+                    ? escHtml(c.executable || '') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '') + (c.flags ? ` <span class="st-model-item__flags">${escHtml(c.flags)}</span>` : '')
                     : c.type === 'ollama'
                       ? escHtml(c.base_url || 'http://localhost:11434') + (c.model_name ? ` · ${escHtml(c.model_name)}` : '')
                       : escHtml(c.model_name || '')}
@@ -432,6 +432,13 @@ export class SettingsPage {
                 <span class="st-form__hint">Binary name available in PATH (e.g. claude, gemini, aider)</span>
               </div>
               <div class="st-form__row">
+                <label class="st-form__label">Model</label>
+                <input class="st-form__input" id="stFCliModel" type="text"
+                  placeholder="e.g. claude-sonnet-4-6, gemini-2.0-flash"
+                  value="${escHtml(config?.type === 'cli' ? (config?.model_name || '') : '')}" autocomplete="off"/>
+                <span class="st-form__hint">Passed as --model &lt;value&gt; to the CLI (optional)</span>
+              </div>
+              <div class="st-form__row">
                 <label class="st-form__label">Flags</label>
                 <input class="st-form__input" id="stFFlags" type="text"
                   placeholder="--dangerously-skip-permissions --print"
@@ -574,9 +581,10 @@ export class SettingsPage {
       let data = { label, type, is_default: isDefault, input_mode: 'pipe' };
 
       if (type === 'cli') {
-        data.executable = overlay.querySelector('#stFExecutable')?.value.trim() || null;
-        data.flags      = overlay.querySelector('#stFFlags')?.value.trim() || null;
-        data.input_mode = overlay.querySelector('#stFInputMode')?.value || 'pipe';
+        data.executable  = overlay.querySelector('#stFExecutable')?.value.trim() || null;
+        data.model_name  = overlay.querySelector('#stFCliModel')?.value.trim() || null;
+        data.flags       = overlay.querySelector('#stFFlags')?.value.trim() || null;
+        data.input_mode  = overlay.querySelector('#stFInputMode')?.value || 'pipe';
       } else if (type === 'ollama') {
         const manual = overlay.querySelector('#stFOllamaModelManual');
         const select = overlay.querySelector('#stFOllamaModelSelect');
