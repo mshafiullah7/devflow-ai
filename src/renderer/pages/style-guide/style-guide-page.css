@@ -108,12 +108,12 @@
 }
 
 .sg-page__editor .scr-ds-templates {
-  flex: 0 0 30%;
+  flex: 0 0 35%;
   min-width: 0;
 }
 
 .sg-page__editor .scr-ds-preview-panel {
-  flex: 0 0 45%;
+  flex: 0 0 40%;
 }
 
 .sg-page__textarea {
