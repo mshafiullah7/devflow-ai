@@ -943,7 +943,7 @@ export class ExtractUserStoriesPage {
             await window.db.prompts.create({
               user_story_id: story.id,
               tag:           p.tag    || null,
-              prompt:        p.prompt || '',
+              prompt:        (p.prompt || '').replaceAll('{{US_ID}}', story.id),
             });
           }
         }
@@ -1022,6 +1022,7 @@ prompt:
 - Include plain instructions (no code unless needed)
 - Need instructions to cover end to end development. It should exactly work as if it is calling APIs. Mock all the data in the data layer or services which calls the API (positive & negative cases). And should be able to replace that code by actual call later. 
 - Include unit test prompts for API/DB/Auth stories, and E2E test prompts for UI stories.
+- When a prompt involves creating unit tests or E2E tests, ALL test function/case/suite names MUST be prefixed with \`US-{{US_ID}}\` (e.g. \`US-{{US_ID}}_login_renders_correctly\`, \`describe('US-{{US_ID}} Login Flow', ...)\`). Use the exact literal placeholder \`{{US_ID}}\` — it will be substituted with the real user story ID automatically.
 
 tag: Is a SINGLE word (UI, API, DB, Auth, Cache, Queue, Email)
 
