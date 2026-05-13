@@ -238,11 +238,13 @@ export class SettingsPage {
     const mapped = {};
     PAGE_KEYS.forEach((k, i) => { mapped[k] = mappings[i]?.model_config_id ?? null; });
 
-    const modelOptions = (key) => {
+    const modelOptions = (key, f = {}) => {
+      const allowed = configs.filter(c => !(f.excludeTypes || []).includes(c.type));
       if (configs.length === 0) return `<option value="">No models configured</option>`;
+      if (allowed.length === 0) return `<option value="" disabled selected>No CLI models configured</option>`;
       const cur = mapped[key] != null ? String(mapped[key]) : '';
       return `<option value=""${cur === '' ? ' selected' : ''}>Use default</option>` +
-        configs.map(c => `<option value="${c.id}"${String(c.id) === cur ? ' selected' : ''}>${escHtml(c.label)}</option>`).join('');
+        allowed.map(c => `<option value="${c.id}"${String(c.id) === cur ? ' selected' : ''}>${escHtml(c.label)}</option>`).join('');
     };
 
     const sections = [
@@ -269,7 +271,7 @@ export class SettingsPage {
       {
         label: 'Tools',
         features: [
-          { key: 'prompt-queue',        icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/></svg>`,                                                                                                        name: 'Prompt Queue' },
+          { key: 'prompt-queue',        icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/></svg>`,                                                                                                        name: 'Prompt Queue', excludeTypes: ['ollama'] },
           { key: 'ai-console',          icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,                                                                                     name: 'AI Chat' },
         ],
       },
@@ -287,8 +289,8 @@ export class SettingsPage {
               <div class="st-mapping-row">
                 <span class="st-mapping-row__icon">${f.icon}</span>
                 <span class="st-mapping-row__name">${escHtml(f.name)}</span>
-                <select class="st-form__select st-mapping-row__select" data-key="${f.key}"${(configs.length === 0 || f.disabled) ? ' disabled' : ''}>
-                  ${modelOptions(f.key)}
+                <select class="st-form__select st-mapping-row__select" data-key="${f.key}"${(configs.length === 0 || f.disabled || (f.excludeTypes && configs.length > 0 && configs.filter(c => !(f.excludeTypes).includes(c.type)).length === 0)) ? ' disabled' : ''}>
+                  ${modelOptions(f.key, f)}
                 </select>
               </div>
             `).join('')}
