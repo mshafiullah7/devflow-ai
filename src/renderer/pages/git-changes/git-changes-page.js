@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
+import { ModelPicker } from '../../components/model-picker/model-picker.js';
 
 export class GitChangesPage {
   constructor(container, params, router) {
@@ -13,6 +14,8 @@ export class GitChangesPage {
     this._activeIdx      = 0;
     this._consoleRunning = false;
     this._qcmdModal      = null;
+    this._picker         = null;
+    this._aiModelConfig  = null;
   }
 
   // ----------------------------------------------------------------
@@ -29,6 +32,12 @@ export class GitChangesPage {
     this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
     this._qcmdModal.mount();
 
+    this._picker = new ModelPicker({
+      anchor:   this.container.querySelector('#gcModelPicker'),
+      onSelect: model => { this._aiModelConfig = model; },
+    });
+    await this._picker.reload();
+
     this._bindEvents();
     if (this._project?.project_path) {
       this._setHeaderFolderPath(this._project.project_path);
@@ -42,6 +51,7 @@ export class GitChangesPage {
   unmount() {
     removeCss('pages/git-changes/git-changes-page.css');
     removeCss('components/git/git-diff.css');
+    this._picker?.unmount();
     window.db.terminal.removeListeners();
   }
 
@@ -74,6 +84,16 @@ export class GitChangesPage {
               </svg>
               <span class="git-page__folder-text" id="gitHeaderFolderText">Select folder</span>
             </div>
+          </div>
+          <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
+            <div id="gcModelPicker"></div>
+            <button class="project-page__model-cfg-btn" id="gcBtnModelConfigs" title="Configure AI models">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
+                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
           <button class="git-page__refresh" id="gitPageRefresh" title="Refresh (Ctrl+R)">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
@@ -165,6 +185,12 @@ export class GitChangesPage {
 
     this.container.querySelector('#gitPageRefresh')
       .addEventListener('click', () => this._loadStatus());
+
+    this.container.querySelector('#gcBtnModelConfigs')
+      .addEventListener('click', () => this.router.navigate('settings', {
+        from: 'git-changes',
+        fromParams: { projectId: this._projectId },
+      }));
 
     this.container.querySelector('#gitPageQcmd')
       .addEventListener('click', () => this._qcmdModal.show());
