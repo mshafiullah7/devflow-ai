@@ -1,6 +1,5 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
-import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { GitController } from '../../components/git/git-controller.js';
 
@@ -42,8 +41,6 @@ export class IssuesPage {
     this._project = await window.db.projects.get(this._projectId);
     this.container.innerHTML = this._template();
 
-    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._picker.reload() });
-    this._modelConfigsModal.mount();
     this._picker = new ModelPicker({
       anchor:   this.container.querySelector('#isModelPicker'),
       onSelect: model => { this._aiModelConfig = model; },
@@ -198,7 +195,7 @@ export class IssuesPage {
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
 
     this.container.querySelector('#isBtnModelConfigs')
-      .addEventListener('click', () => this._modelConfigsModal.show());
+      .addEventListener('click', () => this.router.navigate('settings', { from: 'issues', fromParams: { projectId: this._projectId } }));
 
 
     this.container.querySelector('#headerFolderDisplay')

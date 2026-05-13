@@ -1,6 +1,5 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
-import { ModelConfigsModal }             from '../../components/model-configs/model-configs-modal.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
 import { GitController }                 from '../../components/git/git-controller.js';
 
@@ -190,11 +189,6 @@ export class AiConsolePage {
     this._project = await window.db.projects.get(this.projectId);
 
     this.container.innerHTML = this._template();
-
-    this._modelConfigsModal = new ModelConfigsModal({
-      onConfigsChanged: () => this._picker?.reload(),
-    });
-    this._modelConfigsModal.mount();
 
     this._picker = new ModelPicker({
       anchor:   this.container.querySelector('#aicModelPicker'),
@@ -642,7 +636,7 @@ export class AiConsolePage {
 
     // Model config button
     q('#aicBtnModelConfigs').addEventListener('click', () =>
-      this._modelConfigsModal?.open());
+      this.router.navigate('settings', { from: 'ai-console', fromParams: { projectId: this.projectId } }));
 
     // Git button
     q('#aicBtnGit').addEventListener('click', () =>

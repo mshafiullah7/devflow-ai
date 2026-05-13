@@ -2,7 +2,6 @@ import { injectCss, removeCss, escHtml } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { UserStoryDetail } from '../../components/user-story-detail/user-story-detail.js';
 import { GitController } from '../../components/git/git-controller.js';
-import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 
 export class ExtractUserStoriesPage {
@@ -23,7 +22,6 @@ export class ExtractUserStoriesPage {
     this._project             = null;
     this._aiModelConfig       = null;
     this._git                 = null;
-    this._modelConfigsModal   = null;
     this._qcmdModal           = null;
   }
 
@@ -43,10 +41,6 @@ export class ExtractUserStoriesPage {
       this._setHeaderFolderPath(this._project.project_path);
     }
 
-    this._modelConfigsModal = new ModelConfigsModal({
-      onConfigsChanged: () => this._picker.reload(),
-    });
-    this._modelConfigsModal.mount();
     this._picker = new ModelPicker({
       anchor:   this.container.querySelector('#eusModelPicker'),
       onSelect: model => { this._aiModelConfig = model; },
@@ -268,7 +262,7 @@ export class ExtractUserStoriesPage {
       });
 
     this.container.querySelector('#btnModelConfigs')
-      .addEventListener('click', () => this._modelConfigsModal.show());
+      .addEventListener('click', () => this.router.navigate('settings', { from: 'extract-user-stories', fromParams: { projectId: this._projectId } }));
 
 
     this.container.querySelector('#btnConsoleGit')

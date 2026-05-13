@@ -1,6 +1,5 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
-import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { GitController } from '../../components/git/git-controller.js';
 
@@ -43,8 +42,6 @@ export class DocumentsPage {
 
     this.container.innerHTML = this._pageTemplate();
 
-    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._picker.reload() });
-    this._modelConfigsModal.mount();
     this._picker = new ModelPicker({
       anchor:   this.container.querySelector('#docModelPicker'),
       onSelect: model => { this._aiModelConfig = model; },
@@ -163,7 +160,7 @@ export class DocumentsPage {
       });
 
     this.container.querySelector('#docBtnModelConfigs')
-      .addEventListener('click', () => this._modelConfigsModal.show());
+      .addEventListener('click', () => this.router.navigate('settings', { from: 'documents', fromParams: { projectId: this._projectId } }));
 
 
     this.container.querySelector('#headerFolderDisplay')

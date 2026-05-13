@@ -1,6 +1,5 @@
 import { escHtml, injectCss, removeCss, timeAgo } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
-import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { GitController } from '../../components/git/git-controller.js';
 
@@ -113,8 +112,6 @@ export class MockupsPage {
     this._designTemplate = this._project?.design_template || '';
     this._activeTab      = 'preview';
 
-    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._picker?.reload() });
-    this._modelConfigsModal.mount();
 
 
     this._git = new GitController({
@@ -326,7 +323,7 @@ export class MockupsPage {
       });
 
     this.container.querySelector('#mockupsBtnModelConfigs')
-      .addEventListener('click', () => this._modelConfigsModal.show());
+      .addEventListener('click', () => this.router.navigate('settings', { from: 'mockups', fromParams: { projectId: this._projectId } }));
 
 
     this.container.querySelector('#headerFolderDisplay')

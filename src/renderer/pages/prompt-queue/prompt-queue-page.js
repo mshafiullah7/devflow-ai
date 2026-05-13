@@ -1,6 +1,5 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
-import { ModelConfigsModal }            from '../../components/model-configs/model-configs-modal.js';
 import { ModelPicker }                 from '../../components/model-picker/model-picker.js';
 
 const STATUS_ICONS = {
@@ -40,8 +39,6 @@ export class PromptQueuePage {
 
     this.container.innerHTML = this._template();
 
-    this._modelConfigsModal = new ModelConfigsModal({ onConfigsChanged: () => this._picker.reload() });
-    this._modelConfigsModal.mount();
     this._picker = new ModelPicker({
       anchor:   this.container.querySelector('#pqModelPicker'),
       onSelect: model => { this._modelCfg = model; },
@@ -603,7 +600,7 @@ export class PromptQueuePage {
       .addEventListener('click', () => this.router.navigate(this._from, { projectId: this.projectId }));
 
     this.container.querySelector('#pqBtnModelConfigs')
-      .addEventListener('click', () => this._modelConfigsModal.show());
+      .addEventListener('click', () => this.router.navigate('settings', { from: 'prompt-queue', fromParams: { projectId: this.projectId } }));
 
     this.container.querySelector('#pqHeaderFolderDisplay')
       .addEventListener('click', async () => {

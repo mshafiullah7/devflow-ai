@@ -1,7 +1,6 @@
 import { FeatureList } from '../../components/feature-list/feature-list.js';
 import { UserStoryList } from '../../components/user-story-list/user-story-list.js';
 import { GitController } from '../../components/git/git-controller.js';
-import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
@@ -51,10 +50,6 @@ export class ProjectPage {
     }
 
 
-    this._modelConfigsModal = new ModelConfigsModal({
-      onConfigsChanged: () => this._picker.reload(),
-    });
-    this._modelConfigsModal.mount();
     this._picker = new ModelPicker({
       anchor:   this.container.querySelector('#usModelPicker'),
       onSelect: model => { this._aiModelConfig = model; },
@@ -270,7 +265,7 @@ export class ProjectPage {
 
 
     document.getElementById('btnModelConfigs')
-      .addEventListener('click', () => this._modelConfigsModal.show());
+      .addEventListener('click', () => this.router.navigate('settings', { from: 'user-stories', fromParams: { projectId: this.projectId } }));
 
     document.getElementById('btnExportProject')
       .addEventListener('click', () => this._exportProject());
