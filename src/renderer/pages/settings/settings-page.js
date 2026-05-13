@@ -263,7 +263,7 @@ export class SettingsPage {
       {
         label: 'Git',
         features: [
-          { key: 'git-changes',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v3a6 6 0 0 0 6 6h3"/></svg>`,                                                                 name: 'Git Changes' },
+          { key: 'git-changes',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v3a6 6 0 0 0 6 6h3"/></svg>`,                                                                 name: 'Git Changes', disabled: true },
         ],
       },
       {
@@ -287,7 +287,7 @@ export class SettingsPage {
               <div class="st-mapping-row">
                 <span class="st-mapping-row__icon">${f.icon}</span>
                 <span class="st-mapping-row__name">${escHtml(f.name)}</span>
-                <select class="st-form__select st-mapping-row__select" data-key="${f.key}"${configs.length === 0 ? ' disabled' : ''}>
+                <select class="st-form__select st-mapping-row__select" data-key="${f.key}"${(configs.length === 0 || f.disabled) ? ' disabled' : ''}>
                   ${modelOptions(f.key)}
                 </select>
               </div>
