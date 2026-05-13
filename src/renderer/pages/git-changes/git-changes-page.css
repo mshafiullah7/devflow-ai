@@ -24,6 +24,26 @@
   -webkit-app-region: drag;
 }
 
+.git-page__folder-display {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  max-width: 260px;
+  min-width: 100px;
+  overflow: hidden;
+  transition: border-color 0.12s, color 0.12s;
+  -webkit-app-region: no-drag;
+}
+.git-page__folder-display:hover      { border-color: var(--accent); color: var(--text-primary); }
+.git-page__folder-display--active    { color: var(--text-secondary); }
+.git-page__folder-pill               { display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.git-page__folder-text               { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .git-page__back {
   display: flex;
   align-items: center;

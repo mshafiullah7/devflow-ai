@@ -30,7 +30,13 @@ export class GitChangesPage {
     this._qcmdModal.mount();
 
     this._bindEvents();
+    if (this._project?.project_path) {
+      this._setHeaderFolderPath(this._project.project_path);
+    }
     await this._loadStatus();
+    if (this._project?.project_path) {
+      this._consoleRun('git status');
+    }
   }
 
   unmount() {
@@ -56,6 +62,15 @@ export class GitChangesPage {
           <div class="git-page__title-group">
             <h1 class="git-page__title">${name}</h1>
             <p class="git-page__subtitle">Git Changes</p>
+          </div>
+          <div class="git-page__folder-display" id="gitHeaderFolderDisplay" title="Select folder">
+            <div class="git-page__folder-pill">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              </svg>
+              <span class="git-page__folder-text" id="gitHeaderFolderText">Select folder</span>
+            </div>
           </div>
           <div class="git-page__center">
             <div class="git-page__status-label" id="gitStatusLabel">Loading…</div>
@@ -153,6 +168,17 @@ export class GitChangesPage {
 
     this.container.querySelector('#gitPageQcmd')
       .addEventListener('click', () => this._qcmdModal.show());
+
+    this.container.querySelector('#gitHeaderFolderDisplay')
+      .addEventListener('click', async () => {
+        const folderPath = await window.db.dialog.openFolder();
+        if (!folderPath) return;
+        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
+        if (this._project) this._project.project_path = folderPath;
+        this._setHeaderFolderPath(folderPath);
+        await this._loadStatus();
+        this._consoleRun('git status');
+      });
 
     this._bindConsole();
     this._bindConsoleDivider();
@@ -377,6 +403,16 @@ export class GitChangesPage {
   }
 
   // ----------------------------------------------------------------
+  // Folder display
+  // ----------------------------------------------------------------
+  _setHeaderFolderPath(folderPath) {
+    const text    = this.container.querySelector('#gitHeaderFolderText');
+    const display = this.container.querySelector('#gitHeaderFolderDisplay');
+    if (text)    text.textContent = folderPath;
+    if (display) display.classList.add('git-page__folder-display--active');
+  }
+
+  // ----------------------------------------------------------------
   // Git status
   // ----------------------------------------------------------------
   async _loadStatus() {
@@ -404,7 +440,7 @@ export class GitChangesPage {
 
       if (label) {
         label.textContent = this._files.length === 0
-          ? 'No changes'
+          ? ''
           : `${this._files.length} changed file${this._files.length !== 1 ? 's' : ''}`;
       }
 
