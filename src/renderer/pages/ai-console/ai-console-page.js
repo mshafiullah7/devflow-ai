@@ -186,13 +186,18 @@ export class AiConsolePage {
     injectCss('pages/ai-console/ai-console-page.css');
     applyStoredTheme();
 
-    this._project = await window.db.projects.get(this.projectId);
+    let _mapping;
+    [this._project, _mapping] = await Promise.all([
+      window.db.projects.get(this.projectId),
+      window.db.modelMapping.get('ai-console'),
+    ]);
 
     this.container.innerHTML = this._template();
 
     this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#aicModelPicker'),
-      onSelect: () => {},
+      anchor:    this.container.querySelector('#aicModelPicker'),
+      onSelect:  () => {},
+      initialId: _mapping?.model_config_id ?? null,
     });
 
     this._tplPicker = new TemplatePicker({

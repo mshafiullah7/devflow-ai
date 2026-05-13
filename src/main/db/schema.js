@@ -294,6 +294,16 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- MODEL MAPPING (per-page model assignment)
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS model_mapping (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      page_key         TEXT    NOT NULL UNIQUE,
+      model_config_id  INTEGER REFERENCES model_configs(id) ON DELETE SET NULL,
+      updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- AUDIT / LOG TABLES
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS projects_log (

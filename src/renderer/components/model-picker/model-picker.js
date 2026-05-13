@@ -4,11 +4,11 @@ const STORAGE_KEY = 'devflow-selected-model';
 const TYPE_LABEL  = { cli: 'CLI', api: 'API', ollama: 'LOCAL' };
 
 export class ModelPicker {
-  constructor({ anchor, onSelect } = {}) {
+  constructor({ anchor, onSelect, initialId } = {}) {
     this._anchor   = anchor;
     this._onSelect = onSelect || null;
     this._models   = [];
-    this._selectedId = null;
+    this._selectedId = initialId ?? null;
     this._open     = false;
     this._handleOutside = this._handleOutside.bind(this);
     injectCss('components/model-picker/model-picker.css');

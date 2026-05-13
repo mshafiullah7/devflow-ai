@@ -226,16 +226,21 @@ export class SettingsPage {
   // Model Mapping
   // ----------------------------------------------------------------
   async _renderModelMapping() {
-    const main    = this.container.querySelector('#stMainContent');
-    const [configs, saved] = await Promise.all([
+    const main = this.container.querySelector('#stMainContent');
+
+    const PAGE_KEYS = ['mockups', 'documents', 'extract-user-stories', 'issues', 'git-changes', 'prompt-queue', 'ai-console'];
+
+    const [configs, ...mappings] = await Promise.all([
       window.db.modelConfigs.list(),
-      window.app.config.get('modelMapping'),
+      ...PAGE_KEYS.map(k => window.db.modelMapping.get(k)),
     ]);
-    const mapping = saved || {};
+
+    const mapped = {};
+    PAGE_KEYS.forEach((k, i) => { mapped[k] = mappings[i]?.model_config_id ?? null; });
 
     const modelOptions = (key) => {
       if (configs.length === 0) return `<option value="">No models configured</option>`;
-      const cur = mapping[key] != null ? String(mapping[key]) : '';
+      const cur = mapped[key] != null ? String(mapped[key]) : '';
       return `<option value=""${cur === '' ? ' selected' : ''}>Use default</option>` +
         configs.map(c => `<option value="${c.id}"${String(c.id) === cur ? ' selected' : ''}>${escHtml(c.label)}</option>`).join('');
     };
@@ -244,28 +249,28 @@ export class SettingsPage {
       {
         label: 'Pages',
         features: [
-          { key: 'mockups',        icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,                                                                                                                                                                      name: 'Mockups' },
-          { key: 'documents',      icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,                                                                                                                                       name: 'Documents' },
-          { key: 'extractStories', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,                                                                                                                                                     name: 'Extract User Stories' },
+          { key: 'mockups',             icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,                                                                                    name: 'Mockups' },
+          { key: 'documents',           icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,                                                       name: 'Documents' },
+          { key: 'extract-user-stories', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,                                                                   name: 'Extract User Stories' },
         ],
       },
       {
         label: 'Quality',
         features: [
-          { key: 'issues',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,                                                                                                                               name: 'Issues' },
+          { key: 'issues',              icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,                                               name: 'Issues' },
         ],
       },
       {
         label: 'Git',
         features: [
-          { key: 'gitChanges',     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v3a6 6 0 0 0 6 6h3"/></svg>`,                                                                                                                                                 name: 'Git Changes' },
+          { key: 'git-changes',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v3a6 6 0 0 0 6 6h3"/></svg>`,                                                                 name: 'Git Changes' },
         ],
       },
       {
         label: 'Tools',
         features: [
-          { key: 'promptQueue',    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/></svg>`,                                                                                                                                                                                         name: 'Prompt Queue' },
-          { key: 'aiChat',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,                                                                                                                                                                     name: 'AI Chat' },
+          { key: 'prompt-queue',        icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/></svg>`,                                                                                                        name: 'Prompt Queue' },
+          { key: 'ai-console',          icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,                                                                                     name: 'AI Chat' },
         ],
       },
     ];
@@ -290,27 +295,12 @@ export class SettingsPage {
           </div>
         </div>
       `).join('')}
-
-      <div class="st-mapping-footer">
-        <button class="st-add-btn st-add-btn--primary" id="stBtnSaveMapping">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-          </svg>
-          Save
-        </button>
-        <span class="st-form__hint" id="stMappingHint" style="line-height:30px"></span>
-      </div>
     `;
 
-    main.querySelector('#stBtnSaveMapping').addEventListener('click', async () => {
-      const result = {};
-      main.querySelectorAll('.st-mapping-row__select').forEach(sel => {
-        if (sel.value !== '') result[sel.dataset.key] = Number(sel.value);
+    main.querySelectorAll('.st-mapping-row__select').forEach(sel => {
+      sel.addEventListener('change', () => {
+        window.db.modelMapping.set(sel.dataset.key, Number(sel.value) || null);
       });
-      await window.app.config.set('modelMapping', result);
-      const hint = main.querySelector('#stMappingHint');
-      hint.textContent = 'Saved';
-      setTimeout(() => { hint.textContent = ''; }, 1500);
     });
   }
 

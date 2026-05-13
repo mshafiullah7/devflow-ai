@@ -39,12 +39,17 @@ export class IssuesPage {
     injectCss('pages/issues/issues-page.css');
     applyStoredTheme();
 
-    this._project = await window.db.projects.get(this._projectId);
+    let _mapping;
+    [this._project, _mapping] = await Promise.all([
+      window.db.projects.get(this._projectId),
+      window.db.modelMapping.get('issues'),
+    ]);
     this.container.innerHTML = this._template();
 
     this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#isModelPicker'),
-      onSelect: model => { this._aiModelConfig = model; },
+      anchor:    this.container.querySelector('#isModelPicker'),
+      onSelect:  model => { this._aiModelConfig = model; },
+      initialId: _mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
 

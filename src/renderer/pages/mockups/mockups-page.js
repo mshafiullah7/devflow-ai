@@ -103,11 +103,14 @@ export class MockupsPage {
     injectCss('pages/mockups/mockups-page.css');
     applyStoredTheme();
 
-    [this._project, this._screens, this._modelConfigs] = await Promise.all([
+    let _mapping;
+    [this._project, this._screens, this._modelConfigs, _mapping] = await Promise.all([
       window.db.projects.get(this._projectId),
       window.db.screenDesigns.list(this._projectId),
       window.db.modelConfigs.list(),
+      window.db.modelMapping.get('mockups'),
     ]);
+    const _mappedId = _mapping?.model_config_id ?? null;
 
     this._designTemplate = this._project?.design_template || '';
     this._activeTab      = 'preview';
@@ -134,7 +137,7 @@ export class MockupsPage {
     const defCli = this._modelConfigs.find(c => c.is_default && c.type !== 'anthropic')
                 || this._modelConfigs.find(c => c.type !== 'anthropic')
                 || this._modelConfigs[0];
-    this._selectedModelId = defCli?.id ?? null;
+    this._selectedModelId = _mappedId ?? defCli?.id ?? null;
 
     this.container.innerHTML = this._pageTemplate();
     this._picker = new ModelPicker({
@@ -145,6 +148,7 @@ export class MockupsPage {
         if (nameEl) nameEl.textContent = model?.label || 'No model selected';
         this._updateMockupBtns?.();
       },
+      initialId: _mappedId,
     });
     this._bindShellEvents();
     await this._picker.reload();

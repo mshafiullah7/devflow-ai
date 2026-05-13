@@ -134,6 +134,10 @@ contextBridge.exposeInMainWorld('db', {
     delete: (id)         => invoke('db:issues:delete', id),
     count:  (project_id) => invoke('db:issues:count', project_id),
   },
+  modelMapping: {
+    get: (pageKey)              => invoke('db:model_mapping:get', pageKey),
+    set: (pageKey, modelConfigId) => invoke('db:model_mapping:set', pageKey, modelConfigId),
+  },
   savedThemes: {
     list:   ()     => invoke('db:saved_themes:list'),
     create: (data) => invoke('db:saved_themes:create', data),

@@ -253,6 +253,19 @@ function runMigrations(db) {
     `);
   }
 
+  // Add model_mapping table for existing databases
+  const mmCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='model_mapping'").get();
+  if (!mmCheck) {
+    db.exec(`
+      CREATE TABLE model_mapping (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        page_key         TEXT    NOT NULL UNIQUE,
+        model_config_id  INTEGER REFERENCES model_configs(id) ON DELETE SET NULL,
+        updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
   // Drop prompt and is_executed columns from user_stories (replaced by the prompts table)
   const usColsNow = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
   if (usColsNow.includes('prompt') || usColsNow.includes('is_executed')) {

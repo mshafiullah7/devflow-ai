@@ -22,9 +22,11 @@ export class DocumentsPage {
     injectCss('pages/documents/documents-page.css');
     applyStoredTheme();
 
-    [this._project, this._docs] = await Promise.all([
+    let _mapping;
+    [this._project, this._docs, _mapping] = await Promise.all([
       window.db.projects.get(this._projectId),
       window.db.documents.list(this._projectId),
+      window.db.modelMapping.get('documents'),
     ]);
 
     if (this._docTitle) {
@@ -43,8 +45,9 @@ export class DocumentsPage {
     this.container.innerHTML = this._pageTemplate();
 
     this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#docModelPicker'),
-      onSelect: model => { this._aiModelConfig = model; },
+      anchor:    this.container.querySelector('#docModelPicker'),
+      onSelect:  model => { this._aiModelConfig = model; },
+      initialId: _mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
 

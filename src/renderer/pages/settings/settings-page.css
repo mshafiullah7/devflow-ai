@@ -348,15 +348,6 @@
 .st-mapping-row__name { flex: 1; font-size: 13px; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-mapping-row__select { flex: 0 1 200px; min-width: 100px; box-sizing: border-box; }
 
-.st-mapping-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
 /* ------------------------------------------------------------------ */
 /* Modal overlay                                                        */
 /* ------------------------------------------------------------------ */

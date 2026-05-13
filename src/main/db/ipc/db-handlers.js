@@ -823,6 +823,23 @@ function registerDbHandlers() {
     return { success: true };
   });
 
+  // ----------------------------------------------------------------
+  // model_mapping
+  // ----------------------------------------------------------------
+  ipcMain.handle('db:model_mapping:get', (_e, pageKey) => {
+    return db.prepare('SELECT model_config_id FROM model_mapping WHERE page_key = ?').get(pageKey) ?? null;
+  });
+
+  ipcMain.handle('db:model_mapping:set', (_e, pageKey, modelConfigId) => {
+    db.prepare(`
+      INSERT INTO model_mapping (page_key, model_config_id, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(page_key) DO UPDATE
+        SET model_config_id = excluded.model_config_id,
+            updated_at = excluded.updated_at
+    `).run(pageKey, modelConfigId || null);
+  });
+
   ipcMain.handle('app:writeTempFiles', (_e, files) => {
     const dir = path.join(os.tmpdir(), 'electron-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });

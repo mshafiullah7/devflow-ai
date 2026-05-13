@@ -32,16 +32,19 @@ export class PromptQueuePage {
     injectCss('pages/prompt-queue/prompt-queue-page.css');
     applyStoredTheme();
 
-    [this._project, this._queue] = await Promise.all([
+    let _mapping;
+    [this._project, this._queue, _mapping] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.promptQueue.list({ project_id: this.projectId }),
+      window.db.modelMapping.get('prompt-queue'),
     ]);
 
     this.container.innerHTML = this._template();
 
     this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#pqModelPicker'),
-      onSelect: model => { this._modelCfg = model; },
+      anchor:    this.container.querySelector('#pqModelPicker'),
+      onSelect:  model => { this._modelCfg = model; },
+      initialId: _mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
 

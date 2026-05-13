@@ -30,7 +30,10 @@ export class ExtractUserStoriesPage {
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     applyStoredTheme();
 
-    this._project = await window.db.projects.get(this._projectId);
+    [this._project, this._eusMapping] = await Promise.all([
+      window.db.projects.get(this._projectId),
+      window.db.modelMapping.get('extract-user-stories'),
+    ]);
     this.container.innerHTML = this._template();
 
     this._git = new GitController({ getTermCwd: () => this._project?.project_path || '' });
@@ -42,8 +45,9 @@ export class ExtractUserStoriesPage {
     }
 
     this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#eusModelPicker'),
-      onSelect: model => { this._aiModelConfig = model; },
+      anchor:    this.container.querySelector('#eusModelPicker'),
+      onSelect:  model => { this._aiModelConfig = model; },
+      initialId: this._eusMapping?.model_config_id ?? null,
     });
     await this._picker.reload();
 
