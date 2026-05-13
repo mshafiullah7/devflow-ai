@@ -63,6 +63,9 @@ export class GitChangesPage {
             <h1 class="git-page__title">${name}</h1>
             <p class="git-page__subtitle">Git Changes</p>
           </div>
+          <div class="git-page__center">
+            <div class="git-page__status-label" id="gitStatusLabel">Loading…</div>
+          </div>
           <div class="git-page__folder-display" id="gitHeaderFolderDisplay" title="Select folder">
             <div class="git-page__folder-pill">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
@@ -71,9 +74,6 @@ export class GitChangesPage {
               </svg>
               <span class="git-page__folder-text" id="gitHeaderFolderText">Select folder</span>
             </div>
-          </div>
-          <div class="git-page__center">
-            <div class="git-page__status-label" id="gitStatusLabel">Loading…</div>
           </div>
           <button class="git-page__refresh" id="gitPageRefresh" title="Refresh (Ctrl+R)">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
