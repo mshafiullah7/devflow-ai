@@ -237,6 +237,15 @@
 }
 .is-form__btn:hover    { opacity: 0.88; }
 .is-form__btn:disabled { opacity: 0.5; cursor: default; }
+.is-form__btn--secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.is-form__btn--secondary:hover { background: var(--surface-hover); color: var(--text-primary); opacity: 1; }
 
 /* ------------------------------------------------------------------ */
 /* Issues list — status accordion                                        */

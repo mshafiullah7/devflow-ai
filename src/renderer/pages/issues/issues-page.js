@@ -426,7 +426,14 @@ export class IssuesPage {
     const features = await window.db.features.list(this._projectId) ?? [];
     el.innerHTML   = this._formHtml(issue, features);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
-    if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Save Changes</button>';
+    if (headerActions) headerActions.innerHTML = `
+      <button class="is-form__btn is-form__btn--secondary" id="isFormClean">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2L3 12M6 2H2v4M14 10v4h-4"/>
+        </svg>
+        Clean &amp; Structure
+      </button>
+      <button class="is-form__btn" id="isFormSave">Save Changes</button>`;
     await this._bindFormEvents(el, issue);
   }
 
@@ -632,6 +639,53 @@ export class IssuesPage {
       queueBtn.disabled = true;
       queueBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Added`;
       setTimeout(() => { queueBtn.innerHTML = origHTML; queueBtn.disabled = false; }, 1500);
+    });
+
+    const cleanBtn = this.container.querySelector('#isFormClean');
+    cleanBtn?.addEventListener('click', async () => {
+      const cfg = this._aiModelConfig;
+      if (!cfg) return;
+
+      const title    = titleEl.value.trim();
+      const desc     = descEl.value.trim();
+      const steps    = stepsEl.value.trim();
+      const expected = expectedEl.value.trim();
+      const actual   = actualEl.value.trim();
+
+      const prompt = [
+        'You are a technical writer. Clean up and restructure the Issue Details below.',
+        'Make the content clear, concise, and well-organized — fix grammar, remove redundancy, improve readability.',
+        'Keep all important technical information. Output only the rewritten Issue Details text with no headings, labels, or commentary.',
+        'End your response with a blank line followed by exactly: Fix these issues',
+        '',
+        `Issue Title: ${title || '(untitled)'}`,
+        steps    ? `\nSteps to Reproduce:\n${steps}`         : '',
+        expected ? `\nExpected Behavior:\n${expected}`       : '',
+        actual   ? `\nActual Behavior:\n${actual}`           : '',
+        '',
+        'Issue Details to clean:',
+        desc || '(empty)',
+      ].join('\n');
+
+      const origHTML         = cleanBtn.innerHTML;
+      cleanBtn.disabled      = true;
+      cleanBtn.textContent   = 'Cleaning…';
+      const saveBtnEl        = this.container.querySelector('#isFormSave');
+      if (saveBtnEl) saveBtnEl.disabled = true;
+
+      let output = '';
+      window.app.chat.offAll();
+      window.app.chat.onToken(({ text }) => { output += text; });
+      window.app.chat.onDone(({ raw, error }) => {
+        window.app.chat.offAll();
+        cleanBtn.disabled = false;
+        cleanBtn.innerHTML = origHTML;
+        if (saveBtnEl) saveBtnEl.disabled = false;
+        if (error || !raw) return;
+        descEl.value = raw.trim();
+        save(true);
+      });
+      window.app.chat.generate({ prompt, model: cfg });
     });
   }
 
