@@ -465,7 +465,7 @@ export class IssuesPage {
 
           <div class="is-form__field">
             <label class="is-form__label" for="isFormDesc">Issue Details</label>
-            <textarea class="is-form__textarea" id="isFormDesc" rows="7"
+            <textarea class="is-form__textarea" id="isFormDesc" rows="11"
               placeholder="What is the issue about?">${escHtml(issue?.description || '')}</textarea>
           </div>
 
