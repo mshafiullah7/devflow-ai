@@ -658,7 +658,7 @@ export class IssuesPage {
         '',
         `Issue Title: ${title || '(untitled)'}`,
         '',
-        'Issue Details:',
+        'Issue Details to clean:',
         desc || '(empty)',
       ].join('\n');
 
