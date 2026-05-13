@@ -45,6 +45,16 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:cloudsync:set', (_e, data) => { setCloudSyncConfig(data); });
   ipcMain.handle('app:telegram:get', () => getTelegramConfig());
   ipcMain.handle('app:telegram:set', (_e, data) => { setTelegramConfig(data); });
+  ipcMain.handle('app:telegram:send', async (_e, text) => {
+    const cfg = getTelegramConfig();
+    if (!cfg.botToken || !cfg.chatId) return { ok: false, error: 'Not configured.' };
+    try {
+      await telegramSend(cfg.botToken, cfg.chatId, text);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
   ipcMain.handle('app:telegram:test', async () => {
     const cfg = getTelegramConfig();
     if (!cfg.botToken || !cfg.chatId) return { ok: false, error: 'Bot token and Chat ID are not configured.' };

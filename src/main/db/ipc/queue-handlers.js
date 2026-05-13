@@ -44,18 +44,28 @@ function _fmtTime(d) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-async function _notifyTelegram(label, phase, exitCode, duration) {
+async function _notifyTelegram(projectName, label, phase, exitCode, duration) {
   try {
     const cfg = getTelegramConfig();
     if (!cfg.botToken || !cfg.chatId) return;
-    const now = _fmtTime(new Date());
+    const now     = _fmtTime(new Date());
+    const projLine = projectName ? `Project: \`${projectName}\`` : null;
     let text;
     if (phase === 'start') {
-      text = `*DevFlow Job Started*\nJob: \`${label}\`\nTime: ${now}`;
+      const lines = [`*DevFlow Job Started*`];
+      if (projLine) lines.push(projLine);
+      lines.push(`Job: \`${label}\``, `Time: ${now}`);
+      text = lines.join('\n');
     } else if (exitCode === 0) {
-      text = `✅ *DevFlow: Job Completed*\nJob: \`${label}\`\nDuration: ${duration}ms\nStatus: SUCCESS`;
+      const lines = [`✅ *DevFlow: Job Completed*`];
+      if (projLine) lines.push(projLine);
+      lines.push(`Job: \`${label}\``, `Duration: ${duration}ms`, `Status: SUCCESS`);
+      text = lines.join('\n');
     } else {
-      text = `❌ *DevFlow: Job FAILED*\nJob: \`${label}\`\nTime: ${now}`;
+      const lines = [`❌ *DevFlow: Job FAILED*`];
+      if (projLine) lines.push(projLine);
+      lines.push(`Job: \`${label}\``, `Time: ${now}`);
+      text = lines.join('\n');
     }
     await tgSend(cfg.botToken, cfg.chatId, text);
   } catch (_) {}
@@ -66,15 +76,16 @@ function registerQueueHandlers() {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
   });
 
-  ipcMain.handle('promptQueue:run', (event, { messages, modelConfig, cwd, itemLabel }) => {
+  ipcMain.handle('promptQueue:run', (event, { messages, modelConfig, cwd, itemLabel, projectName }) => {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
 
     const wc        = event.sender;
     const label     = itemLabel || 'job';
+    const proj      = projectName || '';
     const startTime = Date.now();
     const send = (ch, payload) => {
       if (ch === 'promptQueue:done') {
-        _notifyTelegram(label, 'done', payload.exitCode, Date.now() - startTime);
+        _notifyTelegram(proj, label, 'done', payload.exitCode, Date.now() - startTime);
       }
       if (!wc.isDestroyed()) wc.send(ch, payload);
     };
@@ -82,7 +93,7 @@ function registerQueueHandlers() {
 
     const trimmed = trimMessages(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }]);
 
-    _notifyTelegram(label, 'start', null, null);
+    _notifyTelegram(proj, label, 'start', null, null);
 
     if (type === 'anthropic') { _runAnthropic(send, trimmed, modelConfig); return { pid: null }; }
     if (type === 'ollama')    { _runOllama(send, trimmed, modelConfig);    return { pid: null }; }

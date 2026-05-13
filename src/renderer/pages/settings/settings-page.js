@@ -500,6 +500,17 @@ export class SettingsPage {
             <div class="st-placeholder-card__desc">Sent when a queue item exits with an error.</div>
           </div>
         </div>
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">Test Runner — Run Finished</div>
+            <div class="st-placeholder-card__desc">Sent after a test run with pass/fail counts and duration.</div>
+          </div>
+        </div>
       </div>
     `;
 

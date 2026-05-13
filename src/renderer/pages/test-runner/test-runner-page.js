@@ -422,6 +422,24 @@ export class TestRunnerPage {
     const results = parseResults(this._outputText);
     this._showResults(exitCode, results);
     await this._saveRun(exitCode, results);
+    this._notifyTelegram(exitCode, results);
+  }
+
+  _notifyTelegram(exitCode, results) {
+    const projectName = this._project?.name || 'Unknown Project';
+    const command     = this._activeEntry?.cmd || '';
+    const passed      = results.passed  ?? 0;
+    const failed      = results.failed  ?? 0;
+    const icon        = (failed > 0 || exitCode !== 0) ? '❌' : '✅';
+    const status      = (failed > 0 || exitCode !== 0) ? 'Tests Failed' : 'Tests Passed';
+    const lines = [
+      `${icon} *DevFlow: ${status}*`,
+      `Project: \`${projectName}\``,
+      `Command: \`${command}\``,
+      `Tests: ${passed} passed, ${failed} failed`,
+    ];
+    if (results.duration) lines.push(`Duration: ${results.duration}`);
+    window.app.telegram.send(lines.join('\n'));
   }
 
   // ----------------------------------------------------------------

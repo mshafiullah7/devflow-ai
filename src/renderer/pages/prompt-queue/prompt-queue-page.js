@@ -456,6 +456,7 @@ export class PromptQueuePage {
       modelConfig: cfg,
       cwd:         this._project?.project_path || null,
       itemLabel:   item.tag || item.story_title || `#${item.id}`,
+      projectName: this._project?.name || '',
     });
   }
 
