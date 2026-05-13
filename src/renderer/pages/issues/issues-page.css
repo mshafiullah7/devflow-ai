@@ -5,7 +5,7 @@
 
 /* Issues list column */
 #isPanelIssuesList {
-  flex: 0 0 40%;
+  flex: 0 0 35%;
   min-width: 180px;
 }
 
