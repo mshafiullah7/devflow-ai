@@ -675,12 +675,12 @@ export class IssuesPage {
       let output = '';
       window.app.chat.offAll();
       window.app.chat.onToken(({ text }) => { output += text; });
-      window.app.chat.onDone(({ raw, error }) => {
+      window.app.chat.onDone(({ raw }) => {
         window.app.chat.offAll();
         cleanBtn.disabled = false;
         cleanBtn.innerHTML = origHTML;
         if (saveBtnEl) saveBtnEl.disabled = false;
-        if (error || !raw) return;
+        if (!raw) return;
         descEl.value = raw.trim();
         save(true);
       });
