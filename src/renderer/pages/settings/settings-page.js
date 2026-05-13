@@ -413,20 +413,15 @@ export class SettingsPage {
   }
 
   // ----------------------------------------------------------------
-  // Notifications — Telegram (placeholder)
+  // Notifications — Telegram
   // ----------------------------------------------------------------
-  _renderNotifications() {
-    const main = this.container.querySelector('#stMainContent');
+  async _renderNotifications() {
+    const main   = this.container.querySelector('#stMainContent');
+    const saved  = await window.app.telegram.get();
+
     main.innerHTML = `
       <div class="st-content-title">Notifications</div>
       <div class="st-content-sub">Send alerts and updates to a Telegram chat when events occur in your projects</div>
-
-      <div class="st-coming-soon-banner">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
-        </svg>
-        Coming Soon — save your credentials now and notifications will activate when released.
-      </div>
 
       <div class="st-section-header">
         <div class="st-section-label">Telegram Bot</div>
@@ -434,8 +429,8 @@ export class SettingsPage {
       <div class="st-cloud-form">
         <div class="st-form__row">
           <label class="st-form__label">Bot Token</label>
-          <input class="st-form__input" type="password" disabled
-            placeholder="1234567890:ABCDefgh…"
+          <input class="st-form__input" id="tgBotToken" type="password"
+            placeholder="${saved.botToken_enc ? '••••••••  (saved)' : '1234567890:ABCDefgh…'}"
             autocomplete="new-password"/>
           <span class="st-form__hint">
             Create a bot via <strong>@BotFather</strong> on Telegram and paste the token here.
@@ -444,30 +439,32 @@ export class SettingsPage {
         </div>
         <div class="st-form__row">
           <label class="st-form__label">Chat ID</label>
-          <input class="st-form__input" type="text" disabled
-            placeholder="-100123456789"/>
+          <input class="st-form__input" id="tgChatId" type="text"
+            placeholder="-100123456789"
+            value="${escHtml(saved.chatId || '')}"/>
           <span class="st-form__hint">
             Your personal chat ID or a group/channel ID the bot has been added to.
           </span>
         </div>
         <div class="st-cloud-actions">
-          <button class="st-add-btn" disabled title="Available when notifications are released">
+          <button class="st-add-btn" id="tgBtnTest">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
             Send Test Message
           </button>
-          <button class="st-add-btn st-add-btn--primary" disabled title="Available when notifications are released">
+          <button class="st-add-btn st-add-btn--primary" id="tgBtnSave">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
             </svg>
             Save
           </button>
         </div>
+        <span class="st-form__hint" id="tgHint" style="margin-top:6px;display:block"></span>
       </div>
 
       <div class="st-section-header" style="margin-top:28px">
-        <div class="st-section-label">Planned Triggers</div>
+        <div class="st-section-label">Active Triggers</div>
       </div>
       <div class="st-placeholder-sections">
         <div class="st-placeholder-card">
@@ -477,19 +474,8 @@ export class SettingsPage {
             </svg>
           </div>
           <div class="st-placeholder-card__body">
-            <div class="st-placeholder-card__title">Prompt Queue Completed</div>
-            <div class="st-placeholder-card__desc">Notify when a queued AI prompt finishes running.</div>
-          </div>
-        </div>
-        <div class="st-placeholder-card">
-          <div class="st-placeholder-card__icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          </div>
-          <div class="st-placeholder-card__body">
-            <div class="st-placeholder-card__title">New Issue Logged</div>
-            <div class="st-placeholder-card__desc">Notify when an issue is created in any project.</div>
+            <div class="st-placeholder-card__title">Prompt Queue — Job Started</div>
+            <div class="st-placeholder-card__desc">Sent when a queue item begins execution.</div>
           </div>
         </div>
         <div class="st-placeholder-card">
@@ -499,12 +485,48 @@ export class SettingsPage {
             </svg>
           </div>
           <div class="st-placeholder-card__body">
-            <div class="st-placeholder-card__title">Test Run Finished</div>
-            <div class="st-placeholder-card__desc">Notify with pass/fail summary after a test run completes.</div>
+            <div class="st-placeholder-card__title">Prompt Queue — Job Completed</div>
+            <div class="st-placeholder-card__desc">Sent on successful completion with duration.</div>
+          </div>
+        </div>
+        <div class="st-placeholder-card">
+          <div class="st-placeholder-card__icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div class="st-placeholder-card__body">
+            <div class="st-placeholder-card__title">Prompt Queue — Job Failed</div>
+            <div class="st-placeholder-card__desc">Sent when a queue item exits with an error.</div>
           </div>
         </div>
       </div>
     `;
+
+    const hint = main.querySelector('#tgHint');
+
+    main.querySelector('#tgBtnSave').addEventListener('click', async () => {
+      const botToken = main.querySelector('#tgBotToken').value.trim();
+      const chatId   = main.querySelector('#tgChatId').value.trim();
+      await window.app.telegram.set({ botToken, chatId });
+      hint.textContent = 'Saved';
+      hint.style.color = '';
+      setTimeout(() => { hint.textContent = ''; }, 1500);
+    });
+
+    main.querySelector('#tgBtnTest').addEventListener('click', async () => {
+      hint.textContent = 'Sending…';
+      hint.style.color = '';
+      const result = await window.app.telegram.test();
+      if (result.ok) {
+        hint.textContent = 'Message sent successfully';
+        hint.style.color = 'var(--color-success, #4caf50)';
+      } else {
+        hint.textContent = result.error || 'Failed to send message';
+        hint.style.color = 'var(--color-danger, #e53935)';
+      }
+      setTimeout(() => { hint.textContent = ''; hint.style.color = ''; }, 4000);
+    });
   }
 
   // ----------------------------------------------------------------

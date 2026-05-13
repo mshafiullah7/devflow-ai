@@ -70,4 +70,29 @@ function setCloudSyncConfig(data) {
   writeConfig(cfg);
 }
 
-module.exports = { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig };
+function getTelegramConfig() {
+  const tg = readConfig().telegram || {};
+  const result = { chatId: tg.chatId || '' };
+  if (tg.botToken_enc) {
+    try { result.botToken = _decrypt(tg.botToken_enc); } catch { result.botToken = ''; }
+    result.botToken_enc = tg.botToken_enc;
+  } else {
+    result.botToken = '';
+  }
+  return result;
+}
+
+function setTelegramConfig({ botToken, chatId }) {
+  const cfg = readConfig();
+  const prev = cfg.telegram || {};
+  const next = { chatId: chatId || '' };
+  if (botToken) {
+    next.botToken_enc = _encrypt(botToken);
+  } else if (prev.botToken_enc) {
+    next.botToken_enc = prev.botToken_enc;
+  }
+  cfg.telegram = next;
+  writeConfig(cfg);
+}
+
+module.exports = { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig };

@@ -178,6 +178,11 @@ contextBridge.exposeInMainWorld('app', {
     get: ()     => invoke('app:cloudsync:get'),
     set: (data) => invoke('app:cloudsync:set', data),
   },
+  telegram: {
+    get:  ()     => invoke('app:telegram:get'),
+    set:  (data) => invoke('app:telegram:set', data),
+    test: ()     => invoke('app:telegram:test'),
+  },
   db: {
     export:  () => invoke('app:db:export'),
     restore: () => invoke('app:db:restore'),

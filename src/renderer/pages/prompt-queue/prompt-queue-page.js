@@ -455,6 +455,7 @@ export class PromptQueuePage {
       messages:    [{ role: 'user', content: item.prompt_text }],
       modelConfig: cfg,
       cwd:         this._project?.project_path || null,
+      itemLabel:   item.tag || item.story_title || `#${item.id}`,
     });
   }
 

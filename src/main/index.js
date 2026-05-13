@@ -6,7 +6,8 @@ const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
 const { closeDb } = require('./db/database');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
-const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig } = require('./app-config');
+const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
+const { sendMessage: telegramSend } = require('./telegram');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -42,6 +43,18 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:config:set', (_e, key, value) => { setConfigValue(key, value); });
   ipcMain.handle('app:cloudsync:get', () => getCloudSyncConfig());
   ipcMain.handle('app:cloudsync:set', (_e, data) => { setCloudSyncConfig(data); });
+  ipcMain.handle('app:telegram:get', () => getTelegramConfig());
+  ipcMain.handle('app:telegram:set', (_e, data) => { setTelegramConfig(data); });
+  ipcMain.handle('app:telegram:test', async () => {
+    const cfg = getTelegramConfig();
+    if (!cfg.botToken || !cfg.chatId) return { ok: false, error: 'Bot token and Chat ID are not configured.' };
+    try {
+      await telegramSend(cfg.botToken, cfg.chatId, 'Hello from DevFlow! ✅');
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
   ipcMain.handle('app:db:export',  (e)    => exportDb(BrowserWindow.fromWebContents(e.sender)));
   ipcMain.handle('app:db:restore', (e)    => restoreDb(BrowserWindow.fromWebContents(e.sender)));
   ipcMain.handle('app:backup-default-path', () => path.join(app.getPath('userData'), 'backup'));

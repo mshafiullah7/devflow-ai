@@ -7,6 +7,8 @@ const https = require('node:https');
 const fs    = require('node:fs');
 const os    = require('node:os');
 const path  = require('node:path');
+const { getTelegramConfig }    = require('../../app-config');
+const { sendMessage: tgSend }  = require('../../telegram');
 
 let _activeQueueProc = null;
 
@@ -38,19 +40,49 @@ function messagesToText(messages) {
   }).join('\n\n');
 }
 
+function _fmtTime(d) {
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+async function _notifyTelegram(label, phase, exitCode, duration) {
+  try {
+    const cfg = getTelegramConfig();
+    if (!cfg.botToken || !cfg.chatId) return;
+    const now = _fmtTime(new Date());
+    let text;
+    if (phase === 'start') {
+      text = `*DevFlow Job Started*\nJob: \`${label}\`\nTime: ${now}`;
+    } else if (exitCode === 0) {
+      text = `✅ *DevFlow: Job Completed*\nJob: \`${label}\`\nDuration: ${duration}ms\nStatus: SUCCESS`;
+    } else {
+      text = `❌ *DevFlow: Job FAILED*\nJob: \`${label}\`\nTime: ${now}`;
+    }
+    await tgSend(cfg.botToken, cfg.chatId, text);
+  } catch (_) {}
+}
+
 function registerQueueHandlers() {
   ipcMain.handle('promptQueue:kill', () => {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
   });
 
-  ipcMain.handle('promptQueue:run', (event, { messages, modelConfig, cwd }) => {
+  ipcMain.handle('promptQueue:run', (event, { messages, modelConfig, cwd, itemLabel }) => {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
 
-    const wc   = event.sender;
-    const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
+    const wc        = event.sender;
+    const label     = itemLabel || 'job';
+    const startTime = Date.now();
+    const send = (ch, payload) => {
+      if (ch === 'promptQueue:done') {
+        _notifyTelegram(label, 'done', payload.exitCode, Date.now() - startTime);
+      }
+      if (!wc.isDestroyed()) wc.send(ch, payload);
+    };
     const type = modelConfig?.type || 'cli';
 
     const trimmed = trimMessages(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }]);
+
+    _notifyTelegram(label, 'start', null, null);
 
     if (type === 'anthropic') { _runAnthropic(send, trimmed, modelConfig); return { pid: null }; }
     if (type === 'ollama')    { _runOllama(send, trimmed, modelConfig);    return { pid: null }; }
