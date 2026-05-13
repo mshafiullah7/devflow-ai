@@ -464,7 +464,23 @@ export class IssuesPage {
           </div>
 
           <div class="is-form__field">
-            <label class="is-form__label" for="isFormDesc">Issue Details</label>
+            <div class="is-desc-label-row">
+              <label class="is-form__label" for="isFormDesc">Issue Details</label>
+              <div class="is-desc-actions">
+                <button class="is-desc-btn" id="isDescExpandBtn" type="button" title="Expand to full editor">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                    <path d="M9 2h5v5M7 9L14 2M2 7v7h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Expand
+                </button>
+                <button class="is-desc-btn is-desc-btn--queue" id="isDescQueueBtn" type="button" title="Add to Prompt Queue">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                  Add to Queue
+                </button>
+              </div>
+            </div>
             <textarea class="is-form__textarea" id="isFormDesc" rows="11"
               placeholder="What is the issue about?">${escHtml(issue?.description || '')}</textarea>
           </div>
@@ -575,6 +591,28 @@ export class IssuesPage {
 
     saveBtn.addEventListener('click', save);
     el.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } });
+
+    el.querySelector('#isDescExpandBtn')?.addEventListener('click', () => {
+      this._openDescExpand(descEl);
+    });
+
+    el.querySelector('#isDescQueueBtn')?.addEventListener('click', async () => {
+      const text = descEl.value.trim();
+      if (!text) return;
+      const queueBtn = el.querySelector('#isDescQueueBtn');
+      await window.db.promptQueue.add({
+        project_id:    this._projectId,
+        user_story_id: parseInt(storyEl.value) || null,
+        story_title:   titleEl.value.trim() || 'Untitled Issue',
+        prompt_id:     null,
+        tag:           'Issue',
+        prompt_text:   text,
+      });
+      const origHTML = queueBtn.innerHTML;
+      queueBtn.disabled = true;
+      queueBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Added`;
+      setTimeout(() => { queueBtn.innerHTML = origHTML; queueBtn.disabled = false; }, 1500);
+    });
   }
 
   _refreshCardBadges(id, status, severity) {
@@ -630,6 +668,36 @@ export class IssuesPage {
         document.addEventListener('mouseup',   onUp);
       });
     });
+  }
+
+  // ----------------------------------------------------------------
+  // Expand overlay for Issue Details
+  // ----------------------------------------------------------------
+  _openDescExpand(textarea) {
+    const overlay = document.createElement('div');
+    overlay.className = 'is-expand-overlay';
+    overlay.innerHTML = `
+      <div class="is-expand-dialog">
+        <div class="is-expand-header">
+          <span class="is-expand-title">Issue Details</span>
+          <button class="is-expand-close" id="isExpandClose" type="button">✕</button>
+        </div>
+        <textarea class="is-expand-textarea" id="isExpandTa" spellcheck="true">${escHtml(textarea.value)}</textarea>
+        <div class="is-expand-footer">
+          <button class="is-expand-btn is-expand-btn--done" id="isExpandDone" type="button">Done</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const ta = overlay.querySelector('#isExpandTa');
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    const close = () => document.body.removeChild(overlay);
+    const done  = () => { textarea.value = ta.value; close(); };
+    overlay.querySelector('#isExpandDone').addEventListener('click', done);
+    overlay.querySelector('#isExpandClose').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
   }
 
   // ----------------------------------------------------------------
