@@ -486,7 +486,7 @@ export class IssuesPage {
               Actual Behavior
               <span class="is-form__label-hint">(what actually happens)</span>
             </label>
-            <textarea class="is-form__textarea" id="isFormActual" rows="6"
+            <textarea class="is-form__textarea" id="isFormActual" rows="3"
               placeholder="What actually happened…">${escHtml(issue?.actual_behavior || '')}</textarea>
           </div>
 
