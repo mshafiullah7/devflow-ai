@@ -503,7 +503,7 @@ export class SettingsPage {
         <div class="st-placeholder-card">
           <div class="st-placeholder-card__icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              <path d="M8 3v8L4.5 17A2 2 0 0 0 6.4 20h11.2a2 2 0 0 0 1.9-3L16 11V3"/><line x1="8" y1="3" x2="16" y2="3"/><line x1="6" y1="15" x2="18" y2="15"/>
             </svg>
           </div>
           <div class="st-placeholder-card__body">
