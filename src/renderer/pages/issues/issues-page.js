@@ -30,6 +30,7 @@ export class IssuesPage {
     this._aiModelConfig = null;
     this._deepItemId         = params.itemId ?? null;
     this._collapsedStatuses  = new Set(['resolved', 'closed', 'wont_fix']);
+    this._pendingSave        = null;
   }
 
   async mount() {
@@ -67,6 +68,9 @@ export class IssuesPage {
   }
 
   unmount() {
+    const fn = this._pendingSave;
+    this._pendingSave = null;
+    if (fn) fn();
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     this._picker?.unmount();
@@ -356,7 +360,14 @@ export class IssuesPage {
     `;
   }
 
-  _selectIssue(id) {
+  async _autoSave() {
+    const fn = this._pendingSave;
+    this._pendingSave = null;
+    if (fn) await fn();
+  }
+
+  async _selectIssue(id) {
+    await this._autoSave();
     this._activeId = id;
     this.container.querySelectorAll('#isIssuesList .eus-src-item').forEach(c =>
       c.classList.toggle('eus-src-item--active', parseInt(c.dataset.id) === id)
@@ -377,6 +388,7 @@ export class IssuesPage {
   // Detail panel (Panel 4)
   // ----------------------------------------------------------------
   _showEmptyDetail() {
+    this._pendingSave = null;
     const el = this.container.querySelector('#isIssueDetail');
     if (!el) return;
     el.innerHTML = `
@@ -392,6 +404,7 @@ export class IssuesPage {
   }
 
   async _showAddForm() {
+    await this._autoSave();
     this._activeId = null;
     this.container.querySelectorAll('#isIssuesList .eus-src-item').forEach(c => c.classList.remove('eus-src-item--active'));
     const el       = this.container.querySelector('#isIssueDetail');
@@ -550,9 +563,9 @@ export class IssuesPage {
       await loadStories(issue.feature_id, issue.user_story_id ?? null);
     }
 
-    const save = async () => {
+    const save = async (silent = false) => {
       const title = titleEl.value.trim();
-      if (!title) { titleEl.classList.add('is-form__input--error'); titleEl.focus(); return; }
+      if (!title) { if (!silent) { titleEl.classList.add('is-form__input--error'); titleEl.focus(); } return; }
       titleEl.classList.remove('is-form__input--error');
       saveBtn.disabled    = true;
       saveBtn.textContent = issue ? 'Saving…' : 'Adding…';
@@ -588,6 +601,8 @@ export class IssuesPage {
         saveBtn.textContent = issue ? 'Save Changes' : 'Add Issue';
       }
     };
+
+    this._pendingSave = () => save(true);
 
     saveBtn.addEventListener('click', save);
     el.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } });
