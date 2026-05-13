@@ -464,20 +464,20 @@ export class IssuesPage {
           </div>
 
           <div class="is-form__field">
-            <label class="is-form__label" for="isFormDesc">Description</label>
-            <textarea class="is-form__textarea" id="isFormDesc" rows="5"
+            <label class="is-form__label" for="isFormDesc">Issue Details</label>
+            <textarea class="is-form__textarea" id="isFormDesc" rows="7"
               placeholder="What is the issue about?">${escHtml(issue?.description || '')}</textarea>
           </div>
 
           <div class="is-form__field">
             <label class="is-form__label" for="isFormSteps">Steps to Reproduce</label>
-            <textarea class="is-form__textarea is-form__textarea--steps" id="isFormSteps" rows="8"
+            <textarea class="is-form__textarea is-form__textarea--steps" id="isFormSteps" rows="4"
               placeholder="1. Navigate to…&#10;2. Click…&#10;3. Observe…">${escHtml(issue?.steps_to_reproduce || '')}</textarea>
           </div>
 
           <div class="is-form__field">
             <label class="is-form__label" for="isFormExpected">Expected Behavior</label>
-            <textarea class="is-form__textarea" id="isFormExpected" rows="6"
+            <textarea class="is-form__textarea" id="isFormExpected" rows="3"
               placeholder="The system should…">${escHtml(issue?.expected_behavior || '')}</textarea>
           </div>
 
