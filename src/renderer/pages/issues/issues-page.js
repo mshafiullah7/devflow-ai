@@ -426,14 +426,7 @@ export class IssuesPage {
     const features = await window.db.features.list(this._projectId) ?? [];
     el.innerHTML   = this._formHtml(issue, features);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
-    if (headerActions) headerActions.innerHTML = `
-      <button class="is-form__btn is-form__btn--secondary" id="isFormClean">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M13 2L3 12M6 2H2v4M14 10v4h-4"/>
-        </svg>
-        Clean &amp; Structure
-      </button>
-      <button class="is-form__btn" id="isFormSave">Save Changes</button>`;
+    if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Save Changes</button>';
     await this._bindFormEvents(el, issue);
   }
 
@@ -492,6 +485,12 @@ export class IssuesPage {
             <div class="is-desc-label-row">
               <label class="is-form__label" for="isFormDesc">Issue Details</label>
               <div class="is-desc-actions">
+                <button class="is-desc-btn is-desc-btn--clean" id="isDescCleanBtn" type="button" title="Clean &amp; structure with AI">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M13 2L3 12M6 2H2v4M14 10v4h-4"/>
+                  </svg>
+                  Clean &amp; Structure
+                </button>
                 <button class="is-desc-btn" id="isDescExpandBtn" type="button" title="Expand to full editor">
                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                     <path d="M9 2h5v5M7 9L14 2M2 7v7h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -641,7 +640,7 @@ export class IssuesPage {
       setTimeout(() => { queueBtn.innerHTML = origHTML; queueBtn.disabled = false; }, 1500);
     });
 
-    const cleanBtn = this.container.querySelector('#isFormClean');
+    const cleanBtn = el.querySelector('#isDescCleanBtn');
     cleanBtn?.addEventListener('click', async () => {
       const cfg = this._aiModelConfig;
       if (!cfg) return;
