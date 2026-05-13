@@ -125,10 +125,6 @@ export class PromptQueuePage {
         <div class="pq-toolbar">
           <span class="pq-toolbar__summary" id="pqSummary"></span>
           <div class="pq-toolbar__actions">
-            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunNext" title="Run Next">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
-              Run Next
-            </button>
             <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunAll" title="Run All (Ctrl+Enter)">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3l5 5-5 5V3zM9 3l5 5-5 5V3z" fill="currentColor"/></svg>
               Run All
@@ -463,12 +459,10 @@ export class PromptQueuePage {
   }
 
   _updateToolbarRunState(running) {
-    const stop    = this.container.querySelector('#pqBtnStop');
-    const runNext = this.container.querySelector('#pqBtnRunNext');
-    const runAll  = this.container.querySelector('#pqBtnRunAll');
-    if (stop)    stop.hidden    = !running;
-    if (runNext) runNext.hidden = running;
-    if (runAll)  runAll.hidden  = running || this._runAll;
+    const stop   = this.container.querySelector('#pqBtnStop');
+    const runAll = this.container.querySelector('#pqBtnRunAll');
+    if (stop)   stop.hidden   = !running;
+    if (runAll) runAll.hidden = running || this._runAll;
   }
 
   _updateToolbarRunAllState(active) {
@@ -614,13 +608,6 @@ export class PromptQueuePage {
         this._setHeaderFolderPath(folderPath);
       });
 
-
-    this.container.querySelector('#pqBtnRunNext')
-      .addEventListener('click', () => {
-        if (this._isRunning) return;
-        const next = this._queue.find(q => q.status === 'pending');
-        if (next) this._runItem(next);
-      });
 
     this.container.querySelector('#pqBtnRunAll')
       .addEventListener('click', () => {
