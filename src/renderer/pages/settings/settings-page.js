@@ -546,7 +546,7 @@ export class SettingsPage {
   async _renderCloudSync() {
     const main   = this.container.querySelector('#stMainContent');
     const saved  = await window.app.cloudSync.get();
-    const prov   = saved.provider || 'supabase';
+    const prov   = saved.provider || 'neon';
 
     main.innerHTML = `
       <div class="st-content-title">Cloud Sync</div>
@@ -568,30 +568,26 @@ export class SettingsPage {
         <div class="st-form__row">
           <label class="st-form__label">Provider</label>
           <select class="st-form__select" id="csProvider">
-            <option value="supabase"  ${prov === 'supabase'  ? 'selected' : ''}>Supabase</option>
+            <option value="neon"      ${prov === 'neon'      ? 'selected' : ''}>Neon (Serverless PostgreSQL)</option>
             <option value="postgres"  ${prov === 'postgres'  ? 'selected' : ''}>PostgreSQL (self-hosted / on-premises)</option>
           </select>
           <span class="st-form__hint">
-            Both use the same PostgreSQL wire protocol — switching later only requires updating credentials.
-            <a class="st-hint-link" id="csLearnMore" href="#">Learn more</a>
+            Neon is a serverless PostgreSQL with a generous free tier. Self-hosted PostgreSQL is also supported.
+            <a class="st-hint-link" id="csLearnMore" href="#">Open Neon docs</a>
           </span>
         </div>
 
-        <!-- Supabase fields -->
-        <div id="csFieldsSupabase">
+        <!-- Neon fields -->
+        <div id="csFieldsNeon">
           <div class="st-form__row">
-            <label class="st-form__label">Project URL</label>
-            <input class="st-form__input" id="csSupabaseUrl" type="text"
-              placeholder="https://xxxxxxxxxxxx.supabase.co"
-              value="${escHtml(saved.supabaseUrl || '')}"/>
-            <span class="st-form__hint">Found in your Supabase project → Settings → API</span>
-          </div>
-          <div class="st-form__row">
-            <label class="st-form__label">Database Password</label>
-            <input class="st-form__input" id="csPassword" type="password"
-              placeholder="${saved.password_enc ? '••••••••  (saved)' : 'Enter database password'}"
-              autocomplete="new-password"/>
-            <span class="st-form__hint">Project database password — stored encrypted on this device</span>
+            <label class="st-form__label">Connection String</label>
+            <input class="st-form__input" id="csNeonConnStr" type="text"
+              placeholder="postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/dbname?sslmode=require"
+              value="${escHtml(saved.connectionString || '')}"/>
+            <span class="st-form__hint">
+              Copy from Neon Console → your project → Connection Details → Connection string.
+              Password is extracted and stored encrypted on this device.
+            </span>
           </div>
         </div>
 
@@ -695,7 +691,7 @@ export class SettingsPage {
     `;
 
     const applyProvider = (p) => {
-      main.querySelector('#csFieldsSupabase').style.display = p === 'supabase' ? '' : 'none';
+      main.querySelector('#csFieldsNeon').style.display     = p === 'neon'     ? '' : 'none';
       main.querySelector('#csFieldsPostgres').style.display = p === 'postgres' ? '' : 'none';
     };
 
@@ -705,32 +701,37 @@ export class SettingsPage {
 
     main.querySelector('#csLearnMore').addEventListener('click', e => {
       e.preventDefault();
-      window.shell?.openExternal?.('https://supabase.com/docs/guides/database/connecting-to-postgres');
+      window.shell?.openExternal?.('https://neon.tech/docs/connect/connect-from-any-app');
     });
 
     main.querySelector('#csBtnSave').addEventListener('click', async () => {
-      const provider  = main.querySelector('#csProvider').value;
-      const password  = main.querySelector('#csPassword').value;
-      const hint      = main.querySelector('#csSaveHint');
+      const provider = main.querySelector('#csProvider').value;
+      const hint     = main.querySelector('#csSaveHint');
 
       const data = { provider };
 
-      if (provider === 'supabase') {
-        data.supabaseUrl = main.querySelector('#csSupabaseUrl').value.trim();
-        data.ssl         = true;
-        data.host        = `db.${(data.supabaseUrl.match(/https:\/\/([^.]+)/) || [])[1] || ''}.supabase.co`;
-        data.port        = 5432;
-        data.database    = 'postgres';
-        data.username    = 'postgres';
+      if (provider === 'neon') {
+        const raw = main.querySelector('#csNeonConnStr').value.trim();
+        try {
+          const u       = new URL(raw.replace(/^postgresql/, 'http'));
+          data.host     = u.hostname;
+          data.port     = u.port ? Number(u.port) : 5432;
+          data.database = u.pathname.replace('/', '');
+          data.username = u.username;
+          data.ssl      = true;
+          if (u.password) data.password = decodeURIComponent(u.password);
+        } catch { /* malformed string — save raw and let user fix it */ }
+        // store the string with credentials redacted so it can repopulate the field
+        data.connectionString = raw.replace(/:\/\/([^:]+):[^@]+@/, '://$1:••••@');
       } else {
+        const password = main.querySelector('#csPassword').value;
         data.host     = main.querySelector('#csPgHost').value.trim();
         data.port     = Number(main.querySelector('#csPgPort').value) || 5432;
         data.database = main.querySelector('#csPgDatabase').value.trim();
         data.username = main.querySelector('#csPgUsername').value.trim();
         data.ssl      = main.querySelector('#csPgSsl').checked;
+        if (password) data.password = password;
       }
-
-      if (password) data.password = password;
 
       await window.app.cloudSync.set(data);
       hint.textContent = 'Saved';
