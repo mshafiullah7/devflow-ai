@@ -497,15 +497,16 @@ export class TestRunnerPage {
     return snippet.length > 1200 ? snippet.slice(0, 1200) + '\n…' : snippet;
   }
 
-  async _showLogIssueModal(results, exitCode) {
-    const framework = this._activeEntry?.framework ?? '';
-    const command   = this._activeEntry?.cmd        ?? '';
+  async _showLogIssueModal(results, exitCode, overrides = {}) {
+    const framework = overrides.framework ?? (this._activeEntry?.framework ?? '');
+    const command   = overrides.command   ?? (this._activeEntry?.cmd        ?? '');
+    const outputSrc = overrides.output    ?? this._outputText;
 
     const title    = framework ? `${framework} test failure` : 'Test failure';
     const steps    = command   ? `$ ${command}` : '';
     const expected = 'All tests should pass.';
     const actual   = this._buildActualText(results, exitCode);
-    const snippet  = this._extractErrorSnippet(this._outputText);
+    const snippet  = this._extractErrorSnippet(outputSrc);
 
     const features = await window.db.features.list(this._projectId);
 
@@ -701,9 +702,11 @@ export class TestRunnerPage {
 
     const [last, ...older] = this._history;
 
-    lastRunEl.innerHTML =
-      `<div class="tr-history-section-label">Last Run</div>` +
-      this._lastRunSectionHtml(last);
+    lastRunEl.innerHTML = this._lastRunSectionHtml(last);
+    const histIssueBtn = lastRunEl.querySelector('#trLastRunIssueBtn');
+    if (histIssueBtn) {
+      histIssueBtn.addEventListener('click', () => this._showLogIssueModalFromHistory(last));
+    }
 
     if (older.length > 0) {
       prevRunsEl.innerHTML =
@@ -716,14 +719,43 @@ export class TestRunnerPage {
   }
 
   _lastRunSectionHtml(r) {
+    const failed   = r.failed ?? null;
+    const isFailed = r.exit_code !== 0 || (failed !== null && failed > 0);
     const outputText = r.output ? escHtml(r.output) : '<span class="tr-output-none">No output captured</span>';
+    const issueBtn = isFailed
+      ? `<button class="tr-log-issue-btn" id="trLastRunIssueBtn" title="Log as issue">
+           <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+             <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+             <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+           </svg>
+           Log Issue
+         </button>`
+      : '';
     return `
+      <div class="tr-last-run-header">
+        <div class="tr-history-section-label">Last Run</div>
+        ${issueBtn}
+      </div>
       ${this._historyCardHtml(r)}
       <div class="tr-last-run-output">
         <div class="tr-last-run-output__label">Output</div>
         <pre class="tr-last-run-output__pre">${outputText}</pre>
       </div>
     `;
+  }
+
+  _showLogIssueModalFromHistory(r) {
+    const results = {
+      failed:   r.failed   ?? null,
+      passed:   r.passed   ?? null,
+      skipped:  r.skipped  ?? null,
+      duration: r.duration ?? null,
+    };
+    this._showLogIssueModal(results, r.exit_code, {
+      framework: r.framework ?? '',
+      command:   r.command   ?? '',
+      output:    r.output    ?? '',
+    });
   }
 
   _historyCardHtml(r) {

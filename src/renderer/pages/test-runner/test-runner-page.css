@@ -237,6 +237,11 @@
   padding: 24px 12px;
 }
 
+.tr-last-run-header {
+  display: flex;
+  align-items: center;
+}
+
 .tr-history-section-label {
   font-size: 10px;
   font-weight: 700;
