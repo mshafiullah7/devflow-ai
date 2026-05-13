@@ -75,6 +75,13 @@ export class GitChangesPage {
               <span class="git-page__folder-text" id="gitHeaderFolderText">Select folder</span>
             </div>
           </div>
+          <button class="git-page__refresh" id="gitPageVSCode" title="Open in VS Code"
+            ${this._project?.project_path ? '' : 'disabled'}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 2H8a2 2 0 00-2 2v16a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2z"/>
+              <path d="M9 9l3 3-3 3"/>
+            </svg>
+          </button>
           <button class="git-page__refresh" id="gitPageRefresh" title="Refresh (Ctrl+R)">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
               <path d="M4 4a8 8 0 1 1 0 12" stroke="currentColor" stroke-width="1.6"
@@ -162,6 +169,12 @@ export class GitChangesPage {
     this.container.querySelector('#gitPageBack')
       .addEventListener('click', () =>
         this.router.navigate(this._from, { projectId: this._projectId }));
+
+    this.container.querySelector('#gitPageVSCode')
+      .addEventListener('click', () => {
+        const path = this._project?.project_path;
+        if (path) window.shell.openVSCode(path);
+      });
 
     this.container.querySelector('#gitPageRefresh')
       .addEventListener('click', () => this._loadStatus());
@@ -408,8 +421,10 @@ export class GitChangesPage {
   _setHeaderFolderPath(folderPath) {
     const text    = this.container.querySelector('#gitHeaderFolderText');
     const display = this.container.querySelector('#gitHeaderFolderDisplay');
+    const vsCode  = this.container.querySelector('#gitPageVSCode');
     if (text)    text.textContent = folderPath;
     if (display) display.classList.add('git-page__folder-display--active');
+    if (vsCode)  vsCode.disabled = false;
   }
 
   // ----------------------------------------------------------------
