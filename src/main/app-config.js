@@ -31,7 +31,7 @@ function setConfigValue(key, value) {
 }
 
 function _encrypt(plain) {
-  if (safeStorage.isAvailable()) {
+  if (safeStorage.isEncryptionAvailable()) {
     return safeStorage.encryptString(plain).toString('base64');
   }
   // safeStorage unavailable (headless/test) — base64 only, not secure
@@ -39,7 +39,7 @@ function _encrypt(plain) {
 }
 
 function _decrypt(enc) {
-  if (safeStorage.isAvailable()) {
+  if (safeStorage.isEncryptionAvailable()) {
     return safeStorage.decryptString(Buffer.from(enc, 'base64'));
   }
   return Buffer.from(enc, 'base64').toString('utf8');
