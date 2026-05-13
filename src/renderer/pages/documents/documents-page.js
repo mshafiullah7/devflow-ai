@@ -1048,7 +1048,9 @@ export class DocumentsPage {
     const prevContent = contentTA?.value ?? '';
 
     try {
-      if (cfg.type === 'api') {
+      if (cfg.type === 'ollama') {
+        await this._runAiEditOllama(cfg, prompt, aiMsgEl, contentTA, prevContent);
+      } else if (cfg.type === 'api') {
         await this._runAiEditApi(cfg, prompt, aiMsgEl, contentTA, prevContent);
       } else {
         await this._runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent);
@@ -1076,6 +1078,65 @@ export class DocumentsPage {
       sendBtn.disabled = false;
       inputEl.disabled = false;
       inputEl.focus();
+    }
+  }
+
+  async _runAiEditOllama(cfg, prompt, aiMsgEl, contentTA, prevContent) {
+    const baseUrl = (cfg.base_url || 'http://localhost:11434').replace(/\/$/, '');
+    const body    = JSON.stringify({
+      model:    cfg.model_name || '',
+      messages: [{ role: 'user', content: prompt }],
+      stream:   true,
+    });
+
+    let res;
+    try {
+      res = await fetch(`${baseUrl}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    } catch (err) {
+      this._updateChatMsg(aiMsgEl, `Ollama request failed: ${err.message}`, 'error');
+      return;
+    }
+
+    if (!res.ok) {
+      const errText = await res.text();
+      this._updateChatMsg(aiMsgEl, `Ollama HTTP ${res.status}: ${errText.slice(0, 200)}`, 'error');
+      return;
+    }
+
+    const reader   = res.body.getReader();
+    const decoder  = new TextDecoder();
+    let buffer     = '';
+    let fullText   = '';
+    let charCount  = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const data  = JSON.parse(line);
+          const delta = data.message?.content || '';
+          if (delta) {
+            fullText  += delta;
+            charCount += delta.length;
+            this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
+          }
+        } catch { /* skip malformed NDJSON line */ }
+      }
+    }
+
+    if (fullText.trim()) {
+      if (contentTA) { contentTA.value = fullText.trim(); this._dirty = true; }
+      const activeDoc = this._docs.find(d => d.id === this._activeId);
+      if (activeDoc) activeDoc.content = fullText.trim();
+      this._refreshPreviewIfActive();
+      this._setChatMsgApplied(aiMsgEl, fullText, prevContent);
+    } else {
+      this._updateChatMsg(aiMsgEl, 'No content returned by Ollama.', 'error');
     }
   }
 
