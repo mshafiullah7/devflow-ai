@@ -652,15 +652,13 @@ export class IssuesPage {
       const actual   = actualEl.value.trim();
 
       const prompt = [
-        'You are a technical writer. Clean up and restructure the Issue Details below.',
-        'Make the content clear, concise, and well-organized — fix grammar, remove redundancy, improve readability.',
-        'Keep all important technical information. Output only the rewritten Issue Details text with no headings, labels, or commentary.',
+        'You are a technical writer. Analyze the issues details and just list the failed items exclude any passed or counts of pass fail details. This is just remove not needed info from the Issue Details.',
+        'Output only the resulting text with no headings, labels, or commentary.',
         'End your response with a blank line followed by exactly: Fix these issues',
         '',
         `Issue Title: ${title || '(untitled)'}`,
-        actual ? `\nActual Behavior:\n${actual}` : '',
         '',
-        'Issue Details to clean:',
+        'Issue Details:',
         desc || '(empty)',
       ].join('\n');
 
