@@ -1,4 +1,5 @@
 import { escHtml, timeAgo, initial, injectCss, removeCss } from '../../shared/helpers.js';
+import { applyStoredTheme, getTheme, setTheme } from '../../shared/theme-manager.js';
 
 export class LauncherPage {
   constructor(container, params, router) {
@@ -15,7 +16,8 @@ export class LauncherPage {
     this._bindRefs();
     this._bindEvents();
     this._loadRecent();
-    this._applyTheme(localStorage.getItem('theme') || 'dark');
+    applyStoredTheme();
+    this._syncThemeBtns();
   }
 
   unmount() {
@@ -28,45 +30,54 @@ export class LauncherPage {
   _template() {
     return `
       <div class="launcher">
+
         <header class="launcher__header">
           <div class="launcher__logo">
-            <img src="../../assets/icon.png" width="32" height="32" alt="DevFlow AI" style="border-radius:8px;display:block;"/>
+            <div class="launcher__logo-icon">
+              <img src="../../assets/icon.png" alt="DevFlow AI" onerror="this.style.display='none'"/>
+            </div>
             <span class="launcher__app-name">DevFlow AI</span>
           </div>
-          <button class="launcher__theme-toggle" id="btnThemeToggle" title="Toggle light / dark theme" aria-label="Toggle theme">
-            <svg class="theme-icon theme-icon--moon" width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <path d="M17.5 11.5A7.5 7.5 0 019 3a7.5 7.5 0 100 14 7.5 7.5 0 008.5-5.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-            </svg>
-            <svg class="theme-icon theme-icon--sun" width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="4" stroke="currentColor" stroke-width="1.6"/>
-              <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
+          <div class="launcher__theme-control">
+            <button class="launcher__theme-btn" data-theme="light">Light</button>
+            <button class="launcher__theme-btn" data-theme="dark">Dark</button>
+            <button class="launcher__theme-btn" data-theme="midnight">Midnight</button>
+          </div>
         </header>
 
         <main class="launcher__main">
+
+          <div class="launcher__mark">
+            <img src="../../assets/icon.png" alt="" onerror="this.style.display='none'"/>
+          </div>
           <h1 class="launcher__title">Welcome back</h1>
-          <p class="launcher__subtitle">Select a recent project or start a new one</p>
+          <p class="launcher__subtitle">Select a project or start a new one</p>
 
-          <button class="btn-new-project" id="btnNewProject">
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-              <path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-            New Project
-          </button>
+          <div class="launcher__card">
 
-          <section class="recent-section">
-            <h2 class="recent-section__heading">Recent Projects</h2>
-            <div class="project-list" id="projectList">
-              <div class="project-list__empty" id="emptyState">
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <div class="launcher__new-row" id="btnNewProject" role="button" tabindex="0">
+              <div class="launcher__new-plus">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                  <path d="M10 4v12M4 10h12" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <span class="launcher__new-label">New Project</span>
+              <span class="launcher__new-hint">⌘ N</span>
+            </div>
+
+            <div class="launcher__divider">Recent</div>
+
+            <div class="launcher__proj-scroll" id="projectList">
+              <div class="launcher__empty" id="emptyState">
+                <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
                   <rect x="6" y="8" width="28" height="24" rx="4" stroke="#94a3b8" stroke-width="1.5"/>
                   <path d="M13 16h14M13 22h8" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
                 <p>No recent projects yet</p>
               </div>
             </div>
-          </section>
+
+          </div>
         </main>
       </div>
 
@@ -129,41 +140,50 @@ export class LauncherPage {
   }
 
   // ----------------------------------------------------------------
+  // Sync active state on theme pill buttons
+  // ----------------------------------------------------------------
+  _syncThemeBtns() {
+    const current = getTheme();
+    document.querySelectorAll('.launcher__theme-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.theme === current);
+    });
+  }
+
+  // ----------------------------------------------------------------
   // Events
   // ----------------------------------------------------------------
   _bindEvents() {
-    document.getElementById('btnThemeToggle').addEventListener('click', () => {
-      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-      this._applyTheme(next);
+    // Theme pill buttons
+    document.querySelectorAll('.launcher__theme-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setTheme(btn.dataset.theme);
+        this._syncThemeBtns();
+      });
     });
 
+    // New project
     document.getElementById('btnNewProject').addEventListener('click', () => this._openModal());
+    document.getElementById('btnNewProject').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') this._openModal();
+    });
+
+    // New project modal
     document.getElementById('btnModalClose').addEventListener('click', () => this._closeModal());
     document.getElementById('btnCancel').addEventListener('click', () => this._closeModal());
     document.getElementById('btnCreate').addEventListener('click', () => this._createProject());
-
-    document.getElementById('btnConfirmClose').addEventListener('click', () => this._closeConfirm());
-    document.getElementById('btnConfirmCancel').addEventListener('click', () => this._closeConfirm());
-    this._confirmOverlay.addEventListener('click', (e) => {
-      if (e.target === this._confirmOverlay) this._closeConfirm();
-    });
-
     this._inputName.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this._createProject();
     });
     this._modalOverlay.addEventListener('click', (e) => {
       if (e.target === this._modalOverlay) this._closeModal();
     });
-  }
 
-  // ----------------------------------------------------------------
-  // Theme
-  // ----------------------------------------------------------------
-  _applyTheme(theme) {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('theme', theme);
-    const btn = document.getElementById('btnThemeToggle');
-    if (btn) btn.dataset.theme = theme;
+    // Confirm remove modal
+    document.getElementById('btnConfirmClose').addEventListener('click', () => this._closeConfirm());
+    document.getElementById('btnConfirmCancel').addEventListener('click', () => this._closeConfirm());
+    this._confirmOverlay.addEventListener('click', (e) => {
+      if (e.target === this._confirmOverlay) this._closeConfirm();
+    });
   }
 
   // ----------------------------------------------------------------
@@ -171,7 +191,7 @@ export class LauncherPage {
   // ----------------------------------------------------------------
   async _loadRecent() {
     const projects = await window.db.projects.recent();
-    this._projectList.querySelectorAll('.project-card').forEach(el => el.remove());
+    this._projectList.querySelectorAll('.launcher__proj-row').forEach(el => el.remove());
 
     if (projects.length === 0) {
       this._emptyState.hidden = false;
@@ -180,49 +200,122 @@ export class LauncherPage {
 
     this._emptyState.hidden = true;
     projects.forEach(p => {
-      const card = document.createElement('div');
-      card.className = 'project-card';
-      card.innerHTML = `
-        <div class="project-card__icon">${escHtml(initial(p.name))}</div>
-        <div class="project-card__info">
-          <div class="project-card__name">${escHtml(p.name)}</div>
-          ${p.description ? `<div class="project-card__desc">${escHtml(p.description)}</div>` : ''}
+      const row = document.createElement('div');
+      row.className = 'launcher__proj-row';
+      row.innerHTML = `
+        <div class="launcher__proj-dot">${escHtml(initial(p.name))}</div>
+        <div class="launcher__proj-info">
+          <div class="launcher__proj-name">${escHtml(p.name)}</div>
+          ${p.description ? `<div class="launcher__proj-desc">${escHtml(p.description)}</div>` : ''}
         </div>
-        <div class="project-card__meta">${timeAgo(p.created_at)}</div>
-        <button class="project-card__delete" aria-label="Remove project" title="Remove from list">
-          <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
-            <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </button>
+        <div class="launcher__proj-time">${timeAgo(p.created_at)}</div>
+        <div class="launcher__proj-actions">
+          <button class="launcher__action-btn" aria-label="Edit project" title="Edit project">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
+              <path d="M14.5 2.5a2.121 2.121 0 013 3L6 17H3v-3L14.5 2.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="launcher__action-btn" aria-label="Remove project" title="Remove from list">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
+              <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
       `;
-      card.querySelector('.project-card__delete').addEventListener('click', (e) => {
+
+      const [editBtn, deleteBtn] = row.querySelectorAll('.launcher__action-btn');
+
+      editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._confirmDisable(p.id, p.name, card);
+        this._openEditModal(p, row);
       });
-      card.addEventListener('click', () => this._openProject(p.id));
-      this._projectList.appendChild(card);
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._confirmDisable(p.id, p.name, row);
+      });
+      row.addEventListener('click', () => this._openProject(p.id));
+
+      this._projectList.appendChild(row);
     });
   }
 
   async _openProject(id) {
     await window.db.projects.open(id);
     await window.db.window.expand();
-    this.router.navigate('project', { projectId: id });
+    this.router.navigate('project-home', { projectId: id });
   }
 
-  _confirmDisable(id, name, cardEl) {
+  _openEditModal(project, rowEl) {
+    document.querySelector('.proj-edit-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'proj-edit-overlay';
+    overlay.innerHTML = `
+      <div class="proj-edit-dialog">
+        <h3 class="proj-edit-title">Edit Project</h3>
+        <div class="proj-edit-field">
+          <label class="proj-edit-label">Name</label>
+          <input class="proj-edit-input" id="projEditName" type="text" value="${escHtml(project.name)}" placeholder="Project name" autocomplete="off"/>
+        </div>
+        <div class="proj-edit-field">
+          <label class="proj-edit-label">Description</label>
+          <textarea class="proj-edit-textarea" id="projEditDesc" placeholder="Optional description" rows="3">${escHtml(project.description || '')}</textarea>
+        </div>
+        <div class="proj-edit-footer">
+          <button class="proj-edit-btn proj-edit-btn--cancel">Cancel</button>
+          <button class="proj-edit-btn proj-edit-btn--save">Save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const nameInput = overlay.querySelector('#projEditName');
+    const descInput = overlay.querySelector('#projEditDesc');
+    nameInput.focus();
+    nameInput.select();
+
+    const close = () => overlay.remove();
+
+    overlay.querySelector('.proj-edit-btn--cancel').addEventListener('click', close);
+
+    overlay.querySelector('.proj-edit-btn--save').addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      await window.db.projects.update({ id: project.id, name, description: descInput.value.trim() || null });
+
+      // Update row in place
+      rowEl.querySelector('.launcher__proj-dot').textContent  = name.trim()[0]?.toUpperCase() || '?';
+      rowEl.querySelector('.launcher__proj-name').textContent = name;
+      const descEl  = rowEl.querySelector('.launcher__proj-desc');
+      const newDesc = descInput.value.trim();
+      if (newDesc) {
+        if (descEl) descEl.textContent = newDesc;
+        else {
+          const info = rowEl.querySelector('.launcher__proj-info');
+          const d = document.createElement('div');
+          d.className   = 'launcher__proj-desc';
+          d.textContent = newDesc;
+          info.appendChild(d);
+        }
+      } else if (descEl) {
+        descEl.remove();
+      }
+      close();
+    });
+  }
+
+  _confirmDisable(id, name, rowEl) {
     this._confirmName.textContent = name;
     this._confirmOverlay.hidden   = false;
 
-    // Replace the button node to avoid stacking click handlers across calls
-    const oldBtn  = this._btnConfirmRemove;
+    const oldBtn   = this._btnConfirmRemove;
     const freshBtn = oldBtn.cloneNode(true);
     oldBtn.replaceWith(freshBtn);
     this._btnConfirmRemove = freshBtn;
 
     freshBtn.addEventListener('click', async () => {
       this._closeConfirm();
-      await this._disableProject(id, cardEl);
+      await this._disableProject(id, rowEl);
     });
   }
 
@@ -230,15 +323,15 @@ export class LauncherPage {
     this._confirmOverlay.hidden = true;
   }
 
-  async _disableProject(id, cardEl) {
-    cardEl.style.pointerEvents = 'none';
-    cardEl.style.opacity       = '0.5';
+  async _disableProject(id, rowEl) {
+    rowEl.style.pointerEvents = 'none';
+    rowEl.style.opacity       = '0.5';
     try {
       await window.db.projects.update({ id, is_active: 0 });
       await this._loadRecent();
     } catch {
-      cardEl.style.pointerEvents = '';
-      cardEl.style.opacity       = '';
+      rowEl.style.pointerEvents = '';
+      rowEl.style.opacity       = '';
     }
   }
 

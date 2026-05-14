@@ -15,8 +15,9 @@ contextBridge.exposeInMainWorld('db', {
     create: (data)   => invoke('db:projects:create', data),
     update: (data)   => invoke('db:projects:update', data),
     delete: (id)     => invoke('db:projects:delete', id),
-    open:   (id)     => invoke('db:projects:open', id),
-    recent: ()       => invoke('db:projects:recent'),
+    open:    (id)     => invoke('db:projects:open', id),
+    recent:  ()       => invoke('db:projects:recent'),
+    setPath: (data)   => invoke('db:projects:setPath', data),
   },
   features: {
     list:   (project_id) => invoke('db:features:list', project_id),
@@ -38,6 +39,12 @@ contextBridge.exposeInMainWorld('db', {
     delete:    (id)            => invoke('db:prompt_history:delete', id),
     deleteAll: (user_story_id) => invoke('db:prompt_history:deleteAll', user_story_id),
   },
+  prompts: {
+    list:   (user_story_id) => invoke('db:prompts:list', user_story_id),
+    create: (data)          => invoke('db:prompts:create', data),
+    update: (data)          => invoke('db:prompts:update', data),
+    delete: (id)            => invoke('db:prompts:delete', id),
+  },
   documentTemplates: {
     list: () => invoke('db:document_templates:list'),
   },
@@ -47,6 +54,14 @@ contextBridge.exposeInMainWorld('db', {
     create: (data)       => invoke('db:documents:create', data),
     update: (data)       => invoke('db:documents:update', data),
     delete: (id)         => invoke('db:documents:delete', id),
+  },
+  modelConfigs: {
+    list:       ()     => invoke('db:model_configs:list'),
+    get:        (id)   => invoke('db:model_configs:get', id),
+    create:     (data) => invoke('db:model_configs:create', data),
+    update:     (data) => invoke('db:model_configs:update', data),
+    delete:     (id)   => invoke('db:model_configs:delete', id),
+    setDefault: (id)   => invoke('db:model_configs:setDefault', id),
   },
   quickCommands: {
     list:   ()     => invoke('db:quick_commands:list'),
@@ -62,9 +77,77 @@ contextBridge.exposeInMainWorld('db', {
     update:     (data)        => invoke('db:attachments:update', data),
     delete:     (id)          => invoke('db:attachments:delete', id),
   },
+  screenPromptHistory: {
+    list:      (data) => invoke('db:screen_prompt_history:list', data),
+    create:    (data) => invoke('db:screen_prompt_history:create', data),
+    delete:    (id)   => invoke('db:screen_prompt_history:delete', id),
+    deleteAll: (data) => invoke('db:screen_prompt_history:deleteAll', data),
+  },
+  screenDesigns: {
+    list:   (project_id) => invoke('db:screen_designs:list', project_id),
+    get:    (id)         => invoke('db:screen_designs:get', id),
+    create: (data)       => invoke('db:screen_designs:create', data),
+    update: (data)       => invoke('db:screen_designs:update', data),
+    delete: (id)         => invoke('db:screen_designs:delete', id),
+  },
+  promptQueueMessages: {
+    list:  (queue_item_id) => invoke('db:pq_messages:list', queue_item_id),
+    add:   (data)          => invoke('db:pq_messages:add', data),
+    clear: (queue_item_id) => invoke('db:pq_messages:clear', queue_item_id),
+  },
+  promptQueue: {
+    list:            (data) => invoke('db:prompt_queue:list', data),
+    add:             (data) => invoke('db:prompt_queue:add', data),
+    update:          (data) => invoke('db:prompt_queue:update', data),
+    delete:          (id)   => invoke('db:prompt_queue:delete', id),
+    clearDone:       (pid)  => invoke('db:prompt_queue:clear_done', pid),
+    pendingCount:    (pid)  => invoke('db:prompt_queue:pending_count', pid),
+    run:             (data) => invoke('promptQueue:run', data),
+    kill:            ()     => invoke('promptQueue:kill'),
+    onData:          (cb)   => ipcRenderer.on('promptQueue:data', (_e, p) => cb(p)),
+    onDone:          (cb)   => ipcRenderer.on('promptQueue:done', (_e, p) => cb(p)),
+    removeListeners: ()     => {
+      ipcRenderer.removeAllListeners('promptQueue:data');
+      ipcRenderer.removeAllListeners('promptQueue:done');
+    },
+  },
+  testRunner: {
+    detect:          (projectPath) => invoke('testRunner:detect', projectPath),
+    run:             (data)        => invoke('testRunner:run', data),
+    kill:            ()            => invoke('testRunner:kill'),
+    onData:          (cb)          => ipcRenderer.on('testRunner:data', (_e, p) => cb(p)),
+    onDone:          (cb)          => ipcRenderer.on('testRunner:done', (_e, p) => cb(p)),
+    removeListeners: ()            => {
+      ipcRenderer.removeAllListeners('testRunner:data');
+      ipcRenderer.removeAllListeners('testRunner:done');
+    },
+  },
+  testRunHistory: {
+    list:   (project_id) => invoke('testRunHistory:list', project_id),
+    create: (data)       => invoke('testRunHistory:create', data),
+  },
+  issues: {
+    list:   (filters)    => invoke('db:issues:list', filters),
+    get:    (id)         => invoke('db:issues:get', id),
+    create: (data)       => invoke('db:issues:create', data),
+    update: (data)       => invoke('db:issues:update', data),
+    delete: (id)         => invoke('db:issues:delete', id),
+    count:  (project_id) => invoke('db:issues:count', project_id),
+  },
+  modelMapping: {
+    get: (pageKey)              => invoke('db:model_mapping:get', pageKey),
+    set: (pageKey, modelConfigId) => invoke('db:model_mapping:set', pageKey, modelConfigId),
+  },
+  savedThemes: {
+    list:   ()     => invoke('db:saved_themes:list'),
+    create: (data) => invoke('db:saved_themes:create', data),
+    delete: (id)   => invoke('db:saved_themes:delete', id),
+  },
   dialog: {
-    openFolder:   () => invoke('dialog:openFolder'),
-    openJsonFile: () => invoke('dialog:openJsonFile'),
+    openFolder:   ()     => invoke('dialog:openFolder'),
+    openJsonFile: ()     => invoke('dialog:openJsonFile'),
+    openFile:     (opts) => invoke('dialog:openFile', opts),
+    saveJsonFile: (data) => invoke('dialog:saveJsonFile', data),
   },
   window: {
     expand: () => invoke('window:expand'),
@@ -75,6 +158,7 @@ contextBridge.exposeInMainWorld('db', {
     execStart:    (data) => invoke('terminal:exec-start', data),
     killActive:   ()     => invoke('terminal:kill-active'),
     openExternal: (data) => invoke('terminal:open-external', data),
+    sendInput: (text) => invoke('terminal:stdin', text),
     onData: (cb) => ipcRenderer.on('terminal:data', (_e, p) => cb(p)),
     onDone: (cb) => ipcRenderer.on('terminal:done', (_e, p) => cb(p)),
     removeListeners: () => {
@@ -84,7 +168,51 @@ contextBridge.exposeInMainWorld('db', {
   },
 });
 
+contextBridge.exposeInMainWorld('app', {
+  agentCliPath:     () => invoke('app:agent-cli-path'),
+  config: {
+    get: (key)        => invoke('app:config:get', key),
+    set: (key, value) => invoke('app:config:set', key, value),
+  },
+  cloudSync: {
+    get: ()     => invoke('app:cloudsync:get'),
+    set: (data) => invoke('app:cloudsync:set', data),
+  },
+  telegram: {
+    get:  ()       => invoke('app:telegram:get'),
+    set:  (data)   => invoke('app:telegram:set', data),
+    test: ()       => invoke('app:telegram:test'),
+    send: (text)   => invoke('app:telegram:send', text),
+  },
+  db: {
+    export:  () => invoke('app:db:export'),
+    restore: () => invoke('app:db:restore'),
+  },
+  backupDefaultPath: () => invoke('app:backup-default-path'),
+  screensDir:       (projectName) => invoke('app:screens-dir', projectName),
+  prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),
+  writeTempFiles:   (files)       => invoke('app:writeTempFiles', files),
+  exportPdf:        (data)        => invoke('app:export-pdf', data),
+  chat: {
+    generate: (data) => ipcRenderer.invoke('chat:generate', data),
+    cancel:   ()     => ipcRenderer.invoke('chat:cancel'),
+    onToken:  (cb)   => ipcRenderer.on('chat:token', (_e, p) => cb(p)),
+    onDone:   (cb)   => ipcRenderer.on('chat:done',  (_e, p) => cb(p)),
+    offAll:   ()     => {
+      ipcRenderer.removeAllListeners('chat:token');
+      ipcRenderer.removeAllListeners('chat:done');
+    },
+  },
+});
+
+
+contextBridge.exposeInMainWorld('ollama', {
+  listModels: (host) => invoke('ollama:list-models', { host }),
+});
+
 contextBridge.exposeInMainWorld('shell', {
-  openDrawio: (data)     => invoke('shell:openDrawio', data),
-  readFile:   (filepath) => invoke('shell:readFile', filepath),
+  openDrawio: (data)              => invoke('shell:openDrawio', data),
+  readFile:   (filepath)          => invoke('shell:readFile', filepath),
+  writeFile:  (filepath, content) => invoke('shell:writeFile', { filepath, content }),
+  openVSCode: (folderPath)        => invoke('shell:openVSCode', folderPath),
 });

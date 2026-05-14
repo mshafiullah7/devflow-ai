@@ -4,46 +4,60 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
 
-:root {
-  /* Light theme — cool slate teal */
-  --bg:             #FFFFFF;
-  --surface:        #FFFFFF;
-  --surface-header: #FFFFFF;
-  --surface-hover:  #E8EEF5;
-  --border:         #CBD5E1;
-  --accent:         #0D9488;
-  --accent-hover:   #0F766E;
-  --text-primary:   #1E293B;
-  --text-secondary: #64748B;
-  --text-muted:     #94A3B8;
+/* ------------------------------------------------------------------ */
+/* Themes                                                               */
+/* ------------------------------------------------------------------ */
+[data-theme="light"] {
+  --bg:             #fafaf8;
+  --surface:        #ffffff;
+  --surface-header: #f4f3ef;
+  --surface-hover:  #e8edf5;
+  --border:         #d4dae8;
+  --accent:         #1e3a5f;
+  --accent-rgb:     30, 58, 95;
+  --accent-hover:   #162c47;
+  --text-primary:   #1a1916;
+  --text-secondary: #4a4740;
+  --text-muted:     #9a9590;
+  --item-text:      #2e2c28;
   --danger:         #ef4444;
   --radius:         12px;
   --radius-sm:      8px;
-  --shadow:         0 4px 20px -2px rgba(0,0,0,0.05);
-  --card-shadow:    0 4px 20px -2px rgba(0,0,0,0.05);
-  --glow-shadow:    0 0 15px rgba(13,148,136,0.25);
+  --shadow:         0 4px 24px rgba(0,0,0,0.12);
+  --card-shadow:    0 1px 4px rgba(0,0,0,0.07), 0 8px 24px rgba(30,58,95,0.08);
+  --glow-shadow:    none;
 
   /* Console */
-  --console-bg:      #E8EEF5;
-  --console-text:    #64748B;
-  --console-output:  #1E293B;
-  --console-prompt:  #0D9488;
-  --console-input:   #1E293B;
-  --console-caret:   #0D9488;
+  --console-bg:      #f4f3ef;
+  --console-text:    #4a4740;
+  --console-output:  #1a1916;
+  --console-prompt:  #1e3a5f;
+  --console-input:   #1a1916;
+  --console-caret:   #1e3a5f;
+
+  /* Component-specific tokens */
+  --form-focus-shadow:  0 0 0 3px rgba(30,58,95,0.20);
+  --modal-overlay-bg:   rgba(10,8,4,0.5);
+  --card-icon-bg:       rgba(30,58,95,0.10);
+  --border-active:      #8a99bf;
+  --bg-secondary:       #eef0f5;
+  --border-default:     #d4dae8;
+  --bg-hover:           #e8edf5;
+  --text-tertiary:      #b0b8c8;
 }
 
 [data-theme="dark"] {
-  /* Dark theme — modern dark */
   --bg:             #0f1117;
   --surface:        #1a1d27;
   --surface-header: #13151f;
   --surface-hover:  #21253a;
   --border:         #2a2d3e;
   --accent:         #6366f1;
+  --accent-rgb:     99, 102, 241;
   --accent-hover:   #4f52d9;
-  --text-primary:   #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted:     #4b5563;
+  --text-primary:   #c9d3e0;
+  --text-secondary: #7a8ba0;
+  --text-muted:     #506070;
   --danger:         #ef4444;
   --radius:         12px;
   --radius-sm:      8px;
@@ -58,13 +72,80 @@
   --console-prompt:  #6ee7b7;
   --console-input:   #e2e8f0;
   --console-caret:   #6ee7b7;
+
+  /* Component-specific tokens */
+  --form-focus-shadow:  0 0 0 3px rgba(99,102,241,0.15);
+  --modal-overlay-bg:   rgba(0,0,0,0.6);
+  --card-icon-bg:       linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --bg-secondary:       #141720;
+  --border-default:     #2a2d3e;
+  --bg-hover:           #21253a;
+  --text-tertiary:      #4a5568;
+}
+
+[data-theme="midnight"] {
+  --bg:             #000000;
+  --surface:        #0a0a0f;
+  --surface-header: #060608;
+  --surface-hover:  #0d1a12;
+  --border:         #1e3d2c;
+  --accent:         #10b981;
+  --accent-rgb:     16, 185, 129;
+  --accent-hover:   #059669;
+  --text-primary:   #cbd5e1;
+  --text-secondary: #94a3b8;
+  --text-muted:     #374151;
+  --danger:         #f87171;
+  --radius:         12px;
+  --radius-sm:      8px;
+  --shadow:         0 4px 24px rgba(0,0,0,0.8);
+  --card-shadow:    none;
+  --glow-shadow:    0 0 12px rgba(16,185,129,0.2);
+
+  /* Console */
+  --console-bg:      #000000;
+  --console-text:    #4b5563;
+  --console-output:  #d1fae5;
+  --console-prompt:  #10b981;
+  --console-input:   #ecfdf5;
+  --console-caret:   #10b981;
+
+  /* Component-specific tokens */
+  --form-focus-shadow:  0 0 0 3px rgba(16,185,129,0.2);
+  --modal-overlay-bg:   rgba(0,0,0,0.85);
+  --card-icon-bg:       linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --bg-secondary:       #070910;
+  --border-default:     #1e3d2c;
+  --bg-hover:           #0d1a12;
+  --text-tertiary:      #374151;
 }
 
 html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text-primary);
+
+  /* ── Font options ─────────────────────────────────────────────────────
+     Uncomment ONE of the lines below (and comment out the active one)
+     to change the app-wide font across all sections.
+
+     Option 1 — System Default (current, safe cross-platform):
+       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+     Option 2 — Segoe UI Variable (crisp modern Windows 11 feel):
+       font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+
+     Option 3 — Verdana (wide letter-spacing, high legibility):
+       font-family: Verdana, Geneva, Tahoma, sans-serif;
+
+     Option 4 — Calibri (warm humanist, familiar Office style):
+       font-family: Calibri, Candara, 'Segoe UI', sans-serif;
+
+     Option 5 — Georgia (elegant serif, great for reading long text):
+       font-family: Georgia, Cambria, 'Times New Roman', serif;
+     ──────────────────────────────────────────────────────────────────── */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -177,11 +258,7 @@ html, body {
 .form-input:focus,
 .form-textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(13,148,136,0.15);
-}
-[data-theme="dark"] .form-input:focus,
-[data-theme="dark"] .form-textarea:focus {
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  box-shadow: var(--form-focus-shadow);
 }
 
 .form-error {
@@ -198,15 +275,12 @@ html, body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(62,39,35,0.35);
+  background: var(--modal-overlay-bg);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
-}
-[data-theme="dark"] .modal-overlay {
-  background: rgba(0,0,0,0.6);
 }
 
 .modal {
@@ -284,7 +358,7 @@ html, body {
   width: 38px;
   height: 38px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent) 0%, #e8834a 100%);
+  background: var(--card-icon-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -292,9 +366,6 @@ html, body {
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
-}
-[data-theme="dark"] .project-card__icon {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
 }
 
 .project-card__info { flex: 1; min-width: 0; }
@@ -321,4 +392,258 @@ html, body {
   font-size: 11px;
   color: var(--text-muted);
   flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared: AI model select + config button (used in all page headers)  */
+/* ------------------------------------------------------------------ */
+.project-page__model-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.project-page__model-cfg-btn {
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  border-radius: 4px;
+  color: #eab308;
+  cursor: pointer;
+  height: 26px;
+  width: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  outline: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.project-page__model-cfg-btn:hover {
+  background: rgba(234, 179, 8, 0.16);
+  border-color: #eab308;
+}
+
+.project-page__model-select {
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  border-radius: 4px;
+  color: #eab308;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 2px 6px;
+  height: 26px;
+  cursor: pointer;
+  outline: none;
+  align-self: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.15), 0 0 6px rgba(234, 179, 8, 0.2);
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.project-page__model-select:hover,
+.project-page__model-select:focus {
+  border-color: #eab308;
+  background: rgba(234, 179, 8, 0.12);
+  color: var(--text, #e5e7eb);
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
+}
+.project-page__model-select option:disabled {
+  color: var(--text-muted, #6b7280);
+  font-style: italic;
+}
+.project-page__model-select option {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+/* Card icon color override for light theme */
+[data-theme="light"] .project-card__icon,
+[data-theme="light"] .ph-card__icon {
+  color: #1e3a5f;
+}
+
+/* Card hover border override for light theme */
+[data-theme="light"] .project-card:hover,
+[data-theme="light"] .ph-card:hover,
+[data-theme="light"] .usl-card:hover,
+[data-theme="light"] .fl-card:hover,
+[data-theme="light"] .is-card:hover,
+[data-theme="light"] .tc-card:hover,
+[data-theme="light"] .related-item:hover,
+[data-theme="light"] .ph-stat-card--link:hover {
+  border-color: var(--border-active);
+}
+
+/* Card active/selected state override for light theme */
+[data-theme="light"] .usl-card--active,
+[data-theme="light"] .fl-card--active,
+[data-theme="light"] .is-card--active,
+[data-theme="light"] .tc-card--active {
+  border-color: var(--border-active);
+  background: var(--surface-hover);
+}
+
+[data-theme="light"] .project-page__model-cfg-btn {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--accent);
+}
+[data-theme="light"] .project-page__model-cfg-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+[data-theme="light"] .project-page__model-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  box-shadow: none;
+}
+[data-theme="light"] .project-page__model-select:hover,
+[data-theme="light"] .project-page__model-select:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  box-shadow: var(--form-focus-shadow);
+}
+[data-theme="light"] .project-page__model-select option {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared: Git button + badge in page header                           */
+/* ------------------------------------------------------------------ */
+.project-page__git-btn {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.project-page__git-btn:hover {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.1);
+  border-color: #f97316;
+}
+
+.project-page__git-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: #f97316;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 7px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared: Quick Commands button in page header                        */
+/* ------------------------------------------------------------------ */
+.project-page__qcmd-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.project-page__qcmd-btn:hover {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
+  border-color: #a78bfa;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared: Select Folder button + centered path display in page header */
+/* ------------------------------------------------------------------ */
+.project-page__folder-btn {
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  border-radius: 4px;
+  color: #eab308;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.15), 0 0 6px rgba(234, 179, 8, 0.2);
+  transition: color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.project-page__folder-btn:hover {
+  color: #fde047;
+  background: rgba(234, 179, 8, 0.15);
+  border-color: #eab308;
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
+}
+[data-theme="light"] .project-page__folder-btn {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(180, 130, 0, 0.45);
+  color: #92660a;
+  box-shadow: none;
+}
+[data-theme="light"] .project-page__folder-btn:hover {
+  color: #78520a;
+  background: rgba(234, 179, 8, 0.18);
+  border-color: #b45309;
+  box-shadow: none;
+}
+
+.project-page__folder-display {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+}
+.project-page__folder-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 10px;
+  height: 26px;
+  max-width: 100%;
+  transition: background 0.12s, border-color 0.12s;
+}
+.project-page__folder-display:hover .project-page__folder-pill {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+.project-page__folder-text {
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
 }

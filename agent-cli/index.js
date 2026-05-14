@@ -1,0 +1,625 @@
+#!/usr/bin/env node
+/**
+ * agent-cli — Local AI coding agent powered by Ollama
+ * Usage: node agent-cli/index.js [--model phi4-mini] [--dir /path/to/project]
+ */
+
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const args = process.argv.slice(2);
+const getArg = (flag, def) => {
+  const i = args.indexOf(flag);
+  return i !== -1 && args[i + 1] ? args[i + 1] : def;
+};
+
+const MODEL = getArg('--model', 'phi4-mini:latest');
+const PROJECT_DIR = path.resolve(getArg('--dir', process.cwd()));
+const OLLAMA_HOST = getArg('--host', 'http://localhost:11434');
+const MAX_TOOL_ROUNDS = 10;
+
+// ─── Colors ──────────────────────────────────────────────────────────────────
+
+const c = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  cyan: '\x1b[36m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  magenta: '\x1b[35m',
+  blue: '\x1b[34m',
+  gray: '\x1b[90m',
+};
+
+const clr = (color, text) => `${c[color]}${text}${c.reset}`;
+
+// ─── System Prompt ───────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are an autonomous coding agent working on a software project.
+Project directory: ${PROJECT_DIR}
+
+You have access to the following tools. To use a tool, emit a block in this exact format:
+
+<tool_call>
+<name>TOOL_NAME</name>
+<input>TOOL_INPUT_AS_JSON</input>
+</tool_call>
+
+Available tools:
+
+1. read_file
+   Input: { "path": "relative/or/absolute/path" }
+   Reads the content of a file.
+
+2. write_file
+   Input: { "path": "relative/or/absolute/path", "content": "full file content" }
+   Writes (overwrites) a file with the given content. Creates directories if needed.
+
+3. list_files
+   Input: { "path": "relative/or/absolute/path", "pattern": "optional glob like **/*.js" }
+   Lists files in a directory.
+
+4. run_command
+   Input: { "command": "shell command", "cwd": "optional working dir" }
+   Runs a shell command and returns stdout/stderr. Use carefully.
+
+5. search_code
+   Input: { "pattern": "regex or text", "path": "optional dir or file", "glob": "optional *.js" }
+   Searches for a pattern in files.
+
+6. patch_file
+   Input: { "path": "file path", "old": "exact text to replace", "new": "replacement text" }
+   Replaces an exact string in a file. Safer than write_file for small edits.
+
+Rules:
+- Always read a file before editing it.
+- Use patch_file for small targeted edits; write_file only for new files or full rewrites.
+- After making changes, verify by reading the file back.
+- Paths can be relative to the project directory or absolute.
+- When done, provide a clear summary of what was changed.
+- Think step by step. Use tools one at a time and observe results before continuing.
+`;
+
+// ─── Ollama API ───────────────────────────────────────────────────────────────
+
+function ollamaRequest(endpoint, body) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(OLLAMA_HOST + endpoint);
+    const lib = url.protocol === 'https:' ? https : http;
+    const data = JSON.stringify(body);
+
+    const req = lib.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk) => (raw += chunk));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(raw));
+          } catch {
+            reject(new Error('Invalid JSON from Ollama: ' + raw.slice(0, 200)));
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+// Streaming chat: writes tokens to stdout as they arrive, returns full content
+function chatCompletionStream(messages) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(OLLAMA_HOST + '/api/chat');
+    const lib = url.protocol === 'https:' ? https : http;
+    const body = JSON.stringify({
+      model: MODEL,
+      messages,
+      stream: true,
+      options: { temperature: 0.2, num_predict: 4096 },
+    });
+
+    const req = lib.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      },
+      (res) => {
+        let fullContent = '';
+        let leftover = '';
+        let holdback = '';       // buffer that might be start of <tool_call>
+        let suppressed = false;  // once true, never print again this turn
+        const TOOL_TAG = '<tool_call>';
+
+        const flushHoldback = () => {
+          if (holdback && !suppressed) process.stdout.write(holdback);
+          holdback = '';
+        };
+
+        const feedToken = (token) => {
+          if (suppressed) return;
+          holdback += token;
+          // Check if holdback contains the full tag — suppress from here on
+          if (holdback.includes(TOOL_TAG)) {
+            suppressed = true;
+            // Print only the safe part before the tag
+            const safe = holdback.split(TOOL_TAG)[0];
+            if (safe) process.stdout.write(safe);
+            holdback = '';
+            return;
+          }
+          // Check if holdback ends with a prefix of the tag (potential start)
+          let isPrefixSuffix = false;
+          for (let len = Math.min(holdback.length, TOOL_TAG.length - 1); len > 0; len--) {
+            if (TOOL_TAG.startsWith(holdback.slice(-len))) { isPrefixSuffix = true; break; }
+          }
+          if (!isPrefixSuffix) flushHoldback();
+        };
+
+        res.on('data', (chunk) => {
+          const lines = (leftover + chunk.toString()).split('\n');
+          leftover = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const obj = JSON.parse(line);
+              const token = obj.message?.content ?? '';
+              if (token) { fullContent += token; feedToken(token); }
+              if (obj.done) { flushHoldback(); if (!suppressed) process.stdout.write('\n'); }
+            } catch { /* ignore malformed lines */ }
+          }
+        });
+
+        res.on('end', () => {
+          if (leftover.trim()) {
+            try {
+              const obj = JSON.parse(leftover);
+              const token = obj.message?.content ?? '';
+              if (token) { fullContent += token; feedToken(token); }
+            } catch { /* ignore */ }
+          }
+          flushHoldback();
+          resolve(fullContent);
+        });
+      }
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+async function chatCompletion(messages) {
+  return chatCompletionStream(messages);
+}
+
+// ─── Tool Execution ──────────────────────────────────────────────────────────
+
+function resolvePath(p) {
+  // Treat Unix-style absolute paths like /src as relative to PROJECT_DIR on Windows.
+  // A real Windows absolute path looks like C:\... or C:/...
+  if (path.isAbsolute(p) && !/^[A-Za-z]:[/\\]/.test(p)) {
+    p = p.replace(/^[/\\]+/, ''); // strip leading slashes → make relative
+  }
+  if (path.isAbsolute(p)) return p;
+  return path.join(PROJECT_DIR, p);
+}
+
+function safeRelative(p) {
+  const abs = resolvePath(p);
+  const rel = path.relative(PROJECT_DIR, abs);
+  return rel;
+}
+
+const tools = {
+  read_file({ path: p }) {
+    const abs = resolvePath(p);
+    if (!fs.existsSync(abs)) return `Error: File not found: ${abs}`;
+    const stat = fs.statSync(abs);
+    if (stat.size > 200 * 1024) return `Error: File too large (${stat.size} bytes). Use search_code to find specific sections.`;
+    return fs.readFileSync(abs, 'utf8');
+  },
+
+  write_file({ path: p, content }) {
+    const abs = resolvePath(p);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, content, 'utf8');
+    return `Written ${content.length} chars to ${safeRelative(p)}`;
+  },
+
+  list_files({ path: p = '.', pattern }) {
+    const abs = resolvePath(p);
+    if (!fs.existsSync(abs)) return `Error: Path not found: ${abs}`;
+
+    function walk(dir, depth = 0) {
+      if (depth > 4) return [];
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const results = [];
+      for (const e of entries) {
+        if (['node_modules', '.git', 'out', 'backup', '.cache'].includes(e.name)) continue;
+        const full = path.join(dir, e.name);
+        const rel = path.relative(PROJECT_DIR, full);
+        if (e.isDirectory()) {
+          results.push(`📁 ${rel}/`);
+          results.push(...walk(full, depth + 1));
+        } else {
+          if (!pattern || rel.includes(pattern.replace('**/', '').replace('*', ''))) {
+            results.push(`   ${rel}`);
+          }
+        }
+      }
+      return results;
+    }
+
+    const lines = walk(abs);
+    return lines.length ? lines.join('\n') : '(empty directory)';
+  },
+
+  run_command({ command, cwd }) {
+    const workDir = cwd ? resolvePath(cwd) : PROJECT_DIR;
+    // Safety: block obviously destructive commands
+    const blocked = ['rm -rf /', 'del /f /s', 'format ', 'mkfs', 'dd if='];
+    for (const b of blocked) {
+      if (command.toLowerCase().includes(b)) {
+        return `Error: Blocked command for safety: "${b}"`;
+      }
+    }
+    try {
+      const out = execSync(command, {
+        cwd: workDir,
+        timeout: 30000,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        shell: true,
+      });
+      return out || '(no output)';
+    } catch (err) {
+      return `Exit ${err.status || 1}:\n${err.stdout || ''}\n${err.stderr || err.message}`;
+    }
+  },
+
+  search_code({ pattern, path: p = '.', glob }) {
+    const abs = resolvePath(p);
+    try {
+      let cmd = `grep -r --include="*.js" --include="*.json" --include="*.html" --include="*.css" -n -l "${pattern}" "${abs}" 2>/dev/null | head -20`;
+      if (glob) {
+        const ext = glob.replace('*.', '').replace('**/*.', '');
+        cmd = `grep -r --include="*.${ext}" -n "${pattern}" "${abs}" 2>/dev/null | head -40`;
+      } else {
+        cmd = `grep -rn "${pattern}" --include="*.js" --include="*.json" --include="*.html" --include="*.css" "${abs}" 2>/dev/null | head -40`;
+      }
+      const out = execSync(cmd, { encoding: 'utf8', shell: true, timeout: 10000 });
+      return out || `No matches found for: ${pattern}`;
+    } catch (err) {
+      return `Search error: ${err.message}`;
+    }
+  },
+
+  patch_file({ path: p, old: oldText, new: newText }) {
+    const abs = resolvePath(p);
+    if (!fs.existsSync(abs)) return `Error: File not found: ${abs}`;
+    const content = fs.readFileSync(abs, 'utf8');
+    if (!content.includes(oldText)) return `Error: Could not find the text to replace in ${safeRelative(p)}. Check spacing/indentation.`;
+    const count = (content.split(oldText).length - 1);
+    if (count > 1) return `Error: Found ${count} occurrences of the text. Make old string more specific.`;
+    const updated = content.replace(oldText, newText);
+    fs.writeFileSync(abs, updated, 'utf8');
+    return `Patched ${safeRelative(p)} — replaced 1 occurrence.`;
+  },
+};
+
+// ─── Tool Call Parser ─────────────────────────────────────────────────────────
+
+function parseToolCalls(text) {
+  const calls = [];
+
+  // Try all known formats in priority order, stop at first that yields matches.
+  const patterns = [
+    // Format 1 — standard XML: <name>tool</name> <input>{...}</input>
+    /<tool_call>\s*<name>([\w]+)<\/name>\s*<input>([\s\S]*?)<\/input>\s*<\/tool_call>/g,
+    // Format 2 — missing </input>: <name>tool</name> <input>{...}   </tool_call>
+    /<tool_call>\s*<name>([\w]+)<\/name>\s*<input>([\s\S]*?)\s*<\/tool_call>/g,
+    // Format 3 — phi4-mini style: {name} tool\n{input}\n{...json...}\n</tool_call>
+    /<tool_call>\s*\{name\}\s*([\w]+)\s*\{input\}\s*([\s\S]*?)\s*<\/tool_call>/g,
+    // Format 4 — plain name/input lines inside tags
+    /<tool_call>\s*name:\s*([\w]+)\s*input:\s*([\s\S]*?)\s*<\/tool_call>/gi,
+  ];
+
+  for (const regex of patterns) {
+    const matches = [...text.matchAll(regex)];
+    if (matches.length === 0) continue;
+
+    for (const match of matches) {
+      const name     = match[1].trim();
+      const inputRaw = match[2].trim();
+      // inputRaw may be JSON directly, or wrapped in extra braces — try to find first {...}
+      const jsonStr = inputRaw.startsWith('{') ? inputRaw : (inputRaw.match(/\{[\s\S]*\}/) || [inputRaw])[0];
+      try {
+        const input = JSON.parse(jsonStr);
+        calls.push({ name, input });
+      } catch (e) {
+        calls.push({ name, input: null, parseError: `Invalid JSON: ${e.message}\nRaw: ${inputRaw}` });
+      }
+    }
+    break; // stop after first format that matched
+  }
+
+  // Format 5 — JSON object inside <tool_call>: {"name": "tool", "input"/{args}: {...}}
+  // phi4-mini and some models emit raw JSON without XML sub-tags
+  if (calls.length === 0) {
+    const jsonPattern = /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/g;
+    for (const match of text.matchAll(jsonPattern)) {
+      try {
+        const obj = JSON.parse(match[1]);
+        const name = obj.name || obj.tool || obj.function;
+        if (name) {
+          // JSON has a name field — use it directly
+          const input = obj.input || obj.arguments || obj.parameters || obj.args
+            || (({ name: _n, tool: _t, function: _f, input: _i, arguments: _a, parameters: _p, args: _aa, ...rest }) => rest)(obj);
+          calls.push({ name: String(name).trim(), input: input || {} });
+        } else {
+          // No name field — infer tool from argument key signature
+          const keys = new Set(Object.keys(obj));
+          let inferredName = null;
+          if (keys.has('command'))                        inferredName = 'run_command';
+          else if (keys.has('query'))                     inferredName = 'search_code';
+          else if (keys.has('path') && keys.has('content')) inferredName = 'write_file';
+          else if (keys.has('path') && keys.has('old'))   inferredName = 'patch_file';
+          else if (keys.has('path') && keys.has('pattern')) inferredName = 'list_files';
+          else if (keys.has('path'))                      inferredName = 'read_file';
+          if (inferredName) calls.push({ name: inferredName, input: obj });
+        }
+      } catch { /* malformed JSON, skip */ }
+    }
+  }
+
+  return calls;
+}
+
+function executeTool(name, input) {
+  if (!tools[name]) return `Error: Unknown tool "${name}"`;
+  if (!input) return `Error: Invalid tool input JSON`;
+  try {
+    return tools[name](input);
+  } catch (err) {
+    return `Error executing ${name}: ${err.message}`;
+  }
+}
+
+// ─── Agentic Loop ─────────────────────────────────────────────────────────────
+
+async function runAgentLoop(userMessage, conversationHistory) {
+  const messages = [
+    ...conversationHistory,
+    { role: 'user', content: userMessage },
+  ];
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const response = await chatCompletion([
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...messages,
+    ]);
+
+    const toolCalls = parseToolCalls(response);
+
+    if (toolCalls.length === 0) {
+      // No tool calls — final answer (already streamed token-by-token to stdout)
+      messages.push({ role: 'assistant', content: response });
+      return messages;
+    }
+
+    // Tool calls present — the streamed text was the thinking portion; add a newline separator
+    process.stdout.write('\n');
+
+    messages.push({ role: 'assistant', content: response });
+
+    // Execute all tool calls
+    let toolResultBlock = '';
+    for (const call of toolCalls) {
+      console.log(clr('yellow', `  ⚙  ${call.name}`) + clr('gray', ' ' + JSON.stringify(call.input)));
+      const result = call.parseError
+        ? `Error: ${call.parseError}`
+        : executeTool(call.name, call.input);
+
+      const truncated = typeof result === 'string' && result.length > 8000
+        ? result.slice(0, 8000) + '\n... (truncated)'
+        : result;
+
+      toolResultBlock += `<tool_result>\n<name>${call.name}</name>\n<output>${truncated}</output>\n</tool_result>\n`;
+      console.log(clr('green', '  ✓ done') + clr('gray', ` (${String(result).length} chars)\n`));
+    }
+
+    messages.push({ role: 'user', content: toolResultBlock });
+  }
+
+  console.log(clr('red', '\nMax tool rounds reached. Agent stopped.\n'));
+  return messages;
+}
+
+// ─── REPL ─────────────────────────────────────────────────────────────────────
+
+async function checkOllama() {
+  return new Promise((resolve) => {
+    const url = new URL(OLLAMA_HOST + '/api/tags');
+    const lib = url.protocol === 'https:' ? https : http;
+    const req = lib.get(
+      { hostname: url.hostname, port: url.port || 11434, path: '/api/tags', timeout: 3000 },
+      (res) => { resolve(res.statusCode < 500); }
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+}
+
+async function main() {
+  console.log(clr('bold', '\n╔══════════════════════════════════════════╗'));
+  console.log(clr('bold', '║       AI Coding Agent  (Ollama)          ║'));
+  console.log(clr('bold', '╚══════════════════════════════════════════╝'));
+  console.log(clr('cyan',  `  Model   : ${MODEL}`));
+  console.log(clr('cyan',  `  Project : ${PROJECT_DIR}`));
+  console.log(clr('cyan',  `  Ollama  : ${OLLAMA_HOST}`));
+  console.log(clr('dim',   '\n  Commands: /clear  /exit  /model <name>  /dir\n'));
+
+  const ok = await checkOllama();
+  if (!ok) {
+    console.error(clr('red', `\nError: Cannot reach Ollama at ${OLLAMA_HOST}`));
+    console.error(clr('yellow', 'Make sure Ollama is running: ollama serve\n'));
+    process.exit(1);
+  }
+  console.log(clr('green', '  Ollama connection OK\n'));
+
+  // Use raw stdin events instead of readline to avoid Windows named-pipe EOF
+  // issues where readline's internal pause()/resume() cycle triggers premature
+  // 'close' events when stdin is a piped (non-TTY) stream.
+  let conversationHistory = [];
+  let stdinBuffer = '';
+  let processing = false;
+  const lineQueue = [];
+
+  const processNextLine = async () => {
+    if (processing || lineQueue.length === 0) return;
+    processing = true;
+    const input = lineQueue.shift();
+
+    if (input === '/clear') {
+      conversationHistory = [];
+      console.log(clr('green', '  Conversation cleared.\n'));
+    } else if (input === '/dir') {
+      console.log(clr('cyan', `  Project dir: ${PROJECT_DIR}\n`));
+    } else if (input.startsWith('/model ')) {
+      const m = input.slice(7).trim();
+      if (m) console.log(clr('green', `  Switched to model: ${m}\n`));
+    } else if (input === '/history') {
+      console.log(clr('dim', JSON.stringify(conversationHistory, null, 2) + '\n'));
+    } else {
+      try {
+        conversationHistory = await runAgentLoop(input, conversationHistory);
+        if (conversationHistory.length > 40) {
+          conversationHistory = conversationHistory.slice(-40);
+        }
+      } catch (err) {
+        console.error(clr('red', `\nError: ${err.message}\n`));
+      }
+    }
+
+    processing = false;
+    processNextLine();
+  };
+
+  process.stdin.setEncoding('utf8');
+  process.stdin.resume();
+
+  process.stdin.on('data', (chunk) => {
+    stdinBuffer += chunk;
+    let nl;
+    while ((nl = stdinBuffer.indexOf('\n')) !== -1) {
+      const line = stdinBuffer.slice(0, nl).replace(/\r$/, '').trim();
+      stdinBuffer = stdinBuffer.slice(nl + 1);
+      if (line) {
+        lineQueue.push(line);
+        processNextLine();
+      }
+    }
+  });
+
+  // Keep the process alive even if stdin closes — the app sends /q via killActive()
+  process.stdin.on('end', () => {
+    // stdin EOF: do nothing, wait to be killed externally
+  });
+}
+
+// ─── Single-shot mode (--once) ───────────────────────────────────────────────
+// Used by the Electron app: prompt is piped via stdin, result printed to stdout, then exit.
+
+async function runOnce() {
+  // Read prompt from stdin
+  const chunks = [];
+  process.stdin.resume();
+  process.stdin.on('data', (d) => chunks.push(d));
+  await new Promise((resolve) => process.stdin.on('end', resolve));
+  const prompt = Buffer.concat(chunks).toString('utf8').trim();
+
+  const done = (code) => {
+    // Flush stdout/stderr before exiting (process.exit skips buffer flush)
+    process.stdout.write('', () => {
+      process.stderr.write('', () => process.exit(code));
+    });
+  };
+
+  if (!prompt) {
+    process.stderr.write('agent-cli --once: no prompt received on stdin\n');
+    return done(1);
+  }
+
+  const ok = await checkOllama();
+  if (!ok) {
+    process.stderr.write(`agent-cli: Cannot reach Ollama at ${OLLAMA_HOST}\n`);
+    return done(1);
+  }
+
+  const messages = [{ role: 'user', content: prompt }];
+
+  // Strip ANSI color codes from text going to the app terminal panel
+  const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+  const out  = (s) => process.stdout.write(stripAnsi(s));
+  const oute = (s) => process.stderr.write(stripAnsi(s));
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const response = await chatCompletion([
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...messages,
+    ]);
+
+    const toolCalls = parseToolCalls(response);
+
+    if (toolCalls.length === 0) {
+      // No tool calls — final answer already streamed token-by-token
+      return done(0);
+    }
+
+    // Tool calls present — streamed text was the thinking portion; separator newline
+    process.stdout.write('\n');
+
+    messages.push({ role: 'assistant', content: response });
+
+    // Execute tools and collect results (don't echo raw output — model will summarise)
+    let toolResultBlock = '';
+    for (const call of toolCalls) {
+      const result = call.parseError
+        ? `Error: ${call.parseError}`
+        : executeTool(call.name, call.input);
+      const truncated = typeof result === 'string' && result.length > 8000
+        ? result.slice(0, 8000) + '\n... (truncated)' : result;
+      toolResultBlock += `<tool_result>\n<name>${call.name}</name>\n<output>${truncated}</output>\n</tool_result>\n`;
+    }
+
+    messages.push({ role: 'user', content: toolResultBlock });
+  }
+
+  oute('agent-cli: max tool rounds reached\n');
+  return done(1);
+}
+
+if (args.includes('--once')) {
+  runOnce();
+} else {
+  main();
+}

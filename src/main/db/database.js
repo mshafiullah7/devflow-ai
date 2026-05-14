@@ -3,8 +3,8 @@
 const path = require('node:path');
 const { app } = require('electron');
 const Database = require('better-sqlite3');
-const { applySchema } = require('./schema');
-const { seedStatuses, runMigrations } = require('./migrations');
+const { applySchema, seedModelConfigs } = require('./schema');
+const { seedStatuses, runMigrations, seedQuickCommands } = require('./migrations');
 
 let _db = null;
 
@@ -24,6 +24,8 @@ function getDb() {
   applySchema(_db);
   runMigrations(_db);
   seedStatuses(_db);
+  seedModelConfigs(_db);
+  seedQuickCommands(_db);
 
   return _db;
 }

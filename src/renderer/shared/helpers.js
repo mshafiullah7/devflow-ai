@@ -45,7 +45,7 @@ export function formatDate(dateStr) {
 
 /**
  * Injects a <link> stylesheet into <head> (idempotent — safe to call multiple times).
- * @param {string} href  Path relative to the HTML file (e.g. 'pages/project/project.css')
+ * @param {string} href  Path relative to the HTML file (e.g. 'pages/user-stories/user-stories.css')
  */
 export function injectCss(href) {
   const id = href.replace(/[^a-z0-9]/gi, '-');

@@ -1,0 +1,156 @@
+/* ================================================================
+   ModelPicker — custom model selector used in all page headers
+================================================================ */
+.mp-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* ----------------------------------------------------------------
+   Trigger button
+---------------------------------------------------------------- */
+.mp-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 7px;
+  background: rgba(234, 179, 8, 0.06);
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  border-radius: 4px;
+  color: #eab308;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.15), 0 0 6px rgba(234, 179, 8, 0.2);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.mp-trigger:hover,
+.mp-trigger:focus-visible {
+  background: rgba(234, 179, 8, 0.12);
+  border-color: #eab308;
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25), 0 0 10px rgba(234, 179, 8, 0.3);
+  outline: none;
+}
+
+.mp-trigger__icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.mp-trigger__label {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mp-trigger__caret {
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: transform 0.15s;
+}
+.mp-trigger__caret--open {
+  transform: rotate(180deg);
+}
+
+/* ----------------------------------------------------------------
+   Type badges (trigger + menu)
+---------------------------------------------------------------- */
+.mp-trigger__badge,
+.mp-menu__badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 99px;
+}
+
+.mp-badge--cli    { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+.mp-badge--api    { background: rgba(234, 179, 8, 0.15);  color: #eab308; }
+.mp-badge--ollama { background: rgba(34, 197, 94, 0.15);  color: #4ade80; }
+
+/* ----------------------------------------------------------------
+   Floating menu
+---------------------------------------------------------------- */
+.mp-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 300;
+  min-width: 200px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mp-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+.mp-menu__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.mp-menu__item--active {
+  color: var(--text-primary);
+}
+.mp-menu__item--active .mp-menu__label {
+  font-weight: 600;
+}
+
+.mp-menu__check {
+  flex-shrink: 0;
+  width: 14px;
+  color: #eab308;
+}
+
+.mp-menu__label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-menu__empty {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* ----------------------------------------------------------------
+   Light theme overrides
+---------------------------------------------------------------- */
+[data-theme="light"] .mp-trigger {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--accent);
+  box-shadow: none;
+}
+[data-theme="light"] .mp-trigger:hover,
+[data-theme="light"] .mp-trigger:focus-visible {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  box-shadow: var(--form-focus-shadow);
+}
+[data-theme="light"] .mp-menu {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08);
+}
