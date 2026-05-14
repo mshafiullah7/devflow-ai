@@ -102,3 +102,12 @@ out/
 
 # Generated screen design files (runtime output)
 /screens/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+agent/.venv/
+agent/venv/
