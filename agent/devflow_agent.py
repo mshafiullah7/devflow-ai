@@ -19,12 +19,103 @@ Standalone testing:
 
 import argparse
 import json
+import re
 import sys
 
 import ollama
 
 import context_builder
 from tools import TOOLS, execute_tool
+
+# ---------------------------------------------------------------------------
+# Text-based tool call fallback
+# Small models (7b, 14b) often ignore native tool calling and output the call
+# as JSON or XML in their text response. This parser catches those cases.
+# ---------------------------------------------------------------------------
+
+class _FakeFn:
+    """Mimics ollama's tool_call.function so the main loop works for both paths."""
+    def __init__(self, name: str, arguments: dict):
+        self.name      = name
+        self.arguments = arguments
+
+class _FakeToolCall:
+    def __init__(self, name: str, arguments: dict):
+        self.function = _FakeFn(name, arguments)
+
+
+def _parse_text_tool_calls(content: str) -> list:
+    """
+    Parse tool calls that the model emitted as plain text instead of using the
+    native tool-calling API. Handles these common output formats:
+
+      Format A — JSON inside a markdown code block:
+        ```json
+        {"name": "list_directory", "arguments": {"path": "src/app"}}
+        ```
+
+      Format B — raw JSON object anywhere in the text:
+        {"name": "read_file", "arguments": {"path": "lib/main.dart"}}
+
+      Format C — agent-cli XML tags:
+        <tool_call><name>read_file</name><input>{"path": "..."}</input></tool_call>
+
+    Returns a list of _FakeToolCall objects.
+    """
+    calls = []
+
+    # ── Format C: XML tags ────────────────────────────────────────────────────
+    xml = re.compile(
+        r'<tool_call>\s*<name>([\w]+)</name>\s*<input>([\s\S]*?)</input>\s*</tool_call>',
+        re.IGNORECASE,
+    )
+    for m in xml.finditer(content):
+        name = m.group(1).strip()
+        try:
+            args = json.loads(m.group(2).strip())
+            calls.append(_FakeToolCall(name, args))
+        except json.JSONDecodeError:
+            pass
+    if calls:
+        return calls
+
+    # ── Formats A & B: JSON objects ───────────────────────────────────────────
+    # Collect candidates: first try markdown fences, then bare JSON objects
+    candidates: list[str] = []
+
+    # Format A — ```json ... ``` or ``` ... ```
+    for m in re.finditer(r'```(?:json)?\s*\n([\s\S]*?)\n```', content):
+        candidates.append(m.group(1).strip())
+
+    # Format B — any top-level {...} block in the text (greedy brace matching)
+    if not candidates:
+        depth, start = 0, None
+        for i, ch in enumerate(content):
+            if ch == '{':
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0 and start is not None:
+                    candidates.append(content[start:i + 1])
+                    start = None
+
+    for raw in candidates:
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        # Accept {"name": ..., "arguments"/"input"/"parameters"/"args": ...}
+        name = obj.get('name') or obj.get('tool') or obj.get('function')
+        args = (obj.get('arguments') or obj.get('input') or
+                obj.get('parameters') or obj.get('args') or {})
+        if isinstance(name, str) and name.strip():
+            calls.append(_FakeToolCall(name.strip(), args if isinstance(args, dict) else {}))
+
+    return calls
+
 
 # ---------------------------------------------------------------------------
 # System prompt template
@@ -161,29 +252,33 @@ def run(args: argparse.Namespace) -> int:
 
         msg = response.message
 
+        # Resolve tool calls: prefer native API, fall back to text parsing.
+        # Small models (7b/14b) frequently output JSON/XML in content instead
+        # of using the structured tool-calling API.
+        tool_calls = list(msg.tool_calls or [])
+        if not tool_calls and msg.content:
+            tool_calls = _parse_text_tool_calls(msg.content)
+            if tool_calls:
+                _log(f'  (parsed {len(tool_calls)} tool call(s) from model text output)',
+                     args.verbose, is_verbose=True)
+
         # Append assistant message to history
         assistant_entry = {'role': 'assistant', 'content': msg.content or ''}
-        if msg.tool_calls:
-            # Store raw tool call info for history
+        if tool_calls:
             assistant_entry['tool_calls'] = [
-                {
-                    'function': {
-                        'name':      tc.function.name,
-                        'arguments': tc.function.arguments,
-                    }
-                }
-                for tc in msg.tool_calls
+                {'function': {'name': tc.function.name, 'arguments': tc.function.arguments}}
+                for tc in tool_calls
             ]
         messages.append(assistant_entry)
 
         # No tool calls → model is done
-        if not msg.tool_calls:
+        if not tool_calls:
             if msg.content:
                 _log(msg.content, args.verbose)
             break
 
         # Execute each tool the model requested
-        for tc in msg.tool_calls:
+        for tc in tool_calls:
             fn        = tc.function.name
             fn_args   = tc.function.arguments
             if isinstance(fn_args, str):
