@@ -21,6 +21,7 @@ import argparse
 import json
 import re
 import sys
+from pathlib import Path
 
 import ollama
 
@@ -168,16 +169,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--base-url',  default='http://localhost:11434', dest='base_url', help='Ollama base URL')
     p.add_argument('--max-turns', default=30, type=int, dest='max_turns', help='Max agentic loop iterations')
     p.add_argument('--verbose',   action='store_true', help='Print extra debug info to stderr')
-    p.add_argument(
-        '--mode',
-        choices=['initial', 'modify'],
-        default=None,
-        help=(
-            '"initial" builds the RAG index from scratch before running; '
-            '"modify" re-indexes only git-changed files before running. '
-            'Omit to skip RAG entirely (uses static repo map only).'
-        ),
-    )
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -220,24 +211,46 @@ def run(args: argparse.Namespace) -> int:
     """
     Run the agentic loop. Returns exit code (0 = success, 1 = error/timeout).
     """
-    # Step 1 — Build project context (with optional RAG)
+    # Step 1 — Build project context (with auto-detected RAG mode)
     _log('► Building project context...', args.verbose)
 
     retriever = None
-    if args.mode and _HAS_RAG:
+    if _HAS_RAG:
+        # State file: <project>/.devflow_agent/state.json
+        # Presence of {"indexed": true} → incremental re-index (modify).
+        # Missing file or any other state → full index (initial).
+        # To force a full re-index, delete .devflow_agent/state.json.
+        import datetime
+        state_dir  = Path(args.project) / '.devflow_agent'
+        state_file = state_dir / 'state.json'
+
+        already_indexed = False
+        if state_file.exists():
+            try:
+                state = json.loads(state_file.read_text(encoding='utf-8'))
+                already_indexed = state.get('indexed') is True
+            except Exception:
+                pass
+
         retriever = CodeContextRetriever(args.project)
-        if args.mode == 'initial':
-            _log('► RAG: building full index (first run may take ~30s)...', args.verbose)
-            retriever.index(verbose=args.verbose)
-        elif args.mode == 'modify':
+        if already_indexed:
             _log('► RAG: re-indexing changed files...', args.verbose)
             retriever.reindex_changed(verbose=args.verbose)
-    elif args.mode and not _HAS_RAG:
-        _log(
-            '⚠  --mode requires chromadb, gitpython, and sentence-transformers. '
-            'Install with: pip install -r requirements.txt',
-            args.verbose,
-        )
+        else:
+            _log('► RAG: building full index (first run may take ~30s)...', args.verbose)
+            retriever.index(verbose=args.verbose)
+            # Write state file so subsequent runs do incremental re-index
+            try:
+                state_dir.mkdir(exist_ok=True)
+                state_file.write_text(
+                    json.dumps({
+                        'indexed':    True,
+                        'indexed_at': datetime.datetime.now().isoformat(),
+                    }),
+                    encoding='utf-8',
+                )
+            except Exception:
+                pass
 
     try:
         if retriever is not None:
