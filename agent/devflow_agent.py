@@ -51,6 +51,29 @@ class _FakeToolCall:
         self.function = _FakeFn(name, arguments)
 
 
+def _try_parse_json(raw: str):
+    """
+    Parse JSON, tolerating up to 3 extra trailing '}' characters.
+    Small models (7b) sometimes emit one too many closing braces when the
+    generated content itself contains '}' (e.g. C# code inside a JSON string).
+    Returns the parsed object, or None on failure.
+    """
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        trimmed = raw
+        for _ in range(3):
+            if not trimmed.endswith('}'):
+                break
+            trimmed = trimmed[:-1].rstrip()
+            try:
+                return json.loads(trimmed)
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
 def _parse_text_tool_calls(content: str) -> list:
     """
     Parse tool calls that the model emitted as plain text instead of using the
@@ -78,11 +101,9 @@ def _parse_text_tool_calls(content: str) -> list:
     )
     for m in xml.finditer(content):
         name = m.group(1).strip()
-        try:
-            args = json.loads(m.group(2).strip())
+        args = _try_parse_json(m.group(2).strip())
+        if isinstance(args, dict):
             calls.append(_FakeToolCall(name, args))
-        except json.JSONDecodeError:
-            pass
     if calls:
         return calls
 
@@ -109,9 +130,8 @@ def _parse_text_tool_calls(content: str) -> list:
                     start = None
 
     for raw in candidates:
-        try:
-            obj = json.loads(raw)
-        except json.JSONDecodeError:
+        obj = _try_parse_json(raw)
+        if obj is None:
             continue
 
         # Accept {"name": ..., "arguments"/"input"/"parameters"/"args": ...}
