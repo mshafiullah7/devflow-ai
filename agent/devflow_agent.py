@@ -27,6 +27,12 @@ import ollama
 import context_builder
 from tools import TOOLS, execute_tool
 
+try:
+    from rag import CodeContextRetriever
+    _HAS_RAG = True
+except ImportError:
+    _HAS_RAG = False
+
 # ---------------------------------------------------------------------------
 # Text-based tool call fallback
 # Small models (7b, 14b) often ignore native tool calling and output the call
@@ -162,6 +168,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--base-url',  default='http://localhost:11434', dest='base_url', help='Ollama base URL')
     p.add_argument('--max-turns', default=30, type=int, dest='max_turns', help='Max agentic loop iterations')
     p.add_argument('--verbose',   action='store_true', help='Print extra debug info to stderr')
+    p.add_argument(
+        '--mode',
+        choices=['initial', 'modify'],
+        default=None,
+        help=(
+            '"initial" builds the RAG index from scratch before running; '
+            '"modify" re-indexes only git-changed files before running. '
+            'Omit to skip RAG entirely (uses static repo map only).'
+        ),
+    )
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -204,10 +220,34 @@ def run(args: argparse.Namespace) -> int:
     """
     Run the agentic loop. Returns exit code (0 = success, 1 = error/timeout).
     """
-    # Step 1 — Build project context
+    # Step 1 — Build project context (with optional RAG)
     _log('► Building project context...', args.verbose)
+
+    retriever = None
+    if args.mode and _HAS_RAG:
+        retriever = CodeContextRetriever(args.project)
+        if args.mode == 'initial':
+            _log('► RAG: building full index (first run may take ~30s)...', args.verbose)
+            retriever.index(verbose=args.verbose)
+        elif args.mode == 'modify':
+            _log('► RAG: re-indexing changed files...', args.verbose)
+            retriever.reindex_changed(verbose=args.verbose)
+    elif args.mode and not _HAS_RAG:
+        _log(
+            '⚠  --mode requires chromadb, gitpython, and sentence-transformers. '
+            'Install with: pip install -r requirements.txt',
+            args.verbose,
+        )
+
     try:
-        repo_map = context_builder.build(args.project)
+        if retriever is not None:
+            repo_map = context_builder.build_with_rag(
+                args.project,
+                query=args.message,
+                retriever=retriever,
+            )
+        else:
+            repo_map = context_builder.build(args.project)
     except Exception as e:
         _log(f'Error building project context: {e}', args.verbose)
         repo_map = '(context unavailable)'
