@@ -192,7 +192,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--model',     default='qwen2.5-coder:32b', help='Ollama model name')
     p.add_argument('--base-url',  default='http://localhost:11434', dest='base_url', help='Ollama base URL')
     p.add_argument('--max-turns', default=30, type=int, dest='max_turns', help='Max agentic loop iterations')
-    p.add_argument('--verbose',   action='store_true', help='Print extra debug info to stderr')
+    p.add_argument('--verbose',    action='store_true', help='Print extra debug info to stderr')
+    p.add_argument('--max-retries', default=2, type=int, dest='max_retries',
+                   help='Max build-fix retry cycles after the agent loop (default: 2)')
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -226,6 +228,36 @@ def _build_tool_result_message(tool_call, result: str) -> dict:
         'role':    'tool',
         'content': result,
     }
+
+# ---------------------------------------------------------------------------
+# Build verification helpers
+# ---------------------------------------------------------------------------
+
+_BUILD_COMMANDS = [
+    ('*.csproj',     'dotnet build'),
+    ('pom.xml',      'mvn compile -q'),
+    ('build.gradle', './gradlew build -q'),
+    ('Cargo.toml',   'cargo build'),
+    ('go.mod',       'go build ./...'),
+    ('package.json', 'npm run build'),
+]
+
+_BUILD_ERROR_MARKERS = ['error', 'Error', 'ERROR', 'FAILED', 'failed']
+
+
+def _detect_build_command(project_path: str) -> str | None:
+    """Return the first matching build command for the project, or None."""
+    root = Path(project_path)
+    for glob_pattern, cmd in _BUILD_COMMANDS:
+        if any(root.rglob(glob_pattern)):
+            return cmd
+    return None
+
+
+def _has_build_errors(output: str) -> bool:
+    """Return True if the build output contains error indicators."""
+    return any(marker in output for marker in _BUILD_ERROR_MARKERS)
+
 
 # ---------------------------------------------------------------------------
 # Main agent loop
@@ -380,7 +412,79 @@ def run(args: argparse.Namespace) -> int:
         _log(f'\n⚠  Reached max turns ({args.max_turns}). Stopping.', args.verbose)
         return 1
 
-    return 0
+    # Step 4 — Post-loop build verification
+    build_cmd = _detect_build_command(args.project)
+    if not build_cmd:
+        return 0  # no build system detected — nothing to verify
+
+    for retry in range(1, args.max_retries + 1):
+        _log(f'\n► Verifying build: {build_cmd}', args.verbose)
+        build_output = execute_tool('run_command', {'command': build_cmd}, args.project)
+        _log(build_output, args.verbose)
+
+        if not _has_build_errors(build_output):
+            _log('✓ Build passed.', args.verbose)
+            return 0
+
+        _log(f'⚠  Build errors detected — asking model to fix (retry {retry}/{args.max_retries})...', args.verbose)
+
+        # Inject errors as a new user turn so the model can correct them
+        messages.append({
+            'role':    'user',
+            'content': (
+                f'The build failed. Fix ALL errors before finishing.\n\n'
+                f'Build command: {build_cmd}\n\n'
+                f'Output:\n{build_output}'
+            ),
+        })
+
+        # Re-run the agent loop for this retry cycle
+        while turns < args.max_turns:
+            turns += 1
+            _log(f'[fix turn {turns}]', args.verbose, is_verbose=True)
+
+            try:
+                response = client.chat(model=args.model, messages=messages, tools=TOOLS)
+            except Exception as e:
+                _log(f'Ollama error during fix: {e}', args.verbose)
+                return 1
+
+            msg        = response.message
+            tool_calls = list(msg.tool_calls or [])
+            if not tool_calls and msg.content:
+                tool_calls = _parse_text_tool_calls(msg.content)
+
+            assistant_entry = {'role': 'assistant', 'content': msg.content or ''}
+            if tool_calls:
+                assistant_entry['tool_calls'] = [
+                    {'function': {'name': tc.function.name, 'arguments': tc.function.arguments}}
+                    for tc in tool_calls
+                ]
+            messages.append(assistant_entry)
+
+            if not tool_calls:
+                if msg.content:
+                    _log(msg.content, args.verbose)
+                break
+
+            for tc in tool_calls:
+                fn      = tc.function.name
+                fn_args = tc.function.arguments
+                if isinstance(fn_args, str):
+                    try:
+                        fn_args = json.loads(fn_args)
+                    except json.JSONDecodeError:
+                        fn_args = {}
+                _log(_fmt_tool_call(fn, fn_args), args.verbose)
+                result  = execute_tool(fn, fn_args, args.project)
+                preview = result[:120].replace('\n', ' ')
+                if len(result) > 120:
+                    preview += '...'
+                _log(f'  → {preview}', args.verbose, is_verbose=True)
+                messages.append(_build_tool_result_message(tc, result))
+
+    _log(f'\n⚠  Build still failing after {args.max_retries} fix attempt(s). Giving up.', args.verbose)
+    return 1
 
 # ---------------------------------------------------------------------------
 # Entry point
