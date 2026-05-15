@@ -254,7 +254,16 @@ _BUILD_COMMANDS = [
     ('package.json', 'npm run build'),
 ]
 
-_BUILD_ERROR_MARKERS = ['error', 'Error', 'ERROR', 'FAILED', 'failed']
+_BUILD_SUCCESS_MARKERS = ['Build succeeded', 'build succeeded']
+
+_BUILD_ERROR_MARKERS = [
+    'Build FAILED',   # dotnet
+    'build failed',   # generic
+    ': error ',       # MSBuild  e.g. "file.csproj : error MSBxxxx:"
+    ': ERROR ',       # MSBuild uppercase variant
+    'ERROR:',         # cargo, cmake, general tools
+    'FAILED',         # gradle, maven
+]
 
 
 def _detect_build_command(project_path: str) -> str | None:
@@ -272,8 +281,14 @@ def _detect_build_command(project_path: str) -> str | None:
 
 
 def _has_build_errors(output: str) -> bool:
-    """Return True if the build output contains error indicators."""
-    return any(marker in output for marker in _BUILD_ERROR_MARKERS)
+    """Return True if the build output contains error indicators.
+
+    Checks for explicit success first to avoid false positives from strings
+    like '0 Error(s)' that appear in successful dotnet build output.
+    """
+    if any(m in output for m in _BUILD_SUCCESS_MARKERS):
+        return False
+    return any(m in output for m in _BUILD_ERROR_MARKERS)
 
 
 # ---------------------------------------------------------------------------
@@ -534,9 +549,7 @@ def run(args: argparse.Namespace) -> int:
             messages.append(_build_tool_result_message(tc, result))
 
     else:
-        _log(f'\n⚠  Reached max turns ({args.max_turns}). Stopping.', args.verbose)
-        last_error = f'Agent loop exhausted {args.max_turns} turns without completing the task.'
-        _run_fallback(args, args.message, last_error, modified_files, Path(args.project))
+        _log(f'\n⚠  Reached max turns ({args.max_turns}). Proceeding to build verification.', args.verbose)
 
     # Step 4 — Post-loop build verification
     build_cmd = _detect_build_command(args.project)
