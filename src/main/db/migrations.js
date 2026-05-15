@@ -352,6 +352,9 @@ function runMigrations(db) {
   if (!mcCols.includes('fallback_preference')) {
     db.exec("ALTER TABLE model_configs ADD COLUMN fallback_preference TEXT DEFAULT 'auto'");
   }
+  if (!mcCols.includes('use_devflow_agent')) {
+    db.exec('ALTER TABLE model_configs ADD COLUMN use_devflow_agent INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 /**

@@ -837,6 +837,14 @@ export class SettingsPage {
                 <span class="st-ollama-status" id="stOllamaStatus"></span>
               </div>
 
+              <div class="st-form__row" style="margin-top:4px">
+                <label class="st-form__check-label">
+                  <input type="checkbox" id="stFUseDevflow" ${config?.use_devflow_agent ? 'checked' : ''}/>
+                  Use Devflow Agent loop (agentic mode with cloud fallback)
+                </label>
+                <span class="st-form__hint">Runs an autonomous coding loop instead of a single prompt. Falls back to Gemini/Claude when the model gets stuck.</span>
+              </div>
+
               <div class="st-form__row">
                 <label class="st-form__label">Gemini Fallback API Key</label>
                 <input class="st-form__input" id="stFGeminiKey" type="password"
@@ -975,6 +983,7 @@ export class SettingsPage {
         const select = overlay.querySelector('#stFOllamaModelSelect');
         data.base_url            = overlay.querySelector('#stFBaseUrl')?.value.trim() || 'http://localhost:11434';
         data.model_name          = (manual.style.display !== 'none' ? manual.value.trim() : select.value) || null;
+        data.use_devflow_agent   = overlay.querySelector('#stFUseDevflow')?.checked ? 1 : 0;
         data.gemini_api_key      = overlay.querySelector('#stFGeminiKey')?.value.trim() || null;
         data.claude_api_key      = overlay.querySelector('#stFClaudeKey')?.value.trim() || null;
         data.fallback_preference = overlay.querySelector('#stFFallbackPref')?.value || 'auto';

@@ -95,8 +95,11 @@ function registerQueueHandlers() {
 
     _notifyTelegram(proj, label, 'start', null, null);
 
-    if (type === 'anthropic')     { _runAnthropic(send, trimmed, modelConfig);         return { pid: null }; }
-    if (type === 'ollama')        { _runOllama(send, trimmed, modelConfig);             return { pid: null }; }
+    if (type === 'anthropic') { _runAnthropic(send, trimmed, modelConfig); return { pid: null }; }
+    if (type === 'ollama') {
+      if (modelConfig?.use_devflow_agent) return _runDevflowAgent(send, trimmed, modelConfig, cwd);
+      _runOllama(send, trimmed, modelConfig); return { pid: null };
+    }
     if (type === 'api')           { _runApi(send, trimmed, modelConfig);                return { pid: null }; }
     if (type === 'devflow-agent') { return _runDevflowAgent(send, trimmed, modelConfig, cwd); }
 
