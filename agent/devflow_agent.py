@@ -471,6 +471,37 @@ def run(args: argparse.Namespace) -> int:
         {'role': 'user',   'content': args.message},
     ]
 
+    def _trim_messages(msgs: list, max_chars: int = 80_000) -> list:
+        """Keep system + user message; drop oldest tool results when history is too large.
+
+        Tool result messages (role='tool') are the most verbose — they contain full
+        file contents and command outputs. Dropping the oldest ones keeps the model
+        focused on recent context without losing the task goal.
+        """
+        total = sum(len(str(m.get('content', ''))) for m in msgs)
+        if total <= max_chars:
+            return msgs
+
+        # Always preserve: index 0 (system), index 1 (original user task)
+        pinned  = msgs[:2]
+        trimable = msgs[2:]
+
+        while trimable and total > max_chars:
+            # Find the oldest tool result to drop
+            for i, m in enumerate(trimable):
+                if m.get('role') == 'tool':
+                    total -= len(str(m.get('content', '')))
+                    trimable.pop(i)
+                    break
+            else:
+                # No more tool messages — drop the oldest non-pinned message
+                dropped = trimable.pop(0)
+                total -= len(str(dropped.get('content', '')))
+
+        trimmed = pinned + trimable
+        _log(f'  (trimmed history to {len(trimmed)} messages, ~{total} chars)', args.verbose, is_verbose=True)
+        return trimmed
+
     # Step 3 — Agentic loop
     client = ollama.Client(host=args.base_url)
     turns  = 0
@@ -481,6 +512,7 @@ def run(args: argparse.Namespace) -> int:
 
     while turns < args.max_turns:
         turns += 1
+        messages = _trim_messages(messages)
         _log(f'[turn {turns}]', args.verbose, is_verbose=True)
 
         try:
@@ -580,6 +612,7 @@ def run(args: argparse.Namespace) -> int:
         # Re-run the agent loop for this retry cycle
         while turns < args.max_turns:
             turns += 1
+            messages = _trim_messages(messages)
             _log(f'[fix turn {turns}]', args.verbose, is_verbose=True)
 
             try:
