@@ -192,7 +192,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--message',   required=True,  help='Task to perform')
     p.add_argument('--model',     default='qwen2.5-coder:32b', help='Ollama model name')
     p.add_argument('--base-url',  default='http://localhost:11434', dest='base_url', help='Ollama base URL')
-    p.add_argument('--max-turns', default=5, type=int, dest='max_turns', help='Max agentic loop iterations')
+    p.add_argument('--max-turns', default=15, type=int, dest='max_turns', help='Max agentic loop iterations')
     p.add_argument('--verbose',    action='store_true', help='Print extra debug info to stderr')
     p.add_argument('--max-retries', default=2, type=int, dest='max_retries',
                    help='Max build-fix retry cycles after the agent loop (default: 2)')
