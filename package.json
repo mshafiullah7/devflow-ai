@@ -11,7 +11,11 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
-    "agent": "node agent-cli/index.js"
+    "agent": "node agent-cli/index.js",
+    "pretest": "cd node_modules/better-sqlite3 && node ../../node_modules/prebuild-install/bin.js --runtime electron --target 41.2.0 --platform win32 --arch x64 --tag-prefix v",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report tests/e2e/reports"
   },
   "keywords": [],
   "author": {
@@ -32,6 +36,7 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron/fuses": "^1.8.0",
+    "@playwright/test": "^1.60.0",
     "electron": "41.2.0"
   }
 }
