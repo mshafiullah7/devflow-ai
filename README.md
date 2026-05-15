@@ -320,3 +320,10 @@ sudo rpm -i electron-ai-sdlc-1.0.0.x86_64.rpm
 - `terminal:*` — terminal execution and streaming output
 - `dialog:*` — native OS file/folder pickers
 - `window:expand` — resize the app window
+
+
+### E2E running
+
+npm test           # headless
+npm run test:headed  # with visible window
+npm run test:report  # open HTML report

@@ -14,7 +14,8 @@
     "agent": "node agent-cli/index.js",
     "pretest": "cd node_modules/better-sqlite3 && node ../../node_modules/prebuild-install/bin.js --runtime electron --target 41.2.0 --platform win32 --arch x64 --tag-prefix v",
     "test": "playwright test",
-    "test:headed": "playwright test --headed",
+    "test:watch": "cross-env PW_SLOW_MO=800 playwright test",
+    "test:debug": "cross-env PWDEBUG=1 playwright test",
     "test:report": "playwright show-report tests/e2e/reports"
   },
   "keywords": [],
@@ -37,6 +38,7 @@
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron/fuses": "^1.8.0",
     "@playwright/test": "^1.60.0",
+    "cross-env": "^10.1.0",
     "electron": "41.2.0"
   }
 }
