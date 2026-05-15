@@ -340,6 +340,18 @@ function runMigrations(db) {
       END;
     `);
   }
+
+  // Add fallback AI columns to model_configs for devflow-agent support
+  const mcCols = db.prepare('PRAGMA table_info(model_configs)').all().map(c => c.name);
+  if (!mcCols.includes('gemini_api_key')) {
+    db.exec('ALTER TABLE model_configs ADD COLUMN gemini_api_key TEXT');
+  }
+  if (!mcCols.includes('claude_api_key')) {
+    db.exec('ALTER TABLE model_configs ADD COLUMN claude_api_key TEXT');
+  }
+  if (!mcCols.includes('fallback_preference')) {
+    db.exec("ALTER TABLE model_configs ADD COLUMN fallback_preference TEXT DEFAULT 'auto'");
+  }
 }
 
 /**

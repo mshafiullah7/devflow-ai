@@ -19,6 +19,7 @@ Standalone testing:
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -191,10 +192,21 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--message',   required=True,  help='Task to perform')
     p.add_argument('--model',     default='qwen2.5-coder:32b', help='Ollama model name')
     p.add_argument('--base-url',  default='http://localhost:11434', dest='base_url', help='Ollama base URL')
-    p.add_argument('--max-turns', default=30, type=int, dest='max_turns', help='Max agentic loop iterations')
+    p.add_argument('--max-turns', default=5, type=int, dest='max_turns', help='Max agentic loop iterations')
     p.add_argument('--verbose',    action='store_true', help='Print extra debug info to stderr')
     p.add_argument('--max-retries', default=2, type=int, dest='max_retries',
                    help='Max build-fix retry cycles after the agent loop (default: 2)')
+    p.add_argument('--gemini-api-key', default='', dest='gemini_api_key',
+                   help='Google Gemini API key for fallback (or set GEMINI_API_KEY env var)')
+    p.add_argument('--gemini-model', default='gemini-2.0-flash', dest='gemini_model',
+                   help='Gemini model name (default: gemini-2.0-flash)')
+    p.add_argument('--claude-api-key', default='', dest='claude_api_key',
+                   help='Anthropic Claude API key for fallback (or set CLAUDE_API_KEY env var)')
+    p.add_argument('--claude-model', default='claude-haiku-4-5-20251001', dest='claude_model',
+                   help='Claude model name (default: claude-haiku-4-5-20251001)')
+    p.add_argument('--fallback-preference', default='auto', dest='fallback_preference',
+                   choices=['gemini', 'claude', 'auto'],
+                   help='Which cloud AI to use as fallback (default: auto)')
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -257,6 +269,112 @@ def _detect_build_command(project_path: str) -> str | None:
 def _has_build_errors(output: str) -> bool:
     """Return True if the build output contains error indicators."""
     return any(marker in output for marker in _BUILD_ERROR_MARKERS)
+
+
+# ---------------------------------------------------------------------------
+# Cloud fallback helpers (Gemini Flash / Claude Haiku)
+# ---------------------------------------------------------------------------
+
+def _collect_file_contents(modified_files: set, project_root) -> str:
+    sections = []
+    for rel_path in modified_files:
+        abs_path = (project_root / rel_path).resolve()
+        if abs_path.exists():
+            content = abs_path.read_text(encoding='utf-8', errors='replace')
+            sections.append(f'FILE: {rel_path}\n```\n{content}\n```')
+    return '\n\n'.join(sections) if sections else '(no files modified yet)'
+
+
+def _build_fallback_prompt(task: str, error_context: str, file_sections: str) -> str:
+    return (
+        'A local AI agent tried to complete this coding task but got stuck.\n\n'
+        f'TASK:\n{task}\n\n'
+        f'ERROR / LAST OUTPUT:\n{error_context}\n\n'
+        f'RELEVANT FILES (current state):\n{file_sections}\n\n'
+        'Provide corrected file(s) in this exact format — one block per file:\n\n'
+        'FILE: <relative-path>\n'
+        '```\n'
+        '<full corrected file content>\n'
+        '```\n\n'
+        'Only output files that need changes. No explanations.'
+    )
+
+
+def _apply_file_fixes(text: str, project_root) -> bool:
+    from tools import _safe_path
+    pattern = re.compile(r'FILE:\s*(\S+)\s*\n```[^\n]*\n(.*?)```', re.DOTALL)
+    fixes = pattern.findall(text)
+    if not fixes:
+        print('[fallback] No file fixes returned.', flush=True)
+        return False
+    for rel_path, content in fixes:
+        abs_path = _safe_path(project_root, rel_path.strip())
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        abs_path.write_text(content, encoding='utf-8')
+        print(f'[fallback] Wrote fix: {rel_path.strip()}', flush=True)
+    return True
+
+
+def _gemini_fallback(api_key: str, model_name: str, task: str, error_context: str,
+                     modified_files: set, project_root) -> bool:
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(model_name)
+    file_sections = _collect_file_contents(modified_files, project_root)
+    prompt = _build_fallback_prompt(task, error_context, file_sections)
+    response = model.generate_content(prompt)
+    return _apply_file_fixes(response.text, project_root)
+
+
+def _claude_fallback(api_key: str, model_name: str, task: str, error_context: str,
+                     modified_files: set, project_root) -> bool:
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    file_sections = _collect_file_contents(modified_files, project_root)
+    prompt = _build_fallback_prompt(task, error_context, file_sections)
+    message = client.messages.create(
+        model=model_name,
+        max_tokens=4096,
+        messages=[{'role': 'user', 'content': prompt}],
+    )
+    return _apply_file_fixes(message.content[0].text, project_root)
+
+
+def _run_fallback(args, task: str, error_context: str, modified_files: set, project_root) -> bool:
+    """Orchestrate fallback based on preference. Auto: try Gemini, switch to Claude on 429."""
+    import os
+    gemini_key = args.gemini_api_key or os.environ.get('GEMINI_API_KEY', '')
+    claude_key  = args.claude_api_key  or os.environ.get('CLAUDE_API_KEY', '')
+    pref        = args.fallback_preference
+
+    def try_gemini():
+        if not gemini_key:
+            return False
+        print('[fallback] Trying Gemini Flash...', flush=True)
+        return _gemini_fallback(gemini_key, args.gemini_model, task, error_context,
+                                modified_files, project_root)
+
+    def try_claude():
+        if not claude_key:
+            return False
+        print('[fallback] Trying Claude Haiku...', flush=True)
+        return _claude_fallback(claude_key, args.claude_model, task, error_context,
+                                modified_files, project_root)
+
+    if pref == 'gemini':
+        return try_gemini()
+    if pref == 'claude':
+        return try_claude()
+
+    # auto: Gemini first, Claude on quota exceeded
+    try:
+        return try_gemini()
+    except Exception as e:
+        err_str = str(e).lower()
+        if '429' in err_str or 'quota' in err_str or 'exhausted' in err_str or 'rate' in err_str:
+            print('[fallback] Gemini quota exceeded — switching to Claude Haiku...', flush=True)
+            return try_claude()
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +455,7 @@ def run(args: argparse.Namespace) -> int:
     # Step 3 — Agentic loop
     client = ollama.Client(host=args.base_url)
     turns  = 0
+    modified_files: set = set()  # tracks files written — used by cloud fallback
 
     _log(f'► Starting agent loop (model: {args.model}, max turns: {args.max_turns})', args.verbose)
     _log('', args.verbose)
@@ -399,6 +518,8 @@ def run(args: argparse.Namespace) -> int:
             _log(_fmt_tool_call(fn, fn_args), args.verbose)
 
             result = execute_tool(fn, fn_args, args.project)
+            if fn == 'write_file' and fn_args.get('path'):
+                modified_files.add(fn_args['path'])
 
             # Show a short preview of the result
             preview = result[:120].replace('\n', ' ')
@@ -410,7 +531,8 @@ def run(args: argparse.Namespace) -> int:
 
     else:
         _log(f'\n⚠  Reached max turns ({args.max_turns}). Stopping.', args.verbose)
-        return 1
+        last_error = f'Agent loop exhausted {args.max_turns} turns without completing the task.'
+        _run_fallback(args, args.message, last_error, modified_files, Path(args.project))
 
     # Step 4 — Post-loop build verification
     build_cmd = _detect_build_command(args.project)
@@ -477,13 +599,22 @@ def run(args: argparse.Namespace) -> int:
                         fn_args = {}
                 _log(_fmt_tool_call(fn, fn_args), args.verbose)
                 result  = execute_tool(fn, fn_args, args.project)
+                if fn == 'write_file' and fn_args.get('path'):
+                    modified_files.add(fn_args['path'])
                 preview = result[:120].replace('\n', ' ')
                 if len(result) > 120:
                     preview += '...'
                 _log(f'  → {preview}', args.verbose, is_verbose=True)
                 messages.append(_build_tool_result_message(tc, result))
 
-    _log(f'\n⚠  Build still failing after {args.max_retries} fix attempt(s). Giving up.', args.verbose)
+    _log(f'\n⚠  Build still failing after {args.max_retries} fix attempt(s). Trying cloud fallback...', args.verbose)
+    fixed = _run_fallback(args, args.message, build_output, modified_files, Path(args.project))
+    if fixed:
+        final = execute_tool('run_command', {'command': build_cmd}, args.project)
+        _log(final, args.verbose)
+        if not _has_build_errors(final):
+            _log('✓ Build passed after cloud fallback.', args.verbose)
+            return 0
     return 1
 
 # ---------------------------------------------------------------------------

@@ -95,12 +95,60 @@ function registerQueueHandlers() {
 
     _notifyTelegram(proj, label, 'start', null, null);
 
-    if (type === 'anthropic') { _runAnthropic(send, trimmed, modelConfig); return { pid: null }; }
-    if (type === 'ollama')    { _runOllama(send, trimmed, modelConfig);    return { pid: null }; }
-    if (type === 'api')       { _runApi(send, trimmed, modelConfig);       return { pid: null }; }
+    if (type === 'anthropic')     { _runAnthropic(send, trimmed, modelConfig);         return { pid: null }; }
+    if (type === 'ollama')        { _runOllama(send, trimmed, modelConfig);             return { pid: null }; }
+    if (type === 'api')           { _runApi(send, trimmed, modelConfig);                return { pid: null }; }
+    if (type === 'devflow-agent') { return _runDevflowAgent(send, trimmed, modelConfig, cwd); }
 
     return _runCli(send, trimmed, modelConfig, cwd);
   });
+}
+
+// ----------------------------------------------------------------
+// Devflow Agent (Python subprocess)
+// ----------------------------------------------------------------
+function _runDevflowAgent(send, messages, modelConfig, cwd) {
+  const agentPath = path.join(__dirname, '../../../../agent/devflow_agent.py');
+  const task      = messages.map(m => (typeof m === 'string' ? m : m.content || '')).join('\n');
+
+  const spawnArgs = [
+    agentPath,
+    '--project',             cwd || os.homedir(),
+    '--message',             task,
+    '--model',               modelConfig.model_name  || 'qwen2.5-coder:7b',
+    '--base-url',            modelConfig.base_url    || 'http://localhost:11434',
+    '--max-turns',           String(modelConfig.max_tokens || 5),
+    '--fallback-preference', modelConfig.fallback_preference || 'auto',
+    '--verbose',
+  ];
+
+  const env = {
+    ...process.env,
+    ...(modelConfig.gemini_api_key ? { GEMINI_API_KEY: modelConfig.gemini_api_key } : {}),
+    ...(modelConfig.claude_api_key ? { CLAUDE_API_KEY: modelConfig.claude_api_key } : {}),
+  };
+
+  const proc = spawn('python', spawnArgs, {
+    cwd: cwd || os.homedir(),
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  _activeQueueProc = proc;
+
+  proc.stdout.on('data', d => send('promptQueue:data', { text: d.toString('utf8') }));
+  proc.stderr.on('data', d => send('promptQueue:data', { text: d.toString('utf8') }));
+  proc.on('close', code => {
+    _activeQueueProc = null;
+    send('promptQueue:done', { exitCode: code ?? 0 });
+  });
+  proc.on('error', err => {
+    _activeQueueProc = null;
+    send('promptQueue:data', { text: `devflow-agent error: ${err.message}\n` });
+    send('promptQueue:done', { exitCode: 1 });
+  });
+
+  return { pid: proc.pid };
 }
 
 // ----------------------------------------------------------------
