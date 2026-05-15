@@ -71,8 +71,10 @@ function makeSlowPage(page) {
 async function launchApp() {
   const dbPath = path.join(os.tmpdir(), `devflow-test-${Date.now()}-${process.pid}.db`);
 
+  const headless = process.env.PW_HEADED !== '1';
+
   const app = await electron.launch({
-    args: [APP_ENTRY],
+    args: [APP_ENTRY, ...(headless ? ['--headless=new'] : [])],
     env: { ...process.env, TEST_DB_PATH: dbPath },
   });
 
