@@ -261,7 +261,12 @@ def _detect_build_command(project_path: str) -> str | None:
     """Return the first matching build command for the project, or None."""
     root = Path(project_path)
     for glob_pattern, cmd in _BUILD_COMMANDS:
-        if any(root.rglob(glob_pattern)):
+        matches = list(root.rglob(glob_pattern))
+        if matches:
+            # For dotnet: pass the csproj path explicitly so subdirectory projects work
+            if glob_pattern == '*.csproj':
+                rel = matches[0].relative_to(root)
+                return f'dotnet build "{rel}"'
             return cmd
     return None
 
