@@ -522,44 +522,40 @@ function registerDbHandlers() {
   });
 
   ipcMain.handle('db:model_configs:create', (_e, data) => {
-    const { label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, gemini_api_key, claude_api_key, fallback_preference, use_devflow_agent } = data;
+    const { label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent } = data;
     // Clear existing default if setting new default
     if (is_default) db.prepare('UPDATE model_configs SET is_default = 0').run();
     const result = db.prepare(`
-      INSERT INTO model_configs (label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, gemini_api_key, claude_api_key, fallback_preference, use_devflow_agent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO model_configs (label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       label, type ?? 'cli',
       executable ?? null, flags ?? null, input_mode ?? 'pipe',
       base_url ?? null, api_key ?? null, model_name ?? null, max_tokens ?? null,
       is_default ? 1 : 0, sort_order ?? 0,
-      gemini_api_key ?? null, claude_api_key ?? null, fallback_preference ?? 'auto',
       use_devflow_agent ? 1 : 0
     );
     return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(result.lastInsertRowid);
   });
 
   ipcMain.handle('db:model_configs:update', (_e, data) => {
-    const { id, label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, gemini_api_key, claude_api_key, fallback_preference, use_devflow_agent } = data;
+    const { id, label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent } = data;
     if (is_default) db.prepare('UPDATE model_configs SET is_default = 0 WHERE id != ?').run(id);
     db.prepare(`
       UPDATE model_configs
-         SET label               = coalesce(?, label),
-             type                = coalesce(?, type),
-             executable          = ?,
-             flags               = ?,
-             input_mode          = coalesce(?, input_mode),
-             base_url            = ?,
-             api_key             = ?,
-             model_name          = ?,
-             max_tokens          = ?,
-             is_default          = coalesce(?, is_default),
-             sort_order          = coalesce(?, sort_order),
-             gemini_api_key      = ?,
-             claude_api_key      = ?,
-             fallback_preference = coalesce(?, fallback_preference),
-             use_devflow_agent   = coalesce(?, use_devflow_agent),
-             updated_at          = datetime('now')
+         SET label             = coalesce(?, label),
+             type              = coalesce(?, type),
+             executable        = ?,
+             flags             = ?,
+             input_mode        = coalesce(?, input_mode),
+             base_url          = ?,
+             api_key           = ?,
+             model_name        = ?,
+             max_tokens        = ?,
+             is_default        = coalesce(?, is_default),
+             sort_order        = coalesce(?, sort_order),
+             use_devflow_agent = coalesce(?, use_devflow_agent),
+             updated_at        = datetime('now')
        WHERE id = ?
     `).run(
       label ?? null, type ?? null,
@@ -567,7 +563,6 @@ function registerDbHandlers() {
       base_url ?? null, api_key ?? null, model_name ?? null, max_tokens ?? null,
       is_default != null ? (is_default ? 1 : 0) : null,
       sort_order ?? null,
-      gemini_api_key ?? null, claude_api_key ?? null, fallback_preference ?? null,
       use_devflow_agent != null ? (use_devflow_agent ? 1 : 0) : null,
       id
     );

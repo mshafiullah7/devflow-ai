@@ -840,39 +840,9 @@ export class SettingsPage {
               <div class="st-form__row" style="margin-top:4px">
                 <label class="st-form__check-label">
                   <input type="checkbox" id="stFUseDevflow" ${config?.use_devflow_agent ? 'checked' : ''}/>
-                  Use Devflow Agent loop (agentic mode with cloud fallback)
+                  Use Devflow Agent loop (agentic mode)
                 </label>
-                <span class="st-form__hint">Runs an autonomous coding loop instead of a single prompt. Falls back to Gemini/Claude when the model gets stuck.</span>
-              </div>
-
-              <div id="stFDevflowFields" style="display:none">
-                <div class="st-form__row">
-                  <label class="st-form__label">Gemini Fallback API Key</label>
-                  <input class="st-form__input" id="stFGeminiKey" type="password"
-                    placeholder="AIza…"
-                    value="${escHtml(config?.gemini_api_key || '')}"
-                    autocomplete="new-password"/>
-                  <span class="st-form__hint">Free tier: 1,500 req/day — get key at aistudio.google.com</span>
-                </div>
-
-                <div class="st-form__row">
-                  <label class="st-form__label">Claude Fallback API Key</label>
-                  <input class="st-form__input" id="stFClaudeKey" type="password"
-                    placeholder="sk-ant-…"
-                    value="${escHtml(config?.claude_api_key || '')}"
-                    autocomplete="new-password"/>
-                  <span class="st-form__hint">Used when Gemini quota is exceeded (~$0.007/call) — get key at console.anthropic.com</span>
-                </div>
-
-                <div class="st-form__row">
-                  <label class="st-form__label">Fallback Preference</label>
-                  <select class="st-form__select" id="stFFallbackPref">
-                    <option value="auto" ${(config?.fallback_preference || 'auto') === 'auto' ? 'selected' : ''}>Auto (Gemini first → Claude on quota limit)</option>
-                    <option value="gemini" ${config?.fallback_preference === 'gemini' ? 'selected' : ''}>Gemini Flash only</option>
-                    <option value="claude" ${config?.fallback_preference === 'claude' ? 'selected' : ''}>Claude Haiku only</option>
-                  </select>
-                  <span class="st-form__hint">Which cloud AI fixes errors when the local model gets stuck</span>
-                </div>
+                <span class="st-form__hint">Runs an autonomous coding loop instead of a single prompt.</span>
               </div>
             </div>
 
@@ -956,12 +926,6 @@ export class SettingsPage {
     applyType(config?.type || 'cli');
 
     const devflowCheckbox = overlay.querySelector('#stFUseDevflow');
-    const devflowFields   = overlay.querySelector('#stFDevflowFields');
-    const applyDevflow = () => {
-      devflowFields.style.display = devflowCheckbox.checked ? '' : 'none';
-    };
-    applyDevflow();
-    devflowCheckbox.addEventListener('change', applyDevflow);
 
     overlay.querySelector('#stBtnDetect')?.addEventListener('click', loadOllamaModels);
 
@@ -994,9 +958,6 @@ export class SettingsPage {
         data.base_url            = overlay.querySelector('#stFBaseUrl')?.value.trim() || 'http://localhost:11434';
         data.model_name          = (manual.style.display !== 'none' ? manual.value.trim() : select.value) || null;
         data.use_devflow_agent   = overlay.querySelector('#stFUseDevflow')?.checked ? 1 : 0;
-        data.gemini_api_key      = overlay.querySelector('#stFGeminiKey')?.value.trim() || null;
-        data.claude_api_key      = overlay.querySelector('#stFClaudeKey')?.value.trim() || null;
-        data.fallback_preference = overlay.querySelector('#stFFallbackPref')?.value || 'auto';
       }
 
       if (config) {

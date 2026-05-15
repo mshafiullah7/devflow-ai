@@ -116,20 +116,15 @@ function _runDevflowAgent(send, messages, modelConfig, cwd) {
 
   const spawnArgs = [
     agentPath,
-    '--project',             cwd || os.homedir(),
-    '--message',             task,
-    '--model',               modelConfig.model_name  || 'qwen2.5-coder:7b',
-    '--base-url',            modelConfig.base_url    || 'http://localhost:11434',
-    '--max-turns',           String(modelConfig.max_tokens || 5),
-    '--fallback-preference', modelConfig.fallback_preference || 'auto',
+    '--project',  cwd || os.homedir(),
+    '--message',  task,
+    '--model',    modelConfig.model_name || 'qwen2.5-coder:7b',
+    '--base-url', modelConfig.base_url   || 'http://localhost:11434',
+    '--max-turns', String(modelConfig.max_tokens || 5),
     '--verbose',
   ];
 
-  const env = {
-    ...process.env,
-    ...(modelConfig.gemini_api_key ? { GEMINI_API_KEY: modelConfig.gemini_api_key } : {}),
-    ...(modelConfig.claude_api_key ? { CLAUDE_API_KEY: modelConfig.claude_api_key } : {}),
-  };
+  const env = { ...process.env };
 
   const proc = spawn('python', spawnArgs, {
     cwd: cwd || os.homedir(),

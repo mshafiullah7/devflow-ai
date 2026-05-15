@@ -130,17 +130,28 @@ def _parse_text_tool_calls(content: str) -> list:
                     candidates.append(content[start:i + 1])
                     start = None
 
-    for raw in candidates:
-        obj = _try_parse_json(raw)
-        if obj is None:
-            continue
-
-        # Accept {"name": ..., "arguments"/"input"/"parameters"/"args": ...}
+    def _append_if_tool(obj):
         name = obj.get('name') or obj.get('tool') or obj.get('function')
         args = (obj.get('arguments') or obj.get('input') or
                 obj.get('parameters') or obj.get('args') or {})
         if isinstance(name, str) and name.strip():
             calls.append(_FakeToolCall(name.strip(), args if isinstance(args, dict) else {}))
+
+    for raw in candidates:
+        obj = _try_parse_json(raw)
+        if obj is not None:
+            # Single JSON object — common for larger models
+            _append_if_tool(obj)
+        else:
+            # Multiple JSON objects on separate lines — common for small models (7b)
+            # that emit one tool call per line inside a single code fence.
+            for line in raw.splitlines():
+                line = line.strip()
+                if not line.startswith('{'):
+                    continue
+                obj = _try_parse_json(line)
+                if obj is not None:
+                    _append_if_tool(obj)
 
     return calls
 
@@ -177,6 +188,9 @@ Project root: {project_root}
 7. Only after ALL tools have been called and files written, output a one-line summary.
 8. Do not ask for confirmation. Do not ask clarifying questions. Just act.
 9. If a command fails, read the error and fix it with another tool call.
+10. When running build or run commands, ALWAYS pass the full path to the project file (e.g. dotnet build src/MyApp.csproj), never a bare command with no target.
+11. Once the task succeeds (e.g. the program builds without errors), stop immediately — do not re-run or re-verify commands that already passed.
+12. NEVER run interactive programs (e.g. dotnet run on a program that reads from stdin). Use the build command only to verify correctness (e.g. dotnet build src/MyApp.csproj).
 """
 
 # ---------------------------------------------------------------------------
@@ -196,17 +210,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--verbose',    action='store_true', help='Print extra debug info to stderr')
     p.add_argument('--max-retries', default=2, type=int, dest='max_retries',
                    help='Max build-fix retry cycles after the agent loop (default: 2)')
-    p.add_argument('--gemini-api-key', default='', dest='gemini_api_key',
-                   help='Google Gemini API key for fallback (or set GEMINI_API_KEY env var)')
-    p.add_argument('--gemini-model', default='gemini-2.0-flash', dest='gemini_model',
-                   help='Gemini model name (default: gemini-2.0-flash)')
-    p.add_argument('--claude-api-key', default='', dest='claude_api_key',
-                   help='Anthropic Claude API key for fallback (or set CLAUDE_API_KEY env var)')
-    p.add_argument('--claude-model', default='claude-haiku-4-5-20251001', dest='claude_model',
-                   help='Claude model name (default: claude-haiku-4-5-20251001)')
-    p.add_argument('--fallback-preference', default='auto', dest='fallback_preference',
-                   choices=['gemini', 'claude', 'auto'],
-                   help='Which cloud AI to use as fallback (default: auto)')
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -289,111 +292,6 @@ def _has_build_errors(output: str) -> bool:
     if any(m in output for m in _BUILD_SUCCESS_MARKERS):
         return False
     return any(m in output for m in _BUILD_ERROR_MARKERS)
-
-
-# ---------------------------------------------------------------------------
-# Cloud fallback helpers (Gemini Flash / Claude Haiku)
-# ---------------------------------------------------------------------------
-
-def _collect_file_contents(modified_files: set, project_root) -> str:
-    sections = []
-    for rel_path in modified_files:
-        abs_path = (project_root / rel_path).resolve()
-        if abs_path.exists():
-            content = abs_path.read_text(encoding='utf-8', errors='replace')
-            sections.append(f'FILE: {rel_path}\n```\n{content}\n```')
-    return '\n\n'.join(sections) if sections else '(no files modified yet)'
-
-
-def _build_fallback_prompt(task: str, error_context: str, file_sections: str) -> str:
-    return (
-        'A local AI agent tried to complete this coding task but got stuck.\n\n'
-        f'TASK:\n{task}\n\n'
-        f'ERROR / LAST OUTPUT:\n{error_context}\n\n'
-        f'RELEVANT FILES (current state):\n{file_sections}\n\n'
-        'Provide corrected file(s) in this exact format — one block per file:\n\n'
-        'FILE: <relative-path>\n'
-        '```\n'
-        '<full corrected file content>\n'
-        '```\n\n'
-        'Only output files that need changes. No explanations.'
-    )
-
-
-def _apply_file_fixes(text: str, project_root) -> bool:
-    from tools import _safe_path
-    pattern = re.compile(r'FILE:\s*(\S+)\s*\n```[^\n]*\n(.*?)```', re.DOTALL)
-    fixes = pattern.findall(text)
-    if not fixes:
-        print('[fallback] No file fixes returned.', flush=True)
-        return False
-    for rel_path, content in fixes:
-        abs_path = _safe_path(project_root, rel_path.strip())
-        abs_path.parent.mkdir(parents=True, exist_ok=True)
-        abs_path.write_text(content, encoding='utf-8')
-        print(f'[fallback] Wrote fix: {rel_path.strip()}', flush=True)
-    return True
-
-
-def _gemini_fallback(api_key: str, model_name: str, task: str, error_context: str,
-                     modified_files: set, project_root) -> bool:
-    from google import genai
-    client = genai.Client(api_key=api_key)
-    file_sections = _collect_file_contents(modified_files, project_root)
-    prompt = _build_fallback_prompt(task, error_context, file_sections)
-    response = client.models.generate_content(model=model_name, contents=prompt)
-    return _apply_file_fixes(response.text, project_root)
-
-
-def _claude_fallback(api_key: str, model_name: str, task: str, error_context: str,
-                     modified_files: set, project_root) -> bool:
-    import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
-    file_sections = _collect_file_contents(modified_files, project_root)
-    prompt = _build_fallback_prompt(task, error_context, file_sections)
-    message = client.messages.create(
-        model=model_name,
-        max_tokens=4096,
-        messages=[{'role': 'user', 'content': prompt}],
-    )
-    return _apply_file_fixes(message.content[0].text, project_root)
-
-
-def _run_fallback(args, task: str, error_context: str, modified_files: set, project_root) -> bool:
-    """Orchestrate fallback based on preference. Auto: try Gemini, switch to Claude on 429."""
-    import os
-    gemini_key = args.gemini_api_key or os.environ.get('GEMINI_API_KEY', '')
-    claude_key  = args.claude_api_key  or os.environ.get('CLAUDE_API_KEY', '')
-    pref        = args.fallback_preference
-
-    def try_gemini():
-        if not gemini_key:
-            return False
-        print('[fallback] Trying Gemini Flash...', flush=True)
-        return _gemini_fallback(gemini_key, args.gemini_model, task, error_context,
-                                modified_files, project_root)
-
-    def try_claude():
-        if not claude_key:
-            return False
-        print('[fallback] Trying Claude Haiku...', flush=True)
-        return _claude_fallback(claude_key, args.claude_model, task, error_context,
-                                modified_files, project_root)
-
-    if pref == 'gemini':
-        return try_gemini()
-    if pref == 'claude':
-        return try_claude()
-
-    # auto: Gemini first, Claude on quota exceeded
-    try:
-        return try_gemini()
-    except Exception as e:
-        err_str = str(e).lower()
-        if '429' in err_str or 'quota' in err_str or 'exhausted' in err_str or 'rate' in err_str:
-            print('[fallback] Gemini quota exceeded — switching to Claude Haiku...', flush=True)
-            return try_claude()
-        raise
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +403,6 @@ def run(args: argparse.Namespace) -> int:
     # Step 3 — Agentic loop
     client = ollama.Client(host=args.base_url)
     turns  = 0
-    modified_files: set = set()  # tracks files written — used by cloud fallback
 
     _log(f'► Starting agent loop (model: {args.model}, max turns: {args.max_turns})', args.verbose)
     _log('', args.verbose)
@@ -569,8 +466,6 @@ def run(args: argparse.Namespace) -> int:
             _log(_fmt_tool_call(fn, fn_args), args.verbose)
 
             result = execute_tool(fn, fn_args, args.project)
-            if fn == 'write_file' and fn_args.get('path'):
-                modified_files.add(fn_args['path'])
 
             # Show a short preview of the result
             preview = result[:120].replace('\n', ' ')
@@ -649,22 +544,13 @@ def run(args: argparse.Namespace) -> int:
                         fn_args = {}
                 _log(_fmt_tool_call(fn, fn_args), args.verbose)
                 result  = execute_tool(fn, fn_args, args.project)
-                if fn == 'write_file' and fn_args.get('path'):
-                    modified_files.add(fn_args['path'])
                 preview = result[:120].replace('\n', ' ')
                 if len(result) > 120:
                     preview += '...'
                 _log(f'  → {preview}', args.verbose, is_verbose=True)
                 messages.append(_build_tool_result_message(tc, result))
 
-    _log(f'\n⚠  Build still failing after {args.max_retries} fix attempt(s). Trying cloud fallback...', args.verbose)
-    fixed = _run_fallback(args, args.message, build_output, modified_files, Path(args.project))
-    if fixed:
-        final = execute_tool('run_command', {'command': build_cmd}, args.project)
-        _log(final, args.verbose)
-        if not _has_build_errors(final):
-            _log('✓ Build passed after cloud fallback.', args.verbose)
-            return 0
+    _log(f'\n✗ Build still failing after {args.max_retries} fix attempt(s).', args.verbose)
     return 1
 
 # ---------------------------------------------------------------------------

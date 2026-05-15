@@ -311,25 +311,29 @@ def _run_command(args: dict, root: Path) -> str:
     if not command.strip():
         return 'Error: empty command'
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             command,
             shell=True,
             cwd=str(root),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,  # prevent hanging on interactive input
             text=True,
-            timeout=30,
             encoding='utf-8',
             errors='replace',
         )
-        output = (result.stdout or '') + (result.stderr or '')
+        try:
+            stdout, stderr = proc.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return 'Error: command timed out after 30 seconds (program may require interactive input — use dotnet build to verify instead of dotnet run)'
+        output = (stdout or '') + (stderr or '')
         output = output.strip()
         if not output:
-            output = f'(exit code {result.returncode}, no output)'
+            output = f'(exit code {proc.returncode}, no output)'
         elif len(output) > 3000:
             output = output[:3000] + '\n... (truncated)'
         return output
-    except subprocess.TimeoutExpired:
-        return 'Error: command timed out after 30 seconds'
     except Exception as e:
         return f'Error running command: {e}'
 
