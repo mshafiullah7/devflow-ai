@@ -317,12 +317,11 @@ def _apply_file_fixes(text: str, project_root) -> bool:
 
 def _gemini_fallback(api_key: str, model_name: str, task: str, error_context: str,
                      modified_files: set, project_root) -> bool:
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
+    from google import genai
+    client = genai.Client(api_key=api_key)
     file_sections = _collect_file_contents(modified_files, project_root)
     prompt = _build_fallback_prompt(task, error_context, file_sections)
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model=model_name, contents=prompt)
     return _apply_file_fixes(response.text, project_root)
 
 
