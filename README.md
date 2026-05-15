@@ -324,6 +324,7 @@ sudo rpm -i electron-ai-sdlc-1.0.0.x86_64.rpm
 
 ### E2E running
 
-npm test           # headless
-npm run test:headed  # with visible window
-npm run test:report  # open HTML report
+npm test                # headless
+npm run test:watch      # with visible window
+npm run test:debug      # open HTML report
+npm run test:report     #testing report
