@@ -105,6 +105,7 @@ out/
 
 # Playwright test results
 test-results/
+tests/e2e/reports/
 
 # Python
 __pycache__/
