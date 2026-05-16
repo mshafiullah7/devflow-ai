@@ -591,3 +591,259 @@
 .pq-turn__bubble .md-table tbody tr:nth-child(even) { background: #161b22; }
 .pq-turn__bubble .md-table tbody tr:hover { background: #1e2a38; }
 
+/* ------------------------------------------------------------------ */
+/* Plan card (shown between plan phase and execution phase)             */
+/* ------------------------------------------------------------------ */
+
+.pq-detail--plan {
+  padding: 20px 20px 0;
+  overflow-y: auto;
+}
+
+.pq-plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+/* Header */
+.pq-plan-card__header {
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pq-plan-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 4px;
+  padding: 2px 7px;
+  width: fit-content;
+}
+
+.pq-plan-card__task {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.pq-plan-card__meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Steps list */
+.pq-plan-card__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px 0;
+}
+
+.pq-plan-step {
+  display: flex;
+  gap: 12px;
+  padding: 11px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  transition: background 0.12s;
+}
+.pq-plan-step:last-child { border-bottom: none; }
+.pq-plan-step:hover { background: var(--bg-hover); }
+
+.pq-plan-step__num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.pq-plan-step__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pq-plan-step__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.pq-plan-step__desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.pq-plan-step__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pq-plan-step__file {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--text-secondary);
+}
+
+/* Action buttons */
+.pq-plan-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.pq-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 5px);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: opacity 0.12s, background 0.12s;
+  white-space: nowrap;
+}
+
+.pq-plan-btn--approve {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.pq-plan-btn--approve:hover { opacity: 0.88; }
+
+.pq-plan-btn--cancel {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+.pq-plan-btn--cancel:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ------------------------------------------------------------------ */
+/* Step progress tracker (shown above live output during execution)     */
+/* ------------------------------------------------------------------ */
+
+.pq-step-tracker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.pq-step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 5px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pq-step-pill__num {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pq-step-pill__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Pending */
+.pq-step-pill--pending {
+  background: var(--bg);
+  color: var(--text-secondary);
+}
+.pq-step-pill--pending .pq-step-pill__num {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+/* Running */
+.pq-step-pill--running {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+}
+.pq-step-pill--running .pq-step-pill__num {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Done */
+.pq-step-pill--done {
+  background: color-mix(in srgb, #22c55e 10%, transparent);
+  border-color: color-mix(in srgb, #22c55e 35%, transparent);
+  color: #22c55e;
+}
+.pq-step-pill--done .pq-step-pill__num {
+  background: #22c55e;
+  color: #fff;
+}
+
+/* Failed */
+.pq-step-pill--failed {
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+  border-color: color-mix(in srgb, #ef4444 35%, transparent);
+  color: #ef4444;
+}
+.pq-step-pill--failed .pq-step-pill__num {
+  background: #ef4444;
+  color: #fff;
+}
+

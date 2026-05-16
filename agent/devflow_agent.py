@@ -160,6 +160,47 @@ def _parse_text_tool_calls(content: str) -> list:
 # System prompt template
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Planning system prompt
+# ---------------------------------------------------------------------------
+
+PLANNING_SYSTEM_PROMPT = """\
+You are an expert software planning assistant. Analyze the coding task and \
+produce a concrete, step-by-step execution plan.
+
+Project root: {project_root}
+
+{repo_map}
+
+## Output format
+Output ONLY a valid JSON object — no markdown fences, no explanation text:
+
+{{
+  "task": "<one-line summary of the overall task>",
+  "steps": [
+    {{
+      "id": 1,
+      "title": "<short action title, 5-8 words>",
+      "description": "<what will be done in this step and why>",
+      "files": ["<relative paths likely to be read or modified>"],
+      "tools": ["read_file", "write_file"]
+    }}
+  ],
+  "estimated_turns": <integer — total estimated tool calls across all steps>
+}}
+
+## Rules
+- Output ONLY the raw JSON object. No markdown, no commentary.
+- Use 3 to 7 steps. Each step must have a single, focused goal.
+- File paths must be realistic given the project structure shown above.
+- Tools must be chosen from: read_file, write_file, list_directory, search_code,
+  get_file_tree, run_command, delete_file, create_directory
+"""
+
+# ---------------------------------------------------------------------------
+# Execution system prompt
+# ---------------------------------------------------------------------------
+
 SYSTEM_PROMPT_TEMPLATE = """\
 You are an expert software developer. You MUST use tools to make ALL changes. \
 You have direct access to the project filesystem through the tools below.
@@ -210,6 +251,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--verbose',    action='store_true', help='Print extra debug info to stderr')
     p.add_argument('--max-retries', default=2, type=int, dest='max_retries',
                    help='Max build-fix retry cycles after the agent loop (default: 2)')
+    # Planning mode
+    p.add_argument('--plan-only', action='store_true', dest='plan_only',
+                   help='Generate an execution plan and print it as [PLAN_START]...[PLAN_END], then exit')
+    p.add_argument('--approved-plan', default=None, dest='approved_plan',
+                   help='JSON string of an approved plan — execute it step-by-step')
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -295,26 +341,54 @@ def _has_build_errors(output: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Main agent loop
+# Planning helpers
 # ---------------------------------------------------------------------------
 
-def run(args: argparse.Namespace) -> int:
+def _extract_plan_json(content: str) -> dict | None:
+    """Extract and parse plan JSON from model output.
+
+    Handles: raw JSON, markdown-fenced JSON, and JSON embedded in prose.
+    Returns the parsed dict (must contain a 'steps' key) or None.
     """
-    Run the agentic loop. Returns exit code (0 = success, 1 = error/timeout).
-    """
-    # Step 1 — Build project context (with auto-detected RAG mode)
-    _log('► Building project context...', args.verbose)
+    content = content.strip()
+
+    # 1. Direct parse
+    obj = _try_parse_json(content)
+    if isinstance(obj, dict) and 'steps' in obj:
+        return obj
+
+    # 2. Strip markdown code fences (```json ... ```)
+    for m in re.finditer(r'```(?:json)?\s*\n([\s\S]*?)\n```', content):
+        obj = _try_parse_json(m.group(1).strip())
+        if isinstance(obj, dict) and 'steps' in obj:
+            return obj
+
+    # 3. Greedy brace scan — find outermost {...} block
+    depth, start = 0, None
+    for i, ch in enumerate(content):
+        if ch == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and start is not None:
+                obj = _try_parse_json(content[start:i + 1])
+                if isinstance(obj, dict) and 'steps' in obj:
+                    return obj
+                start = None
+
+    return None
+
+
+def _build_context(args: argparse.Namespace):
+    """Build repo map + optional RAG retriever. Returns (repo_map, retriever)."""
+    import datetime
 
     retriever = None
     if _HAS_RAG:
-        # State file: <project>/.devflow_agent/state.json
-        # Presence of {"indexed": true} → incremental re-index (modify).
-        # Missing file or any other state → full index (initial).
-        # To force a full re-index, delete .devflow_agent/state.json.
-        import datetime
         state_dir  = Path(args.project) / '.devflow_agent'
         state_file = state_dir / 'state.json'
-
         already_indexed = False
         if state_file.exists():
             try:
@@ -330,7 +404,6 @@ def run(args: argparse.Namespace) -> int:
         else:
             _log('► RAG: building full index (first run may take ~30s)...', args.verbose)
             retriever.index(verbose=args.verbose)
-            # Write state file so subsequent runs do incremental re-index
             try:
                 state_dir.mkdir(exist_ok=True)
                 state_file.write_text(
@@ -356,6 +429,124 @@ def run(args: argparse.Namespace) -> int:
         _log(f'Error building project context: {e}', args.verbose)
         repo_map = '(context unavailable)'
 
+    return repo_map, retriever
+
+
+def generate_plan(args: argparse.Namespace) -> int:
+    """Generate a structured execution plan.
+
+    Outputs [PLAN_START]{json}[PLAN_END] to stdout, then exits.
+    The Electron layer detects these markers and shows the plan card.
+    """
+    _log('► Building project context for planning...', args.verbose)
+    repo_map, _ = _build_context(args)
+    _log(f'► Context ready — {len(repo_map)} chars', args.verbose, is_verbose=True)
+
+    system = PLANNING_SYSTEM_PROMPT.format(
+        project_root=args.project,
+        repo_map=repo_map,
+    )
+
+    client = ollama.Client(host=args.base_url)
+    _log(f'► Generating execution plan (model: {args.model})...', args.verbose)
+
+    try:
+        response = client.chat(
+            model=args.model,
+            messages=[
+                {'role': 'system', 'content': system},
+                {'role': 'user',   'content': f'Create a detailed execution plan for: {args.message}'},
+            ],
+        )
+    except ollama.ResponseError as e:
+        _log(f'Ollama error: {e.error}', args.verbose)
+        return 1
+    except Exception as e:
+        _log(f'Failed to connect to Ollama at {args.base_url}: {e}', args.verbose)
+        return 1
+
+    content = response.message.content or ''
+    plan = _extract_plan_json(content)
+
+    if plan is None:
+        _log(f'Could not parse plan JSON from model output:\n{content}', args.verbose)
+        return 1
+
+    # Normalise: ensure sequential IDs
+    for i, step in enumerate(plan.get('steps', []), 1):
+        step['id'] = i
+
+    plan_json = json.dumps(plan, ensure_ascii=False, indent=2)
+    # Emit the special marker so Electron can detect and parse the plan
+    print(f'[PLAN_START]{plan_json}[PLAN_END]', flush=True)
+    return 0
+
+
+def execute_with_plan(args: argparse.Namespace, plan: dict) -> int:
+    """Execute an approved plan step by step.
+
+    Prints [STEP:N/total] Title  before each step, and
+           [STEP_DONE:N/total]   or [STEP_FAILED:N/total] after.
+    The Electron layer listens for these markers to drive the step progress UI.
+    """
+    import copy
+
+    steps = plan.get('steps', [])
+    total = len(steps)
+
+    if not steps:
+        _log('Approved plan contains no steps.', args.verbose)
+        return 1
+
+    _log(f'► Executing plan: {plan.get("task", args.message)}', args.verbose)
+    _log(f'► {total} step(s) to execute', args.verbose)
+    _log('', args.verbose)
+
+    for step in steps:
+        step_num    = step.get('id', steps.index(step) + 1)
+        title       = step.get('title', f'Step {step_num}')
+        description = step.get('description', '')
+
+        # Emit step-start marker (Electron picks this up for step progress bar)
+        print(f'[STEP:{step_num}/{total}] {title}', flush=True)
+        _log(f'  {description}', args.verbose)
+
+        # Build step-specific args — focus the agent on this one step only
+        step_args         = copy.copy(args)
+        step_args.message = (
+            f'Overall task: {args.message}\n\n'
+            f'You are now executing step {step_num} of {total}: {title}\n'
+            f'Details: {description}\n\n'
+            f'Focus ONLY on this step. Do not work ahead to other steps.'
+        )
+        # Remove plan flags so run() is used normally
+        step_args.plan_only      = False
+        step_args.approved_plan  = None
+
+        exit_code = run(step_args)
+
+        if exit_code != 0:
+            print(f'[STEP_FAILED:{step_num}/{total}]', flush=True)
+            return exit_code
+
+        print(f'[STEP_DONE:{step_num}/{total}]', flush=True)
+        _log('', args.verbose)
+
+    _log(f'\n✓ All {total} steps completed successfully.', args.verbose)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Main agent loop
+# ---------------------------------------------------------------------------
+
+def run(args: argparse.Namespace) -> int:
+    """
+    Run the agentic loop. Returns exit code (0 = success, 1 = error/timeout).
+    """
+    # Step 1 — Build project context (repo map + optional RAG)
+    _log('► Building project context...', args.verbose)
+    repo_map, _ = _build_context(args)
     _log(f'► Context ready — {len(repo_map)} chars', args.verbose, is_verbose=True)
 
     # Step 2 — Assemble system prompt
@@ -558,8 +749,25 @@ def run(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 def main():
-    args       = parse_args()
-    exit_code  = run(args)
+    args = parse_args()
+
+    if args.plan_only:
+        # Phase 1 — generate plan, print markers, exit
+        exit_code = generate_plan(args)
+
+    elif args.approved_plan:
+        # Phase 2 — execute the user-approved plan step by step
+        try:
+            plan = json.loads(args.approved_plan)
+        except json.JSONDecodeError as e:
+            print(f'Error parsing approved plan JSON: {e}', flush=True)
+            sys.exit(1)
+        exit_code = execute_with_plan(args, plan)
+
+    else:
+        # Normal mode — no planning, run full agentic loop directly
+        exit_code = run(args)
+
     sys.exit(exit_code)
 
 

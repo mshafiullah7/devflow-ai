@@ -97,45 +97,172 @@ function registerQueueHandlers() {
 
     if (type === 'anthropic') { _runAnthropic(send, trimmed, modelConfig); return { pid: null }; }
     if (type === 'ollama') {
-      if (modelConfig?.use_devflow_agent) return _runDevflowAgent(send, trimmed, modelConfig, cwd);
+      if (modelConfig?.use_devflow_agent) return _runDevflowAgent(send, trimmed, modelConfig, cwd, { planOnly: true });
       _runOllama(send, trimmed, modelConfig); return { pid: null };
     }
     if (type === 'api')           { _runApi(send, trimmed, modelConfig);                return { pid: null }; }
-    if (type === 'devflow-agent') { return _runDevflowAgent(send, trimmed, modelConfig, cwd); }
+    if (type === 'devflow-agent') { return _runDevflowAgent(send, trimmed, modelConfig, cwd, { planOnly: true }); }
 
     return _runCli(send, trimmed, modelConfig, cwd);
+  });
+
+  // Phase 2 — user approved the plan; spawn agent in execution mode
+  ipcMain.handle('promptQueue:approvePlan', (event, { plan, messages, modelConfig, cwd, itemLabel, projectName }) => {
+    if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
+
+    const wc        = event.sender;
+    const label     = itemLabel || 'job';
+    const proj      = projectName || '';
+    const startTime = Date.now();
+    const send = (ch, payload) => {
+      if (ch === 'promptQueue:done') {
+        _notifyTelegram(proj, label, 'done', payload.exitCode, Date.now() - startTime);
+      }
+      if (!wc.isDestroyed()) wc.send(ch, payload);
+    };
+
+    const trimmed = trimMessages(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }]);
+    _notifyTelegram(proj, label, 'start', null, null);
+
+    return _runDevflowAgent(send, trimmed, modelConfig, cwd, { approvedPlan: plan });
   });
 }
 
 // ----------------------------------------------------------------
 // Devflow Agent (Python subprocess)
+//
+// options:
+//   planOnly     {boolean} — pass --plan-only; emit promptQueue:plan on detection
+//   approvedPlan {string}  — JSON string; pass --approved-plan; emit step events
 // ----------------------------------------------------------------
-function _runDevflowAgent(send, messages, modelConfig, cwd) {
+function _runDevflowAgent(send, messages, modelConfig, cwd, options = {}) {
   const agentPath = path.join(__dirname, '../../../../agent/devflow_agent.py');
   const task      = messages.map(m => (typeof m === 'string' ? m : m.content || '')).join('\n');
 
   const spawnArgs = [
     agentPath,
-    '--project',  cwd || os.homedir(),
-    '--message',  task,
-    '--model',    modelConfig.model_name || 'qwen2.5-coder:7b',
-    '--base-url', modelConfig.base_url   || 'http://localhost:11434',
+    '--project',   cwd || os.homedir(),
+    '--message',   task,
+    '--model',     modelConfig.model_name || 'qwen2.5-coder:7b',
+    '--base-url',  modelConfig.base_url   || 'http://localhost:11434',
     '--max-turns', String(modelConfig.max_tokens || 5),
     '--verbose',
   ];
 
-  const env = { ...process.env };
+  if (options.planOnly) {
+    spawnArgs.push('--plan-only');
+  }
+  if (options.approvedPlan) {
+    spawnArgs.push('--approved-plan', options.approvedPlan);
+  }
 
   const proc = spawn('python', spawnArgs, {
     cwd: cwd || os.homedir(),
-    env,
+    env: { ...process.env },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
   _activeQueueProc = proc;
 
-  proc.stdout.on('data', d => send('promptQueue:data', { text: d.toString('utf8') }));
+  // ── Plan marker detection ────────────────────────────────────────────────
+  // When running in --plan-only mode the agent prints:
+  //   [PLAN_START]{json}[PLAN_END]
+  // We intercept those bytes, parse the JSON, and emit promptQueue:plan.
+  // Everything before [PLAN_START] is forwarded normally as promptQueue:data.
+  let planBuf   = '';
+  let inPlan    = false;
+
+  proc.stdout.on('data', d => {
+    let remaining = d.toString('utf8');
+
+    // ── Inside a plan block — keep accumulating ──────────────────────────
+    if (inPlan) {
+      const endIdx = remaining.indexOf('[PLAN_END]');
+      if (endIdx === -1) {
+        planBuf += remaining;
+        return;
+      }
+      // Found the closing marker
+      planBuf  += remaining.slice(0, endIdx);
+      remaining  = remaining.slice(endIdx + '[PLAN_END]'.length);
+      inPlan     = false;
+
+      try {
+        const plan = JSON.parse(planBuf.trim());
+        send('promptQueue:plan', { plan });
+      } catch (e) {
+        send('promptQueue:data', { text: `[Plan parse error: ${e.message}]\n` });
+      }
+      planBuf = '';
+      if (remaining) send('promptQueue:data', { text: remaining });
+      return;
+    }
+
+    // ── Not in plan block — scan for [PLAN_START] ───────────────────────
+    const startIdx = remaining.indexOf('[PLAN_START]');
+    if (startIdx !== -1) {
+      const pre = remaining.slice(0, startIdx);
+      if (pre) send('promptQueue:data', { text: pre });
+
+      const afterStart = remaining.slice(startIdx + '[PLAN_START]'.length);
+      const endIdx     = afterStart.indexOf('[PLAN_END]');
+
+      if (endIdx !== -1) {
+        // Both markers on the same chunk
+        planBuf = afterStart.slice(0, endIdx);
+        remaining = afterStart.slice(endIdx + '[PLAN_END]'.length);
+        try {
+          const plan = JSON.parse(planBuf.trim());
+          send('promptQueue:plan', { plan });
+        } catch (e) {
+          send('promptQueue:data', { text: `[Plan parse error: ${e.message}]\n` });
+        }
+        planBuf = '';
+        if (remaining) send('promptQueue:data', { text: remaining });
+      } else {
+        // Only opening marker seen — accumulate until closing arrives
+        planBuf = afterStart;
+        inPlan  = true;
+      }
+      return;
+    }
+
+    // ── Step progress markers ────────────────────────────────────────────
+    // [STEP:N/total] Title  →  emit promptQueue:step for UI progress bar
+    // [STEP_DONE:N/total]   →  emit promptQueue:stepDone
+    // [STEP_FAILED:N/total] →  emit promptQueue:stepFailed
+    // These are also forwarded as promptQueue:data for the live output bubble.
+    const stepMatch = remaining.match(/\[STEP:(\d+)\/(\d+)\]\s*(.*)/);
+    if (stepMatch) {
+      send('promptQueue:step', {
+        stepNum:  parseInt(stepMatch[1]),
+        total:    parseInt(stepMatch[2]),
+        title:    stepMatch[3].trim(),
+        state:    'running',
+      });
+    }
+    const doneMatch = remaining.match(/\[STEP_DONE:(\d+)\/(\d+)\]/);
+    if (doneMatch) {
+      send('promptQueue:step', {
+        stepNum: parseInt(doneMatch[1]),
+        total:   parseInt(doneMatch[2]),
+        state:   'done',
+      });
+    }
+    const failMatch = remaining.match(/\[STEP_FAILED:(\d+)\/(\d+)\]/);
+    if (failMatch) {
+      send('promptQueue:step', {
+        stepNum: parseInt(failMatch[1]),
+        total:   parseInt(failMatch[2]),
+        state:   'failed',
+      });
+    }
+
+    send('promptQueue:data', { text: remaining });
+  });
+
   proc.stderr.on('data', d => send('promptQueue:data', { text: d.toString('utf8') }));
+
   proc.on('close', code => {
     _activeQueueProc = null;
     send('promptQueue:done', { exitCode: code ?? 0 });

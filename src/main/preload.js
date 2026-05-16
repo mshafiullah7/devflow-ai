@@ -104,11 +104,18 @@ contextBridge.exposeInMainWorld('db', {
     pendingCount:    (pid)  => invoke('db:prompt_queue:pending_count', pid),
     run:             (data) => invoke('promptQueue:run', data),
     kill:            ()     => invoke('promptQueue:kill'),
-    onData:          (cb)   => ipcRenderer.on('promptQueue:data', (_e, p) => cb(p)),
-    onDone:          (cb)   => ipcRenderer.on('promptQueue:done', (_e, p) => cb(p)),
+    // Phase 2 — execute an approved plan
+    approvePlan:     (data) => invoke('promptQueue:approvePlan', data),
+    onData:          (cb)   => ipcRenderer.on('promptQueue:data',     (_e, p) => cb(p)),
+    onDone:          (cb)   => ipcRenderer.on('promptQueue:done',     (_e, p) => cb(p)),
+    // Planning events
+    onPlan:          (cb)   => ipcRenderer.on('promptQueue:plan',     (_e, p) => cb(p)),
+    onStep:          (cb)   => ipcRenderer.on('promptQueue:step',     (_e, p) => cb(p)),
     removeListeners: ()     => {
       ipcRenderer.removeAllListeners('promptQueue:data');
       ipcRenderer.removeAllListeners('promptQueue:done');
+      ipcRenderer.removeAllListeners('promptQueue:plan');
+      ipcRenderer.removeAllListeners('promptQueue:step');
     },
   },
   testRunner: {
