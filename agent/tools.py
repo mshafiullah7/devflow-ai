@@ -3,7 +3,12 @@
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
+
+# Timeout (seconds) for run_command — first attempt, then retry
+_CMD_TIMEOUT_1 = 30
+_CMD_TIMEOUT_2 = 60   # silent retry if first attempt times out
 
 # ---------------------------------------------------------------------------
 # Tool schemas — sent to Ollama so the model knows what tools exist
@@ -219,7 +224,13 @@ def _write_file(args: dict, root: Path) -> str:
     content = args.get('content', '')
     path    = _safe_path(root, rel)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding='utf-8')
+    try:
+        path.write_text(content, encoding='utf-8')
+    except PermissionError:
+        # File may be briefly locked (e.g. by an editor or antivirus).
+        # Wait half a second and try once more before reporting failure.
+        time.sleep(0.5)
+        path.write_text(content, encoding='utf-8')   # raises if still locked
     return f'Written {len(content)} bytes to {rel}'
 
 
@@ -310,30 +321,53 @@ def _run_command(args: dict, root: Path) -> str:
     command = args.get('command', '')
     if not command.strip():
         return 'Error: empty command'
-    try:
-        proc = subprocess.Popen(
+
+    def _spawn():
+        return subprocess.Popen(
             command,
             shell=True,
             cwd=str(root),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,  # prevent hanging on interactive input
+            stdin=subprocess.DEVNULL,   # prevent hanging on interactive input
             text=True,
             encoding='utf-8',
             errors='replace',
         )
+
+    def _collect(proc, timeout):
+        """Communicate with proc; return (output_str, timed_out)."""
         try:
-            stdout, stderr = proc.communicate(timeout=30)
+            stdout, stderr = proc.communicate(timeout=timeout)
+            output = ((stdout or '') + (stderr or '')).strip()
+            if not output:
+                output = f'(exit code {proc.returncode}, no output)'
+            elif len(output) > 3000:
+                output = output[:3000] + '\n... (truncated)'
+            return output, False
         except subprocess.TimeoutExpired:
             proc.kill()
-            return 'Error: command timed out after 30 seconds (program may require interactive input — use dotnet build to verify instead of dotnet run)'
-        output = (stdout or '') + (stderr or '')
-        output = output.strip()
-        if not output:
-            output = f'(exit code {proc.returncode}, no output)'
-        elif len(output) > 3000:
-            output = output[:3000] + '\n... (truncated)'
+            proc.communicate()   # drain pipes to avoid zombie
+            return '', True
+
+    try:
+        # ── First attempt: 30-second timeout ────────────────────────────────
+        proc = _spawn()
+        output, timed_out = _collect(proc, _CMD_TIMEOUT_1)
+
+        if timed_out:
+            # ── Silent retry: 60-second timeout ─────────────────────────────
+            proc2 = _spawn()
+            output, timed_out2 = _collect(proc2, _CMD_TIMEOUT_2)
+            if timed_out2:
+                return (
+                    f'Error: command timed out after {_CMD_TIMEOUT_2} seconds. '
+                    'If this is a run command use the build command instead '
+                    '(e.g. dotnet build, npm run build) to verify correctness.'
+                )
+
         return output
+
     except Exception as e:
         return f'Error running command: {e}'
 

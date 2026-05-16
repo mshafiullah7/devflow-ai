@@ -304,6 +304,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--plan-model', default=None, dest='plan_model',
                    help='Separate model to use for plan generation (defaults to --model). '
                         'Use a larger model here for better plans, e.g. qwen2.5-coder:32b')
+    p.add_argument('--max-tool-errors', default=3, type=int, dest='max_tool_errors',
+                   help='Max consecutive tool errors before aborting the loop (default: 3)')
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -337,6 +339,67 @@ def _build_tool_result_message(tool_call, result: str) -> dict:
         'role':    'tool',
         'content': result,
     }
+
+
+def _is_tool_error(result: str) -> bool:
+    """Return True if the tool result string signals a failure."""
+    low = result.lstrip()
+    return (
+        low.startswith('Error:')
+        or low.startswith('ERROR:')
+        or low.startswith('Error executing')
+    )
+
+
+def _format_tool_error_feedback(tool_name: str, tool_args: dict, error: str) -> str:
+    """
+    Convert a raw tool error string into a structured correction hint
+    so the model understands exactly what went wrong and how to fix it.
+    """
+    low = error.lower()
+
+    if 'not found' in low or 'no such file' in low or 'does not exist' in low:
+        path = tool_args.get('path', '?')
+        return (
+            f'[TOOL ERROR] {tool_name} failed — "{path}" does not exist.\n'
+            f'Call list_directory or get_file_tree first to confirm the correct path, '
+            f'then retry with the exact path shown in the output.'
+        )
+
+    if 'timed out' in low:
+        return (
+            f'[TOOL ERROR] {tool_name} timed out (tried 30 s then 60 s).\n'
+            f'Do NOT use run commands (dotnet run, npm start). '
+            f'Use a build/compile command instead (dotnet build, npm run build, python -m py_compile).'
+        )
+
+    if 'permission' in low or 'access is denied' in low or 'permissionerror' in low:
+        path = tool_args.get('path', '?')
+        return (
+            f'[TOOL ERROR] {tool_name} — permission denied on "{path}".\n'
+            f'Do not write to system directories. Use a path inside the project root only.'
+        )
+
+    if 'is not a file' in low or 'is not a directory' in low:
+        path = tool_args.get('path', '?')
+        return (
+            f'[TOOL ERROR] {tool_name} — "{path}" is the wrong type '
+            f'(file vs directory mismatch).\n'
+            f'Call get_file_tree to inspect the structure, then use the correct path.'
+        )
+
+    if 'unknown tool' in low:
+        return (
+            f'[TOOL ERROR] "{tool_name}" is not a valid tool.\n'
+            f'Available tools: read_file, write_file, list_directory, search_code, '
+            f'get_file_tree, run_command, delete_file, create_directory.'
+        )
+
+    # Generic fallback — include the full error so the model can reason about it
+    return (
+        f'[TOOL ERROR] {tool_name} failed: {error}\n'
+        f'Read the error carefully and try a different approach.'
+    )
 
 # ---------------------------------------------------------------------------
 # Build verification helpers
@@ -652,7 +715,8 @@ def run(args: argparse.Namespace) -> int:
 
     # Step 3 — Agentic loop
     client = ollama.Client(host=args.base_url)
-    turns  = 0
+    turns             = 0
+    consecutive_errors = 0   # reset to 0 on any successful tool call
 
     _log(f'► Starting agent loop (model: {args.model}, max turns: {args.max_turns})', args.verbose)
     _log('', args.verbose)
@@ -717,8 +781,8 @@ def run(args: argparse.Namespace) -> int:
                 _log('\n► Cancelled by user. Exiting cleanly.', args.verbose)
                 return 130
 
-            fn        = tc.function.name
-            fn_args   = tc.function.arguments
+            fn      = tc.function.name
+            fn_args = tc.function.arguments
             if isinstance(fn_args, str):
                 try:
                     fn_args = json.loads(fn_args)
@@ -735,7 +799,41 @@ def run(args: argparse.Namespace) -> int:
                 preview += '...'
             _log(f'  → {preview}', args.verbose, is_verbose=True)
 
-            messages.append(_build_tool_result_message(tc, result))
+            # ── Tool error detection & structured feedback ───────────────────
+            if _is_tool_error(result):
+                consecutive_errors += 1
+                _log(
+                    f'  ✗ tool error ({consecutive_errors}/{args.max_tool_errors})',
+                    args.verbose,
+                )
+
+                if consecutive_errors >= args.max_tool_errors:
+                    # Too many failures in a row — tell the model to stop and
+                    # summarise rather than keep spiralling into bad tool calls.
+                    _log(
+                        f'\n⚠  {consecutive_errors} consecutive tool errors — '
+                        'injecting abort signal.',
+                        args.verbose,
+                    )
+                    messages.append({
+                        'role':    'user',
+                        'content': (
+                            f'[ABORT] {consecutive_errors} tool calls failed in a row. '
+                            f'Last error: {result}\n'
+                            'Stop calling tools. Summarise what you have completed so far '
+                            'and what still needs to be done manually.'
+                        ),
+                    })
+                    break   # exit tool loop → next while turn → model summarises
+
+                # Inject structured hint so the model corrects its approach
+                feedback = _format_tool_error_feedback(fn, fn_args, result)
+                messages.append(_build_tool_result_message(tc, feedback))
+
+            else:
+                # Successful tool call — reset the error streak
+                consecutive_errors = 0
+                messages.append(_build_tool_result_message(tc, result))
 
     else:
         _log(f'\n⚠  Reached max turns ({args.max_turns}). Proceeding to build verification.', args.verbose)
@@ -804,6 +902,10 @@ def run(args: argparse.Namespace) -> int:
                 break
 
             for tc in tool_calls:
+                if _cancel_requested.is_set():
+                    _log('\n► Cancelled by user. Exiting cleanly.', args.verbose)
+                    return 130
+
                 fn      = tc.function.name
                 fn_args = tc.function.arguments
                 if isinstance(fn_args, str):
@@ -817,7 +919,25 @@ def run(args: argparse.Namespace) -> int:
                 if len(result) > 120:
                     preview += '...'
                 _log(f'  → {preview}', args.verbose, is_verbose=True)
-                messages.append(_build_tool_result_message(tc, result))
+
+                if _is_tool_error(result):
+                    consecutive_errors += 1
+                    _log(f'  ✗ tool error ({consecutive_errors}/{args.max_tool_errors})', args.verbose)
+                    if consecutive_errors >= args.max_tool_errors:
+                        _log(f'\n⚠  {consecutive_errors} consecutive tool errors — injecting abort signal.', args.verbose)
+                        messages.append({
+                            'role':    'user',
+                            'content': (
+                                f'[ABORT] {consecutive_errors} tool calls failed in a row. '
+                                f'Last error: {result}\n'
+                                'Stop calling tools and summarise what remains to be fixed manually.'
+                            ),
+                        })
+                        break
+                    messages.append(_build_tool_result_message(tc, _format_tool_error_feedback(fn, fn_args, result)))
+                else:
+                    consecutive_errors = 0
+                    messages.append(_build_tool_result_message(tc, result))
 
     _log(f'\n✗ Build still failing after {args.max_retries} fix attempt(s).', args.verbose)
     return 1
