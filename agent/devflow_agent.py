@@ -346,14 +346,25 @@ def _build_tool_result_message(tool_call, result: str) -> dict:
 
 
 def _print_run_summary(turns: int, tool_calls: int, prompt_tok: int, eval_tok: int, elapsed: float, files: set = None):
-    """Print a machine-readable run summary that Electron can parse."""
-    files_json = json.dumps(sorted(files)) if files else '[]'
-    print(
-        f'[DONE] turns={turns} tool_calls={tool_calls} '
-        f'tokens_in={prompt_tok} tokens_out={eval_tok} '
-        f'elapsed={elapsed:.1f}s files={files_json}',
-        flush=True,
-    )
+    """Print run summary — human-readable in a terminal, machine-readable when piped (Electron)."""
+    files_list = sorted(f for f in (files or []) if f)
+    if sys.stdout.isatty():
+        print(f'\n── Run summary ───────────────────────────', flush=True)
+        print(f'  Turns: {turns}  |  Tool calls: {tool_calls}', flush=True)
+        print(f'  Tokens: {prompt_tok} in / {eval_tok} out  |  Elapsed: {elapsed:.1f}s', flush=True)
+        if files_list:
+            print('  Files written:', flush=True)
+            for f in files_list:
+                print(f'    • {f}', flush=True)
+        print(f'──────────────────────────────────────────', flush=True)
+    else:
+        files_json = json.dumps(files_list)
+        print(
+            f'[DONE] turns={turns} tool_calls={tool_calls} '
+            f'tokens_in={prompt_tok} tokens_out={eval_tok} '
+            f'elapsed={elapsed:.1f}s files={files_json}',
+            flush=True,
+        )
 
 
 def _is_tool_error(result: str) -> bool:
