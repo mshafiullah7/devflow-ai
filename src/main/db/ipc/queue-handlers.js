@@ -258,6 +258,24 @@ function _runDevflowAgent(send, messages, modelConfig, cwd, options = {}) {
       });
     }
 
+    // ── [DONE] run summary ───────────────────────────────────────────────
+    // Format: [DONE] turns=N tool_calls=N tokens_in=N tokens_out=N elapsed=Xs files=[...]
+    if (remaining.includes('[DONE]')) {
+      const m = remaining.match(/\[DONE\] turns=(\d+) tool_calls=(\d+) tokens_in=(\d+) tokens_out=(\d+) elapsed=([\d.]+)s files=(\[.*?\])/);
+      if (m) {
+        let files = [];
+        try { files = JSON.parse(m[6]); } catch (_) {}
+        send('promptQueue:runSummary', {
+          turns:      parseInt(m[1]),
+          toolCalls:  parseInt(m[2]),
+          tokensIn:   parseInt(m[3]),
+          tokensOut:  parseInt(m[4]),
+          elapsed:    parseFloat(m[5]),
+          files,
+        });
+      }
+    }
+
     send('promptQueue:data', { text: remaining });
   });
 

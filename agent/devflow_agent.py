@@ -345,12 +345,13 @@ def _build_tool_result_message(tool_call, result: str) -> dict:
     }
 
 
-def _print_run_summary(turns: int, tool_calls: int, prompt_tok: int, eval_tok: int, elapsed: float):
+def _print_run_summary(turns: int, tool_calls: int, prompt_tok: int, eval_tok: int, elapsed: float, files: set = None):
     """Print a machine-readable run summary that Electron can parse."""
+    files_json = json.dumps(sorted(files)) if files else '[]'
     print(
         f'[DONE] turns={turns} tool_calls={tool_calls} '
         f'tokens_in={prompt_tok} tokens_out={eval_tok} '
-        f'elapsed={elapsed:.1f}s',
+        f'elapsed={elapsed:.1f}s files={files_json}',
         flush=True,
     )
 
@@ -735,6 +736,7 @@ def run(args: argparse.Namespace) -> int:
     total_prompt_tok   = 0
     total_eval_tok     = 0
     total_tool_calls   = 0
+    written_files      = set()
     loop_start         = time.time()
 
     _log(f'► Starting agent loop (model: {args.model}, max turns: {args.max_turns})', args.verbose)
@@ -879,6 +881,8 @@ def run(args: argparse.Namespace) -> int:
                     _log(f'  ⚠ empty file detected: {path}', args.verbose)
                     messages.append(_build_tool_result_message(tc, warning))
                 else:
+                    if fn == 'write_file':
+                        written_files.add(fn_args.get('path', ''))
                     messages.append(_build_tool_result_message(tc, result))
 
     else:
@@ -887,7 +891,7 @@ def run(args: argparse.Namespace) -> int:
     # Step 4 — Post-loop build verification
     build_cmd = _detect_build_command(args.project)
     if not build_cmd:
-        _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start)
+        _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start, written_files)
         return 0  # no build system detected — nothing to verify
 
     for retry in range(1, args.max_retries + 1):
@@ -897,7 +901,7 @@ def run(args: argparse.Namespace) -> int:
 
         if not _has_build_errors(build_output):
             _log('✓ Build passed.', args.verbose)
-            _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start)
+            _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start, written_files)
             return 0
 
         _log(f'⚠  Build errors detected — asking model to fix (retry {retry}/{args.max_retries})...', args.verbose)
@@ -997,10 +1001,12 @@ def run(args: argparse.Namespace) -> int:
                     messages.append(_build_tool_result_message(tc, _format_tool_error_feedback(fn, fn_args, result, args.project)))
                 else:
                     consecutive_errors = 0
+                    if fn == 'write_file':
+                        written_files.add(fn_args.get('path', ''))
                     messages.append(_build_tool_result_message(tc, result))
 
     _log(f'\n✗ Build still failing after {args.max_retries} fix attempt(s).', args.verbose)
-    _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start)
+    _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start, written_files)
     return 1
 
 # ---------------------------------------------------------------------------
