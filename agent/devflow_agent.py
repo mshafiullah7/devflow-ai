@@ -222,8 +222,8 @@ Output ONLY a valid JSON object — no markdown fences, no explanation text:
     {{
       "id": 1,
       "title": "<short action title, 5-8 words>",
-      "description": "<what will be done in this step and why>",
-      "files": ["<relative paths likely to be read or modified>"],
+      "description": "<detailed description: exact file to create, class/function names, method signatures, what each function does, how files connect to each other>",
+      "files": ["<relative path from project root only, e.g. src/main.py>"],
       "tools": ["read_file", "write_file"]
     }}
   ],
@@ -237,7 +237,8 @@ Output ONLY a valid JSON object — no markdown fences, no explanation text:
 - Example: "add_task, list_tasks, mark_done, delete_task" → ONE step "Write task operations module", not 4 steps.
 - Each step must produce a distinct, testable artifact (a new file, a passing test, a working command).
 - Steps must be non-overlapping — no two steps should write to the same file.
-- File paths must be realistic given the project structure shown above.
+- "files" MUST contain relative paths only (e.g. "task_manager.py", "src/cli.py"). NEVER use absolute paths.
+- "description" MUST be specific: include exact class names, function signatures (e.g. def add_task(description: str) -> None), and how this file is used by other files.
 - Tools must be chosen from: read_file, write_file, list_directory, search_code,
   get_file_tree, run_command, delete_file, create_directory
 """
