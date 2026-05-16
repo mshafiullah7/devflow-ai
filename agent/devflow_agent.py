@@ -365,7 +365,7 @@ def _is_tool_error(result: str) -> bool:
     )
 
 
-def _format_tool_error_feedback(tool_name: str, tool_args: dict, error: str) -> str:
+def _format_tool_error_feedback(tool_name: str, tool_args: dict, error: str, project: str = '') -> str:
     """
     Convert a raw tool error string into a structured correction hint
     so the model understands exactly what went wrong and how to fix it.
@@ -374,10 +374,11 @@ def _format_tool_error_feedback(tool_name: str, tool_args: dict, error: str) -> 
 
     if 'not found' in low or 'no such file' in low or 'does not exist' in low:
         path = tool_args.get('path', '?')
+        tree = execute_tool('get_file_tree', {}, project) if project else ''
+        tree_section = f'\nProject structure:\n{tree}' if tree and not tree.startswith('Error') else ''
         return (
-            f'[TOOL ERROR] {tool_name} failed — "{path}" does not exist.\n'
-            f'Call list_directory or get_file_tree first to confirm the correct path, '
-            f'then retry with the exact path shown in the output.'
+            f'[TOOL ERROR] {tool_name} failed — "{path}" does not exist.{tree_section}\n'
+            f'Retry with the exact path shown above.'
         )
 
     if 'timed out' in low:
@@ -857,7 +858,7 @@ def run(args: argparse.Namespace) -> int:
                     break   # exit tool loop → next while turn → model summarises
 
                 # Inject structured hint so the model corrects its approach
-                feedback = _format_tool_error_feedback(fn, fn_args, result)
+                feedback = _format_tool_error_feedback(fn, fn_args, result, args.project)
                 messages.append(_build_tool_result_message(tc, feedback))
 
             else:
@@ -993,7 +994,7 @@ def run(args: argparse.Namespace) -> int:
                             ),
                         })
                         break
-                    messages.append(_build_tool_result_message(tc, _format_tool_error_feedback(fn, fn_args, result)))
+                    messages.append(_build_tool_result_message(tc, _format_tool_error_feedback(fn, fn_args, result, args.project)))
                 else:
                     consecutive_errors = 0
                     messages.append(_build_tool_result_message(tc, result))
