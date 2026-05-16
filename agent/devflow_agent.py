@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import threading
+import time
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -342,6 +343,16 @@ def _build_tool_result_message(tool_call, result: str) -> dict:
         'role':    'tool',
         'content': result,
     }
+
+
+def _print_run_summary(turns: int, tool_calls: int, prompt_tok: int, eval_tok: int, elapsed: float):
+    """Print a machine-readable run summary that Electron can parse."""
+    print(
+        f'[DONE] turns={turns} tool_calls={tool_calls} '
+        f'tokens_in={prompt_tok} tokens_out={eval_tok} '
+        f'elapsed={elapsed:.1f}s',
+        flush=True,
+    )
 
 
 def _is_tool_error(result: str) -> bool:
@@ -718,8 +729,12 @@ def run(args: argparse.Namespace) -> int:
 
     # Step 3 — Agentic loop
     client = ollama.Client(host=args.base_url)
-    turns             = 0
+    turns              = 0
     consecutive_errors = 0   # reset to 0 on any successful tool call
+    total_prompt_tok   = 0
+    total_eval_tok     = 0
+    total_tool_calls   = 0
+    loop_start         = time.time()
 
     _log(f'► Starting agent loop (model: {args.model}, max turns: {args.max_turns})', args.verbose)
     _log('', args.verbose)
@@ -734,6 +749,7 @@ def run(args: argparse.Namespace) -> int:
         messages = _trim_messages(messages)
         _log(f'[turn {turns}]', args.verbose, is_verbose=True)
 
+        turn_start = time.time()
         try:
             response = client.chat(
                 model=args.model,
@@ -750,6 +766,16 @@ def run(args: argparse.Namespace) -> int:
             _log(f'Failed to connect to Ollama at {args.base_url}: {e}', args.verbose)
             _log('Make sure Ollama is running: ollama serve', args.verbose)
             return 1
+
+        turn_elapsed     = time.time() - turn_start
+        p_tok            = getattr(response, 'prompt_eval_count', 0) or 0
+        e_tok            = getattr(response, 'eval_count', 0) or 0
+        total_prompt_tok += p_tok
+        total_eval_tok   += e_tok
+        _log(
+            f'  [{turn_elapsed:.1f}s | in:{p_tok} out:{e_tok} tok]',
+            args.verbose, is_verbose=True,
+        )
 
         msg = response.message
 
@@ -795,6 +821,7 @@ def run(args: argparse.Namespace) -> int:
             _log(_fmt_tool_call(fn, fn_args), args.verbose)
 
             result = execute_tool(fn, fn_args, args.project)
+            total_tool_calls += 1
 
             # Show a short preview of the result
             preview = result[:120].replace('\n', ' ')
@@ -859,6 +886,7 @@ def run(args: argparse.Namespace) -> int:
     # Step 4 — Post-loop build verification
     build_cmd = _detect_build_command(args.project)
     if not build_cmd:
+        _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start)
         return 0  # no build system detected — nothing to verify
 
     for retry in range(1, args.max_retries + 1):
@@ -868,6 +896,7 @@ def run(args: argparse.Namespace) -> int:
 
         if not _has_build_errors(build_output):
             _log('✓ Build passed.', args.verbose)
+            _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start)
             return 0
 
         _log(f'⚠  Build errors detected — asking model to fix (retry {retry}/{args.max_retries})...', args.verbose)
@@ -892,6 +921,7 @@ def run(args: argparse.Namespace) -> int:
             messages = _trim_messages(messages)
             _log(f'[fix turn {turns}]', args.verbose, is_verbose=True)
 
+            fix_turn_start = time.time()
             try:
                 response = client.chat(model=args.model, messages=messages, tools=TOOLS)
             except KeyboardInterrupt:
@@ -900,6 +930,16 @@ def run(args: argparse.Namespace) -> int:
             except Exception as e:
                 _log(f'Ollama error during fix: {e}', args.verbose)
                 return 1
+
+            fix_elapsed      = time.time() - fix_turn_start
+            p_tok            = getattr(response, 'prompt_eval_count', 0) or 0
+            e_tok            = getattr(response, 'eval_count', 0) or 0
+            total_prompt_tok += p_tok
+            total_eval_tok   += e_tok
+            _log(
+                f'  [{fix_elapsed:.1f}s | in:{p_tok} out:{e_tok} tok]',
+                args.verbose, is_verbose=True,
+            )
 
             msg        = response.message
             tool_calls = list(msg.tool_calls or [])
@@ -933,6 +973,7 @@ def run(args: argparse.Namespace) -> int:
                         fn_args = {}
                 _log(_fmt_tool_call(fn, fn_args), args.verbose)
                 result  = execute_tool(fn, fn_args, args.project)
+                total_tool_calls += 1
                 preview = result[:120].replace('\n', ' ')
                 if len(result) > 120:
                     preview += '...'
@@ -958,6 +999,7 @@ def run(args: argparse.Namespace) -> int:
                     messages.append(_build_tool_result_message(tc, result))
 
     _log(f'\n✗ Build still failing after {args.max_retries} fix attempt(s).', args.verbose)
+    _print_run_summary(turns, total_tool_calls, total_prompt_tok, total_eval_tok, time.time() - loop_start)
     return 1
 
 # ---------------------------------------------------------------------------
