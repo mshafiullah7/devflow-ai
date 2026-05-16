@@ -277,6 +277,8 @@ Project root: {project_root}
 10. When running build or run commands, ALWAYS pass the full path to the project file (e.g. dotnet build src/MyApp.csproj), never a bare command with no target.
 11. Once the task succeeds (e.g. the program builds without errors), stop immediately — do not re-run or re-verify commands that already passed.
 12. NEVER run interactive programs (e.g. dotnet run on a program that reads from stdin). Use the build command only to verify correctness (e.g. dotnet build src/MyApp.csproj).
+13. NEVER write a file with empty content. Every write_file call MUST contain the complete, working implementation. Never create placeholder files to fill in later — write the full code immediately in the same call.
+14. NEVER split a file's implementation across multiple turns. Write the entire file content in one single write_file call.
 """
 
 # ---------------------------------------------------------------------------
@@ -833,7 +835,22 @@ def run(args: argparse.Namespace) -> int:
             else:
                 # Successful tool call — reset the error streak
                 consecutive_errors = 0
-                messages.append(_build_tool_result_message(tc, result))
+
+                # ── Empty-file guard ─────────────────────────────────────────
+                # If write_file succeeded but wrote 0 bytes the model created a
+                # placeholder. Reinject a warning so it fills the file immediately
+                # instead of moving on and forgetting.
+                if fn == 'write_file' and result.startswith('Written 0 bytes'):
+                    path = fn_args.get('path', '?')
+                    warning = (
+                        f'[EMPTY FILE WARNING] {path} was written with no content.\n'
+                        f'You MUST call write_file again for "{path}" with the complete '
+                        f'implementation. Never leave a file empty.'
+                    )
+                    _log(f'  ⚠ empty file detected: {path}', args.verbose)
+                    messages.append(_build_tool_result_message(tc, warning))
+                else:
+                    messages.append(_build_tool_result_message(tc, result))
 
     else:
         _log(f'\n⚠  Reached max turns ({args.max_turns}). Proceeding to build verification.', args.verbose)
