@@ -8,10 +8,11 @@ AI-assisted Software Development Lifecycle (SDLC) management desktop app. Manage
 
 1. [What It Does](#what-it-does)
 2. [Features](#features)
-3. [Markdown Reference](#markdown-reference)
-4. [Developer Setup](#developer-setup)
-5. [Building Executables](#building-executables)
-6. [Tech Stack & Architecture](#tech-stack--architecture)
+3. [AI Configuration](#ai-configuration)
+4. [Markdown Reference](#markdown-reference)
+5. [Developer Setup](#developer-setup)
+6. [Building Executables](#building-executables)
+7. [Tech Stack & Architecture](#tech-stack--architecture)
 
 ---
 
@@ -131,6 +132,142 @@ Attachments are stored in SQLite and linked inside Markdown content.
 - Built-in terminal panel for running shell commands.
 - Supports long-running processes.
 - Kill Active / `Ctrl+C` stops the running process.
+
+---
+
+## AI Configuration
+
+AI models are configured in **Settings → AI Models**. Each model config has a **type** that controls how the app calls the model.
+
+---
+
+### Model Types
+
+| Type | How it works | Used by |
+|------|-------------|---------|
+| `ollama` | Direct HTTP call to a local Ollama server | Documents, Chat, User Stories, Prompt Queue |
+| `ollama` + DevFlow Agent | Spawns `devflow_agent.py` subprocess | Prompt Queue only |
+| `anthropic` | Anthropic SDK call (Claude) | Prompt Queue, Chat |
+| `api` | Generic HTTP POST to any OpenAI-compatible endpoint | Prompt Queue |
+| `cli` | Runs a local CLI binary (e.g. `claude`, `gemini`) | Prompt Queue, Mockups, Extract Stories |
+
+---
+
+### Configuring an Ollama Model
+
+1. Open **Settings → AI Models → Add model**
+2. Select type **Local (Ollama)**
+3. Fill in the fields:
+
+| Field | Maps to agent flag | Default | Notes |
+|-------|-------------------|---------|-------|
+| **Base URL** | `--base-url` | `http://localhost:11434` | Your Ollama server URL. Use the detect button to auto-populate the model list. |
+| **Model** | `--model` | `qwen2.5-coder:7b` | Pick from the detected dropdown or type manually. Larger models (32b+) give better results for complex tasks. |
+| **Max Tokens** | `--max-turns` | `15` | Controls how many agentic loop iterations the agent is allowed. Higher = more autonomous but slower. |
+| **Use Devflow Agent loop** | enables agent mode | off | Checkbox. When ticked, the Prompt Queue runs `devflow_agent.py` instead of a direct Ollama call. |
+
+4. Optionally tick **Set as default model** so it pre-selects in all pages.
+5. Click **Save**.
+
+---
+
+### DevFlow Agent Mode
+
+When **Use Devflow Agent loop** is enabled, the Prompt Queue runs in two phases:
+
+#### Phase 1 — Plan
+
+The agent (`devflow_agent.py`) is called with `--plan-only`. It:
+- Reads the repo map and RAG context for the project
+- Generates a structured JSON plan (2–5 steps) using the configured model
+- Streams the plan back to the Electron UI for review
+
+The plan is displayed in the Prompt Queue panel. Each step shows a title and description of what will be changed and which files are involved.
+
+#### Phase 2 — Execute (after approval)
+
+Once you approve the plan, the agent is called with `--approved-plan <json>`. It:
+- Executes each step in sequence using the agentic tool loop
+- Streams step progress markers (`[STEP:1/3]`, `[STEP_DONE:1/3]`, `[STEP_FAILED:1/3]`) to the UI
+- Runs build verification after all steps complete and auto-retries on build errors
+
+#### Run Summary
+
+At the end of every run the agent prints a summary. In the Prompt Queue output panel you will see the raw line; in a terminal (CLI use) it is formatted:
+
+```
+── Run summary ───────────────────────────
+  Turns: 8  |  Tool calls: 22
+  Tokens: 14820 in / 890 out  |  Elapsed: 47.3s
+  Files written:
+    • src/components/App.tsx
+    • src/utils/db.ts
+──────────────────────────────────────────
+```
+
+The Electron app also fires a `promptQueue:runSummary` event with structured data so future UI panels can display metrics.
+
+---
+
+### Agent Flag Reference
+
+These are all flags `devflow_agent.py` accepts. Most are set via the model config UI; advanced flags are CLI-only.
+
+| Flag | UI field | Default | Description |
+|------|----------|---------|-------------|
+| `--model` | Model | `qwen2.5-coder:32b` | Ollama model for task execution |
+| `--base-url` | Base URL | `http://localhost:11434` | Ollama server endpoint |
+| `--max-turns` | Max Tokens | `15` | Max agentic loop iterations per step |
+| `--max-retries` | — | `2` | Max build-fix attempts after the loop ends |
+| `--max-tool-errors` | — | `3` | Consecutive tool failures before the agent aborts |
+| `--plan-only` | auto | — | Generate plan and exit; set automatically by Electron in Phase 1 |
+| `--approved-plan` | auto | — | JSON plan string; set automatically by Electron in Phase 2 |
+| `--plan-model` | — | same as `--model` | Use a separate (larger) model for plan generation only |
+| `--verbose` | auto | — | Always passed by Electron; enables per-turn timing and token logs |
+
+**CLI usage example:**
+
+```bash
+# Run without planning (direct agentic loop)
+python agent/devflow_agent.py \
+  --project /path/to/project \
+  --message "Add input validation to the login form" \
+  --model qwen2.5-coder:32b \
+  --max-turns 20 \
+  --verbose
+
+# Generate a plan only (inspect before running)
+python agent/devflow_agent.py \
+  --project /path/to/project \
+  --message "Refactor auth module to use JWT" \
+  --model qwen2.5-coder:32b \
+  --plan-only
+
+# Use a larger model for planning, smaller for execution
+python agent/devflow_agent.py \
+  --project /path/to/project \
+  --message "Add dark mode toggle" \
+  --model qwen2.5-coder:7b \
+  --plan-model qwen2.5-coder:32b
+```
+
+---
+
+### Agent Prerequisites
+
+The DevFlow Agent requires Python dependencies. Install once before first use:
+
+```bash
+cd agent
+pip install -r requirements.txt
+```
+
+Ollama must be running locally:
+
+```bash
+ollama serve
+ollama pull qwen2.5-coder:32b   # or whichever model you configured
+```
 
 ---
 
