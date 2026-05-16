@@ -173,7 +173,7 @@ def _parse_text_tool_calls(content: str) -> list:
 
 PLANNING_SYSTEM_PROMPT = """\
 You are an expert software planning assistant. Analyze the coding task and \
-produce a concrete, step-by-step execution plan.
+produce a minimal, concrete, step-by-step execution plan.
 
 Project root: {project_root}
 
@@ -198,7 +198,11 @@ Output ONLY a valid JSON object — no markdown fences, no explanation text:
 
 ## Rules
 - Output ONLY the raw JSON object. No markdown, no commentary.
-- Use 3 to 7 steps. Each step must have a single, focused goal.
+- Use the MINIMUM number of steps needed — 2 to 5 steps maximum.
+- NEVER create one step per function/method. Group related code into one step.
+- Example: "add_task, list_tasks, mark_done, delete_task" → ONE step "Write task operations module", not 4 steps.
+- Each step must produce a distinct, testable artifact (a new file, a passing test, a working command).
+- Steps must be non-overlapping — no two steps should write to the same file.
 - File paths must be realistic given the project structure shown above.
 - Tools must be chosen from: read_file, write_file, list_directory, search_code,
   get_file_tree, run_command, delete_file, create_directory
@@ -263,6 +267,9 @@ def parse_args() -> argparse.Namespace:
                    help='Generate an execution plan and print it as [PLAN_START]...[PLAN_END], then exit')
     p.add_argument('--approved-plan', default=None, dest='approved_plan',
                    help='JSON string of an approved plan — execute it step-by-step')
+    p.add_argument('--plan-model', default=None, dest='plan_model',
+                   help='Separate model to use for plan generation (defaults to --model). '
+                        'Use a larger model here for better plans, e.g. qwen2.5-coder:32b')
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -454,15 +461,18 @@ def generate_plan(args: argparse.Namespace) -> int:
         repo_map=repo_map,
     )
 
+    # Use --plan-model if provided (allows a smarter model for planning
+    # while a faster model handles execution)
+    planning_model = args.plan_model or args.model
     client = ollama.Client(host=args.base_url)
-    _log(f'► Generating execution plan (model: {args.model})...', args.verbose)
+    _log(f'► Generating execution plan (model: {planning_model})...', args.verbose)
 
     try:
         response = client.chat(
-            model=args.model,
+            model=planning_model,
             messages=[
                 {'role': 'system', 'content': system},
-                {'role': 'user',   'content': f'Create a detailed execution plan for: {args.message}'},
+                {'role': 'user',   'content': f'Create a minimal execution plan for: {args.message}'},
             ],
         )
     except ollama.ResponseError as e:
