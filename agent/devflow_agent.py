@@ -22,7 +22,15 @@ import json
 import os
 import re
 import sys
+import threading
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Graceful cancellation
+# Set by Ctrl+C (SIGINT) or by the stdin watcher when the user types 'q'.
+# Every long-running loop checks this before each iteration.
+# ---------------------------------------------------------------------------
+_cancel_requested = threading.Event()
 
 # Force UTF-8 stdout/stderr so Unicode symbols (►, ✓, ✗, etc.) work on
 # Windows terminals that default to cp1252.
@@ -41,6 +49,32 @@ try:
     _HAS_RAG = True
 except ImportError:
     _HAS_RAG = False
+
+# ---------------------------------------------------------------------------
+# Stdin watcher — 'q' + Enter cancels the agent gracefully
+# Only started when stdin is a real TTY (not when piped by Electron).
+# ---------------------------------------------------------------------------
+
+def _stdin_watcher() -> None:
+    """Background daemon thread: watch stdin for 'q' / 'quit' / 'exit'."""
+    try:
+        for line in sys.stdin:
+            if line.strip().lower() in ('q', 'quit', 'exit'):
+                _cancel_requested.set()
+                print('\n► Cancel requested — stopping after current operation...',
+                      flush=True)
+                break
+    except Exception:
+        pass   # stdin closed or not readable — silently exit
+
+
+def _start_stdin_watcher() -> None:
+    """Start the stdin watcher thread only when stdin is an interactive TTY."""
+    if not sys.stdin or not sys.stdin.isatty():
+        return
+    t = threading.Thread(target=_stdin_watcher, daemon=True, name='stdin-watcher')
+    t.start()
+
 
 # ---------------------------------------------------------------------------
 # Text-based tool call fallback
@@ -475,6 +509,9 @@ def generate_plan(args: argparse.Namespace) -> int:
                 {'role': 'user',   'content': f'Create a minimal execution plan for: {args.message}'},
             ],
         )
+    except KeyboardInterrupt:
+        _log('\n► Interrupted (Ctrl+C). Plan generation cancelled.', args.verbose)
+        return 130
     except ollama.ResponseError as e:
         _log(f'Ollama error: {e.error}', args.verbose)
         return 1
@@ -520,6 +557,11 @@ def execute_with_plan(args: argparse.Namespace, plan: dict) -> int:
     _log('', args.verbose)
 
     for step in steps:
+        # ── Cancellation check before each step ─────────────────────────────
+        if _cancel_requested.is_set():
+            _log('\n► Cancelled by user. Stopping plan execution.', args.verbose)
+            return 130
+
         step_num    = step.get('id', steps.index(step) + 1)
         title       = step.get('title', f'Step {step_num}')
         description = step.get('description', '')
@@ -616,6 +658,11 @@ def run(args: argparse.Namespace) -> int:
     _log('', args.verbose)
 
     while turns < args.max_turns:
+        # ── Cancellation check (Ctrl+C or 'q') ──────────────────────────────
+        if _cancel_requested.is_set():
+            _log('\n► Cancelled by user. Exiting cleanly.', args.verbose)
+            return 130
+
         turns += 1
         messages = _trim_messages(messages)
         _log(f'[turn {turns}]', args.verbose, is_verbose=True)
@@ -626,6 +673,9 @@ def run(args: argparse.Namespace) -> int:
                 messages=messages,
                 tools=TOOLS,
             )
+        except KeyboardInterrupt:
+            _log('\n► Interrupted (Ctrl+C). Exiting cleanly.', args.verbose)
+            return 130
         except ollama.ResponseError as e:
             _log(f'Ollama error: {e.error}', args.verbose)
             return 1
@@ -663,6 +713,10 @@ def run(args: argparse.Namespace) -> int:
 
         # Execute each tool the model requested
         for tc in tool_calls:
+            if _cancel_requested.is_set():
+                _log('\n► Cancelled by user. Exiting cleanly.', args.verbose)
+                return 130
+
             fn        = tc.function.name
             fn_args   = tc.function.arguments
             if isinstance(fn_args, str):
@@ -714,12 +768,19 @@ def run(args: argparse.Namespace) -> int:
 
         # Re-run the agent loop for this retry cycle
         while turns < args.max_turns:
+            if _cancel_requested.is_set():
+                _log('\n► Cancelled by user. Exiting cleanly.', args.verbose)
+                return 130
+
             turns += 1
             messages = _trim_messages(messages)
             _log(f'[fix turn {turns}]', args.verbose, is_verbose=True)
 
             try:
                 response = client.chat(model=args.model, messages=messages, tools=TOOLS)
+            except KeyboardInterrupt:
+                _log('\n► Interrupted (Ctrl+C). Exiting cleanly.', args.verbose)
+                return 130
             except Exception as e:
                 _log(f'Ollama error during fix: {e}', args.verbose)
                 return 1
@@ -768,22 +829,32 @@ def run(args: argparse.Namespace) -> int:
 def main():
     args = parse_args()
 
-    if args.plan_only:
-        # Phase 1 — generate plan, print markers, exit
-        exit_code = generate_plan(args)
+    # Start 'q' watcher only when running directly in a terminal.
+    # When spawned by Electron, stdin is 'ignore' so isatty() returns False.
+    _start_stdin_watcher()
 
-    elif args.approved_plan:
-        # Phase 2 — execute the user-approved plan step by step
-        try:
-            plan = json.loads(args.approved_plan)
-        except json.JSONDecodeError as e:
-            print(f'Error parsing approved plan JSON: {e}', flush=True)
-            sys.exit(1)
-        exit_code = execute_with_plan(args, plan)
+    try:
+        if args.plan_only:
+            # Phase 1 — generate plan, print markers, exit
+            exit_code = generate_plan(args)
 
-    else:
-        # Normal mode — no planning, run full agentic loop directly
-        exit_code = run(args)
+        elif args.approved_plan:
+            # Phase 2 — execute the user-approved plan step by step
+            try:
+                plan = json.loads(args.approved_plan)
+            except json.JSONDecodeError as e:
+                print(f'Error parsing approved plan JSON: {e}', flush=True)
+                sys.exit(1)
+            exit_code = execute_with_plan(args, plan)
+
+        else:
+            # Normal mode — no planning, run full agentic loop directly
+            exit_code = run(args)
+
+    except KeyboardInterrupt:
+        # Ctrl+C pressed between phases or before the first loop iteration
+        print('\n► Interrupted (Ctrl+C). Exiting cleanly.', flush=True)
+        sys.exit(130)
 
     sys.exit(exit_code)
 
