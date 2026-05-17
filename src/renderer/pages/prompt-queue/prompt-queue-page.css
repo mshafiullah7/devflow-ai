@@ -19,9 +19,8 @@
   align-items: center;
   gap: 10px;
   padding: 0 16px;
-  height: 42px;
-  min-height: 42px;
-  background: var(--bg-secondary);
+  height: 48px;
+  background: var(--surface-header);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   flex-shrink: 0;
@@ -41,7 +40,7 @@
   flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
-.pq-header__back:hover { background: var(--bg-hover); color: var(--text-primary); }
+.pq-header__back:hover { background: var(--surface-hover); color: var(--text-primary); }
 
 .pq-header__title {
   font-size: 13px;
