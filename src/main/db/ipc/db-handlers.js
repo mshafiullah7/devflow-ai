@@ -2,6 +2,7 @@
 
 const { ipcMain } = require('electron');
 const { shell } = require('electron');
+const { safeHandle } = require('../../ipc-safe-handle');
 const os        = require('os');
 const fs        = require('fs');
 const path      = require('path');
@@ -13,29 +14,29 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // status_master
   // ----------------------------------------------------------------
-  ipcMain.handle('db:status:list', () => {
+  safeHandle('db:status:list', () => {
     return db.prepare('SELECT * FROM status_master WHERE is_active = 1 ORDER BY sort_order').all();
   });
 
   // ----------------------------------------------------------------
   // projects
   // ----------------------------------------------------------------
-  ipcMain.handle('db:projects:list', () => {
+  safeHandle('db:projects:list', () => {
     return db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all();
   });
 
-  ipcMain.handle('db:projects:get', (_e, id) => {
+  safeHandle('db:projects:get', (_e, id) => {
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:projects:create', (_e, { name, description }) => {
+  safeHandle('db:projects:create', (_e, { name, description }) => {
     const result = db
       .prepare('INSERT INTO projects (name, description) VALUES (?, ?)')
       .run(name, description ?? null);
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:projects:update', (_e, { id, name, description, is_active, design_template, project_path }) => {
+  safeHandle('db:projects:update', (_e, { id, name, description, is_active, design_template, project_path }) => {
     db.prepare(
       `UPDATE projects
           SET name = coalesce(?, name),
@@ -56,22 +57,22 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:projects:delete', (_e, id) => {
+  safeHandle('db:projects:delete', (_e, id) => {
     db.prepare('DELETE FROM projects WHERE id = ?').run(id);
     return { success: true };
   });
 
-  ipcMain.handle('db:projects:open', (_e, id) => {
+  safeHandle('db:projects:open', (_e, id) => {
     db.prepare(`UPDATE projects SET last_opened_at = datetime('now') WHERE id = ?`).run(id);
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:projects:setPath', (_e, { id, project_path }) => {
+  safeHandle('db:projects:setPath', (_e, { id, project_path }) => {
     db.prepare(`UPDATE projects SET project_path = ?, updated_at = datetime('now') WHERE id = ?`).run(project_path, id);
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:projects:recent', () => {
+  safeHandle('db:projects:recent', () => {
     return db
       .prepare(
         `SELECT * FROM projects
@@ -85,7 +86,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // features
   // ----------------------------------------------------------------
-  ipcMain.handle('db:features:list', (_e, project_id) => {
+  safeHandle('db:features:list', (_e, project_id) => {
     const base = `
       SELECT f.*, sm.name AS status_name
       FROM features f
@@ -97,18 +98,18 @@ function registerDbHandlers() {
     return db.prepare(base + ' ORDER BY f.created_at DESC').all();
   });
 
-  ipcMain.handle('db:features:get', (_e, id) => {
+  safeHandle('db:features:get', (_e, id) => {
     return db.prepare('SELECT * FROM features WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:features:create', (_e, { project_id, name, description, status_id }) => {
+  safeHandle('db:features:create', (_e, { project_id, name, description, status_id }) => {
     const result = db
       .prepare('INSERT INTO features (project_id, name, description, status_id) VALUES (?, ?, ?, ?)')
       .run(project_id, name, description ?? null, status_id ?? null);
     return db.prepare('SELECT * FROM features WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:features:update', (_e, { id, name, description, status_id, is_active }) => {
+  safeHandle('db:features:update', (_e, { id, name, description, status_id, is_active }) => {
     db.prepare(
       `UPDATE features
           SET name = coalesce(?, name),
@@ -121,7 +122,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM features WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:features:delete', (_e, id) => {
+  safeHandle('db:features:delete', (_e, id) => {
     db.prepare('DELETE FROM features WHERE id = ?').run(id);
     return { success: true };
   });
@@ -129,7 +130,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // user_stories
   // ----------------------------------------------------------------
-  ipcMain.handle('db:user_stories:list', (_e, { feature_id, project_id, include_extracted = false } = {}) => {
+  safeHandle('db:user_stories:list', (_e, { feature_id, project_id, include_extracted = false } = {}) => {
     const base = `
       SELECT us.*, sm.name AS status_name
       FROM user_stories us
@@ -144,11 +145,11 @@ function registerDbHandlers() {
     return db.prepare(base + ' ORDER BY us.created_at DESC').all();
   });
 
-  ipcMain.handle('db:user_stories:get', (_e, id) => {
+  safeHandle('db:user_stories:get', (_e, id) => {
     return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(id);
   });
 
-  ipcMain.handle(
+  safeHandle(
     'db:user_stories:create',
     (_e, { feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted = 0, priority, estimated_hours, remaining_hours, target_date }) => {
       const result = db
@@ -168,7 +169,7 @@ function registerDbHandlers() {
     }
   );
 
-  ipcMain.handle(
+  safeHandle(
     'db:user_stories:update',
     (_e, data) => {
       const { id, title, description, acceptance_criteria, status_id, is_active, is_extracted,
@@ -191,7 +192,7 @@ function registerDbHandlers() {
     }
   );
 
-  ipcMain.handle('db:user_stories:delete', (_e, id) => {
+  safeHandle('db:user_stories:delete', (_e, id) => {
     db.prepare('DELETE FROM user_stories WHERE id = ?').run(id);
     return { success: true };
   });
@@ -199,7 +200,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // prompt_history
   // ----------------------------------------------------------------
-  ipcMain.handle('db:prompt_history:list', (_e, user_story_id) => {
+  safeHandle('db:prompt_history:list', (_e, user_story_id) => {
     return db
       .prepare(
         'SELECT * FROM prompt_history WHERE user_story_id = ? AND is_active = 1 ORDER BY executed_at DESC LIMIT 20'
@@ -207,19 +208,19 @@ function registerDbHandlers() {
       .all(user_story_id);
   });
 
-  ipcMain.handle('db:prompt_history:create', (_e, { user_story_id, prompt }) => {
+  safeHandle('db:prompt_history:create', (_e, { user_story_id, prompt }) => {
     const result = db
       .prepare('INSERT INTO prompt_history (user_story_id, prompt) VALUES (?, ?)')
       .run(user_story_id, prompt);
     return db.prepare('SELECT * FROM prompt_history WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:prompt_history:delete', (_e, id) => {
+  safeHandle('db:prompt_history:delete', (_e, id) => {
     db.prepare('UPDATE prompt_history SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
 
-  ipcMain.handle('db:prompt_history:deleteAll', (_e, user_story_id) => {
+  safeHandle('db:prompt_history:deleteAll', (_e, user_story_id) => {
     db.prepare('UPDATE prompt_history SET is_active = 0 WHERE user_story_id = ?').run(user_story_id);
     return { success: true };
   });
@@ -227,25 +228,25 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // screen_prompt_history
   // ----------------------------------------------------------------
-  ipcMain.handle('db:screen_prompt_history:list', (_e, { project_id, screen_design_id }) => {
+  safeHandle('db:screen_prompt_history:list', (_e, { project_id, screen_design_id }) => {
     return db
       .prepare('SELECT * FROM screen_prompt_history WHERE project_id = ? AND screen_design_id = ? AND is_active = 1 ORDER BY executed_at DESC LIMIT 20')
       .all(project_id, screen_design_id);
   });
 
-  ipcMain.handle('db:screen_prompt_history:create', (_e, { project_id, screen_design_id, prompt }) => {
+  safeHandle('db:screen_prompt_history:create', (_e, { project_id, screen_design_id, prompt }) => {
     const result = db
       .prepare('INSERT INTO screen_prompt_history (project_id, screen_design_id, prompt) VALUES (?, ?, ?)')
       .run(project_id, screen_design_id, prompt);
     return db.prepare('SELECT * FROM screen_prompt_history WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:screen_prompt_history:delete', (_e, id) => {
+  safeHandle('db:screen_prompt_history:delete', (_e, id) => {
     db.prepare('UPDATE screen_prompt_history SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
 
-  ipcMain.handle('db:screen_prompt_history:deleteAll', (_e, { project_id, screen_design_id }) => {
+  safeHandle('db:screen_prompt_history:deleteAll', (_e, { project_id, screen_design_id }) => {
     db.prepare('UPDATE screen_prompt_history SET is_active = 0 WHERE project_id = ? AND screen_design_id = ?').run(project_id, screen_design_id);
     return { success: true };
   });
@@ -253,20 +254,20 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // prompts
   // ----------------------------------------------------------------
-  ipcMain.handle('db:prompts:list', (_e, user_story_id) => {
+  safeHandle('db:prompts:list', (_e, user_story_id) => {
     return db.prepare(
       'SELECT * FROM prompts WHERE user_story_id = ? AND is_active = 1 ORDER BY created_at ASC'
     ).all(user_story_id);
   });
 
-  ipcMain.handle('db:prompts:create', (_e, { user_story_id, tag, prompt }) => {
+  safeHandle('db:prompts:create', (_e, { user_story_id, tag, prompt }) => {
     const result = db.prepare(
       'INSERT INTO prompts (user_story_id, tag, prompt) VALUES (?, ?, ?)'
     ).run(user_story_id, tag ?? null, prompt);
     return db.prepare('SELECT * FROM prompts WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:prompts:update', (_e, { id, tag, prompt, is_executed }) => {
+  safeHandle('db:prompts:update', (_e, { id, tag, prompt, is_executed }) => {
     db.prepare(
       `UPDATE prompts SET tag = coalesce(?, tag), prompt = coalesce(?, prompt),
        is_executed = CASE WHEN ? IS NOT NULL THEN ? ELSE is_executed END,
@@ -275,7 +276,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM prompts WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:prompts:delete', (_e, id) => {
+  safeHandle('db:prompts:delete', (_e, id) => {
     db.prepare(`UPDATE prompts SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
     return { success: true };
   });
@@ -283,13 +284,13 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // test_run_history
   // ----------------------------------------------------------------
-  ipcMain.handle('testRunHistory:list', (_e, project_id) => {
+  safeHandle('testRunHistory:list', (_e, project_id) => {
     return db.prepare(
       `SELECT * FROM test_run_history WHERE project_id = ? ORDER BY ran_at DESC LIMIT 20`
     ).all(project_id);
   });
 
-  ipcMain.handle('testRunHistory:create', (_e, { project_id, framework, command, passed, failed, skipped, duration, output, exit_code }) => {
+  safeHandle('testRunHistory:create', (_e, { project_id, framework, command, passed, failed, skipped, duration, output, exit_code }) => {
     db.prepare(
       `INSERT INTO test_run_history (project_id, framework, command, passed, failed, skipped, duration, output, exit_code)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -320,7 +321,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // testRunner — framework detection
   // ----------------------------------------------------------------
-  ipcMain.handle('testRunner:detect', (_e, projectPath) => {
+  safeHandle('testRunner:detect', (_e, projectPath) => {
     if (!projectPath) return [];
     const exists  = (p) => { try { return fs.existsSync(p); } catch { return false; } };
     const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
@@ -383,7 +384,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // issues
   // ----------------------------------------------------------------
-  ipcMain.handle('db:issues:list', (_e, { project_id, feature_id, user_story_id, status, severity } = {}) => {
+  safeHandle('db:issues:list', (_e, { project_id, feature_id, user_story_id, status, severity } = {}) => {
     let sql = `
       SELECT i.*,
              us.title AS story_title,
@@ -402,11 +403,11 @@ function registerDbHandlers() {
     return db.prepare(sql).all(...params);
   });
 
-  ipcMain.handle('db:issues:get', (_e, id) => {
+  safeHandle('db:issues:get', (_e, id) => {
     return db.prepare('SELECT * FROM issues WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:issues:create', (_e, { project_id, feature_id, user_story_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status }) => {
+  safeHandle('db:issues:create', (_e, { project_id, feature_id, user_story_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status }) => {
     const result = db.prepare(`
       INSERT INTO issues (project_id, feature_id, user_story_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -431,7 +432,7 @@ function registerDbHandlers() {
     `).get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:issues:update', (_e, { id, feature_id, user_story_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active }) => {
+  safeHandle('db:issues:update', (_e, { id, feature_id, user_story_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active }) => {
     db.prepare(`
       UPDATE issues
          SET feature_id         = CASE WHEN ? IS NOT NULL THEN ? ELSE feature_id END,
@@ -468,12 +469,12 @@ function registerDbHandlers() {
     `).get(id);
   });
 
-  ipcMain.handle('db:issues:delete', (_e, id) => {
+  safeHandle('db:issues:delete', (_e, id) => {
     db.prepare(`UPDATE issues SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
     return { success: true };
   });
 
-  ipcMain.handle('db:issues:count', (_e, project_id) => {
+  safeHandle('db:issues:count', (_e, project_id) => {
     const total    = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1`).get(project_id)?.n ?? 0;
     const open     = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'open'`).get(project_id)?.n ?? 0;
     const resolved = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'resolved'`).get(project_id)?.n ?? 0;
@@ -483,18 +484,18 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // quick_commands
   // ----------------------------------------------------------------
-  ipcMain.handle('db:quick_commands:list', () => {
+  safeHandle('db:quick_commands:list', () => {
     return db.prepare('SELECT * FROM quick_commands WHERE is_active = 1 ORDER BY created_at ASC').all();
   });
 
-  ipcMain.handle('db:quick_commands:create', (_e, { command, description }) => {
+  safeHandle('db:quick_commands:create', (_e, { command, description }) => {
     const result = db
       .prepare('INSERT INTO quick_commands (command, description) VALUES (?, ?)')
       .run(command, description ?? null);
     return db.prepare('SELECT * FROM quick_commands WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:quick_commands:update', (_e, { id, command, description }) => {
+  safeHandle('db:quick_commands:update', (_e, { id, command, description }) => {
     db.prepare(
       `UPDATE quick_commands
           SET command = coalesce(?, command),
@@ -505,7 +506,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM quick_commands WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:quick_commands:delete', (_e, id) => {
+  safeHandle('db:quick_commands:delete', (_e, id) => {
     db.prepare('UPDATE quick_commands SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
@@ -513,15 +514,15 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // model_configs
   // ----------------------------------------------------------------
-  ipcMain.handle('db:model_configs:list', () => {
+  safeHandle('db:model_configs:list', () => {
     return db.prepare('SELECT * FROM model_configs WHERE is_active = 1 ORDER BY sort_order ASC, id ASC').all();
   });
 
-  ipcMain.handle('db:model_configs:get', (_e, id) => {
+  safeHandle('db:model_configs:get', (_e, id) => {
     return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:model_configs:create', (_e, data) => {
+  safeHandle('db:model_configs:create', (_e, data) => {
     const { label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent } = data;
     // Clear existing default if setting new default
     if (is_default) db.prepare('UPDATE model_configs SET is_default = 0').run();
@@ -538,7 +539,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:model_configs:update', (_e, data) => {
+  safeHandle('db:model_configs:update', (_e, data) => {
     const { id, label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent } = data;
     if (is_default) db.prepare('UPDATE model_configs SET is_default = 0 WHERE id != ?').run(id);
     db.prepare(`
@@ -569,12 +570,12 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:model_configs:delete', (_e, id) => {
+  safeHandle('db:model_configs:delete', (_e, id) => {
     db.prepare('UPDATE model_configs SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
 
-  ipcMain.handle('db:model_configs:setDefault', (_e, id) => {
+  safeHandle('db:model_configs:setDefault', (_e, id) => {
     db.prepare('UPDATE model_configs SET is_default = 0').run();
     db.prepare('UPDATE model_configs SET is_default = 1 WHERE id = ?').run(id);
     return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(id);
@@ -583,7 +584,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // document_templates
   // ----------------------------------------------------------------
-  ipcMain.handle('db:document_templates:list', () => {
+  safeHandle('db:document_templates:list', () => {
     return db
       .prepare('SELECT * FROM document_templates WHERE is_active = 1 ORDER BY sort_order ASC')
       .all();
@@ -592,24 +593,24 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // project_documents
   // ----------------------------------------------------------------
-  ipcMain.handle('db:documents:list', (_e, project_id) => {
+  safeHandle('db:documents:list', (_e, project_id) => {
     return db
       .prepare('SELECT * FROM project_documents WHERE project_id = ? AND is_active = 1 ORDER BY created_at ASC')
       .all(project_id);
   });
 
-  ipcMain.handle('db:documents:get', (_e, id) => {
+  safeHandle('db:documents:get', (_e, id) => {
     return db.prepare('SELECT * FROM project_documents WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:documents:create', (_e, { project_id, title, content }) => {
+  safeHandle('db:documents:create', (_e, { project_id, title, content }) => {
     const result = db
       .prepare('INSERT INTO project_documents (project_id, title, content) VALUES (?, ?, ?)')
       .run(project_id, title, content ?? null);
     return db.prepare('SELECT * FROM project_documents WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:documents:update', (_e, { id, title, content }) => {
+  safeHandle('db:documents:update', (_e, { id, title, content }) => {
     db.prepare(
       `UPDATE project_documents
           SET title   = coalesce(?, title),
@@ -620,7 +621,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM project_documents WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:documents:delete', (_e, id) => {
+  safeHandle('db:documents:delete', (_e, id) => {
     db.prepare('UPDATE project_documents SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
@@ -628,36 +629,36 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // document_attachments
   // ----------------------------------------------------------------
-  ipcMain.handle('db:attachments:list', (_e, document_id) => {
+  safeHandle('db:attachments:list', (_e, document_id) => {
     return db
       .prepare('SELECT id, document_id, name, type, is_active, created_at FROM document_attachments WHERE document_id = ? AND is_active = 1 ORDER BY created_at ASC')
       .all(document_id);
   });
 
-  ipcMain.handle('db:attachments:get', (_e, id) => {
+  safeHandle('db:attachments:get', (_e, id) => {
     return db.prepare('SELECT * FROM document_attachments WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:attachments:create', (_e, { document_id, name, type, content }) => {
+  safeHandle('db:attachments:create', (_e, { document_id, name, type, content }) => {
     const result = db
       .prepare('INSERT INTO document_attachments (document_id, name, type, content) VALUES (?, ?, ?, ?)')
       .run(document_id, name, type ?? 'svg', content ?? '');
     return db.prepare('SELECT id, document_id, name, type, created_at FROM document_attachments WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:attachments:update', (_e, { id, name, content }) => {
+  safeHandle('db:attachments:update', (_e, { id, name, content }) => {
     db.prepare(
       `UPDATE document_attachments SET name = coalesce(?, name), content = ?, updated_at = datetime('now') WHERE id = ?`
     ).run(name ?? null, content, id);
     return db.prepare('SELECT id, document_id, name, type, created_at FROM document_attachments WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:attachments:delete', (_e, id) => {
+  safeHandle('db:attachments:delete', (_e, id) => {
     db.prepare('UPDATE document_attachments SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
 
-  ipcMain.handle('db:attachments:getContent', (_e, id) => {
+  safeHandle('db:attachments:getContent', (_e, id) => {
     const row = db.prepare('SELECT content, name, type FROM document_attachments WHERE id = ?').get(id);
     return row ?? null;
   });
@@ -665,17 +666,17 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // screen_designs
   // ----------------------------------------------------------------
-  ipcMain.handle('db:screen_designs:list', (_e, project_id) => {
+  safeHandle('db:screen_designs:list', (_e, project_id) => {
     return db
       .prepare('SELECT * FROM screen_designs WHERE project_id = ? AND is_active = 1 ORDER BY created_at DESC')
       .all(project_id);
   });
 
-  ipcMain.handle('db:screen_designs:get', (_e, id) => {
+  safeHandle('db:screen_designs:get', (_e, id) => {
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:screen_designs:create', (_e, { project_id, title, description, tech_stack, html_content, prompt_used, model_used }) => {
+  safeHandle('db:screen_designs:create', (_e, { project_id, title, description, tech_stack, html_content, prompt_used, model_used }) => {
     const result = db
       .prepare(`INSERT INTO screen_designs (project_id, title, description, tech_stack, html_content, prompt_used, model_used)
                 VALUES (?, ?, ?, ?, ?, ?, ?)`)
@@ -683,7 +684,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:screen_designs:update', (_e, { id, title, description, tech_stack, html_content, prompt_used, model_used }) => {
+  safeHandle('db:screen_designs:update', (_e, { id, title, description, tech_stack, html_content, prompt_used, model_used }) => {
     db.prepare(
       `UPDATE screen_designs
           SET title        = coalesce(?, title),
@@ -698,7 +699,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:screen_designs:delete', (_e, id) => {
+  safeHandle('db:screen_designs:delete', (_e, id) => {
     db.prepare('UPDATE screen_designs SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
@@ -706,7 +707,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // draw.io — open in desktop app via temp file
   // ----------------------------------------------------------------
-  ipcMain.handle('shell:openDrawio', async (_e, { id, name, content }) => {
+  safeHandle('shell:openDrawio', async (_e, { id, name, content }) => {
     const dir  = path.join(os.tmpdir(), 'electron-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });
     const safe = name.replace(/[^a-z0-9_\-]/gi, '_');
@@ -719,12 +720,12 @@ function registerDbHandlers() {
     return { file };
   });
 
-  ipcMain.handle('shell:readFile', (_e, filepath) => {
+  safeHandle('shell:readFile', (_e, filepath) => {
     try { return fs.readFileSync(filepath, 'utf8'); }
     catch { return null; }
   });
 
-  ipcMain.handle('shell:writeFile', (_e, { filepath, content }) => {
+  safeHandle('shell:writeFile', (_e, { filepath, content }) => {
     try {
       fs.mkdirSync(path.dirname(filepath), { recursive: true });
       fs.writeFileSync(filepath, content, 'utf8');
@@ -735,7 +736,7 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // prompt_queue
   // ----------------------------------------------------------------
-  ipcMain.handle('db:prompt_queue:list', (_e, { project_id }) => {
+  safeHandle('db:prompt_queue:list', (_e, { project_id }) => {
     return db.prepare(`
       SELECT * FROM prompt_queue
       WHERE project_id = ?
@@ -743,7 +744,7 @@ function registerDbHandlers() {
     `).all(project_id);
   });
 
-  ipcMain.handle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text }) => {
+  safeHandle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text }) => {
     const max = db.prepare('SELECT MAX(sort_order) AS m FROM prompt_queue WHERE project_id = ?').get(project_id);
     const sort_order = (max?.m ?? -1) + 1;
     const result = db.prepare(`
@@ -753,7 +754,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:prompt_queue:update', (_e, { id, status, output, exit_code, ran_at, model_label }) => {
+  safeHandle('db:prompt_queue:update', (_e, { id, status, output, exit_code, ran_at, model_label }) => {
     db.prepare(`
       UPDATE prompt_queue
          SET status      = CASE WHEN ? IS NOT NULL THEN ? ELSE status END,
@@ -773,37 +774,37 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(id);
   });
 
-  ipcMain.handle('db:prompt_queue:delete', (_e, id) => {
+  safeHandle('db:prompt_queue:delete', (_e, id) => {
     db.prepare('DELETE FROM prompt_queue WHERE id = ?').run(id);
     return { success: true };
   });
 
-  ipcMain.handle('db:prompt_queue:clear_done', (_e, project_id) => {
+  safeHandle('db:prompt_queue:clear_done', (_e, project_id) => {
     db.prepare(`DELETE FROM prompt_queue WHERE project_id = ? AND status IN ('done','failed','skipped')`).run(project_id);
     return { success: true };
   });
 
-  ipcMain.handle('db:prompt_queue:pending_count', (_e, project_id) => {
+  safeHandle('db:prompt_queue:pending_count', (_e, project_id) => {
     return db.prepare(`SELECT COUNT(*) AS count FROM prompt_queue WHERE project_id = ? AND status = 'pending'`).get(project_id)?.count ?? 0;
   });
 
   // ----------------------------------------------------------------
   // prompt_queue_messages
   // ----------------------------------------------------------------
-  ipcMain.handle('db:pq_messages:list', (_e, queue_item_id) => {
+  safeHandle('db:pq_messages:list', (_e, queue_item_id) => {
     return db.prepare(
       'SELECT * FROM prompt_queue_messages WHERE queue_item_id = ? ORDER BY id ASC'
     ).all(queue_item_id);
   });
 
-  ipcMain.handle('db:pq_messages:add', (_e, { queue_item_id, role, content }) => {
+  safeHandle('db:pq_messages:add', (_e, { queue_item_id, role, content }) => {
     const res = db.prepare(
       'INSERT INTO prompt_queue_messages (queue_item_id, role, content) VALUES (?, ?, ?)'
     ).run(queue_item_id, role, content);
     return db.prepare('SELECT * FROM prompt_queue_messages WHERE id = ?').get(res.lastInsertRowid);
   });
 
-  ipcMain.handle('db:pq_messages:clear', (_e, queue_item_id) => {
+  safeHandle('db:pq_messages:clear', (_e, queue_item_id) => {
     db.prepare('DELETE FROM prompt_queue_messages WHERE queue_item_id = ?').run(queue_item_id);
     return { success: true };
   });
@@ -811,18 +812,18 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // saved_themes (global library, shared across all projects)
   // ----------------------------------------------------------------
-  ipcMain.handle('db:saved_themes:list', () => {
+  safeHandle('db:saved_themes:list', () => {
     return db.prepare('SELECT * FROM saved_themes WHERE is_active = 1 ORDER BY created_at DESC').all();
   });
 
-  ipcMain.handle('db:saved_themes:create', (_e, { name, light, dark }) => {
+  safeHandle('db:saved_themes:create', (_e, { name, light, dark }) => {
     const result = db
       .prepare('INSERT INTO saved_themes (name, light, dark) VALUES (?, ?, ?)')
       .run(name, light ?? '', dark ?? '');
     return db.prepare('SELECT * FROM saved_themes WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  ipcMain.handle('db:saved_themes:delete', (_e, id) => {
+  safeHandle('db:saved_themes:delete', (_e, id) => {
     db.prepare('UPDATE saved_themes SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
   });
@@ -830,11 +831,11 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // model_mapping
   // ----------------------------------------------------------------
-  ipcMain.handle('db:model_mapping:get', (_e, pageKey) => {
+  safeHandle('db:model_mapping:get', (_e, pageKey) => {
     return db.prepare('SELECT model_config_id FROM model_mapping WHERE page_key = ?').get(pageKey) ?? null;
   });
 
-  ipcMain.handle('db:model_mapping:set', (_e, pageKey, modelConfigId) => {
+  safeHandle('db:model_mapping:set', (_e, pageKey, modelConfigId) => {
     db.prepare(`
       INSERT INTO model_mapping (page_key, model_config_id, updated_at)
       VALUES (?, ?, datetime('now'))
@@ -844,7 +845,7 @@ function registerDbHandlers() {
     `).run(pageKey, modelConfigId || null);
   });
 
-  ipcMain.handle('app:writeTempFiles', (_e, files) => {
+  safeHandle('app:writeTempFiles', (_e, files) => {
     const dir = path.join(os.tmpdir(), 'electron-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });
     const ts = Date.now();

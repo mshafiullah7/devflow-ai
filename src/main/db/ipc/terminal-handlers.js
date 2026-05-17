@@ -1,6 +1,7 @@
 'use strict';
 
 const { ipcMain } = require('electron');
+const { safeHandle } = require('../../ipc-safe-handle');
 const { spawn, execSync } = require('child_process');
 const fs   = require('node:fs');
 const os   = require('node:os');
@@ -19,10 +20,10 @@ function killTree(proc) {
 }
 
 function registerTerminalHandlers() {
-  ipcMain.handle('terminal:homedir', () => os.homedir());
+  safeHandle('terminal:homedir', () => os.homedir());
 
   // Quick exec used only for `cd` path resolution (short-lived, 10 s max)
-  ipcMain.handle('terminal:exec', (_e, { command, cwd }) => {
+  safeHandle('terminal:exec', (_e, { command, cwd }) => {
     return new Promise((resolve) => {
       const proc = spawn(
         'powershell.exe',
@@ -40,7 +41,7 @@ function registerTerminalHandlers() {
   });
 
   // Streaming exec — no timeout, pushes chunks back via webContents.send
-  ipcMain.handle('terminal:exec-start', (event, { command, cwd, initialStdin }) => {
+  safeHandle('terminal:exec-start', (event, { command, cwd, initialStdin }) => {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
 
     const wc = event.sender;
@@ -85,19 +86,19 @@ function registerTerminalHandlers() {
     return { pid: _activeProc.pid };
   });
 
-  ipcMain.handle('terminal:kill-active', () => {
+  safeHandle('terminal:kill-active', () => {
     if (_activeProc) { killTree(_activeProc); _activeProc = null; }
   });
 
   // Forward user input to the running process's stdin (for interactive programs)
-  ipcMain.handle('terminal:stdin', (_e, text) => {
+  safeHandle('terminal:stdin', (_e, text) => {
     if (_activeProc && _activeProc.stdin && !_activeProc.stdin.destroyed) {
       _activeProc.stdin.write(text);
     }
   });
 
   // Open an interactive PowerShell window (visible, stays open)
-  ipcMain.handle('terminal:open-external', (_e, { command, cwd }) => {
+  safeHandle('terminal:open-external', (_e, { command, cwd }) => {
     const workDir  = cwd || os.homedir();
     const safeCwd  = workDir.replace(/'/g, "''");
     const fullCmd  = `Set-Location '${safeCwd}'\n${command}`;
@@ -117,7 +118,7 @@ function registerTerminalHandlers() {
   });
 
   // Dedicated test runner — separate process slot so it doesn't conflict with the terminal panel
-  ipcMain.handle('testRunner:run', (event, { command, cwd }) => {
+  safeHandle('testRunner:run', (event, { command, cwd }) => {
     if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
 
     const wc        = event.sender;
@@ -142,7 +143,7 @@ function registerTerminalHandlers() {
     return { pid: _activeTestProc.pid };
   });
 
-  ipcMain.handle('testRunner:kill', () => {
+  safeHandle('testRunner:kill', () => {
     if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
   });
 }

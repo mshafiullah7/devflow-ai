@@ -1,5 +1,25 @@
 import { Router } from './shared/router.js';
 import { LauncherPage } from './pages/launcher/launcher.js';
+import { showToast } from './utils/toast.js';
+
+window.showToast = showToast;
+
+const FRIENDLY = {
+  'db:':          'A data operation failed. Please try again.',
+  'chat:':        'The AI request failed. Check your model settings.',
+  'promptQueue:': 'Prompt execution failed.',
+  'terminal:':    'Command execution failed.',
+  'testRunner:':  'Test runner failed.',
+  'dialog:':      'File operation failed.',
+  'shell:':       'Shell operation failed.',
+  'ollama:':      'Ollama request failed. Is the server running?',
+};
+
+window.addEventListener('app:ipc-error', (e) => {
+  const { channel } = e.detail;
+  const prefix = Object.keys(FRIENDLY).find(p => channel.startsWith(p));
+  showToast(prefix ? FRIENDLY[prefix] : 'An unexpected error occurred.');
+});
 
 const router = new Router(document.getElementById('app'));
 

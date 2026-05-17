@@ -341,6 +341,21 @@ function runMigrations(db) {
     `);
   }
 
+  // Add error_logs table for persistent error tracking
+  const elCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='error_logs'").get();
+  if (!elCheck) {
+    db.exec(`
+      CREATE TABLE error_logs (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        source     TEXT    NOT NULL,
+        message    TEXT    NOT NULL,
+        stack      TEXT,
+        context    TEXT,
+        created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
   // Add fallback AI columns to model_configs for devflow-agent support
   const mcCols = db.prepare('PRAGMA table_info(model_configs)').all().map(c => c.name);
   if (!mcCols.includes('gemini_api_key')) {

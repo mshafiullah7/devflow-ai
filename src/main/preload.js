@@ -3,7 +3,15 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
+const invoke = async (channel, ...args) => {
+  const result = await ipcRenderer.invoke(channel, ...args);
+  if (result && typeof result === 'object' && '__error' in result) {
+    window.dispatchEvent(new CustomEvent('app:ipc-error', {
+      detail: { channel, message: result.__error },
+    }));
+  }
+  return result;
+};
 
 contextBridge.exposeInMainWorld('db', {
   status: {
@@ -198,6 +206,9 @@ contextBridge.exposeInMainWorld('app', {
     restore: () => invoke('app:db:restore'),
   },
   backupDefaultPath: () => invoke('app:backup-default-path'),
+  logs: {
+    list: () => invoke('app:logs:list'),
+  },
   screensDir:       (projectName) => invoke('app:screens-dir', projectName),
   prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),
   writeTempFiles:   (files)       => invoke('app:writeTempFiles', files),

@@ -1,6 +1,7 @@
 'use strict';
 
 const { ipcMain }         = require('electron');
+const { safeHandle }      = require('../../ipc-safe-handle');
 const { spawn, execSync } = require('child_process');
 const http  = require('node:http');
 const https = require('node:https');
@@ -72,11 +73,11 @@ async function _notifyTelegram(projectName, label, phase, exitCode, duration) {
 }
 
 function registerQueueHandlers() {
-  ipcMain.handle('promptQueue:kill', () => {
+  safeHandle('promptQueue:kill', () => {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
   });
 
-  ipcMain.handle('promptQueue:run', (event, { messages, modelConfig, cwd, itemLabel, projectName }) => {
+  safeHandle('promptQueue:run', (event, { messages, modelConfig, cwd, itemLabel, projectName }) => {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
 
     const wc        = event.sender;
@@ -107,7 +108,7 @@ function registerQueueHandlers() {
   });
 
   // Phase 2 — user approved the plan; spawn agent in execution mode
-  ipcMain.handle('promptQueue:approvePlan', (event, { plan, messages, modelConfig, cwd, itemLabel, projectName }) => {
+  safeHandle('promptQueue:approvePlan', (event, { plan, messages, modelConfig, cwd, itemLabel, projectName }) => {
     if (_activeQueueProc) { killTree(_activeQueueProc); _activeQueueProc = null; }
 
     const wc        = event.sender;

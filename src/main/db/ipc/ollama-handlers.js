@@ -21,6 +21,7 @@
  */
 
 const { ipcMain } = require('electron');
+const { safeHandle } = require('../../ipc-safe-handle');
 const { spawn }   = require('child_process');
 const http        = require('node:http');
 const https       = require('node:https');
@@ -48,7 +49,7 @@ function killActive() {
 function registerOllamaHandlers() {
 
   // ── List available local models via Ollama REST API ─────────────
-  ipcMain.handle('ollama:list-models', (_e, { host } = {}) => {
+  safeHandle('ollama:list-models', (_e, { host } = {}) => {
     return new Promise((resolve) => {
       const base = safeBase(host);
       const url  = `${base}/api/tags`;
@@ -75,7 +76,7 @@ function registerOllamaHandlers() {
   // ── Run one prompt turn via agent-cli --once ────────────────────
   // Same mechanism as "Run in console" but streams tokens back to the
   // Ollama Console UI rather than the terminal panel.
-  ipcMain.handle('ollama:chat', (event, { agentCliPath, model, host, dir, prompt }) => {
+  safeHandle('ollama:chat', (event, { agentCliPath, model, host, dir, prompt }) => {
     const wc   = event.sender;
     const send = (ch, p) => { if (!wc.isDestroyed()) wc.send(ch, p); };
 
@@ -139,7 +140,7 @@ function registerOllamaHandlers() {
   });
 
   // ── Cancel active run ───────────────────────────────────────────
-  ipcMain.handle('ollama:cancel', () => killActive());
+  safeHandle('ollama:cancel', () => killActive());
 }
 
 module.exports = { registerOllamaHandlers };
