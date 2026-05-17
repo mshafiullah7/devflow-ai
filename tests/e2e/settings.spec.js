@@ -41,6 +41,15 @@ async function seedModelConfig(window, label = 'Test CLI', type = 'cli') {
   );
 }
 
+async function clearModelConfigs(window) {
+  await window.evaluate(async () => {
+    const items = await window.db.modelConfigs.list();
+    if (Array.isArray(items)) {
+      for (const item of items) await window.db.modelConfigs.delete(item.id);
+    }
+  });
+}
+
 // ----------------------------------------------------------------
 // Setup / teardown
 // ----------------------------------------------------------------
@@ -132,6 +141,7 @@ test('clicking Backup loads the backup content', async () => {
 // ----------------------------------------------------------------
 
 test('AI Config shows the empty-state message when no models are configured', async () => {
+  await clearModelConfigs(window);
   await navigateToSettings(window);
   await expect(window.locator('.st-model-empty')).toBeVisible();
 });
@@ -236,6 +246,7 @@ test('filling the label and submitting adds the model and closes the modal', asy
 });
 
 test('newly added model label appears in the model list', async () => {
+  await clearModelConfigs(window);
   await navigateToSettings(window);
   await window.locator('#stBtnAddModel').click();
   await window.locator('#stFLabel').fill('New Test Model');
@@ -256,6 +267,7 @@ test('adding a model removes the empty-state message', async () => {
 // ----------------------------------------------------------------
 
 test('clicking a model card opens the Edit modal', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'Editable Model');
   await navigateToSettings(window);
   await window.locator('.st-model-item--clickable').click();
@@ -263,6 +275,7 @@ test('clicking a model card opens the Edit modal', async () => {
 });
 
 test('Edit modal title reads "Edit Model"', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'Edit Title Check');
   await navigateToSettings(window);
   await window.locator('.st-model-item--clickable').click();
@@ -270,6 +283,7 @@ test('Edit modal title reads "Edit Model"', async () => {
 });
 
 test('Edit modal pre-fills the label with the existing model label', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'Pre-filled Label');
   await navigateToSettings(window);
   await window.locator('[data-action="edit"]').click();
@@ -277,6 +291,7 @@ test('Edit modal pre-fills the label with the existing model label', async () =>
 });
 
 test('Edit modal shows the model type as read-only text', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'CLI Type Check', 'cli');
   await navigateToSettings(window);
   await window.locator('[data-action="edit"]').click();
@@ -288,6 +303,7 @@ test('Edit modal shows the model type as read-only text', async () => {
 // ----------------------------------------------------------------
 
 test('delete button removes the model from the list', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'Delete Me');
   await navigateToSettings(window);
   await window.locator('[data-action="delete"]').click();
@@ -295,6 +311,7 @@ test('delete button removes the model from the list', async () => {
 });
 
 test('deleting the only model restores the empty-state message', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'Last Model');
   await navigateToSettings(window);
   await window.locator('[data-action="delete"]').click();
@@ -306,12 +323,14 @@ test('deleting the only model restores the empty-state message', async () => {
 // ----------------------------------------------------------------
 
 test('non-default model shows the set-default star button', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'Not Default');
   await navigateToSettings(window);
   await expect(window.locator('[data-action="default"]')).toBeVisible();
 });
 
 test('clicking the star button marks the model as default', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'Promote to Default');
   await navigateToSettings(window);
   await window.locator('[data-action="default"]').click();
@@ -319,6 +338,7 @@ test('clicking the star button marks the model as default', async () => {
 });
 
 test('default model does not show the star button', async () => {
+  await clearModelConfigs(window);
   await seedModelConfig(window, 'Promote to Default');
   await navigateToSettings(window);
   await window.locator('[data-action="default"]').click();
@@ -336,10 +356,10 @@ test('Model Mapping page shows section rows for each feature', async () => {
 });
 
 test('all mapping selects are disabled when no models are configured', async () => {
+  await clearModelConfigs(window);
   await navigateToSettings(window);
   await window.locator('#stNavModelMapping').click();
-  const selects = window.locator('.st-mapping-row__select:not([disabled="false"])');
-  // Every select should be disabled or show "No models configured"
+  // Every select should be disabled when no models are configured
   const count = await window.locator('.st-mapping-row__select').count();
   const disabledCount = await window.locator('.st-mapping-row__select[disabled]').count();
   expect(disabledCount).toBe(count);

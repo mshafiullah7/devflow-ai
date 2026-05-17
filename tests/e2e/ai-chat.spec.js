@@ -54,6 +54,15 @@ async function waitForDataLoad(window) {
   await expect(window.locator('#aicThread')).toContainText('Ready to help', { timeout: 8000 });
 }
 
+async function clearModelConfigs(window) {
+  await window.evaluate(async () => {
+    const items = await window.db.modelConfigs.list();
+    if (Array.isArray(items)) {
+      for (const item of items) await window.db.modelConfigs.delete(item.id);
+    }
+  });
+}
+
 // ----------------------------------------------------------------
 // Setup / teardown
 // ----------------------------------------------------------------
@@ -328,6 +337,7 @@ test('clicking Send with an empty textarea does nothing', async () => {
 });
 
 test('clicking Send with text but no model shows a model-missing error', async () => {
+  await clearModelConfigs(window);
   await navigateToAiConsole(window);
   await waitForDataLoad(window);
   await window.locator('#aicInput').fill('Tell me about this project');
@@ -341,6 +351,7 @@ test('clicking Send with text but no model shows a model-missing error', async (
 // ----------------------------------------------------------------
 
 test('pressing Enter in the textarea with text triggers send (shows model error)', async () => {
+  await clearModelConfigs(window);
   await navigateToAiConsole(window);
   await waitForDataLoad(window);
   await window.locator('#aicInput').fill('Hello');
@@ -361,6 +372,7 @@ test('pressing Shift+Enter in the textarea does not trigger send', async () => {
 // ----------------------------------------------------------------
 
 test('Clear resets the thread to the welcome message', async () => {
+  await clearModelConfigs(window);
   await navigateToAiConsole(window);
   await waitForDataLoad(window);
   // Trigger error message so thread has more than just the welcome text

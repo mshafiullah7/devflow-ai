@@ -36,6 +36,15 @@ async function seedQuickCommand(window, command, description = '') {
   );
 }
 
+async function clearQuickCommands(window) {
+  await window.evaluate(async () => {
+    const items = await window.db.quickCommands.list();
+    if (Array.isArray(items)) {
+      for (const item of items) await window.db.quickCommands.delete(item.id);
+    }
+  });
+}
+
 // ----------------------------------------------------------------
 // Setup / teardown
 // ----------------------------------------------------------------
@@ -111,6 +120,7 @@ test('saving the add form without a command marks the command field invalid', as
 });
 
 test('saving the add form with a command adds it to the list', async () => {
+  await clearQuickCommands(window);
   await navigateToGitChanges(window);
   await window.locator('#gitPageQcmd').click();
   await window.locator('.qcmd-overlay').waitFor();
@@ -122,6 +132,7 @@ test('saving the add form with a command adds it to the list', async () => {
 });
 
 test('edit button opens the form prefilled with the command text', async () => {
+  await clearQuickCommands(window);
   await seedQuickCommand(window, 'git status');
   await navigateToGitChanges(window);
   await window.locator('#gitPageQcmd').click();
@@ -131,6 +142,7 @@ test('edit button opens the form prefilled with the command text', async () => {
 });
 
 test('cancel in the edit form returns to the list view', async () => {
+  await clearQuickCommands(window);
   await seedQuickCommand(window, 'git status');
   await navigateToGitChanges(window);
   await window.locator('#gitPageQcmd').click();
@@ -142,6 +154,7 @@ test('cancel in the edit form returns to the list view', async () => {
 });
 
 test('delete button removes the command from the list', async () => {
+  await clearQuickCommands(window);
   await seedQuickCommand(window, 'git status');
   await navigateToGitChanges(window);
   await window.locator('#gitPageQcmd').click();
@@ -174,6 +187,7 @@ test('clicking the picker button again closes the dropdown', async () => {
 // ----------------------------------------------------------------
 
 test('selecting a {{input}} command from the picker shows the input prompt', async () => {
+  await clearQuickCommands(window);
   await seedQuickCommand(window, 'git checkout {{input}}');
   await navigateToGitChanges(window);
   await window.locator('#gitQcmdPickerBtn').click();
@@ -183,6 +197,7 @@ test('selecting a {{input}} command from the picker shows the input prompt', asy
 });
 
 test('input prompt Cancel button closes the overlay', async () => {
+  await clearQuickCommands(window);
   await seedQuickCommand(window, 'git checkout {{input}}');
   await navigateToGitChanges(window);
   await window.locator('#gitQcmdPickerBtn').click();

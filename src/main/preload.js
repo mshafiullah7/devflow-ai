@@ -9,6 +9,7 @@ const invoke = async (channel, ...args) => {
     window.dispatchEvent(new CustomEvent('app:ipc-error', {
       detail: { channel, message: result.__error },
     }));
+    throw new Error(result.__error);
   }
   return result;
 };
