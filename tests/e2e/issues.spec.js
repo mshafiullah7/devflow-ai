@@ -106,6 +106,7 @@ test('clicking Add opens the add issue form', async () => {
 test('saving the add form without a title marks the title field as invalid', async () => {
   await navigateToIssues(window);
   await window.locator('#isBtnAdd').click();
+  await window.locator('#isFormTitle').waitFor({ state: 'visible' });
   await window.locator('#isFormSave').click();
   await expect(window.locator('#isFormTitle')).toHaveClass(/is-form__input--error/);
 });
