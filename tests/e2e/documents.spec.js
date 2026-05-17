@@ -172,6 +172,7 @@ test('saving a document updates its title in the sidebar', async () => {
 
 test('clicking delete removes the document and restores the empty state', async () => {
   await createEmptyDocument(window);
+  window.once('dialog', dialog => dialog.accept());
   await window.locator('.doc-sidebar__item').hover();
   await window.locator('.doc-sidebar__item-del').click();
   await expect(window.locator('.doc-sidebar__item')).toHaveCount(0);
