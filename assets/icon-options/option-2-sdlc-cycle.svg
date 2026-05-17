@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d1b2a"/>
+      <stop offset="100%" style="stop-color:#1b2838"/>
+    </linearGradient>
+    <linearGradient id="ring2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38bdf8"/>
+      <stop offset="50%" style="stop-color:#818cf8"/>
+      <stop offset="100%" style="stop-color:#f472b6"/>
+    </linearGradient>
+    <filter id="glow2">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="100" fill="url(#bg2)"/>
+
+  <!-- Outer SDLC cycle ring — 3/4 arc with arrow -->
+  <!-- Arc: center 256,256, radius 170, from 120° to 60° (going clockwise, 300° sweep) -->
+  <path d="M 108,341 A 170,170 0 1 1 404,341"
+        fill="none" stroke="url(#ring2)" stroke-width="22"
+        stroke-linecap="round" filter="url(#glow2)"/>
+
+  <!-- Arrowhead at end of arc (bottom-right area pointing down-left) -->
+  <polygon points="404,341 374,315 430,318" fill="#f472b6" filter="url(#glow2)"/>
+
+  <!-- Inner cycle nodes: 4 dots at compass points minus bottom -->
+  <!-- Top -->
+  <circle cx="256" cy="86" r="18" fill="#38bdf8" filter="url(#glow2)"/>
+  <!-- Right -->
+  <circle cx="426" cy="256" r="18" fill="#818cf8" filter="url(#glow2)"/>
+  <!-- Left -->
+  <circle cx="86" cy="256" r="18" fill="#38bdf8" filter="url(#glow2)"/>
+
+  <!-- Center: AI lightning bolt -->
+  <g transform="translate(256,256)" filter="url(#glow2)">
+    <path d="M 18,-60 L -8,10 L 16,10 L -18,60 L 8,-10 L -16,-10 Z"
+          fill="#facc15" opacity="0.95"/>
+  </g>
+
+  <!-- Label ring segments (small text) -->
+  <!-- Plan at top -->
+  <text x="256" y="58" font-family="Arial, sans-serif" font-size="22" font-weight="600"
+        fill="#38bdf8" text-anchor="middle" opacity="0.8">PLAN</text>
+  <!-- Build at right -->
+  <text x="448" y="262" font-family="Arial, sans-serif" font-size="22" font-weight="600"
+        fill="#818cf8" text-anchor="start" opacity="0.8">BUILD</text>
+  <!-- Test at left -->
+  <text x="64" y="262" font-family="Arial, sans-serif" font-size="22" font-weight="600"
+        fill="#38bdf8" text-anchor="end" opacity="0.8">TEST</text>
+  <!-- Ship at bottom -->
+  <text x="256" y="468" font-family="Arial, sans-serif" font-size="22" font-weight="600"
+        fill="#f472b6" text-anchor="middle" opacity="0.8">SHIP</text>
+</svg>

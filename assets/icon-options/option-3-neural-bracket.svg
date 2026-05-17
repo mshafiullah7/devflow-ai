@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a14"/>
+      <stop offset="100%" style="stop-color:#111827"/>
+    </linearGradient>
+    <linearGradient id="bracket3" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#60a5fa"/>
+    </linearGradient>
+    <filter id="glow3">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="100" fill="url(#bg3)"/>
+
+  <!-- Left code bracket < -->
+  <path d="M 200,140 L 100,256 L 200,372"
+        fill="none" stroke="url(#bracket3)" stroke-width="28"
+        stroke-linecap="round" stroke-linejoin="round" filter="url(#glow3)"/>
+
+  <!-- Right code bracket > -->
+  <path d="M 312,140 L 412,256 L 312,372"
+        fill="none" stroke="url(#bracket3)" stroke-width="28"
+        stroke-linecap="round" stroke-linejoin="round" filter="url(#glow3)"/>
+
+  <!-- Neural nodes inside: 5-node pattern -->
+  <!-- Center node (main AI) -->
+  <circle cx="256" cy="256" r="28" fill="#60a5fa" opacity="0.95" filter="url(#glow3)"/>
+  <!-- Surrounding 4 smaller nodes -->
+  <circle cx="256" cy="168" r="16" fill="#34d399" opacity="0.85" filter="url(#glow3)"/>
+  <circle cx="256" cy="344" r="16" fill="#34d399" opacity="0.85" filter="url(#glow3)"/>
+  <circle cx="210" cy="212" r="12" fill="#a78bfa" opacity="0.75"/>
+  <circle cx="302" cy="212" r="12" fill="#a78bfa" opacity="0.75"/>
+  <circle cx="210" cy="300" r="12" fill="#a78bfa" opacity="0.75"/>
+  <circle cx="302" cy="300" r="12" fill="#a78bfa" opacity="0.75"/>
+
+  <!-- Connection lines from center to satellites -->
+  <line x1="256" y1="256" x2="256" y2="184" stroke="#60a5fa" stroke-width="3" opacity="0.5"/>
+  <line x1="256" y1="256" x2="256" y2="328" stroke="#60a5fa" stroke-width="3" opacity="0.5"/>
+  <line x1="256" y1="256" x2="210" y2="212" stroke="#a78bfa" stroke-width="3" opacity="0.5"/>
+  <line x1="256" y1="256" x2="302" y2="212" stroke="#a78bfa" stroke-width="3" opacity="0.5"/>
+  <line x1="256" y1="256" x2="210" y2="300" stroke="#a78bfa" stroke-width="3" opacity="0.5"/>
+  <line x1="256" y1="256" x2="302" y2="300" stroke="#a78bfa" stroke-width="3" opacity="0.5"/>
+</svg>
