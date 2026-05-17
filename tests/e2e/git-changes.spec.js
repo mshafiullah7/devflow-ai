@@ -116,7 +116,7 @@ test('saving the add form without a command marks the command field invalid', as
   await window.locator('.qcmd-form__btn--save').click();
   // field gets a red outline style when empty
   const outline = await window.locator('#qcmdInputCmd').evaluate(el => el.style.outline);
-  expect(outline).toContain('ef4444');
+  expect(outline).toMatch(/ef4444|rgb\(239,\s*68,\s*68\)/);
 });
 
 test('saving the add form with a command adds it to the list', async () => {
