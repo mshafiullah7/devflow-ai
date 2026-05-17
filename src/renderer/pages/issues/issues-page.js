@@ -615,7 +615,7 @@ export class IssuesPage {
 
     this._pendingSave = () => save(true);
 
-    saveBtn.addEventListener('click', save);
+    saveBtn.addEventListener('click', () => save());
     el.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } });
 
     el.querySelector('#isDescExpandBtn')?.addEventListener('click', () => {
