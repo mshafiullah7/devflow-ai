@@ -578,6 +578,7 @@ export class IssuesPage {
       const title = titleEl.value.trim();
       if (!title) { if (!silent) { titleEl.classList.add('is-form__input--error'); titleEl.focus(); } return; }
       titleEl.classList.remove('is-form__input--error');
+      this._pendingSave   = null;
       saveBtn.disabled    = true;
       saveBtn.textContent = issue ? 'Saving…' : 'Adding…';
 
