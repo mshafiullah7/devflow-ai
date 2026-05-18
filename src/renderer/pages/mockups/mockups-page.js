@@ -20,7 +20,8 @@ Rules:
 - All CSS goes inside a <style> tag; CDN links (e.g. Tailwind CDN) are allowed
 - Visually polished, modern design with realistic placeholder content
 - Fully responsive
-- No explanation, no markdown — raw HTML only${ctx}${design}${save}
+- No explanation, no markdown — raw HTML only
+- REQUIRED: Include a light/dark theme toggle button fixed in the top-right corner (position:fixed; top:1rem; right:1rem; z-index:9999). The button must toggle a "dark" class on <html> or <body> and switch all colours accordingly using CSS variables or a [data-theme] attribute. Default to light theme. The toggle must work standalone with no external dependencies.${ctx}${design}${save}
 
 Screen to design:
 ${description}`;
