@@ -235,5 +235,6 @@ contextBridge.exposeInMainWorld('shell', {
   openDrawio: (data)              => invoke('shell:openDrawio', data),
   readFile:   (filepath)          => invoke('shell:readFile', filepath),
   writeFile:  (filepath, content) => invoke('shell:writeFile', { filepath, content }),
+  statFile:   (filepath)          => invoke('shell:statFile', filepath),
   openVSCode: (folderPath)        => invoke('shell:openVSCode', folderPath),
 });

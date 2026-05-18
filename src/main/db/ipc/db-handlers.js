@@ -725,6 +725,13 @@ function registerDbHandlers() {
     catch { return null; }
   });
 
+  safeHandle('shell:statFile', (_e, filepath) => {
+    try {
+      const s = fs.statSync(filepath);
+      return { mtimeMs: s.mtimeMs };
+    } catch { return null; }
+  });
+
   safeHandle('shell:writeFile', (_e, { filepath, content }) => {
     try {
       fs.mkdirSync(path.dirname(filepath), { recursive: true });

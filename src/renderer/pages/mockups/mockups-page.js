@@ -480,6 +480,36 @@ export class MockupsPage {
     });
   }
 
+  _showConfirmDialog(title, body, confirmLabel, onConfirm) {
+    const existing = this.container.querySelector('.scr-unsaved-overlay');
+    if (existing) return;
+
+    const dlg = document.createElement('div');
+    dlg.className = 'scr-unsaved-overlay';
+    dlg.innerHTML = `
+      <div class="scr-unsaved-dialog">
+        <div class="scr-unsaved-dialog__icon" style="color:#f59e0b">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+            <path d="M12 9v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3 class="scr-unsaved-dialog__title">${escHtml(title)}</h3>
+        <p class="scr-unsaved-dialog__body">${escHtml(body)}</p>
+        <div class="scr-unsaved-dialog__actions">
+          <button class="scr-btn scr-btn--danger"    id="confirmDlgOk">${escHtml(confirmLabel)}</button>
+          <button class="scr-btn scr-btn--secondary" id="confirmDlgCancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    this.container.querySelector('.mockups-page').appendChild(dlg);
+    dlg.querySelector('#confirmDlgCancel').addEventListener('click', () => dlg.remove());
+    dlg.querySelector('#confirmDlgOk').addEventListener('click', () => {
+      dlg.remove();
+      onConfirm();
+    });
+  }
+
   _showExportSuccessModal(fileName) {
     const dlg = document.createElement('div');
     dlg.className = 'scr-unsaved-overlay';
@@ -1446,17 +1476,39 @@ export class MockupsPage {
       const rootDir     = await window.app.screensDir();
       const screensDir  = safeProject ? `${rootDir}\\${safeProject}` : rootDir;
       const filePath    = `${screensDir}\\${safeTitle}.html`;
-      const fileContent = await window.shell.readFile(filePath);
-      if (fileContent) {
-        await window.db.screenDesigns.update({ id: screen.id, html_content: fileContent });
-        screen.html_content = fileContent;
-        this._loadPreview(fileContent);
-      } else {
-        const fresh = await window.db.screenDesigns.get(screen.id);
+
+      const [fileContent, fileStat, fresh] = await Promise.all([
+        window.shell.readFile(filePath),
+        window.shell.statFile(filePath),
+        window.db.screenDesigns.get(screen.id),
+      ]);
+
+      if (!fileContent) {
         if (fresh) {
           screen.html_content = fresh.html_content;
           this._loadPreview(fresh.html_content);
         }
+        return;
+      }
+
+      const dbUpdatedAt = fresh?.updated_at ? new Date(fresh.updated_at).getTime() : 0;
+      const fileIsOlder = fileStat && fileStat.mtimeMs < dbUpdatedAt;
+
+      const doRefresh = () => {
+        window.db.screenDesigns.update({ id: screen.id, html_content: fileContent });
+        screen.html_content = fileContent;
+        this._loadPreview(fileContent);
+      };
+
+      if (fileIsOlder) {
+        this._showConfirmDialog(
+          'File is older than current version',
+          'The file on disk was last modified before the latest database change. Overwriting will lose unsaved edits.',
+          'Overwrite anyway',
+          doRefresh
+        );
+      } else {
+        doRefresh();
       }
     });
 
