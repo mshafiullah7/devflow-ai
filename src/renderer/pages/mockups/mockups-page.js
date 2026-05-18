@@ -789,7 +789,8 @@ export class MockupsPage {
       window.app.chat.onDone(async ({ html, raw, error }) => {
         clearInterval(genTimer);
         window.app.chat.offAll();
-        const rawText = raw || '';
+        const rawText    = raw || '';
+        const previousHtml = screen.html_content;  // capture before overwrite
 
         if (html && !error) {
           await window.db.screenDesigns.update({ id: screen.id, html_content: html, model_used: model.label || '' });
@@ -803,10 +804,32 @@ export class MockupsPage {
                   <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 Preview updated
+                ${previousHtml ? `<button class="scr-chat-rollback-btn" title="Rollback to previous version">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 6h7a5 5 0 0 1 0 10H4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M5 3L2 6l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Rollback
+                </button>` : ''}
               </div>
               <pre class="scr-chat-response-bubble__pre">${escHtml(rawText)}</pre>
             </div>
           `;
+          if (previousHtml) {
+            previewBubble.querySelector('.scr-chat-rollback-btn')?.addEventListener('click', () => {
+              this._showConfirmDialog(
+                'Rollback changes?',
+                'This will restore the previous version. Current changes will be lost.',
+                'Rollback',
+                async () => {
+                  await window.db.screenDesigns.update({ id: screen.id, html_content: previousHtml });
+                  screen.html_content = previousHtml;
+                  this._loadPreview(previousHtml);
+                  previewBubble.querySelector('.scr-chat-rollback-btn')?.remove();
+                }
+              );
+            });
+          }
         } else {
           previewBubble.innerHTML = `
             <div class="scr-chat-response-bubble scr-chat-response-bubble--err">
