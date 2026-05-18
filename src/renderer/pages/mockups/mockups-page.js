@@ -1363,9 +1363,10 @@ export class MockupsPage {
 
     divider.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      const startX     = e.clientX;
-      const startWidth = editPane.getBoundingClientRect().width;
-      const totalWidth = splitEl.getBoundingClientRect().width;
+      const startX            = e.clientX;
+      const startEditWidth    = editPane.getBoundingClientRect().width;
+      const startPreviewWidth = previewPane.getBoundingClientRect().width;
+      const totalWidth        = splitEl.getBoundingClientRect().width;
 
       // Iframe captures mousemove once the cursor enters it — block it during drag
       const iframe = main.querySelector('#scrPreviewFrame');
@@ -1374,11 +1375,23 @@ export class MockupsPage {
       document.body.style.userSelect = 'none';
 
       const onMove = (mv) => {
-        const newWidth = Math.min(Math.max(startWidth - (mv.clientX - startX), 200), totalWidth - 200);
-        editPane.style.flex = `0 0 ${newWidth}px`;
-        const editPct = Math.round((newWidth / totalWidth) * 100);
-        if (editPctEl)    editPctEl.textContent    = editPct + '%';
-        if (previewPctEl) previewPctEl.textContent = (100 - editPct) + '%';
+        const delta = mv.clientX - startX;
+        const isMobile = (localStorage.getItem(VIEWPORT_KEY) || 'desktop') === 'mobile';
+        if (isMobile) {
+          // In mobile mode, preview is fixed and edit is flexible — resize the preview pane
+          const newPreviewWidth = Math.min(Math.max(startPreviewWidth + delta, 200), totalWidth - 200);
+          previewPane.style.flex = `0 0 ${newPreviewWidth}px`;
+          const previewPct = Math.round((newPreviewWidth / totalWidth) * 100);
+          if (previewPctEl) previewPctEl.textContent = previewPct + '%';
+          if (editPctEl)    editPctEl.textContent    = (100 - previewPct) + '%';
+        } else {
+          // In desktop mode, edit is fixed and preview is flexible — resize the edit pane
+          const newEditWidth = Math.min(Math.max(startEditWidth - delta, 200), totalWidth - 200);
+          editPane.style.flex = `0 0 ${newEditWidth}px`;
+          const editPct = Math.round((newEditWidth / totalWidth) * 100);
+          if (editPctEl)    editPctEl.textContent    = editPct + '%';
+          if (previewPctEl) previewPctEl.textContent = (100 - editPct) + '%';
+        }
       };
 
       const onUp = () => {
