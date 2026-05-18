@@ -1491,7 +1491,8 @@ export class MockupsPage {
         return;
       }
 
-      const dbUpdatedAt = fresh?.updated_at ? new Date(fresh.updated_at).getTime() : 0;
+      // SQLite datetime('now') is UTC but lacks 'Z' — append it so Date parses correctly
+      const dbUpdatedAt = fresh?.updated_at ? new Date(fresh.updated_at.replace(' ', 'T') + 'Z').getTime() : 0;
       const fileIsOlder = fileStat && fileStat.mtimeMs < dbUpdatedAt;
 
       const doRefresh = () => {
