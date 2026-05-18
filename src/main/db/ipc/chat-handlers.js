@@ -44,8 +44,10 @@ ${existingHtml}`;
 }
 
 // Fallback model used when CLI model config has no model_name set.
-// Haiku is the cheapest model; set model_name explicitly in model config to override.
-const DEFAULT_CLI_MODEL = 'claude-haiku-4-5-20251001';
+// Uses the undated alias so it survives patch/date-suffix rotations within the same
+// model generation. Update this constant when Anthropic retires the haiku-4-5 family.
+// Set model_name explicitly in the model config to override per-profile.
+const DEFAULT_CLI_MODEL = 'claude-haiku-4-5';
 
 let _activeProc = null;
 let _cancelled  = false;
