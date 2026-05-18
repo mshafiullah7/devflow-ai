@@ -85,6 +85,58 @@ function extractHtml(text) {
   return null;
 }
 
+// Prompt that asks for JSON search-replace patches instead of full HTML —
+// cuts output tokens by ~90% for typical edits.
+function buildDiffPromptWithRef(instruction, htmlFilePath, projectDescription) {
+  const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
+  return `You are an expert UI/UX developer. Apply the instruction below to the HTML file.
+
+Read the existing HTML from: ${htmlFilePath}${ctx}
+
+Instruction: ${instruction}
+
+Output ONLY a raw JSON array of search-replace patches. No explanation, no markdown, no HTML.
+The output must start with [ and end with ].
+
+Format:
+[{"search":"exact substring copied from the HTML","replace":"new content"}]
+
+Rules:
+- Each "search" must be an exact, unique substring of the HTML in the file
+- Include at least 20 surrounding characters so the string is unambiguous
+- Replace the smallest snippet that achieves the change — do not repeat unchanged content
+- Multiple patches are fine and applied in order`;
+}
+
+// Parse [{search, replace}] patches from model output.
+function extractPatches(text) {
+  const clean = stripAnsi(text);
+  const start = clean.indexOf('[');
+  const end   = clean.lastIndexOf(']');
+  if (start === -1 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(clean.slice(start, end + 1));
+    if (Array.isArray(parsed) && parsed.length > 0 &&
+        parsed.every(p => typeof p.search === 'string' && 'replace' in p)) {
+      return parsed;
+    }
+  } catch (_) {}
+  return null;
+}
+
+// Apply [{search, replace}] patches sequentially to html.
+// Throws if any search string is not found.
+function applyPatches(html, patches) {
+  let result = html;
+  for (const { search, replace } of patches) {
+    if (!result.includes(search)) {
+      throw new Error(`Patch search string not found: "${search.slice(0, 80)}"`);
+    }
+    result = result.split(search).join(replace);
+  }
+  return result;
+}
+
 // ----------------------------------------------------------------
 // Anthropic SSE streaming
 // ----------------------------------------------------------------
@@ -217,6 +269,7 @@ function runCli(wc, prompt, editPayload, model, messages) {
 
   let promptText;
   let htmlTmpFile = null;
+  let isDiffMode  = false;
 
   if (editPayload) {
     htmlTmpFile = path.join(os.tmpdir(), `ai-sdlc-html-${ts}.html`);
@@ -226,7 +279,8 @@ function runCli(wc, prompt, editPayload, model, messages) {
       send(wc, 'chat:done', { html: null, raw: '', error: `Failed to write HTML temp file: ${err.message}` });
       return;
     }
-    promptText = buildEditPromptWithRef(editPayload.instruction, htmlTmpFile, editPayload.projectDescription);
+    promptText = buildDiffPromptWithRef(editPayload.instruction, htmlTmpFile, editPayload.projectDescription);
+    isDiffMode = true;
   } else if (messages && messages.length > 1) {
     // Format conversation history as plain text for stateless CLI tools
     const lines = messages.slice(0, -1).map(m =>
@@ -283,12 +337,31 @@ function runCli(wc, prompt, editPayload, model, messages) {
   _activeProc.on('close', (code) => {
     cleanup();
     if (_cancelled) return;
-    const html = extractHtml(accumulated);
-    send(wc, 'chat:done', {
-      html,
-      raw:   accumulated,
-      error: html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response'),
-    });
+
+    let html  = null;
+    let error = null;
+
+    if (isDiffMode) {
+      const patches = extractPatches(accumulated);
+      if (patches) {
+        try {
+          html = applyPatches(editPayload.htmlContent, patches);
+        } catch (err) {
+          // Patch application failed — fall back to full HTML extraction
+          html  = extractHtml(accumulated);
+          error = html ? null : `Patch failed (${err.message}) and no full HTML found`;
+        }
+      } else {
+        // Model output full HTML despite instructions — accept it
+        html  = extractHtml(accumulated);
+        error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'No patches or HTML found in response');
+      }
+    } else {
+      html  = extractHtml(accumulated);
+      error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
+    }
+
+    send(wc, 'chat:done', { html, raw: accumulated, error });
     _activeProc = null;
   });
 
