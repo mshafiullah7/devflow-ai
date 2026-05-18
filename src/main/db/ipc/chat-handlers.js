@@ -43,6 +43,10 @@ Existing HTML:
 ${existingHtml}`;
 }
 
+// Fallback model used when CLI model config has no model_name set.
+// Haiku is the cheapest model; set model_name explicitly in model config to override.
+const DEFAULT_CLI_MODEL = 'claude-haiku-4-5-20251001';
+
 let _activeProc = null;
 let _cancelled  = false;
 
@@ -205,8 +209,8 @@ function runOllama(wc, prompt, editPayload, model, messages) {
 // ----------------------------------------------------------------
 function runCli(wc, prompt, editPayload, model, messages) {
   const exe       = model.executable || 'claude';
-  const modelFlag = model.model_name ? ` --model ${model.model_name}` : '';
-  const baseFlags = `--dangerously-skip-permissions --print${modelFlag}`;
+  const modelName = model.model_name || DEFAULT_CLI_MODEL;
+  const baseFlags = `--dangerously-skip-permissions --print --model ${modelName}`;
   const ts        = Date.now();
 
   let promptText;
