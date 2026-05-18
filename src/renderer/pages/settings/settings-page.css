@@ -492,6 +492,11 @@
   font-style: italic;
 }
 
+.st-form__error {
+  font-size: 11px;
+  color: var(--danger, #ef4444);
+}
+
 .st-backup-paths {
   margin-top: 10px;
   border: 1px solid var(--border);
