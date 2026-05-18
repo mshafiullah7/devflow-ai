@@ -1,6 +1,29 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
+const KNOWN_CLI_MODELS = {
+  claude: [
+    'claude-haiku-4-5',
+    'claude-haiku-4-5-20251001',
+    'claude-sonnet-4-6',
+    'claude-opus-4-5',
+  ],
+  gemini: [
+    'gemini-2.5-flash-preview-05-20',
+    'gemini-2.5-pro-preview-05-06',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+  ],
+  aider: [
+    'gpt-4o',
+    'gpt-4-turbo',
+    'claude-sonnet-4-6',
+    'claude-opus-4-5',
+    'deepseek/deepseek-coder',
+  ],
+};
 
 export class SettingsPage {
   constructor(container, params, router) {
@@ -791,10 +814,18 @@ export class SettingsPage {
               </div>
               <div class="st-form__row">
                 <label class="st-form__label">Model *</label>
-                <input class="st-form__input" id="stFCliModel" type="text"
-                  placeholder="e.g. claude-haiku-4-5, gemini-2.0-flash"
-                  value="${escHtml(config?.type === 'cli' ? (config?.model_name || '') : '')}" autocomplete="off"/>
-                <span class="st-form__hint">Passed as --model &lt;value&gt; to the CLI</span>
+                <div class="st-input-row">
+                  <input class="st-form__input" id="stFCliModel" type="text" list="stFCliModelList"
+                    placeholder="e.g. claude-haiku-4-5, gemini-2.0-flash"
+                    value="${escHtml(config?.type === 'cli' ? (config?.model_name || '') : '')}" autocomplete="off"/>
+                  <datalist id="stFCliModelList"></datalist>
+                  <button type="button" class="st-detect-btn" id="stFBtnFetchCliModels" style="display:none" title="Fetch installed Ollama models">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                  </button>
+                </div>
+                <span class="st-form__hint" id="stFCliModelHint">Passed as --model &lt;value&gt; to the CLI</span>
                 <span class="st-form__error" id="stFCliModelError" style="display:none">Model name is required</span>
               </div>
               <div class="st-form__row">
@@ -931,9 +962,62 @@ export class SettingsPage {
 
     overlay.querySelector('#stBtnDetect')?.addEventListener('click', loadOllamaModels);
 
-    overlay.querySelector('#stFCliModel')?.addEventListener('input', () => {
-      overlay.querySelector('#stFCliModelError').style.display = 'none';
+    // CLI model suggestions — populate datalist based on executable
+    const cliExeInput   = overlay.querySelector('#stFExecutable');
+    const cliModelInput = overlay.querySelector('#stFCliModel');
+    const cliModelList  = overlay.querySelector('#stFCliModelList');
+    const cliModelHint  = overlay.querySelector('#stFCliModelHint');
+    const cliModelError = overlay.querySelector('#stFCliModelError');
+    const cliFetchBtn   = overlay.querySelector('#stFBtnFetchCliModels');
+
+    const updateCliModelSuggestions = (exe) => {
+      const name = (exe || '').toLowerCase().trim();
+      if (cliModelList) cliModelList.innerHTML = '';
+      if (cliFetchBtn)  cliFetchBtn.style.display = 'none';
+      if (!cliModelHint) return;
+      if (KNOWN_CLI_MODELS[name]) {
+        KNOWN_CLI_MODELS[name].forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          cliModelList.appendChild(opt);
+        });
+        cliModelHint.textContent = `${KNOWN_CLI_MODELS[name].length} known ${name} models available as suggestions`;
+      } else if (name === 'ollama') {
+        cliFetchBtn.style.display = '';
+        cliModelHint.textContent  = 'Click the refresh button to load your installed Ollama models';
+      } else {
+        cliModelHint.textContent = 'Passed as --model <value> to the CLI';
+      }
+    };
+
+    if (cliExeInput) {
+      cliExeInput.addEventListener('input', () => updateCliModelSuggestions(cliExeInput.value));
+      updateCliModelSuggestions(config?.executable || '');
+    }
+
+    cliFetchBtn?.addEventListener('click', async () => {
+      const orig = cliFetchBtn.innerHTML;
+      cliFetchBtn.disabled = true;
+      try {
+        const models = await window.ollama.listModels('http://localhost:11434');
+        if (cliModelList) cliModelList.innerHTML = '';
+        (models || []).forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          cliModelList.appendChild(opt);
+        });
+        cliModelHint.textContent = `${models?.length || 0} Ollama models loaded — click the field to pick one`;
+      } catch {
+        cliModelHint.textContent = 'Could not reach Ollama at localhost:11434 — is it running?';
+      } finally {
+        cliFetchBtn.innerHTML  = orig;
+        cliFetchBtn.disabled   = false;
+      }
     });
+
+    if (cliModelInput) {
+      cliModelInput.addEventListener('input', () => { if (cliModelError) cliModelError.style.display = 'none'; });
+    }
 
     overlay.querySelectorAll('.st-type-btn').forEach(btn => {
       btn.addEventListener('click', () => {
