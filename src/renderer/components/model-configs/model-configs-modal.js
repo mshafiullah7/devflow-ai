@@ -1,5 +1,29 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 
+const KNOWN_CLI_MODELS = {
+  claude: [
+    'claude-haiku-4-5',
+    'claude-haiku-4-5-20251001',
+    'claude-sonnet-4-6',
+    'claude-opus-4-5',
+  ],
+  gemini: [
+    'gemini-2.5-flash-preview-05-20',
+    'gemini-2.5-pro-preview-05-06',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+  ],
+  aider: [
+    'gpt-4o',
+    'gpt-4-turbo',
+    'claude-sonnet-4-6',
+    'claude-opus-4-5',
+    'deepseek/deepseek-coder',
+  ],
+};
+
 export class ModelConfigsModal {
   constructor({ onConfigsChanged }) {
     this._onConfigsChanged = onConfigsChanged || (() => {});
@@ -160,9 +184,20 @@ export class ModelConfigsModal {
             <span class="mcfg-form__hint">Binary name available in PATH (e.g. claude, gemini, aider)</span>
           </div>
           <div class="mcfg-form__row">
-            <label class="mcfg-form__label">Model</label>
-            <input class="mcfg-form__input" id="mcfgCliModel" type="text" placeholder="e.g. claude-sonnet-4-6, gemini-2.0-flash" value="${escHtml(config?.type === 'cli' ? (config?.model_name || '') : '')}" autocomplete="off"/>
-            <span class="mcfg-form__hint">Passed as --model &lt;value&gt; to the CLI (optional)</span>
+            <label class="mcfg-form__label">Model *</label>
+            <div class="mcfg-form__input-row">
+              <input class="mcfg-form__input" id="mcfgCliModel" type="text" list="mcfgCliModelList"
+                placeholder="e.g. claude-haiku-4-5, gemini-2.0-flash"
+                value="${escHtml(config?.type === 'cli' ? (config?.model_name || '') : '')}"
+                autocomplete="off"/>
+              <datalist id="mcfgCliModelList"></datalist>
+              <button type="button" class="mcfg-btn mcfg-fetch-btn" id="btnFetchModels" style="display:none" title="Fetch installed Ollama models">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M13 8A5 5 0 1 1 8 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M13 3v5h-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Fetch
+              </button>
+            </div>
+            <span class="mcfg-form__hint" id="mcfgCliModelHint">Passed as --model &lt;value&gt; to the CLI</span>
+            <span class="mcfg-form__error" id="mcfgCliModelError" style="display:none">Model name is required</span>
           </div>
           <div class="mcfg-form__row">
             <label class="mcfg-form__label">Flags</label>
@@ -230,6 +265,64 @@ export class ModelConfigsModal {
       });
     });
 
+    // Model suggestions — populate datalist based on executable name
+    const exeInput    = body.querySelector('#mcfgExecutable');
+    const modelInput  = body.querySelector('#mcfgCliModel');
+    const modelList   = body.querySelector('#mcfgCliModelList');
+    const fetchBtn    = body.querySelector('#btnFetchModels');
+    const modelHint   = body.querySelector('#mcfgCliModelHint');
+    const modelError  = body.querySelector('#mcfgCliModelError');
+
+    const updateModelSuggestions = (exe) => {
+      const name = (exe || '').toLowerCase().trim();
+      modelList.innerHTML = '';
+      fetchBtn.style.display = 'none';
+      if (KNOWN_CLI_MODELS[name]) {
+        KNOWN_CLI_MODELS[name].forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          modelList.appendChild(opt);
+        });
+        modelHint.textContent = `${KNOWN_CLI_MODELS[name].length} known ${name} models available as suggestions`;
+      } else if (name === 'ollama') {
+        fetchBtn.style.display = '';
+        modelHint.textContent = 'Click Fetch to load your installed Ollama models';
+      } else {
+        modelHint.textContent = 'Passed as --model <value> to the CLI';
+      }
+    };
+
+    if (exeInput) {
+      exeInput.addEventListener('input', () => updateModelSuggestions(exeInput.value));
+      updateModelSuggestions(config?.executable || '');
+    }
+
+    fetchBtn?.addEventListener('click', async () => {
+      const orig = fetchBtn.innerHTML;
+      fetchBtn.textContent = '…';
+      fetchBtn.disabled = true;
+      try {
+        const res  = await fetch('http://localhost:11434/api/tags');
+        const data = await res.json();
+        modelList.innerHTML = '';
+        (data.models || []).forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.name;
+          modelList.appendChild(opt);
+        });
+        modelHint.textContent = `${data.models?.length || 0} Ollama models loaded — click the field to pick one`;
+      } catch {
+        modelHint.textContent = 'Could not reach Ollama at localhost:11434 — is it running?';
+      } finally {
+        fetchBtn.innerHTML  = orig;
+        fetchBtn.disabled   = false;
+      }
+    });
+
+    if (modelInput) {
+      modelInput.addEventListener('input', () => { modelError.style.display = 'none'; });
+    }
+
     body.querySelector('#mcfgForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const type      = body.querySelector('#mcfgType').value;
@@ -241,8 +334,14 @@ export class ModelConfigsModal {
       let data = { label, type, is_default: isDefault, input_mode: 'pipe' };
 
       if (type === 'cli') {
+        const cliModel = body.querySelector('#mcfgCliModel')?.value.trim() || '';
+        if (!cliModel) {
+          body.querySelector('#mcfgCliModelError').style.display = '';
+          body.querySelector('#mcfgCliModel').focus();
+          return;
+        }
         data.executable  = body.querySelector('#mcfgExecutable')?.value.trim() || null;
-        data.model_name  = body.querySelector('#mcfgCliModel')?.value.trim() || null;
+        data.model_name  = cliModel;
         data.flags       = body.querySelector('#mcfgFlags')?.value.trim() || null;
         data.input_mode  = body.querySelector('#mcfgInputMode')?.value || 'pipe';
       } else if (type === 'anthropic') {
