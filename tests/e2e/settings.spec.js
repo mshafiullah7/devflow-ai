@@ -241,6 +241,7 @@ test('filling the label and submitting adds the model and closes the modal', asy
   await navigateToSettings(window);
   await window.locator('#stBtnAddModel').click();
   await window.locator('#stFLabel').fill('My Claude CLI');
+  await window.locator('#stFCliModel').fill('claude-sonnet-4-6');
   await window.locator('#stModalForm button[type="submit"]').click();
   await expect(window.locator('.st-overlay')).toHaveCount(0);
 });
@@ -250,6 +251,7 @@ test('newly added model label appears in the model list', async () => {
   await navigateToSettings(window);
   await window.locator('#stBtnAddModel').click();
   await window.locator('#stFLabel').fill('New Test Model');
+  await window.locator('#stFCliModel').fill('claude-sonnet-4-6');
   await window.locator('#stModalForm button[type="submit"]').click();
   await expect(window.locator('.st-model-item__label')).toHaveText('New Test Model');
 });
@@ -258,6 +260,7 @@ test('adding a model removes the empty-state message', async () => {
   await navigateToSettings(window);
   await window.locator('#stBtnAddModel').click();
   await window.locator('#stFLabel').fill('Remove Empty State');
+  await window.locator('#stFCliModel').fill('claude-sonnet-4-6');
   await window.locator('#stModalForm button[type="submit"]').click();
   await expect(window.locator('.st-model-empty')).toHaveCount(0);
 });
