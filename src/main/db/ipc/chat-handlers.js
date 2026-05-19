@@ -85,8 +85,30 @@ function extractHtml(text) {
   return null;
 }
 
-// Prompt that asks for JSON search-replace patches instead of full HTML —
-// cuts output tokens by ~90% for typical edits.
+// Inline variant: HTML embedded directly (used by Ollama which has no file access).
+function buildDiffPromptInline(instruction, existingHtml, projectDescription) {
+  const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
+  return `Apply the instruction below to the existing HTML.${ctx}
+
+Instruction: ${instruction}
+
+Existing HTML:
+${existingHtml}
+
+Output ONLY a raw JSON array of search-replace patches. No explanation, no markdown, no HTML.
+The output must start with [ and end with ].
+
+Format:
+[{"search":"exact substring copied from the HTML","replace":"new content"}]
+
+Rules:
+- Each "search" must be an exact, unique substring of the HTML above
+- Include at least 20 surrounding characters so the string is unambiguous
+- Replace the smallest snippet that achieves the change — do not repeat unchanged content
+- Multiple patches are fine and applied in order`;
+}
+
+// File-ref variant: CLI tools read the HTML from disk.
 function buildDiffPromptWithRef(instruction, htmlFilePath, projectDescription) {
   const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
   return `You are an expert UI/UX developer. Apply the instruction below to the HTML file.
@@ -201,24 +223,29 @@ function runAnthropic(wc, prompt, editPayload, model, messages) {
 // Uses agent/ollama_proxy.py instead of direct HTTP to inherit the
 // reliability of the Python ollama client and consistent streaming.
 // ----------------------------------------------------------------
-// System message prepended to every Ollama request.
-// Small local models need an explicit system instruction to output raw HTML
-// without explanations — they won't reliably follow user-prompt-only rules.
-const OLLAMA_SYSTEM_MSG = {
+const OLLAMA_SYSTEM_HTML = {
   role: 'system',
   content: 'You are an expert UI/UX developer. You MUST output ONLY raw, complete HTML starting with <!DOCTYPE html> and ending with </html>. Never explain, describe, or comment on the HTML. Never use markdown code fences. Output nothing except the HTML document itself.',
 };
 
+const OLLAMA_SYSTEM_DIFF = {
+  role: 'system',
+  content: 'You are an expert UI/UX developer. You MUST output ONLY a raw JSON array of search-replace patches. Never explain, never output HTML, never use markdown. The output must start with [ and end with ].',
+};
+
 function runOllama(wc, prompt, editPayload, model, messages) {
   let msgs;
+  let isDiffMode = false;
+
   if (editPayload) {
-    const content = buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
-    msgs = [OLLAMA_SYSTEM_MSG, { role: 'user', content }];
+    // Diff/patch mode for edits — much smaller output than full HTML
+    isDiffMode = true;
+    const content = buildDiffPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
+    msgs = [OLLAMA_SYSTEM_DIFF, { role: 'user', content }];
   } else if (messages && messages.length > 0) {
-    // Prepend system message if the array doesn't already have one
-    msgs = messages[0]?.role === 'system' ? messages : [OLLAMA_SYSTEM_MSG, ...messages];
+    msgs = messages[0]?.role === 'system' ? messages : [OLLAMA_SYSTEM_HTML, ...messages];
   } else {
-    msgs = [OLLAMA_SYSTEM_MSG, { role: 'user', content: prompt }];
+    msgs = [OLLAMA_SYSTEM_HTML, { role: 'user', content: prompt }];
   }
 
   const ts      = Date.now();
@@ -249,7 +276,6 @@ function runOllama(wc, prompt, editPayload, model, messages) {
     send(wc, 'chat:token', { text });
   });
 
-  // Forward stderr so proxy diagnostics (connection info, errors) appear in chat
   _activeProc.stderr.on('data', (chunk) => {
     send(wc, 'chat:token', { text: chunk.toString('utf8') });
   });
@@ -257,8 +283,30 @@ function runOllama(wc, prompt, editPayload, model, messages) {
   _activeProc.on('close', (code) => {
     cleanup();
     if (_cancelled) return;
-    const html  = extractHtml(accumulated);
-    const error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
+
+    let html  = null;
+    let error = null;
+
+    if (isDiffMode) {
+      const patches = extractPatches(accumulated);
+      if (patches) {
+        try {
+          html = applyPatches(editPayload.htmlContent, patches);
+        } catch (err) {
+          // Patch failed — fall back to full HTML extraction
+          html  = extractHtml(accumulated);
+          error = html ? null : `Patch failed (${err.message}) and no full HTML found`;
+        }
+      } else {
+        // Model output full HTML despite instructions — accept it
+        html  = extractHtml(accumulated);
+        error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'No patches or HTML found in response');
+      }
+    } else {
+      html  = extractHtml(accumulated);
+      error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
+    }
+
     send(wc, 'chat:done', { html, raw: accumulated, error });
     _activeProc = null;
   });
