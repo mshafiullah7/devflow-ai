@@ -197,7 +197,9 @@ function runAnthropic(wc, prompt, editPayload, model, messages) {
 }
 
 // ----------------------------------------------------------------
-// Ollama NDJSON streaming  (/api/chat)
+// Ollama — Python proxy subprocess
+// Uses agent/ollama_proxy.py instead of direct HTTP to inherit the
+// reliability of the Python ollama client and consistent streaming.
 // ----------------------------------------------------------------
 function runOllama(wc, prompt, editPayload, model, messages) {
   let msgs;
@@ -210,52 +212,49 @@ function runOllama(wc, prompt, editPayload, model, messages) {
     msgs = [{ role: 'user', content: prompt }];
   }
 
-  const baseUrl = (model.base_url || 'http://localhost:11434').replace(/\/$/, '');
-  const body    = JSON.stringify({
-    model:    model.model_name,
-    messages: msgs,
-    stream:   true,
-  });
+  const ts      = Date.now();
+  const tmpFile = path.join(os.tmpdir(), `ai-sdlc-ollama-${ts}.json`);
+  try {
+    fs.writeFileSync(tmpFile, JSON.stringify(msgs), 'utf8');
+  } catch (err) {
+    send(wc, 'chat:done', { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
+    return;
+  }
 
-  const url = new URL('/api/chat', baseUrl);
-  const mod = url.protocol === 'https:' ? https : http;
+  const agentPath = path.join(__dirname, '../../../../agent/ollama_proxy.py');
+  const baseUrl   = (model.base_url || 'http://localhost:11434').replace(/\/$/, '');
+  const cleanup   = () => { try { fs.unlinkSync(tmpFile); } catch (_) {} };
   let accumulated = '';
-  let buffer      = '';
 
-  const req = mod.request({
-    hostname: url.hostname,
-    port:     url.port || (url.protocol === 'https:' ? 443 : 80),
-    path:     url.pathname,
-    method:   'POST',
-    headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-  }, (res) => {
-    res.on('data', (chunk) => {
-      buffer += chunk.toString('utf8');
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const data  = JSON.parse(line);
-          const token = data.message?.content || '';
-          if (token) {
-            accumulated += token;
-            send(wc, 'chat:token', { text: token });
-          }
-          if (data.done) {
-            const html = extractHtml(accumulated);
-            send(wc, 'chat:done', { html, raw: accumulated, error: html ? null : 'Could not extract HTML from response' });
-          }
-        } catch (_) {}
-      }
-    });
-    res.on('error', (err) => send(wc, 'chat:done', { html: null, raw: '', error: err.message }));
+  _activeProc = spawn('python', [
+    agentPath,
+    '--messages-file', tmpFile,
+    '--model',         model.model_name,
+    '--base-url',      baseUrl,
+  ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env } });
+
+  _activeProc.stdout.on('data', (chunk) => {
+    const text = chunk.toString('utf8');
+    accumulated += text;
+    send(wc, 'chat:token', { text });
   });
 
-  req.on('error', (err) => send(wc, 'chat:done', { html: null, raw: '', error: err.message }));
-  req.write(body);
-  req.end();
-  _activeProc = req;
+  _activeProc.stderr.on('data', () => {});
+
+  _activeProc.on('close', (code) => {
+    cleanup();
+    if (_cancelled) return;
+    const html  = extractHtml(accumulated);
+    const error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
+    send(wc, 'chat:done', { html, raw: accumulated, error });
+    _activeProc = null;
+  });
+
+  _activeProc.on('error', (err) => {
+    cleanup();
+    send(wc, 'chat:done', { html: null, raw: accumulated, error: err.message });
+    _activeProc = null;
+  });
 }
 
 // ----------------------------------------------------------------
