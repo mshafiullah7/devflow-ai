@@ -467,7 +467,7 @@
 }
 
 .doc-editor__title-input {
-  flex: 1;
+  flex: 1 1 auto;
   background: transparent;
   border: none;
   outline: none;
@@ -475,7 +475,7 @@
   font-weight: 600;
   font-family: inherit;
   color: var(--text-primary);
-  min-width: 0;
+  min-width: 60px;
 }
 .doc-editor__title-input::placeholder {
   color: var(--text-muted);

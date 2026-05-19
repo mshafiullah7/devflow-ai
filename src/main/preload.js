@@ -3,7 +3,16 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
+const invoke = async (channel, ...args) => {
+  const result = await ipcRenderer.invoke(channel, ...args);
+  if (result && typeof result === 'object' && '__error' in result) {
+    window.dispatchEvent(new CustomEvent('app:ipc-error', {
+      detail: { channel, message: result.__error },
+    }));
+    throw new Error(result.__error);
+  }
+  return result;
+};
 
 contextBridge.exposeInMainWorld('db', {
   status: {
@@ -104,11 +113,20 @@ contextBridge.exposeInMainWorld('db', {
     pendingCount:    (pid)  => invoke('db:prompt_queue:pending_count', pid),
     run:             (data) => invoke('promptQueue:run', data),
     kill:            ()     => invoke('promptQueue:kill'),
-    onData:          (cb)   => ipcRenderer.on('promptQueue:data', (_e, p) => cb(p)),
-    onDone:          (cb)   => ipcRenderer.on('promptQueue:done', (_e, p) => cb(p)),
+    // Phase 2 — execute an approved plan
+    approvePlan:     (data) => invoke('promptQueue:approvePlan', data),
+    onData:          (cb)   => ipcRenderer.on('promptQueue:data',       (_e, p) => cb(p)),
+    onDone:          (cb)   => ipcRenderer.on('promptQueue:done',       (_e, p) => cb(p)),
+    // Planning events
+    onPlan:          (cb)   => ipcRenderer.on('promptQueue:plan',       (_e, p) => cb(p)),
+    onStep:          (cb)   => ipcRenderer.on('promptQueue:step',       (_e, p) => cb(p)),
+    onRunSummary:    (cb)   => ipcRenderer.on('promptQueue:runSummary', (_e, p) => cb(p)),
     removeListeners: ()     => {
       ipcRenderer.removeAllListeners('promptQueue:data');
       ipcRenderer.removeAllListeners('promptQueue:done');
+      ipcRenderer.removeAllListeners('promptQueue:plan');
+      ipcRenderer.removeAllListeners('promptQueue:step');
+      ipcRenderer.removeAllListeners('promptQueue:runSummary');
     },
   },
   testRunner: {
@@ -189,6 +207,9 @@ contextBridge.exposeInMainWorld('app', {
     restore: () => invoke('app:db:restore'),
   },
   backupDefaultPath: () => invoke('app:backup-default-path'),
+  logs: {
+    list: () => invoke('app:logs:list'),
+  },
   screensDir:       (projectName) => invoke('app:screens-dir', projectName),
   prepareScreenRef: (data)        => invoke('app:prepare-screen-ref', data),
   writeTempFiles:   (files)       => invoke('app:writeTempFiles', files),

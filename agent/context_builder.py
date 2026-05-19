@@ -184,6 +184,29 @@ def build(project_root: str, max_chars: int = 12_000) -> str:
     return result
 
 
+def build_with_rag(
+    project_root: str,
+    query: str,
+    retriever,
+    max_chars: int = 12_000,
+    rag_snippets: int = 5,
+    rag_char_budget: int = 6_000,
+) -> str:
+    """
+    Combines the static repo map with semantically retrieved code snippets.
+    The static map is built first (capped at max_chars), then RAG snippets
+    for the specific query are appended (capped at rag_char_budget).
+    """
+    repo_map  = build(project_root, max_chars=max_chars)
+    rag_block = retriever.query(query, n_results=rag_snippets)
+    if rag_block:
+        trimmed = rag_block[:rag_char_budget]
+        if len(rag_block) > rag_char_budget:
+            trimmed += '\n... (RAG snippets truncated)'
+        return repo_map + '\n\n' + trimmed
+    return repo_map
+
+
 if __name__ == '__main__':
     import sys
     target = sys.argv[1] if len(sys.argv) > 1 else '.'

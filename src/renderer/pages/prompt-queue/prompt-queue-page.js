@@ -23,9 +23,13 @@ export class PromptQueuePage {
     this._isRunning  = false;
     this._runAll     = false;
     this._modelCfg   = null;
-    this._messages      = {};   // { [itemId]: [{role, content, created_at}] }
-    this._runTimer      = null;
-    this._runStartTime  = null;
+    this._messages         = {};   // { [itemId]: [{role, content, created_at}] }
+    this._runTimer         = null;
+    this._runStartTime     = null;
+    // Planning state
+    this._awaitingApproval = false;
+    this._pendingPlan      = null;   // { item, plan } while waiting for user approval
+    this._activePlan       = null;   // plan being executed (for step progress bar)
   }
 
   async mount() {
@@ -331,6 +335,8 @@ export class PromptQueuePage {
             ${item.tag ? `<span class="pq-detail__tag">${escHtml(item.tag)}</span>` : ''}
             ${item.ran_at ? `<span class="pq-detail__time">${new Date(item.ran_at + (item.ran_at.endsWith('Z') ? '' : 'Z')).toLocaleString()}</span>` : ''}
           </div>
+          ${isRunning && this._activePlan ? `
+          <div class="pq-step-tracker" id="pqStepTracker"></div>` : ''}
           <div class="pq-convo" id="pqConvo">
             ${this._renderConvoHtml(msgs)}
             ${isRunning ? `<div class="pq-turn pq-turn--assistant" id="pqLiveTurn">
@@ -379,6 +385,165 @@ export class PromptQueuePage {
   }
 
   // ----------------------------------------------------------------
+  // Plan card — shown after plan phase, waiting for user approval
+  // ----------------------------------------------------------------
+  _showPlanCard(item, plan) {
+    const panel = this.container.querySelector('#pqDetailPanel');
+    if (!panel) return;
+
+    const steps = plan.steps || [];
+    const stepsHtml = steps.map(s => `
+      <div class="pq-plan-step">
+        <div class="pq-plan-step__num">${s.id}</div>
+        <div class="pq-plan-step__body">
+          <div class="pq-plan-step__title">${escHtml(s.title)}</div>
+          <div class="pq-plan-step__desc">${escHtml(s.description || '')}</div>
+          ${s.files && s.files.length ? `
+            <div class="pq-plan-step__files">
+              ${s.files.map(f => `<code class="pq-plan-step__file">${escHtml(f)}</code>`).join('')}
+            </div>` : ''}
+        </div>
+      </div>`).join('');
+
+    panel.innerHTML = `
+      <div class="pq-detail pq-detail--plan">
+        <div class="pq-plan-card">
+          <div class="pq-plan-card__header">
+            <div class="pq-plan-card__badge">AI Plan</div>
+            <div class="pq-plan-card__task">${escHtml(plan.task || item.prompt_text)}</div>
+            ${plan.estimated_turns ? `<div class="pq-plan-card__meta">~${plan.estimated_turns} tool calls estimated</div>` : ''}
+          </div>
+
+          <div class="pq-plan-card__steps">
+            ${stepsHtml}
+          </div>
+
+          <div class="pq-plan-card__actions">
+            <button class="pq-plan-btn pq-plan-btn--approve" id="pqBtnApprovePlan">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Approve &amp; Run
+            </button>
+            <button class="pq-plan-btn pq-plan-btn--cancel" id="pqBtnRejectPlan">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>`;
+
+    panel.querySelector('#pqBtnApprovePlan').addEventListener('click', () => {
+      this._approvePlan(item, plan);
+    });
+    panel.querySelector('#pqBtnRejectPlan').addEventListener('click', () => {
+      this._rejectPlan(item);
+    });
+  }
+
+  // User clicked Approve — execute the plan
+  async _approvePlan(item, plan) {
+    this._awaitingApproval = false;
+    this._pendingPlan      = null;
+    this._activePlan       = plan;
+    this._outputBuf[item.id] = '';
+
+    // Re-wire listeners for the execution phase
+    window.db.promptQueue.removeListeners();
+    window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
+    window.db.promptQueue.onStep((stepInfo) => this._updateStepProgress(stepInfo));
+
+    window.db.promptQueue.onDone(async ({ exitCode }) => {
+      window.db.promptQueue.removeListeners();
+      this._stopRunTimer();
+      this._activePlan = null;
+
+      const succeeded = exitCode === 0;
+      item.status    = succeeded ? 'done' : 'failed';
+      item.exit_code = exitCode;
+      item.output    = this._outputBuf[item.id] || '';
+
+      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent || item.prompt_text });
+      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
+      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
+      this._isRunning = false;
+
+      await window.db.promptQueue.update({ id: item.id, status: item.status, output: item.output, exit_code: exitCode });
+
+      if (succeeded && item.prompt_id) {
+        await window.db.prompts.update({ id: item.prompt_id, is_executed: 1 });
+      }
+
+      this._refreshItemEl(item.id);
+      this._updateSummary();
+      this._updateToolbarRunState(false);
+      if (this._selectedId === item.id) this._renderDetail(item);
+
+      if (this._runAll && succeeded) {
+        const next = this._queue.find(q => q.status === 'pending');
+        if (next) { setTimeout(() => this._runItem(next), 200); }
+        else { this._runAll = false; this._updateToolbarRunAllState(false); }
+      } else if (this._runAll) {
+        this._runAll = false;
+        this._updateToolbarRunAllState(false);
+      }
+    });
+
+    // Switch detail panel to live output + step tracker
+    this._renderDetail(item);
+    this._startRunTimer();
+
+    // Kick off execution with the approved plan
+    const cfg = this._modelCfg || {};
+    window.db.promptQueue.approvePlan({
+      plan:        JSON.stringify(plan),
+      messages:    [{ role: 'user', content: item.prompt_text }],
+      modelConfig: cfg,
+      cwd:         this._project?.project_path || null,
+      itemLabel:   item.tag || item.story_title || `#${item.id}`,
+      projectName: this._project?.name || '',
+    });
+  }
+
+  // User clicked Cancel — reset item to pending
+  async _rejectPlan(item) {
+    this._awaitingApproval = false;
+    this._pendingPlan      = null;
+    this._isRunning        = false;
+    this._activePlan       = null;
+    window.db.promptQueue.removeListeners();
+    this._stopRunTimer();
+
+    item.status = 'pending';
+    await window.db.promptQueue.update({ id: item.id, status: 'pending' });
+    this._refreshItemEl(item.id);
+    this._updateSummary();
+    this._updateToolbarRunState(false);
+    if (this._selectedId === item.id) this._renderDetail(item);
+  }
+
+  // ----------------------------------------------------------------
+  // Step progress bar (during approved-plan execution)
+  // ----------------------------------------------------------------
+  _updateStepProgress({ stepNum, total, title, state }) {
+    const tracker = this.container.querySelector('#pqStepTracker');
+    if (!tracker) return;
+
+    // If step tracker isn't built yet (first step marker), build it
+    if (!tracker.children.length && this._activePlan) {
+      const steps = this._activePlan.steps || [];
+      tracker.innerHTML = steps.map(s => `
+        <div class="pq-step-pill pq-step-pill--pending" data-step="${s.id}" title="${escHtml(s.title)}">
+          <span class="pq-step-pill__num">${s.id}</span>
+          <span class="pq-step-pill__label">${escHtml(s.title)}</span>
+        </div>`).join('');
+    }
+
+    const pill = tracker.querySelector(`[data-step="${stepNum}"]`);
+    if (!pill) return;
+    pill.className = `pq-step-pill pq-step-pill--${state}`;
+  }
+
+  // ----------------------------------------------------------------
   // Run logic
   // ----------------------------------------------------------------
   async _runItem(item) {
@@ -404,9 +569,29 @@ export class PromptQueuePage {
 
     window.db.promptQueue.removeListeners();
     window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
+
+    // Planning: when the plan arrives, pause and show the approval card
+    window.db.promptQueue.onPlan(({ plan }) => {
+      this._awaitingApproval = true;
+      this._pendingPlan      = { item, plan };
+    });
+
+    // Step progress during approved-plan execution
+    window.db.promptQueue.onStep((stepInfo) => this._updateStepProgress(stepInfo));
+
     window.db.promptQueue.onDone(async ({ exitCode }) => {
+      // ── Plan phase done — show approval card instead of finalising ──────
+      if (this._awaitingApproval && this._pendingPlan) {
+        window.db.promptQueue.removeListeners();
+        this._stopRunTimer();
+        this._showPlanCard(this._pendingPlan.item, this._pendingPlan.plan);
+        return;
+      }
+
+      // ── Normal execution done ────────────────────────────────────────────
       window.db.promptQueue.removeListeners();
       this._stopRunTimer();
+      this._activePlan = null;
 
       const succeeded = exitCode === 0;
       item.status     = succeeded ? 'done' : 'failed';

@@ -1,6 +1,7 @@
 'use strict';
 
 const { ipcMain }          = require('electron');
+const { safeHandle }       = require('../../ipc-safe-handle');
 const { spawn, execSync }  = require('child_process');
 const http                 = require('node:http');
 const https                = require('node:https');
@@ -296,9 +297,9 @@ function runCli(wc, prompt, editPayload, model, messages) {
 // Register
 // ----------------------------------------------------------------
 function registerChatHandlers() {
-  ipcMain.handle('chat:cancel', () => killActive());
+  safeHandle('chat:cancel', () => killActive());
 
-  ipcMain.handle('chat:generate', (event, { prompt, messages, editPayload, model }) => {
+  safeHandle('chat:generate', (event, { prompt, messages, editPayload, model }) => {
     if (_activeProc) killActive();
     _cancelled = false;
     const wc   = event.sender;

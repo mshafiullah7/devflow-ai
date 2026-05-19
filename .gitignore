@@ -102,3 +102,16 @@ out/
 
 # Generated screen design files (runtime output)
 /screens/
+
+# Playwright test results
+test-results/
+tests/e2e/reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+agent/.venv/
+agent/venv/

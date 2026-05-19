@@ -1,6 +1,6 @@
 # devflow-ai-sdlc
 
-AI-assisted Software Development Lifecycle (SDLC) management desktop app. Manage projects, features, user stories, prompts, and documents — all stored locally with no cloud dependency.
+**AI-First** Software Development Lifecycle (SDLC) platform. AI agents are the primary execution layer — they read your codebase, plan changes, write code, run builds, and retry on failure. You define the work and approve the plan; the agent drives implementation. Everything stored locally in SQLite with no cloud dependency.
 
 ---
 
@@ -8,21 +8,27 @@ AI-assisted Software Development Lifecycle (SDLC) management desktop app. Manage
 
 1. [What It Does](#what-it-does)
 2. [Features](#features)
-3. [Markdown Reference](#markdown-reference)
-4. [Developer Setup](#developer-setup)
-5. [Building Executables](#building-executables)
-6. [Tech Stack & Architecture](#tech-stack--architecture)
+3. [AI Configuration](#ai-configuration)
+4. [Markdown Reference](#markdown-reference)
+5. [Developer Setup](#developer-setup)
+6. [Building Executables](#building-executables)
+7. [Tech Stack & Architecture](#tech-stack--architecture)
 
 ---
 
 ## What It Does
 
+DevFlow is an AI-First SDLC platform where AI agents are the core execution engine, not a supplementary tool. The human role is project definition, story writing, and plan approval — the agent handles implementation.
+
 - Organise work into **Projects → Features → User Stories**.
-- Write and track AI **Prompts** per user story with Markdown preview.
-- Create rich **Documents** per project using Markdown with templates.
-- Attach **SVG diagrams** and **draw.io diagrams** directly to documents.
-- Run terminal commands from within the app.
-- Everything stored **locally in SQLite** — no internet or account required.
+- Write AI **Prompts** per user story; the DevFlow Agent plans and executes them autonomously.
+- **Two-phase agentic execution**: AI proposes a step-by-step plan → you approve → agent executes with full codebase awareness, runs build verification, and auto-retries on failure.
+- **RAG-powered context**: the agent indexes your project with ChromaDB + sentence-transformers so every task has full, semantically-relevant code context.
+- Generate **UI Mockups** from natural language and extract User Stories directly from designs.
+- Use the **AI Console** for project-wide chat: refine stories, triage issues, generate test cases, and update specs.
+- Create rich **Documents** per project using Markdown with templates, SVG diagrams, and draw.io attachments.
+- Supports **multiple AI backends**: local Ollama models, Anthropic Claude, Google Gemini, OpenAI-compatible APIs, and local CLI tools — switchable per workflow.
+- Everything stored **locally in SQLite** — no cloud account required.
 
 ---
 
@@ -131,6 +137,142 @@ Attachments are stored in SQLite and linked inside Markdown content.
 - Built-in terminal panel for running shell commands.
 - Supports long-running processes.
 - Kill Active / `Ctrl+C` stops the running process.
+
+---
+
+## AI Configuration
+
+AI models are configured in **Settings → AI Models**. Each model config has a **type** that controls how the app calls the model.
+
+---
+
+### Model Types
+
+| Type | How it works | Used by |
+|------|-------------|---------|
+| `ollama` | Direct HTTP call to a local Ollama server | Documents, Chat, User Stories, Prompt Queue |
+| `ollama` + DevFlow Agent | Spawns `devflow_agent.py` subprocess | Prompt Queue only |
+| `anthropic` | Anthropic SDK call (Claude) | Prompt Queue, Chat |
+| `api` | Generic HTTP POST to any OpenAI-compatible endpoint | Prompt Queue |
+| `cli` | Runs a local CLI binary (e.g. `claude`, `gemini`) | Prompt Queue, Mockups, Extract Stories |
+
+---
+
+### Configuring an Ollama Model
+
+1. Open **Settings → AI Models → Add model**
+2. Select type **Local (Ollama)**
+3. Fill in the fields:
+
+| Field | Maps to agent flag | Default | Notes |
+|-------|-------------------|---------|-------|
+| **Base URL** | `--base-url` | `http://localhost:11434` | Your Ollama server URL. Use the detect button to auto-populate the model list. |
+| **Model** | `--model` | `qwen2.5-coder:7b` | Pick from the detected dropdown or type manually. Larger models (32b+) give better results for complex tasks. |
+| **Max Tokens** | `--max-turns` | `15` | Controls how many agentic loop iterations the agent is allowed. Higher = more autonomous but slower. |
+| **Use Devflow Agent loop** | enables agent mode | off | Checkbox. When ticked, the Prompt Queue runs `devflow_agent.py` instead of a direct Ollama call. |
+
+4. Optionally tick **Set as default model** so it pre-selects in all pages.
+5. Click **Save**.
+
+---
+
+### DevFlow Agent Mode
+
+When **Use Devflow Agent loop** is enabled, the Prompt Queue runs in two phases:
+
+#### Phase 1 — Plan
+
+The agent (`devflow_agent.py`) is called with `--plan-only`. It:
+- Reads the repo map and RAG context for the project
+- Generates a structured JSON plan (2–5 steps) using the configured model
+- Streams the plan back to the Electron UI for review
+
+The plan is displayed in the Prompt Queue panel. Each step shows a title and description of what will be changed and which files are involved.
+
+#### Phase 2 — Execute (after approval)
+
+Once you approve the plan, the agent is called with `--approved-plan <json>`. It:
+- Executes each step in sequence using the agentic tool loop
+- Streams step progress markers (`[STEP:1/3]`, `[STEP_DONE:1/3]`, `[STEP_FAILED:1/3]`) to the UI
+- Runs build verification after all steps complete and auto-retries on build errors
+
+#### Run Summary
+
+At the end of every run the agent prints a summary. In the Prompt Queue output panel you will see the raw line; in a terminal (CLI use) it is formatted:
+
+```
+── Run summary ───────────────────────────
+  Turns: 8  |  Tool calls: 22
+  Tokens: 14820 in / 890 out  |  Elapsed: 47.3s
+  Files written:
+    • src/components/App.tsx
+    • src/utils/db.ts
+──────────────────────────────────────────
+```
+
+The Electron app also fires a `promptQueue:runSummary` event with structured data so future UI panels can display metrics.
+
+---
+
+### Agent Flag Reference
+
+These are all flags `devflow_agent.py` accepts. Most are set via the model config UI; advanced flags are CLI-only.
+
+| Flag | UI field | Default | Description |
+|------|----------|---------|-------------|
+| `--model` | Model | `qwen2.5-coder:32b` | Ollama model for task execution |
+| `--base-url` | Base URL | `http://localhost:11434` | Ollama server endpoint |
+| `--max-turns` | Max Tokens | `15` | Max agentic loop iterations per step |
+| `--max-retries` | — | `2` | Max build-fix attempts after the loop ends |
+| `--max-tool-errors` | — | `3` | Consecutive tool failures before the agent aborts |
+| `--plan-only` | auto | — | Generate plan and exit; set automatically by Electron in Phase 1 |
+| `--approved-plan` | auto | — | JSON plan string; set automatically by Electron in Phase 2 |
+| `--plan-model` | — | same as `--model` | Use a separate (larger) model for plan generation only |
+| `--verbose` | auto | — | Always passed by Electron; enables per-turn timing and token logs |
+
+**CLI usage example:**
+
+```bash
+# Run without planning (direct agentic loop)
+python agent/devflow_agent.py \
+  --project /path/to/project \
+  --message "Add input validation to the login form" \
+  --model qwen2.5-coder:32b \
+  --max-turns 20 \
+  --verbose
+
+# Generate a plan only (inspect before running)
+python agent/devflow_agent.py \
+  --project /path/to/project \
+  --message "Refactor auth module to use JWT" \
+  --model qwen2.5-coder:32b \
+  --plan-only
+
+# Use a larger model for planning, smaller for execution
+python agent/devflow_agent.py \
+  --project /path/to/project \
+  --message "Add dark mode toggle" \
+  --model qwen2.5-coder:7b \
+  --plan-model qwen2.5-coder:32b
+```
+
+---
+
+### Agent Prerequisites
+
+The DevFlow Agent requires Python dependencies. Install once before first use:
+
+```bash
+cd agent
+pip install -r requirements.txt
+```
+
+Ollama must be running locally:
+
+```bash
+ollama serve
+ollama pull qwen2.5-coder:32b   # or whichever model you configured
+```
 
 ---
 
@@ -297,6 +439,26 @@ sudo rpm -i electron-ai-sdlc-1.0.0.x86_64.rpm
 | Renderer | Plain ES modules (`file://`) — no bundler, no framework |
 | Styling | Vanilla CSS with CSS variables (dark/light theme) |
 | Build tooling | Electron Forge v7 |
+| AI agent | Python subprocess (`devflow_agent.py`) — agentic loop with tool use |
+| Vector search | ChromaDB + `sentence-transformers` (RAG for codebase context) |
+| AI backends | Anthropic SDK, Ollama HTTP, Google Gemini, OpenAI-compatible API, CLI |
+
+### AI-First Architecture
+
+```
+User → Prompt Queue / AI Console / Mockups
+          ↓
+    IPC → Node.js Main Process
+          ↓
+    DevFlow Agent (Python subprocess)
+      ├── Agentic loop (LLM → tool calls → execution)
+      ├── RAG (ChromaDB semantic code search)
+      ├── Full repo map + context injection
+      ├── Tool use: file I/O, git, build, test
+      └── Auto-retry on build failure
+```
+
+The agent is autonomous: it reads your codebase, understands the context via RAG, makes multi-step tool calls, and retries on failure. You approve the plan; the agent drives execution.
 
 ### Database Tables
 
@@ -305,7 +467,11 @@ sudo rpm -i electron-ai-sdlc-1.0.0.x86_64.rpm
 | `projects` | Top-level projects |
 | `features` | Features per project |
 | `user_stories` | User stories per feature |
-| `prompt_history` | History of prompts run per user story |
+| `prompts` | Implementation prompts per user story |
+| `prompt_history` | Execution history for every agent run |
+| `model_configs` | AI model configurations and credentials |
+| `screen_designs` | AI-generated mockups with prompt history |
+| `screen_prompt_history` | History of mockup generation prompts |
 | `status_master` | Shared status values (Backlog, Done, etc.) |
 | `quick_commands` | Reusable prompt snippets |
 | `document_templates` | Built-in Markdown templates |
@@ -315,8 +481,20 @@ sudo rpm -i electron-ai-sdlc-1.0.0.x86_64.rpm
 ### IPC Channels
 
 - `db:*` — all database read/write operations
+- `chat:*` — streaming AI responses (Anthropic, Ollama, CLI)
+- `queue:*` — prompt queue execution, plan/approve/execute workflow, agent lifecycle
+- `ollama:*` — Ollama model detection and inference
 - `shell:openDrawio` — write temp `.drawio` file and open in desktop app
 - `shell:readFile` — read a file path (used for draw.io Sync)
 - `terminal:*` — terminal execution and streaming output
 - `dialog:*` — native OS file/folder pickers
 - `window:expand` — resize the app window
+- `promptQueue:runSummary` — structured run metrics emitted after each agent run (turns, tokens, elapsed, files written)
+
+
+### E2E running
+
+npm test                # headless
+npm run test:watch      # with visible window
+npm run test:debug      # open HTML report
+npm run test:report     #testing report

@@ -1,11 +1,12 @@
 'use strict';
 
 const { ipcMain, dialog, BrowserWindow, screen } = require('electron');
+const { safeHandle } = require('../../ipc-safe-handle');
 const fs = require('node:fs/promises');
 const { spawn } = require('node:child_process');
 
 function registerDialogHandlers() {
-  ipcMain.handle('dialog:openFolder', async (event) => {
+  safeHandle('dialog:openFolder', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory'],
@@ -15,7 +16,7 @@ function registerDialogHandlers() {
     return result.filePaths[0];
   });
 
-  ipcMain.handle('dialog:openJsonFile', async (event) => {
+  safeHandle('dialog:openJsonFile', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = await dialog.showOpenDialog(win, {
       properties: ['openFile'],
@@ -27,7 +28,7 @@ function registerDialogHandlers() {
     return fs.readFile(result.filePaths[0], 'utf-8');
   });
 
-  ipcMain.handle('dialog:openFile', async (event, { title, extensions, defaultPath } = {}) => {
+  safeHandle('dialog:openFile', async (event, { title, extensions, defaultPath } = {}) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const opts = {
       properties: ['openFile'],
@@ -43,7 +44,7 @@ function registerDialogHandlers() {
     return { path: result.filePaths[0], content };
   });
 
-  ipcMain.handle('window:expand', (event) => {
+  safeHandle('window:expand', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
     const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
@@ -53,7 +54,7 @@ function registerDialogHandlers() {
     win.center();
   });
 
-  ipcMain.handle('dialog:saveJsonFile', async (event, { data, filename }) => {
+  safeHandle('dialog:saveJsonFile', async (event, { data, filename }) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = await dialog.showSaveDialog(win, {
       title: 'Export to JSON',
@@ -65,7 +66,7 @@ function registerDialogHandlers() {
     return { success: true, filePath: result.filePath };
   });
 
-  ipcMain.handle('app:export-pdf', async (event, { html, filename }) => {
+  safeHandle('app:export-pdf', async (event, { html, filename }) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = await dialog.showSaveDialog(win, {
       title: 'Export to PDF',
@@ -95,7 +96,7 @@ function registerDialogHandlers() {
     return { success: true };
   });
 
-  ipcMain.handle('shell:openVSCode', (_e, folderPath) => {
+  safeHandle('shell:openVSCode', (_e, folderPath) => {
     if (!folderPath) return;
     const proc = spawn('cmd.exe', ['/c', 'code', folderPath], { detached: true, stdio: 'ignore' });
     proc.unref();

@@ -8,6 +8,13 @@ const { closeDb } = require('./db/database');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
 const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
 const { sendMessage: telegramSend } = require('./telegram');
+const { logError } = require('./logger');
+
+process.on('uncaughtException',   (err)    => logError('uncaughtException', err));
+process.on('unhandledRejection',  (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logError('unhandledRejection', err);
+});
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -65,6 +72,13 @@ app.whenReady().then(async () => {
       return { ok: false, error: e.message };
     }
   });
+  ipcMain.handle('app:logs:list', () => {
+    const { getDb } = require('./db/database');
+    return getDb().prepare(
+      'SELECT id, source, message, stack, created_at FROM error_logs ORDER BY created_at DESC LIMIT 200'
+    ).all();
+  });
+
   ipcMain.handle('app:db:export',  (e)    => exportDb(BrowserWindow.fromWebContents(e.sender)));
   ipcMain.handle('app:db:restore', (e)    => restoreDb(BrowserWindow.fromWebContents(e.sender)));
   ipcMain.handle('app:backup-default-path', () => path.join(app.getPath('userData'), 'backup'));

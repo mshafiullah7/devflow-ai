@@ -340,6 +340,36 @@ function runMigrations(db) {
       END;
     `);
   }
+
+  // Add error_logs table for persistent error tracking
+  const elCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='error_logs'").get();
+  if (!elCheck) {
+    db.exec(`
+      CREATE TABLE error_logs (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        source     TEXT    NOT NULL,
+        message    TEXT    NOT NULL,
+        stack      TEXT,
+        context    TEXT,
+        created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
+  // Add fallback AI columns to model_configs for devflow-agent support
+  const mcCols = db.prepare('PRAGMA table_info(model_configs)').all().map(c => c.name);
+  if (!mcCols.includes('gemini_api_key')) {
+    db.exec('ALTER TABLE model_configs ADD COLUMN gemini_api_key TEXT');
+  }
+  if (!mcCols.includes('claude_api_key')) {
+    db.exec('ALTER TABLE model_configs ADD COLUMN claude_api_key TEXT');
+  }
+  if (!mcCols.includes('fallback_preference')) {
+    db.exec("ALTER TABLE model_configs ADD COLUMN fallback_preference TEXT DEFAULT 'auto'");
+  }
+  if (!mcCols.includes('use_devflow_agent')) {
+    db.exec('ALTER TABLE model_configs ADD COLUMN use_devflow_agent INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 /**

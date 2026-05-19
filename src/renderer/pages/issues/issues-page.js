@@ -578,6 +578,7 @@ export class IssuesPage {
       const title = titleEl.value.trim();
       if (!title) { if (!silent) { titleEl.classList.add('is-form__input--error'); titleEl.focus(); } return; }
       titleEl.classList.remove('is-form__input--error');
+      this._pendingSave   = null;
       saveBtn.disabled    = true;
       saveBtn.textContent = issue ? 'Saving…' : 'Adding…';
 
@@ -615,7 +616,7 @@ export class IssuesPage {
 
     this._pendingSave = () => save(true);
 
-    saveBtn.addEventListener('click', save);
+    saveBtn.addEventListener('click', () => save());
     el.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } });
 
     el.querySelector('#isDescExpandBtn')?.addEventListener('click', () => {

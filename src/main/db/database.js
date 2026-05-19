@@ -13,9 +13,10 @@ function getDb() {
 
   // In development use the project-root DB so existing data is preserved.
   // In production (packaged) fall back to userData which is always writable.
-  const dbPath = app.isPackaged
-    ? path.join(app.getPath('userData'), 'sdlc.db')
-    : path.join(app.getAppPath(), 'sdlc.db');
+  const dbPath = process.env.TEST_DB_PATH
+    || (app.isPackaged
+      ? path.join(app.getPath('userData'), 'sdlc.db')
+      : path.join(app.getAppPath(), 'sdlc.db'));
   _db = new Database(dbPath);
 
   _db.pragma('journal_mode = WAL');
