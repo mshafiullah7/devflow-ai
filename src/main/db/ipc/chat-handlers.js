@@ -201,15 +201,24 @@ function runAnthropic(wc, prompt, editPayload, model, messages) {
 // Uses agent/ollama_proxy.py instead of direct HTTP to inherit the
 // reliability of the Python ollama client and consistent streaming.
 // ----------------------------------------------------------------
+// System message prepended to every Ollama request.
+// Small local models need an explicit system instruction to output raw HTML
+// without explanations — they won't reliably follow user-prompt-only rules.
+const OLLAMA_SYSTEM_MSG = {
+  role: 'system',
+  content: 'You are an expert UI/UX developer. You MUST output ONLY raw, complete HTML starting with <!DOCTYPE html> and ending with </html>. Never explain, describe, or comment on the HTML. Never use markdown code fences. Output nothing except the HTML document itself.',
+};
+
 function runOllama(wc, prompt, editPayload, model, messages) {
   let msgs;
   if (editPayload) {
     const content = buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
-    msgs = [{ role: 'user', content }];
+    msgs = [OLLAMA_SYSTEM_MSG, { role: 'user', content }];
   } else if (messages && messages.length > 0) {
-    msgs = messages;
+    // Prepend system message if the array doesn't already have one
+    msgs = messages[0]?.role === 'system' ? messages : [OLLAMA_SYSTEM_MSG, ...messages];
   } else {
-    msgs = [{ role: 'user', content: prompt }];
+    msgs = [OLLAMA_SYSTEM_MSG, { role: 'user', content: prompt }];
   }
 
   const ts      = Date.now();
@@ -231,6 +240,7 @@ function runOllama(wc, prompt, editPayload, model, messages) {
     '--messages-file', tmpFile,
     '--model',         model.model_name,
     '--base-url',      baseUrl,
+    '--verbose',
   ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env } });
 
   _activeProc.stdout.on('data', (chunk) => {
@@ -239,7 +249,10 @@ function runOllama(wc, prompt, editPayload, model, messages) {
     send(wc, 'chat:token', { text });
   });
 
-  _activeProc.stderr.on('data', () => {});
+  // Forward stderr so proxy diagnostics (connection info, errors) appear in chat
+  _activeProc.stderr.on('data', (chunk) => {
+    send(wc, 'chat:token', { text: chunk.toString('utf8') });
+  });
 
   _activeProc.on('close', (code) => {
     cleanup();
