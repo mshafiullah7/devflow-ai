@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ollama_proxy.py — Thin Ollama streaming proxy for electron-ai-sdlc chat.
+ollama_proxy.py — Thin Ollama streaming proxy for devflow-ai-sdlc chat.
 
 Reads a JSON messages array from a file, streams the Ollama response to
 stdout token-by-token, and exits with code 1 on any connection error.

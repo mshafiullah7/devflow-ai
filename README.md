@@ -318,7 +318,7 @@ Supported in both Prompt preview and Document preview:
 ```bash
 # 1. Clone the repo
 git clone <repo-url>
-cd electron-ai-sdlc
+cd devflow-ai-sdlc
 
 # 2. Install dependencies (also compiles better-sqlite3 native module)
 npm install
@@ -366,7 +366,7 @@ Bundles source + Electron binary into a folder.
 npm run package
 ```
 
-Output: `out/electron-ai-sdlc-<platform>-<arch>/`
+Output: `out/devflow-ai-sdlc-<platform>-<arch>/`
 
 ---
 
@@ -388,29 +388,29 @@ Output: `out/make/`
 ```bash
 npm run make
 ```
-- Output: `out/make/squirrel.windows/x64/electron-ai-sdlc Setup.exe`
+- Output: `out/make/squirrel.windows/x64/devflow-ai-sdlc Setup.exe`
 - Requires Visual Studio Build Tools for native module compilation.
 
 #### macOS
 ```bash
 npm run make
 ```
-- Output: `out/make/zip/darwin/x64/electron-ai-sdlc-darwin-x64-1.0.0.zip`
+- Output: `out/make/zip/darwin/x64/devflow-ai-sdlc-darwin-x64-1.0.0.zip`
 - For a signed `.dmg`, configure `packagerConfig.osxSign` and `osxNotarize` in `forge.config.js`.
 
 #### Linux
 ```bash
 npm run make
 ```
-- DEB: `out/make/deb/x64/electron-ai-sdlc_1.0.0_amd64.deb`
-- RPM: `out/make/rpm/x64/electron-ai-sdlc-1.0.0.x86_64.rpm`
+- DEB: `out/make/deb/x64/devflow-ai-sdlc_1.0.0_amd64.deb`
+- RPM: `out/make/rpm/x64/devflow-ai-sdlc-1.0.0.x86_64.rpm`
 
 ```bash
 # Install DEB
-sudo dpkg -i electron-ai-sdlc_1.0.0_amd64.deb
+sudo dpkg -i devflow-ai-sdlc_1.0.0_amd64.deb
 
 # Install RPM
-sudo rpm -i electron-ai-sdlc-1.0.0.x86_64.rpm
+sudo rpm -i devflow-ai-sdlc-1.0.0.x86_64.rpm
 ```
 
 ---

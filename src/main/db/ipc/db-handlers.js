@@ -708,7 +708,7 @@ function registerDbHandlers() {
   // draw.io — open in desktop app via temp file
   // ----------------------------------------------------------------
   safeHandle('shell:openDrawio', async (_e, { id, name, content }) => {
-    const dir  = path.join(os.tmpdir(), 'electron-ai-sdlc');
+    const dir  = path.join(os.tmpdir(), 'devflow-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });
     const safe = name.replace(/[^a-z0-9_\-]/gi, '_');
     const file = path.join(dir, `${safe}_${id}.drawio`);
@@ -853,7 +853,7 @@ function registerDbHandlers() {
   });
 
   safeHandle('app:writeTempFiles', (_e, files) => {
-    const dir = path.join(os.tmpdir(), 'electron-ai-sdlc');
+    const dir = path.join(os.tmpdir(), 'devflow-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });
     const ts = Date.now();
     return files.map(({ name, content }) => {
