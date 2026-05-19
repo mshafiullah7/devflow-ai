@@ -917,9 +917,17 @@ export class MockupsPage {
     const chatInput  = main.querySelector('#scrDescription');
     const resize     = () => { chatInput.style.height = 'auto'; chatInput.style.height = chatInput.scrollHeight + 'px'; };
 
-    // Replace any existing history group so it toggles cleanly
     const existing = messagesEl.querySelector('.scr-chat-history-group');
-    if (existing) { existing.remove(); return; }
+
+    // Expanded (full) group is showing → collapse back to 3
+    if (existing && !existing.classList.contains('scr-chat-history-group--initial')) {
+      existing.remove();
+      await this._loadInitialHistory(this._activeId, main);
+      return;
+    }
+
+    // Initial (3-item) group is showing → expand to full list
+    if (existing) existing.remove();
 
     const items = await window.db.screenPromptHistory.list({
       project_id:       this._projectId,
@@ -947,7 +955,7 @@ export class MockupsPage {
             <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
             <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          Recent prompts
+          All ${items.length} prompt${items.length > 1 ? 's' : ''}
         </div>
         <div class="scr-chat-history-list">
           ${items.map((h, i) => `
