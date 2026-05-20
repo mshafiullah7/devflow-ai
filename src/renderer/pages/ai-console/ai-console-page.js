@@ -408,7 +408,7 @@ export class AiConsolePage {
               </label>
 
               <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="stories" disabled>
+                <input type="checkbox" class="aic-slice__check" data-slice="stories" checked disabled>
                 <div class="aic-slice__info">
                   <span class="aic-slice__name">User stories</span>
                   <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxStories">– stories</span>
