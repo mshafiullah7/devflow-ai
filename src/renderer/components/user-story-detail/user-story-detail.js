@@ -497,6 +497,10 @@ export class UserStoryDetail {
     this._loadPrompts(story.id);
     this._bindCriteriaSection(this._detailEl, story.id);
     this._loadCriteria(story.id);
+    // Eagerly fetch issue count so the tab label is visible before the tab is opened
+    window.db.issues.list({ project_id: this._projectId, user_story_id: story.id })
+      .then(issues => this._refreshIssuesTabLabel(issues.length))
+      .catch(() => {});
     saveBtn.addEventListener('click', save);
     this._bindCtrlS(save);
     this._bindExpandBtns(this._detailEl, save);
@@ -521,12 +525,20 @@ export class UserStoryDetail {
     activate(this._activeTab);
   }
 
+  _refreshIssuesTabLabel(count) {
+    if (!this._detailEl) return;
+    const tab = this._detailEl.querySelector('[data-tab="issues"]');
+    if (!tab) return;
+    tab.textContent = count > 0 ? `Issues (${count})` : 'Issues';
+  }
+
   async _loadIssuesTab(container, storyId) {
     const el = container.querySelector('#uslIssuesList');
     if (!el) return;
     el.innerHTML = '<div class="project-related__empty">Loading…</div>';
     try {
       const issues = await window.db.issues.list({ project_id: this._projectId, user_story_id: storyId });
+      this._refreshIssuesTabLabel(issues.length);
       if (issues.length === 0) {
         el.innerHTML = '<div class="project-related__empty">No issues for this story</div>';
         return;
