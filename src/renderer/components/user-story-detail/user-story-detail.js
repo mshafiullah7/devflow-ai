@@ -450,13 +450,19 @@ export class UserStoryDetail {
     saveBtn.textContent = 'Save Changes';
     if (headerActions) headerActions.appendChild(saveBtn);
 
-    // Auto-save status immediately on change
+    // Auto-save status immediately on change; clear is_extracted so the
+    // AI badge is removed once the user has reviewed the story.
     statusEl.addEventListener('change', async () => {
       try {
-        await window.db.userStories.update({
+        const payload = {
           id:        story.id,
           status_id: statusEl.value ? parseInt(statusEl.value, 10) : null,
-        });
+        };
+        if (story.is_extracted) {
+          payload.is_extracted = 0;
+          story.is_extracted   = 0;   // keep local copy in sync
+        }
+        await window.db.userStories.update(payload);
         this._onStoryUpdated();
       } catch { /* silent */ }
     });
@@ -473,7 +479,7 @@ export class UserStoryDetail {
       saveBtn.textContent = 'Saving…';
 
       try {
-        await window.db.userStories.update({
+        const payload = {
           id:              story.id,
           title,
           description:     descEl.value.trim()        || null,
@@ -482,7 +488,12 @@ export class UserStoryDetail {
           target_date:     targetDateEl.value          || null,
           estimated_hours: estHoursEl.value !== ''     ? parseFloat(estHoursEl.value)  : null,
           remaining_hours: remHoursEl.value !== ''     ? parseFloat(remHoursEl.value)  : null,
-        });
+        };
+        if (story.is_extracted) {
+          payload.is_extracted = 0;
+          story.is_extracted   = 0;   // keep local copy in sync
+        }
+        await window.db.userStories.update(payload);
         saveBtn.disabled    = false;
         saveBtn.textContent = 'Save Changes';
         this._onStoryUpdated();
