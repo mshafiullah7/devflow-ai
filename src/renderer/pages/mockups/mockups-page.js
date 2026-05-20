@@ -1265,7 +1265,10 @@ export class MockupsPage {
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
             </button>
-
+          </div>
+          <div class="scr-preview-tabs">
+            <button class="scr-preview-tab scr-preview-tab--active" id="scrTabPreview">Preview</button>
+            <button class="scr-preview-tab" id="scrTabDescription">Description</button>
           </div>
           <div class="scr-viewer__actions">
             <div class="scr-actions-menu" id="scrActionsMenu">
@@ -1314,13 +1317,12 @@ export class MockupsPage {
           </div>
         </div>
 
+        <div class="scr-viewer__desc-panel scr-md-preview" id="scrDescPanel" hidden></div>
+
         <div class="scr-viewer__split" id="scrSplit">
           <div class="scr-viewer__preview-pane" id="scrPreviewPane">
             <div class="scr-viewer__preview-bar">
-              <div class="scr-preview-tabs">
-                <button class="scr-preview-tab scr-preview-tab--active" id="scrTabPreview">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></button>
-                <button class="scr-preview-tab" id="scrTabDescription">Description</button>
-              </div>
+              <span class="scr-viewer__preview-label">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></span>
               <button class="scr-btn scr-btn--sm" id="scrViewportToggle"></button>
               <button class="scr-btn scr-btn--sm" id="scrRefreshBtn" title="Refresh preview (R)">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -1332,7 +1334,6 @@ export class MockupsPage {
             </div>
             <div class="scr-viewer__content" id="scrViewerContent">
               <iframe class="scr-viewer__iframe" id="scrPreviewFrame"></iframe>
-              <div class="scr-viewer__desc-panel scr-md-preview" id="scrDescPanel" hidden></div>
             </div>
           </div>
 
@@ -1550,27 +1551,21 @@ export class MockupsPage {
 
     const tabPreview     = main.querySelector('#scrTabPreview');
     const tabDescription = main.querySelector('#scrTabDescription');
-    const previewFrame   = main.querySelector('#scrPreviewFrame');
+    const split          = main.querySelector('#scrSplit');
     const descPanel      = main.querySelector('#scrDescPanel');
-    const viewportToggle = main.querySelector('#scrViewportToggle');
-    const refreshBtn     = main.querySelector('#scrRefreshBtn');
 
     tabPreview.addEventListener('click', () => {
       tabPreview.classList.add('scr-preview-tab--active');
       tabDescription.classList.remove('scr-preview-tab--active');
-      previewFrame.hidden = false;
-      descPanel.hidden    = true;
-      viewportToggle.hidden = false;
-      refreshBtn.hidden     = false;
+      split.hidden     = false;
+      descPanel.hidden = true;
     });
 
     tabDescription.addEventListener('click', () => {
       tabDescription.classList.add('scr-preview-tab--active');
       tabPreview.classList.remove('scr-preview-tab--active');
-      previewFrame.hidden = true;
-      descPanel.hidden    = false;
-      viewportToggle.hidden = true;
-      refreshBtn.hidden     = true;
+      split.hidden     = true;
+      descPanel.hidden = false;
       const text = screen.description || '';
       descPanel.innerHTML = text
         ? renderMarkdown(text)

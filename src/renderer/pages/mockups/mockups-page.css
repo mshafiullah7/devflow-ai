@@ -882,7 +882,7 @@
 .scr-chat-dismiss-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 
 /* ------------------------------------------------------------------ */
-/* Preview pane — Preview / Description tab toggle                      */
+/* Toolbar — Preview / Description tab toggle                           */
 /* ------------------------------------------------------------------ */
 .scr-preview-tabs {
   display: flex;
@@ -891,7 +891,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 2px;
-  margin-right: auto;
+  margin: 0 auto;
 }
 
 .scr-preview-tab {
@@ -916,8 +916,9 @@
 
 .scr-viewer__desc-panel {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 20px 28px;
+  padding: 24px 36px;
   box-sizing: border-box;
 }
 
