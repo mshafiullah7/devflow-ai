@@ -1290,6 +1290,7 @@ export class MockupsPage {
     const queuePanel    = main.querySelector('#scrDescQueuePanel');
     const editorBody    = main.querySelector('#scrDescEditorBody');
     const footer        = main.querySelector('.scr-desc-editor__footer');
+    const tabsEl        = main.querySelector('.scr-desc-editor__tabs');
 
     const refreshDescQueueCount = async () => {
       const all = await window.db.screenDesigns.list(this._projectId);
@@ -1306,6 +1307,7 @@ export class MockupsPage {
       queuePanel.hidden  = !queueOpen;
       editorBody.hidden  = queueOpen;
       footer.hidden      = queueOpen;
+      tabsEl.hidden      = queueOpen;
       if (queueOpen) this._renderQueuePanel(queuePanel).then(refreshDescQueueCount);
     });
   }
