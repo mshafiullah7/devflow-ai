@@ -242,7 +242,7 @@ export class UserStoryList {
   // Data
   // ----------------------------------------------------------------
   async _load() {
-    const stories = await window.db.userStories.list({ feature_id: this._featureId });
+    const stories = await window.db.userStories.list({ feature_id: this._featureId, include_extracted: true });
     this._render(stories);
   }
 
