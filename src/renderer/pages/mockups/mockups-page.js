@@ -1317,7 +1317,10 @@ export class MockupsPage {
         <div class="scr-viewer__split" id="scrSplit">
           <div class="scr-viewer__preview-pane" id="scrPreviewPane">
             <div class="scr-viewer__preview-bar">
-              <span class="scr-viewer__preview-label">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></span>
+              <div class="scr-preview-tabs">
+                <button class="scr-preview-tab scr-preview-tab--active" id="scrTabPreview">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></button>
+                <button class="scr-preview-tab" id="scrTabDescription">Description</button>
+              </div>
               <button class="scr-btn scr-btn--sm" id="scrViewportToggle"></button>
               <button class="scr-btn scr-btn--sm" id="scrRefreshBtn" title="Refresh preview (R)">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -1329,6 +1332,7 @@ export class MockupsPage {
             </div>
             <div class="scr-viewer__content" id="scrViewerContent">
               <iframe class="scr-viewer__iframe" id="scrPreviewFrame"></iframe>
+              <div class="scr-viewer__desc-panel scr-md-preview" id="scrDescPanel" hidden></div>
             </div>
           </div>
 
@@ -1543,6 +1547,35 @@ export class MockupsPage {
     });
 
     main.querySelector('#scrEditDetailsBtn').addEventListener('click', () => this._showEditScreenModal(screen));
+
+    const tabPreview     = main.querySelector('#scrTabPreview');
+    const tabDescription = main.querySelector('#scrTabDescription');
+    const previewFrame   = main.querySelector('#scrPreviewFrame');
+    const descPanel      = main.querySelector('#scrDescPanel');
+    const viewportToggle = main.querySelector('#scrViewportToggle');
+    const refreshBtn     = main.querySelector('#scrRefreshBtn');
+
+    tabPreview.addEventListener('click', () => {
+      tabPreview.classList.add('scr-preview-tab--active');
+      tabDescription.classList.remove('scr-preview-tab--active');
+      previewFrame.hidden = false;
+      descPanel.hidden    = true;
+      viewportToggle.hidden = false;
+      refreshBtn.hidden     = false;
+    });
+
+    tabDescription.addEventListener('click', () => {
+      tabDescription.classList.add('scr-preview-tab--active');
+      tabPreview.classList.remove('scr-preview-tab--active');
+      previewFrame.hidden = true;
+      descPanel.hidden    = false;
+      viewportToggle.hidden = true;
+      refreshBtn.hidden     = true;
+      const text = screen.description || '';
+      descPanel.innerHTML = text
+        ? renderMarkdown(text)
+        : '<p class="scr-md-preview__empty">No description added yet.</p>';
+    });
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {
       const title       = screen.title;
