@@ -16,10 +16,9 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, stories, allStories, features, statuses, documents, mockups, issueCount, testRunHistory, queuePending] = await Promise.all([
+    const [project, stories, features, statuses, documents, mockups, issueCount, testRunHistory, queuePending] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.userStories.list({ project_id: this.projectId }),
-      window.db.userStories.list({ project_id: this.projectId, include_extracted: true }),
       window.db.features.list(this.projectId),
       window.db.status.list(),
       window.db.documents.list(this.projectId),
@@ -31,7 +30,6 @@ export class ProjectHomePage {
 
     this._project          = project;
     this._stories          = stories;
-    this._extractedStories = allStories.filter(s => s.is_extracted);
     this._features         = features;
     this._statuses         = statuses;
     this._documents        = documents;
@@ -201,7 +199,6 @@ export class ProjectHomePage {
     const features    = this._features || [];
     const mockups     = this._mockups  || [];
     const documents   = this._documents || [];
-    const extracted   = this._extractedStories || [];
     const failed      = this._testRunHistory[0]?.failed ?? 0;
     const issueTotal  = this._issueCount?.total ?? 0;
 
@@ -294,17 +291,6 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count">${mockups.length}</span>
             </button>
 
-            <button class="ph-nav-item" id="navExtractStories">
-              <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                  <path d="M2 17l10 5 10-5"/>
-                  <path d="M2 12l10 5 10-5"/>
-                </svg>
-              </span>
-              <span class="ph-nav-item__label">Extract Stories</span>
-              <span class="ph-nav-item__count">${extracted.length}</span>
-            </button>
 
             <button class="ph-nav-item" id="navUserStories">
               <span class="ph-nav-item__icon">
@@ -630,8 +616,6 @@ export class ProjectHomePage {
     this.container.querySelector('#navDocuments')
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId }));
 
-    this.container.querySelector('#navExtractStories')
-      .addEventListener('click', () => this.router.navigate('extract-user-stories', { projectId: this.projectId }));
 
     this.container.querySelector('#navUserStories')
       .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this.projectId }));
