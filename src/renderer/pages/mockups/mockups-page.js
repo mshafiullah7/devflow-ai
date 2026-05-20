@@ -1230,6 +1230,135 @@ export class MockupsPage {
   }
 
   // ----------------------------------------------------------------
+  // Queue panel
+  // ----------------------------------------------------------------
+  async _renderQueuePanel(panel) {
+    const allScreens = await window.db.screenDesigns.list(this._projectId);
+    const queued     = allScreens.filter(s => s.queued && s.is_active !== 0);
+
+    panel.innerHTML = `
+      <div class="scr-queue-panel">
+        <div class="scr-queue-panel__header">
+          <span class="scr-queue-panel__title">Queue</span>
+          <span class="scr-queue-panel__count">${queued.length} screen${queued.length !== 1 ? 's' : ''}</span>
+          <div style="flex:1"></div>
+          <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrQueueStopBtn" hidden>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/>
+            </svg>
+            Stop
+          </button>
+          <button class="scr-btn scr-btn--primary scr-btn--sm" id="scrQueueRunBtn" ${queued.length === 0 ? 'disabled' : ''}>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <path d="M4 3l9 5-9 5V3z" fill="currentColor"/>
+            </svg>
+            Run All
+          </button>
+        </div>
+        <div class="scr-queue-panel__list" id="scrQueueList">
+          ${queued.length === 0
+            ? '<p class="scr-queue-panel__empty">No screens are queued. Set <strong>queued = 1</strong> on screens to add them here.</p>'
+            : queued.map(s => `
+              <div class="scr-queue-item" data-id="${s.id}">
+                <svg class="scr-queue-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+                </svg>
+                <span class="scr-queue-item__title">${escHtml(s.title)}</span>
+                ${s.description ? '' : '<span class="scr-queue-item__no-desc" title="No description — will be skipped">No description</span>'}
+                <span class="scr-queue-item__status scr-queue-item__status--pending" id="scrQueueStatus-${s.id}">Pending</span>
+              </div>
+            `).join('')}
+        </div>
+      </div>
+    `;
+
+    if (queued.length === 0) return;
+
+    const runBtn  = panel.querySelector('#scrQueueRunBtn');
+    const stopBtn = panel.querySelector('#scrQueueStopBtn');
+
+    runBtn.addEventListener('click', () => {
+      runBtn.hidden  = true;
+      stopBtn.hidden = false;
+      this._runQueue(queued, panel, () => {
+        runBtn.hidden  = false;
+        stopBtn.hidden = true;
+      });
+    });
+
+    stopBtn.addEventListener('click', () => {
+      this._queueStopped = true;
+      window.app.chat.cancel();
+      window.app.chat.offAll();
+      stopBtn.hidden = true;
+      runBtn.hidden  = false;
+    });
+  }
+
+  async _runQueue(screens, panel, onFinish) {
+    this._queueStopped = false;
+    const model = this._getSelectedModel();
+    if (!model) { alert('No model selected.'); onFinish(); return; }
+
+    for (const screen of screens) {
+      if (this._queueStopped) break;
+
+      const statusEl = panel.querySelector(`#scrQueueStatus-${screen.id}`);
+      if (!screen.description) {
+        if (statusEl) {
+          statusEl.textContent = 'Skipped';
+          statusEl.className   = 'scr-queue-item__status scr-queue-item__status--skipped';
+        }
+        continue;
+      }
+
+      if (statusEl) {
+        statusEl.textContent = 'Running…';
+        statusEl.className   = 'scr-queue-item__status scr-queue-item__status--running';
+      }
+
+      const prompt = buildScreenPrompt(
+        screen.description,
+        this._project?.description || '',
+        '',
+        this._getDesignTemplateForPrompt()
+      );
+
+      const result = await new Promise(resolve => {
+        window.app.chat.offAll();
+        window.app.chat.onDone(resolve);
+        window.app.chat.generate({ prompt, model });
+      });
+
+      if (this._queueStopped) break;
+
+      if (result.html && !result.error) {
+        await window.db.screenDesigns.update({
+          id:           screen.id,
+          html_content: result.html,
+          executed:     1,
+          queued:       0,
+        });
+        screen.html_content = result.html;
+        screen.executed     = 1;
+        screen.queued       = 0;
+        if (statusEl) {
+          statusEl.textContent = 'Done';
+          statusEl.className   = 'scr-queue-item__status scr-queue-item__status--done';
+        }
+      } else {
+        if (statusEl) {
+          statusEl.textContent = result.error || 'Error';
+          statusEl.className   = 'scr-queue-item__status scr-queue-item__status--error';
+        }
+      }
+    }
+
+    window.app.chat.offAll();
+    onFinish();
+  }
+
+  // ----------------------------------------------------------------
   // Screen viewer
   // ----------------------------------------------------------------
   async _selectScreen(id) {
@@ -1269,6 +1398,7 @@ export class MockupsPage {
           <div class="scr-preview-tabs">
             <button class="scr-preview-tab scr-preview-tab--active" id="scrTabPreview">Preview</button>
             <button class="scr-preview-tab" id="scrTabDescription">Description</button>
+            <button class="scr-preview-tab" id="scrTabQueue">Queue</button>
           </div>
           <div class="scr-viewer__actions">
             <div class="scr-actions-menu" id="scrActionsMenu">
@@ -1318,6 +1448,7 @@ export class MockupsPage {
         </div>
 
         <div class="scr-viewer__desc-panel scr-md-preview" id="scrDescPanel" hidden></div>
+        <div class="scr-viewer__queue-panel" id="scrQueuePanel" hidden></div>
 
         <div class="scr-viewer__split" id="scrSplit">
           <div class="scr-viewer__preview-pane" id="scrPreviewPane">
@@ -1551,25 +1682,32 @@ export class MockupsPage {
 
     const tabPreview     = main.querySelector('#scrTabPreview');
     const tabDescription = main.querySelector('#scrTabDescription');
+    const tabQueue       = main.querySelector('#scrTabQueue');
     const split          = main.querySelector('#scrSplit');
     const descPanel      = main.querySelector('#scrDescPanel');
+    const queuePanel     = main.querySelector('#scrQueuePanel');
+    const allTabs        = [tabPreview, tabDescription, tabQueue];
 
-    tabPreview.addEventListener('click', () => {
-      tabPreview.classList.add('scr-preview-tab--active');
-      tabDescription.classList.remove('scr-preview-tab--active');
-      split.hidden     = false;
-      descPanel.hidden = true;
-    });
+    const switchTab = (active) => {
+      allTabs.forEach(t => t.classList.toggle('scr-preview-tab--active', t === active));
+      split.hidden      = active !== tabPreview;
+      descPanel.hidden  = active !== tabDescription;
+      queuePanel.hidden = active !== tabQueue;
+    };
+
+    tabPreview.addEventListener('click', () => switchTab(tabPreview));
 
     tabDescription.addEventListener('click', () => {
-      tabDescription.classList.add('scr-preview-tab--active');
-      tabPreview.classList.remove('scr-preview-tab--active');
-      split.hidden     = true;
-      descPanel.hidden = false;
+      switchTab(tabDescription);
       const text = screen.description || '';
       descPanel.innerHTML = text
         ? renderMarkdown(text)
         : '<p class="scr-md-preview__empty">No description added yet.</p>';
+    });
+
+    tabQueue.addEventListener('click', () => {
+      switchTab(tabQueue);
+      this._renderQueuePanel(queuePanel);
     });
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {
