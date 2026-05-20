@@ -1052,10 +1052,12 @@
 .scr-md-preview a:hover { text-decoration: underline; }
 .scr-md-preview__empty { color: var(--text-muted); font-style: italic; font-size: 12px; margin: 0; }
 
-/* Compact new-screen dialog (title only) */
+/* Compact new-screen/edit-screen dialog (title only) */
 .scr-ns-dialog--compact {
-  min-height: unset;
+  height: auto;
+  max-height: unset;
 }
 .scr-ns-dialog--compact .scr-ns-dialog__body {
-  padding-bottom: 4px;
+  flex: none;
+  padding-bottom: 8px;
 }
