@@ -9,25 +9,32 @@
   align-items: center;
   column-gap: 4px;
   row-gap: 3px;
-  background: transparent;
-  border: none;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 3px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
+  padding-left: 5px; /* compensate for left border */
   margin-bottom: 4px;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.1s, border-left-color 0.1s;
 }
-.usl-card:hover   { background: var(--surface-hover); }
-.usl-card--active { background: rgba(99, 102, 241, 0.1); }
+.usl-card:hover {
+  background: var(--surface-hover);
+  border-left-color: rgba(99, 102, 241, 0.4);
+}
+.usl-card--active {
+  background: rgba(99, 102, 241, 0.1);
+  border-left-color: var(--accent);
+}
 
-/* AI-extracted stories — amber tint + left accent border */
+/* AI-extracted stories — amber border + tint overrides */
 .usl-card--extracted {
-  border-left: 3px solid rgba(245, 158, 11, 0.7);
-  padding-left: 5px; /* compensate for border so content stays aligned */
+  border-left-color: rgba(245, 158, 11, 0.7);
   background: rgba(245, 158, 11, 0.05);
 }
 .usl-card--extracted:hover {
   background: rgba(245, 158, 11, 0.1);
+  border-left-color: rgba(245, 158, 11, 0.9);
 }
 .usl-card--extracted.usl-card--active {
   background: rgba(245, 158, 11, 0.12);
