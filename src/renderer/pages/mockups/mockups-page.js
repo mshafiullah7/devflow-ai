@@ -1331,6 +1331,12 @@ export class MockupsPage {
             </svg>
             Stop
           </button>
+          <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrQueueClearBtn" hidden>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <path d="M4 8h8M8 4l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Clear completed
+          </button>
           <button class="scr-btn scr-btn--primary scr-btn--sm" id="scrQueueRunBtn" ${queued.length === 0 ? 'disabled' : ''}>
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
               <path d="M4 3l9 5-9 5V3z" fill="currentColor"/>
@@ -1366,8 +1372,22 @@ export class MockupsPage {
 
     if (queued.length === 0) return;
 
-    const runBtn  = panel.querySelector('#scrQueueRunBtn');
-    const stopBtn = panel.querySelector('#scrQueueStopBtn');
+    const runBtn   = panel.querySelector('#scrQueueRunBtn');
+    const stopBtn  = panel.querySelector('#scrQueueStopBtn');
+    const clearBtn = panel.querySelector('#scrQueueClearBtn');
+
+    const refreshBadges = async () => {
+      const all = await window.db.screenDesigns.list(this._projectId);
+      const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
+      const badge = this.container.querySelector('#scrQueueCount');
+      if (badge) badge.textContent = remaining;
+      const qBtn = this.container.querySelector('#scrQueueBtn');
+      if (qBtn) qBtn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
+      const descBadge = this.container.querySelector('#scrDescQueueCount');
+      if (descBadge) descBadge.textContent = remaining;
+      const descQBtn = this.container.querySelector('#scrDescQueueBtn');
+      if (descQBtn) descQBtn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
+    };
 
     runBtn.addEventListener('click', () => {
       runBtn.hidden  = true;
@@ -1375,14 +1395,8 @@ export class MockupsPage {
       this._runQueue(queued, panel, () => {
         runBtn.hidden  = false;
         stopBtn.hidden = true;
-        // Refresh toolbar badge after run
-        window.db.screenDesigns.list(this._projectId).then(all => {
-          const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
-          const badge = this.container.querySelector('#scrQueueCount');
-          if (badge) badge.textContent = remaining;
-          const btn = this.container.querySelector('#scrQueueBtn');
-          if (btn) btn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
-        });
+        clearBtn.hidden = false;
+        refreshBadges();
       });
     });
 
@@ -1390,8 +1404,16 @@ export class MockupsPage {
       this._queueStopped = true;
       window.app.chat.cancel();
       window.app.chat.offAll();
-      stopBtn.hidden = true;
-      runBtn.hidden  = false;
+      stopBtn.hidden  = true;
+      runBtn.hidden   = false;
+      clearBtn.hidden = false;
+    });
+
+    clearBtn.addEventListener('click', async () => {
+      // Re-render panel — done items already have queued=0 in DB so they disappear naturally
+      await this._renderQueuePanel(panel);
+      this._refreshSidebar();
+      refreshBadges();
     });
 
     // Prompt preview toggles
