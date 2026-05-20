@@ -1201,14 +1201,16 @@ export class MockupsPage {
             <button class="scr-desc-tab-btn scr-desc-tab-btn--active" id="scrDescTabEdit">Edit</button>
             <button class="scr-desc-tab-btn" id="scrDescTabPreview">Preview</button>
           </div>
-          <button class="scr-btn scr-btn--sm scr-btn--secondary scr-queue-btn${screen.queued ? ' scr-queue-btn--active' : ''}" id="scrDescQueueBtn" title="${screen.queued ? 'Remove from queue' : 'Add to queue'}">
+          <button class="scr-btn scr-btn--sm scr-btn--secondary scr-queue-btn" id="scrDescQueueBtn" title="Generation queue">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
             Queue
+            <span class="scr-queue-btn__badge" id="scrDescQueueCount">…</span>
           </button>
         </div>
-        <div class="scr-desc-editor__body">
+        <div class="scr-viewer__queue-panel" id="scrDescQueuePanel" hidden></div>
+        <div class="scr-desc-editor__body" id="scrDescEditorBody">
           <textarea class="scr-desc-editor__textarea" id="scrDescTextarea" placeholder="Describe this screen… (supports Markdown)">${escHtml(screen.description || '')}</textarea>
           <div class="scr-desc-editor__preview scr-md-preview" id="scrDescPreview" hidden></div>
         </div>
@@ -1270,15 +1272,28 @@ export class MockupsPage {
       this._showEditScreenModal(screen);
     });
 
-    const queueBtn = main.querySelector('#scrDescQueueBtn');
-    queueBtn.addEventListener('click', async () => {
-      const queued = screen.queued ? 0 : 1;
-      await window.db.screenDesigns.update({ id: screen.id, queued });
-      screen.queued = queued;
-      queueBtn.classList.toggle('scr-queue-btn--active', !!queued);
-      queueBtn.title = queued ? 'Remove from queue' : 'Add to queue';
-      this._screens = await window.db.screenDesigns.list(this._projectId);
-      this._refreshSidebar();
+    const queueBtn      = main.querySelector('#scrDescQueueBtn');
+    const queueCountEl  = main.querySelector('#scrDescQueueCount');
+    const queuePanel    = main.querySelector('#scrDescQueuePanel');
+    const editorBody    = main.querySelector('#scrDescEditorBody');
+    const footer        = main.querySelector('.scr-desc-editor__footer');
+
+    const refreshDescQueueCount = async () => {
+      const all = await window.db.screenDesigns.list(this._projectId);
+      const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
+      queueCountEl.textContent = remaining;
+      queueBtn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
+    };
+    refreshDescQueueCount();
+
+    let queueOpen = false;
+    queueBtn.addEventListener('click', () => {
+      queueOpen = !queueOpen;
+      queueBtn.classList.toggle('scr-queue-btn--active', queueOpen);
+      queuePanel.hidden  = !queueOpen;
+      editorBody.hidden  = queueOpen;
+      footer.hidden      = queueOpen;
+      if (queueOpen) this._renderQueuePanel(queuePanel).then(refreshDescQueueCount);
     });
   }
 
