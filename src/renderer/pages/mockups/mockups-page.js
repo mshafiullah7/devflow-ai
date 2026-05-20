@@ -276,19 +276,32 @@ export class MockupsPage {
 
   _renderList() {
     if (this._screens.length === 0) return '<p class="scr-sidebar__empty">No screens yet</p>';
-    return this._screens.map(s => `
-      <div class="scr-sidebar__item${s.id === this._activeId ? ' scr-sidebar__item--active' : ''}" data-id="${s.id}">
-        <svg class="scr-sidebar__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
-          <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-        </svg>
-        <div class="scr-sidebar__item-info">
-          <div class="scr-sidebar__item-row">
-            <span class="scr-sidebar__item-id">#${s.id}</span>
-            <span class="scr-sidebar__item-title">${escHtml(s.title)}</span>
+    return this._screens.map(s => {
+      const canQueue = !s.executed && s.description;
+      const isQueued = !!s.queued;
+      return `
+        <div class="scr-sidebar__item${s.id === this._activeId ? ' scr-sidebar__item--active' : ''}" data-id="${s.id}">
+          <svg class="scr-sidebar__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          <div class="scr-sidebar__item-info">
+            <div class="scr-sidebar__item-row">
+              <span class="scr-sidebar__item-id">#${s.id}</span>
+              <span class="scr-sidebar__item-title">${escHtml(s.title)}</span>
+            </div>
           </div>
+          ${canQueue ? `
+            <button class="scr-sidebar__queue-btn${isQueued ? ' scr-sidebar__queue-btn--active' : ''}"
+              data-queue-id="${s.id}" data-queued="${isQueued ? '1' : '0'}"
+              title="${isQueued ? 'Remove from queue' : 'Add to queue'}">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </button>
+          ` : ''}
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   _refreshSidebar() {
@@ -300,6 +313,29 @@ export class MockupsPage {
   _bindSidebarItems() {
     this.container.querySelectorAll('.scr-sidebar__item').forEach(el => {
       el.addEventListener('click', () => this._selectScreen(Number(el.dataset.id)));
+    });
+
+    this.container.querySelectorAll('.scr-sidebar__queue-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id       = Number(btn.dataset.queueId);
+        const queued   = btn.dataset.queued === '1' ? 0 : 1;
+        await window.db.screenDesigns.update({ id, queued });
+        const screen = this._screens.find(s => s.id === id);
+        if (screen) screen.queued = queued;
+        btn.dataset.queued = queued;
+        btn.title = queued ? 'Remove from queue' : 'Add to queue';
+        btn.classList.toggle('scr-sidebar__queue-btn--active', !!queued);
+        // Refresh badge in viewer toolbar if visible
+        const badge = this.container.querySelector('#scrQueueCount');
+        if (badge) {
+          const all = await window.db.screenDesigns.list(this._projectId);
+          const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
+          badge.textContent = remaining;
+          this.container.querySelector('#scrQueueBtn')
+            ?.classList.toggle('scr-queue-btn--has-items', remaining > 0);
+        }
+      });
     });
   }
 
