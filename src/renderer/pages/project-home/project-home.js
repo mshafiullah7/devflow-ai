@@ -272,17 +272,6 @@ export class ProjectHomePage {
             </button>
 
             <div class="ph-sidebar-section">Work</div>
-            <button class="ph-nav-item" id="navMockups">
-              <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="2" y="3" width="20" height="14" rx="2"/>
-                  <path d="M8 21h8M12 17v4"/>
-                </svg>
-              </span>
-              <span class="ph-nav-item__label">Mockups</span>
-              <span class="ph-nav-item__count">${mockups.length}</span>
-            </button>
-
             <button class="ph-nav-item" id="navDocuments">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -292,6 +281,17 @@ export class ProjectHomePage {
               </span>
               <span class="ph-nav-item__label">Documents</span>
               <span class="ph-nav-item__count">${documents.length}</span>
+            </button>
+
+            <button class="ph-nav-item" id="navMockups">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/>
+                  <path d="M8 21h8M12 17v4"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Mockups</span>
+              <span class="ph-nav-item__count">${mockups.length}</span>
             </button>
 
             <button class="ph-nav-item" id="navExtractStories">
