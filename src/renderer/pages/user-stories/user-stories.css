@@ -214,7 +214,7 @@
 .project-panel__content {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 4px 6px;
 }
 
 .project-panel__empty {
