@@ -8,6 +8,8 @@ function applySchema(db) {
   // Safe column migrations — silently ignored if column already exists
   const migrations = [
     `ALTER TABLE projects ADD COLUMN design_template TEXT`,
+    `ALTER TABLE screen_designs ADD COLUMN queued   INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE screen_designs ADD COLUMN executed INTEGER NOT NULL DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -165,8 +167,8 @@ function applySchema(db) {
       description         TEXT,
       tech_stack          TEXT    NOT NULL DEFAULT 'html',
       html_content        TEXT    NOT NULL DEFAULT '',
-      prompt_used         TEXT,
-      model_used          TEXT,
+      queued              INTEGER NOT NULL DEFAULT 0,
+      executed            INTEGER NOT NULL DEFAULT 0,
       is_active           INTEGER NOT NULL DEFAULT 1,
       created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))

@@ -174,8 +174,8 @@ erDiagram
     TEXT description
     TEXT tech_stack
     TEXT html_content
-    TEXT prompt_used
-    TEXT model_used
+    INTEGER queued
+    INTEGER executed
     INTEGER is_active
     TEXT created_at
     TEXT updated_at
@@ -616,8 +616,8 @@ AI-generated or hand-crafted UI screen designs stored as HTML.
 | `description` | TEXT | | |
 | `tech_stack` | TEXT | NOT NULL, DEFAULT `'html'` | e.g. `html`, `react`, `vue` |
 | `html_content` | TEXT | NOT NULL, DEFAULT `''` | Raw HTML/CSS/JS of the design |
-| `prompt_used` | TEXT | | The prompt that generated this design |
-| `model_used` | TEXT | | Label of the model that generated it |
+| `queued` | INTEGER | NOT NULL, DEFAULT `0` | Flagged for batch generation run |
+| `executed` | INTEGER | NOT NULL, DEFAULT `0` | First generation has completed |
 | `is_active` | INTEGER | NOT NULL, DEFAULT 1 | |
 | `created_at` | TEXT | NOT NULL, DEFAULT `datetime('now')` | |
 | `updated_at` | TEXT | NOT NULL, DEFAULT `datetime('now')` | |

@@ -676,26 +676,27 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
   });
 
-  safeHandle('db:screen_designs:create', (_e, { project_id, title, description, tech_stack, html_content, prompt_used, model_used }) => {
+  safeHandle('db:screen_designs:create', (_e, { project_id, title, description, tech_stack, html_content, queued, executed }) => {
     const result = db
-      .prepare(`INSERT INTO screen_designs (project_id, title, description, tech_stack, html_content, prompt_used, model_used)
+      .prepare(`INSERT INTO screen_designs (project_id, title, description, tech_stack, html_content, queued, executed)
                 VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(project_id, title, description ?? null, tech_stack ?? 'html', html_content ?? '', prompt_used ?? null, model_used ?? null);
+      .run(project_id, title, description ?? null, tech_stack ?? 'html', html_content ?? '', queued ?? 0, executed ?? 0);
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:screen_designs:update', (_e, { id, title, description, tech_stack, html_content, prompt_used, model_used }) => {
+  safeHandle('db:screen_designs:update', (_e, { id, title, description, tech_stack, html_content, queued, executed }) => {
     db.prepare(
       `UPDATE screen_designs
           SET title        = coalesce(?, title),
               description  = coalesce(?, description),
               tech_stack   = coalesce(?, tech_stack),
               html_content = coalesce(?, html_content),
-              prompt_used  = coalesce(?, prompt_used),
-              model_used   = coalesce(?, model_used),
+              queued       = CASE WHEN ? IS NOT NULL THEN ? ELSE queued END,
+              executed     = CASE WHEN ? IS NOT NULL THEN ? ELSE executed END,
               updated_at   = datetime('now')
         WHERE id = ?`
-    ).run(title ?? null, description ?? null, tech_stack ?? null, html_content ?? null, prompt_used ?? null, model_used ?? null, id);
+    ).run(title ?? null, description ?? null, tech_stack ?? null, html_content ?? null,
+          queued ?? null, queued ?? null, executed ?? null, executed ?? null, id);
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
   });
 

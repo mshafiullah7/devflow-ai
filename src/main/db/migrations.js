@@ -126,6 +126,15 @@ function runMigrations(db) {
     `);
   }
 
+  // Add queued/executed to screen_designs
+  const sdCols = db.prepare('PRAGMA table_info(screen_designs)').all().map(c => c.name);
+  if (!sdCols.includes('queued')) {
+    db.exec('ALTER TABLE screen_designs ADD COLUMN queued INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!sdCols.includes('executed')) {
+    db.exec('ALTER TABLE screen_designs ADD COLUMN executed INTEGER NOT NULL DEFAULT 0');
+  }
+
   // Add is_executed to prompts
   const promptsCols = db.prepare('PRAGMA table_info(prompts)').all().map(c => c.name);
   if (!promptsCols.includes('is_executed')) {

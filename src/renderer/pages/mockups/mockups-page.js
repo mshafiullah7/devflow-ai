@@ -1,4 +1,4 @@
-import { escHtml, injectCss, removeCss, timeAgo } from '../../shared/helpers.js';
+import { escHtml, injectCss, removeCss, timeAgo, renderMarkdown } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { GitController } from '../../components/git/git-controller.js';
@@ -549,8 +549,6 @@ export class MockupsPage {
         title,
         description: desc,
         tech_stack:  stack,
-        prompt_used: desc,
-        model_used:  this._getSelectedModel()?.label || '',
       });
     }
 
@@ -560,8 +558,6 @@ export class MockupsPage {
       description:  desc,
       tech_stack:   stack,
       html_content: '',
-      prompt_used:  desc,
-      model_used:   this._getSelectedModel()?.label || '',
     });
     this._editingId = screen.id;
     return screen;
@@ -603,7 +599,7 @@ export class MockupsPage {
     const dlg = document.createElement('div');
     dlg.className = 'scr-overlay';
     dlg.innerHTML = `
-      <div class="scr-ns-dialog">
+      <div class="scr-ns-dialog scr-ns-dialog--compact">
         <div class="scr-ns-dialog__header">
           <span class="scr-ns-dialog__title">New Screen</span>
           <button class="scr-dialog__close" id="scrNsClose">&times;</button>
@@ -614,22 +610,10 @@ export class MockupsPage {
             <input class="scr-form__input" id="scrNsTitle" type="text"
               placeholder="e.g. Login Screen, Dashboard, Product List…" autocomplete="off"/>
           </div>
-          <div class="scr-form__row scr-form__row--grow">
-            <label class="scr-form__label">Description</label>
-            <textarea class="scr-form__textarea scr-ns-dialog__desc" id="scrNsDesc"
-              placeholder="Describe what this screen should contain…"></textarea>
-          </div>
         </div>
         <div class="scr-ns-dialog__footer">
           <button class="scr-btn scr-btn--secondary" id="scrNsCancel">Cancel</button>
-          <button class="scr-btn scr-btn--primary" id="scrNsSave" title="Save & Open (Ctrl+S)">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-              <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-            </svg>
-            <span><u>S</u>ave &amp; Open</span>
-          </button>
+          <button class="scr-btn scr-btn--primary" id="scrNsSave" title="Save (Enter)">Save</button>
         </div>
       </div>
     `;
@@ -642,7 +626,7 @@ export class MockupsPage {
     dlg.querySelector('#scrNsCancel').addEventListener('click', close);
 
     dlg.addEventListener('keydown', (e) => {
-      if (e.key === 's' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         dlg.querySelector('#scrNsSave')?.click();
       }
@@ -651,25 +635,20 @@ export class MockupsPage {
 
     dlg.querySelector('#scrNsSave').addEventListener('click', async () => {
       const title = dlg.querySelector('#scrNsTitle').value.trim();
-      const desc  = dlg.querySelector('#scrNsDesc').value.trim();
       if (!title) { dlg.querySelector('#scrNsTitle').focus(); return; }
 
       const screen = await window.db.screenDesigns.create({
         project_id:   this._projectId,
         title,
-        description:  desc,
         tech_stack:   'html',
         html_content: '',
-        prompt_used:  desc,
-        model_used:   this._getSelectedModel()?.label || '',
       });
 
       close();
-      this._screens   = await window.db.screenDesigns.list(this._projectId);
-      this._activeId  = screen.id;
-      this._editingId = screen.id;
+      this._screens  = await window.db.screenDesigns.list(this._projectId);
+      this._activeId = screen.id;
       this._refreshSidebar();
-      this._showScreenViewer(screen);
+      this._showDescriptionEditor(screen);
     });
   }
 
@@ -793,8 +772,9 @@ export class MockupsPage {
         const previousHtml = screen.html_content;  // capture before overwrite
 
         if (html && !error) {
-          await window.db.screenDesigns.update({ id: screen.id, html_content: html, model_used: model.label || '' });
+          await window.db.screenDesigns.update({ id: screen.id, html_content: html, executed: 1 });
           screen.html_content = html;
+          screen.executed = 1;
           this._loadPreview(html);
           previewBubble.innerHTML = `
             <div class="scr-chat-response-bubble scr-chat-response-bubble--ok">
@@ -998,7 +978,7 @@ export class MockupsPage {
           </div>
           <div class="scr-form__row scr-form__row--grow">
             <label class="scr-form__label">Description</label>
-            <textarea class="scr-form__textarea scr-ns-dialog__desc" id="scrEditDesc">${escHtml(screen.description || screen.prompt_used || '')}</textarea>
+            <textarea class="scr-form__textarea scr-ns-dialog__desc" id="scrEditDesc">${escHtml(screen.description || '')}</textarea>
           </div>
         </div>
         <div class="scr-ns-dialog__footer">
@@ -1032,8 +1012,6 @@ export class MockupsPage {
         title,
         description: desc,
         tech_stack:  'html',
-        prompt_used: desc,
-        model_used:  this._getSelectedModel()?.label || '',
       });
       screen.title       = title;
       screen.description = desc;
@@ -1189,6 +1167,91 @@ export class MockupsPage {
   }
 
   // ----------------------------------------------------------------
+  // Description editor (shown when screen.executed === 0)
+  // ----------------------------------------------------------------
+  _showDescriptionEditor(screen) {
+    const main = this.container.querySelector('#scrMain');
+    main.innerHTML = `
+      <div class="scr-desc-editor">
+        <div class="scr-desc-editor__toolbar">
+          <div class="scr-viewer__meta">
+            <span class="scr-viewer__title">${escHtml(screen.title)}</span>
+            <span class="scr-viewer__tech-badge">${TECH}</span>
+            <button class="scr-btn scr-btn--sm" id="scrDescEditDetailsBtn" title="Rename screen">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="scr-desc-editor__tabs">
+            <button class="scr-desc-tab-btn scr-desc-tab-btn--active" id="scrDescTabEdit">Edit</button>
+            <button class="scr-desc-tab-btn" id="scrDescTabPreview">Preview</button>
+          </div>
+        </div>
+        <div class="scr-desc-editor__body">
+          <textarea class="scr-desc-editor__textarea" id="scrDescTextarea" placeholder="Describe this screen… (supports Markdown)">${escHtml(screen.description || '')}</textarea>
+          <div class="scr-desc-editor__preview scr-md-preview" id="scrDescPreview" hidden></div>
+        </div>
+        <div class="scr-desc-editor__footer">
+          <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrDescDeleteBtn">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+              <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Delete
+          </button>
+          <button class="scr-btn scr-btn--primary" id="scrDescSaveBtn">Save Description</button>
+        </div>
+      </div>
+    `;
+
+    const textarea  = main.querySelector('#scrDescTextarea');
+    const preview   = main.querySelector('#scrDescPreview');
+    const tabEdit   = main.querySelector('#scrDescTabEdit');
+    const tabPrev   = main.querySelector('#scrDescTabPreview');
+
+    const showTab = (mode) => {
+      const isEdit = mode === 'edit';
+      textarea.hidden = !isEdit;
+      preview.hidden  = isEdit;
+      tabEdit.classList.toggle('scr-desc-tab-btn--active', isEdit);
+      tabPrev.classList.toggle('scr-desc-tab-btn--active', !isEdit);
+      if (!isEdit) {
+        const text = textarea.value.trim();
+        preview.innerHTML = text
+          ? renderMarkdown(text)
+          : '<p class="scr-md-preview__empty">Nothing to preview yet.</p>';
+      }
+    };
+
+    tabEdit.addEventListener('click', () => showTab('edit'));
+    tabPrev.addEventListener('click', () => showTab('preview'));
+
+    main.querySelector('#scrDescSaveBtn').addEventListener('click', async () => {
+      const desc = textarea.value.trim();
+      await window.db.screenDesigns.update({ id: screen.id, description: desc });
+      screen.description = desc;
+    });
+
+    main.querySelector('#scrDescDeleteBtn').addEventListener('click', () => {
+      this._showDeleteConfirmDialog(screen, async () => {
+        await window.db.screenDesigns.delete(screen.id);
+        this._screens = await window.db.screenDesigns.list(this._projectId);
+        this._activeId = null;
+        this._refreshSidebar();
+        if (this._screens.length > 0) {
+          this._selectScreen(this._screens[0].id);
+        } else {
+          this._showEmptyState();
+        }
+      });
+    });
+
+    main.querySelector('#scrDescEditDetailsBtn').addEventListener('click', () => {
+      this._showEditScreenModal(screen);
+    });
+  }
+
+  // ----------------------------------------------------------------
   // Screen viewer
   // ----------------------------------------------------------------
   async _selectScreen(id) {
@@ -1196,7 +1259,12 @@ export class MockupsPage {
     this._activeTab = 'preview';
     this._setActiveItem(id);
     const screen = await window.db.screenDesigns.get(id);
-    if (screen) this._showScreenViewer(screen);
+    if (!screen) return;
+    if (screen.executed) {
+      this._showScreenViewer(screen);
+    } else {
+      this._showDescriptionEditor(screen);
+    }
   }
 
   _setActiveItem(id) {
@@ -1399,7 +1467,7 @@ export class MockupsPage {
 
     // Load saved description into composer
     main.querySelector('#scrLoadDescBtn').addEventListener('click', () => {
-      const saved = screen.description || screen.prompt_used || '';
+      const saved = screen.description || '';
       if (!saved) return;
       chatInput.value = saved;
       resizeChatInput();
@@ -1588,7 +1656,7 @@ export class MockupsPage {
         return;
       }
 
-      const desc = screen.description || screen.prompt_used || '';
+      const desc = screen.description || '';
       if (!desc) {
         alert('No description saved for this screen. Edit the screen details and add a description first.');
         return;
