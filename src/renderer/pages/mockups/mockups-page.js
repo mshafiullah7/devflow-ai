@@ -326,15 +326,28 @@ export class MockupsPage {
         btn.dataset.queued = queued;
         btn.title = queued ? 'Remove from queue' : 'Add to queue';
         btn.classList.toggle('scr-sidebar__queue-btn--active', !!queued);
-        // Refresh badge in viewer toolbar if visible
-        const badge = this.container.querySelector('#scrQueueCount');
-        if (badge) {
-          const all = await window.db.screenDesigns.list(this._projectId);
-          const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
-          badge.textContent = remaining;
+        // Refresh badges and re-render any open queue panel
+        const all = await window.db.screenDesigns.list(this._projectId);
+        const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
+
+        const viewerBadge = this.container.querySelector('#scrQueueCount');
+        if (viewerBadge) {
+          viewerBadge.textContent = remaining;
           this.container.querySelector('#scrQueueBtn')
             ?.classList.toggle('scr-queue-btn--has-items', remaining > 0);
         }
+        const descBadge = this.container.querySelector('#scrDescQueueCount');
+        if (descBadge) {
+          descBadge.textContent = remaining;
+          this.container.querySelector('#scrDescQueueBtn')
+            ?.classList.toggle('scr-queue-btn--has-items', remaining > 0);
+        }
+
+        // Re-render whichever queue panel is currently open
+        const viewerPanel = this.container.querySelector('#scrQueuePanel');
+        if (viewerPanel && !viewerPanel.hidden) this._renderQueuePanel(viewerPanel);
+        const descPanel = this.container.querySelector('#scrDescQueuePanel');
+        if (descPanel && !descPanel.hidden) this._renderQueuePanel(descPanel);
       });
     });
   }
