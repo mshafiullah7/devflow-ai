@@ -1,5 +1,20 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 
+const IS_STATUS = {
+  open:        { label: 'Open',        cls: 'rs-badge--open'        },
+  in_progress: { label: 'In Progress', cls: 'rs-badge--in-progress' },
+  resolved:    { label: 'Resolved',    cls: 'rs-badge--resolved'    },
+  closed:      { label: 'Closed',      cls: 'rs-badge--closed'      },
+  wont_fix:    { label: "Won't Fix",   cls: 'rs-badge--wont-fix'    },
+};
+
+const IS_SEVERITY = {
+  critical: { label: 'Critical', cls: 'rs-severity--critical' },
+  high:     { label: 'High',     cls: 'rs-severity--high'     },
+  medium:   { label: 'Medium',   cls: 'rs-severity--medium'   },
+  low:      { label: 'Low',      cls: 'rs-severity--low'      },
+};
+
 export class UserStoryDetail {
   constructor({ detailEl, projectId, getModel, onRunCommandExternal, onPrintOutput, onStoryUpdated, onCancelled, headerActionsEl, onExport, onDelete }) {
     this._detailEl               = detailEl;
@@ -16,6 +31,7 @@ export class UserStoryDetail {
     this._statuses               = [];
     this._ctrlSHandler           = null;
     this._currentStory           = null;
+    this._activeTab              = 'description';
     this._titleEl                = null;
     this._descEl                 = null;
     this._acEl                   = null;
@@ -105,86 +121,104 @@ export class UserStoryDetail {
       <div class="usl-add-form">
         <div class="usl-add-form__header">
           <h2 class="usl-add-form__title">Add User Story</h2>
+          <div class="usl-view-toggle" id="uslAddDetailTabs">
+            <button class="usl-view-toggle__btn usl-view-toggle__btn--active" data-tab="description">Description</button>
+            <button class="usl-view-toggle__btn" data-tab="criterias">Criteria's</button>
+            <button class="usl-view-toggle__btn" data-tab="tasks">Tasks</button>
+            <button class="usl-view-toggle__btn" data-tab="issues">Issues</button>
+          </div>
         </div>
         <div class="usl-add-form__body">
 
-          <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslAddTitle">
-              Title <span class="usl-add-form__required">*</span>
-            </label>
-            <input
-              class="usl-add-form__input"
-              id="uslAddTitle"
-              type="text"
-              placeholder="As a user, I want to…"
-              maxlength="200"
-              autocomplete="off"
-            />
-          </div>
-
-          <div class="usl-add-form__field usl-add-form__field--desc">
-            <div class="usl-add-form__label-row">
-              <label class="usl-add-form__label" for="uslAddDesc">Description</label>
-              <button class="usl-add-form__expand" type="button" data-expand="uslAddDesc" title="Expand" aria-label="Expand Description">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
+          <div class="usl-tab-content" data-tab-content="description">
+            <div class="usl-add-form__field">
+              <label class="usl-add-form__label" for="uslAddTitle">
+                Title <span class="usl-add-form__required">*</span>
+              </label>
+              <input
+                class="usl-add-form__input"
+                id="uslAddTitle"
+                type="text"
+                placeholder="As a user, I want to…"
+                maxlength="200"
+                autocomplete="off"
+              />
             </div>
-            <textarea class="usl-add-form__textarea" id="uslAddDesc" placeholder="Describe the story…" rows="6"></textarea>
-          </div>
 
-          <div class="usl-add-form__field usl-add-form__field--ac">
-            <div class="usl-add-form__label-row">
-              <label class="usl-add-form__label" for="uslAddAC">Acceptance Criteria</label>
-              <button class="usl-add-form__expand" type="button" data-expand="uslAddAC" title="Expand" aria-label="Expand Acceptance Criteria">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
+            <div class="usl-add-form__field usl-add-form__field--desc">
+              <div class="usl-add-form__label-row">
+                <label class="usl-add-form__label" for="uslAddDesc">Description</label>
+                <button class="usl-add-form__expand" type="button" data-expand="uslAddDesc" title="Expand" aria-label="Expand Description">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+              <textarea class="usl-add-form__textarea" id="uslAddDesc" placeholder="Describe the story…" rows="6"></textarea>
             </div>
-            <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="6"></textarea>
-          </div>
 
-          <div class="usl-add-form__planning-grid">
-            <div class="usl-add-form__planning-cell">
-              <label class="usl-add-form__label" for="uslAddPriority">Priority</label>
-              <select class="usl-add-form__select usl-priority-select" id="uslAddPriority" data-priority="medium">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
+            <div class="usl-add-form__planning-grid">
+              <div class="usl-add-form__planning-cell">
+                <label class="usl-add-form__label" for="uslAddPriority">Priority</label>
+                <select class="usl-add-form__select usl-priority-select" id="uslAddPriority" data-priority="medium">
+                  <option value="low">Low</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <div class="usl-add-form__planning-cell">
+                <label class="usl-add-form__label" for="uslAddTargetDate">Target Date</label>
+                <input class="usl-add-form__input" id="uslAddTargetDate" type="date" />
+              </div>
+              <div class="usl-add-form__planning-cell">
+                <label class="usl-add-form__label" for="uslAddEstHours">Est. Hours</label>
+                <input class="usl-add-form__input" id="uslAddEstHours" type="number" min="0" step="0.5" placeholder="—" />
+              </div>
+              <div class="usl-add-form__planning-cell">
+                <label class="usl-add-form__label" for="uslAddRemHours">Rem. Hours</label>
+                <input class="usl-add-form__input" id="uslAddRemHours" type="number" min="0" step="0.5" placeholder="—" />
+              </div>
+            </div>
+
+            <div class="usl-add-form__field">
+              <label class="usl-add-form__label" for="uslAddStatus">Status</label>
+              <select class="usl-add-form__select" id="uslAddStatus">
+                <option value="">— none —</option>
+                ${this._statuses.map(st =>
+                  `<option value="${st.id}"${st.id === defaultStatus ? ' selected' : ''}>${escHtml(st.name)}</option>`
+                ).join('')}
               </select>
             </div>
-            <div class="usl-add-form__planning-cell">
-              <label class="usl-add-form__label" for="uslAddTargetDate">Target Date</label>
-              <input class="usl-add-form__input" id="uslAddTargetDate" type="date" />
-            </div>
-            <div class="usl-add-form__planning-cell">
-              <label class="usl-add-form__label" for="uslAddEstHours">Est. Hours</label>
-              <input class="usl-add-form__input" id="uslAddEstHours" type="number" min="0" step="0.5" placeholder="—" />
-            </div>
-            <div class="usl-add-form__planning-cell">
-              <label class="usl-add-form__label" for="uslAddRemHours">Rem. Hours</label>
-              <input class="usl-add-form__input" id="uslAddRemHours" type="number" min="0" step="0.5" placeholder="—" />
+          </div>
+
+          <div class="usl-tab-content" data-tab-content="criterias">
+            <div class="usl-add-form__field usl-add-form__field--ac">
+              <div class="usl-add-form__label-row">
+                <label class="usl-add-form__label" for="uslAddAC">Acceptance Criteria</label>
+                <button class="usl-add-form__expand" type="button" data-expand="uslAddAC" title="Expand" aria-label="Expand Acceptance Criteria">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+              <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="6"></textarea>
             </div>
           </div>
 
-          <div class="usl-prompts-section">
-            <div class="usl-prompts-section__header">
-              <span class="usl-prompts-section__title">Prompts</span>
-              <button class="usl-prompts-section__add-btn" id="uslAddPromptBtn" type="button" title="Add prompt">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                Add
-              </button>
+          <div class="usl-tab-content" data-tab-content="tasks">
+            <div class="usl-prompts-section">
+              <div class="usl-prompts-section__header">
+                <span class="usl-prompts-section__title">Tasks</span>
+                <button class="usl-prompts-section__add-btn" id="uslAddPromptBtn" type="button" title="Add task">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Add
+                </button>
+              </div>
+              <div class="usl-prompts-list" id="uslAddPromptsList"></div>
             </div>
-            <div class="usl-prompts-list" id="uslAddPromptsList"></div>
           </div>
 
-          <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslAddStatus">Status</label>
-            <select class="usl-add-form__select" id="uslAddStatus">
-              <option value="">— none —</option>
-              ${this._statuses.map(st =>
-                `<option value="${st.id}"${st.id === defaultStatus ? ' selected' : ''}>${escHtml(st.name)}</option>`
-              ).join('')}
-            </select>
+          <div class="usl-tab-content" data-tab-content="issues">
+            <div class="usl-issues-tab" id="uslIssuesList">
+              <div class="project-related__empty">Save the story first to see issues</div>
+            </div>
           </div>
 
         </div>
@@ -206,6 +240,7 @@ export class UserStoryDetail {
 
     priorityEl.addEventListener('change', () => { priorityEl.dataset.priority = priorityEl.value; });
 
+    this._bindTabToggle(this._detailEl, null);
     this._bindPromptsSection(this._detailEl, null);
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
@@ -259,6 +294,12 @@ export class UserStoryDetail {
       <div class="usl-add-form">
         <div class="usl-add-form__header">
           <h2 class="usl-add-form__title">User Story</h2>
+          <div class="usl-view-toggle" id="uslEditDetailTabs">
+            <button class="usl-view-toggle__btn usl-view-toggle__btn--active" data-tab="description">Description</button>
+            <button class="usl-view-toggle__btn" data-tab="criterias">Criteria's</button>
+            <button class="usl-view-toggle__btn" data-tab="tasks">Tasks</button>
+            <button class="usl-view-toggle__btn" data-tab="issues">Issues</button>
+          </div>
           <select class="usl-add-form__status-select" id="uslEditStatus">
             <option value="">— none —</option>
             ${this._statuses.map(st =>
@@ -268,74 +309,86 @@ export class UserStoryDetail {
         </div>
         <div class="usl-add-form__body">
 
-          <div class="usl-add-form__field">
-            <label class="usl-add-form__label" for="uslEditTitle">
-              Title <span class="usl-add-form__required">*</span>
-            </label>
-            <input
-              class="usl-add-form__input"
-              id="uslEditTitle"
-              type="text"
-              placeholder="As a user, I want to…"
-              maxlength="200"
-              autocomplete="off"
-              value="${escHtml(story.title)}"
-            />
-          </div>
+          <div class="usl-tab-content" data-tab-content="description">
+            <div class="usl-add-form__field">
+              <label class="usl-add-form__label" for="uslEditTitle">
+                Title <span class="usl-add-form__required">*</span>
+              </label>
+              <input
+                class="usl-add-form__input"
+                id="uslEditTitle"
+                type="text"
+                placeholder="As a user, I want to…"
+                maxlength="200"
+                autocomplete="off"
+                value="${escHtml(story.title)}"
+              />
+            </div>
 
-          <div class="usl-add-form__field usl-add-form__field--desc">
-            <div class="usl-add-form__label-row">
-              <label class="usl-add-form__label" for="uslEditDesc">Description</label>
-              <button class="usl-add-form__expand" type="button" data-expand="uslEditDesc" title="Expand" aria-label="Expand Description">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
+            <div class="usl-add-form__field usl-add-form__field--desc">
+              <div class="usl-add-form__label-row">
+                <label class="usl-add-form__label" for="uslEditDesc">Description</label>
+                <button class="usl-add-form__expand" type="button" data-expand="uslEditDesc" title="Expand" aria-label="Expand Description">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+              <textarea class="usl-add-form__textarea" id="uslEditDesc" placeholder="Describe the story…" rows="6">${escHtml(story.description || '')}</textarea>
             </div>
-            <textarea class="usl-add-form__textarea" id="uslEditDesc" placeholder="Describe the story…" rows="6">${escHtml(story.description || '')}</textarea>
-          </div>
 
-          <div class="usl-add-form__field usl-add-form__field--ac">
-            <div class="usl-add-form__label-row">
-              <label class="usl-add-form__label" for="uslEditAC">Acceptance Criteria</label>
-              <button class="usl-add-form__expand" type="button" data-expand="uslEditAC" title="Expand" aria-label="Expand Acceptance Criteria">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-            </div>
-            <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="6">${escHtml(story.acceptance_criteria || '')}</textarea>
-          </div>
-
-          <div class="usl-add-form__planning-grid">
-            <div class="usl-add-form__planning-cell">
-              <label class="usl-add-form__label" for="uslEditPriority">Priority</label>
-              <select class="usl-add-form__select usl-priority-select" id="uslEditPriority" data-priority="${escHtml(story.priority || 'medium')}">
-                <option value="low"${(story.priority || 'medium') === 'low' ? ' selected' : ''}>Low</option>
-                <option value="medium"${(!story.priority || story.priority === 'medium') ? ' selected' : ''}>Medium</option>
-                <option value="high"${story.priority === 'high' ? ' selected' : ''}>High</option>
-                <option value="critical"${story.priority === 'critical' ? ' selected' : ''}>Critical</option>
-              </select>
-            </div>
-            <div class="usl-add-form__planning-cell">
-              <label class="usl-add-form__label" for="uslEditTargetDate">Target Date</label>
-              <input class="usl-add-form__input" id="uslEditTargetDate" type="date" value="${escHtml(story.target_date || '')}" />
-            </div>
-            <div class="usl-add-form__planning-cell">
-              <label class="usl-add-form__label" for="uslEditEstHours">Est. Hours</label>
-              <input class="usl-add-form__input" id="uslEditEstHours" type="number" min="0" step="0.5" placeholder="—" value="${story.estimated_hours ?? ''}" />
-            </div>
-            <div class="usl-add-form__planning-cell">
-              <label class="usl-add-form__label" for="uslEditRemHours">Rem. Hours</label>
-              <input class="usl-add-form__input" id="uslEditRemHours" type="number" min="0" step="0.5" placeholder="—" value="${story.remaining_hours ?? ''}" />
+            <div class="usl-add-form__planning-grid">
+              <div class="usl-add-form__planning-cell">
+                <label class="usl-add-form__label" for="uslEditPriority">Priority</label>
+                <select class="usl-add-form__select usl-priority-select" id="uslEditPriority" data-priority="${escHtml(story.priority || 'medium')}">
+                  <option value="low"${(story.priority || 'medium') === 'low' ? ' selected' : ''}>Low</option>
+                  <option value="medium"${(!story.priority || story.priority === 'medium') ? ' selected' : ''}>Medium</option>
+                  <option value="high"${story.priority === 'high' ? ' selected' : ''}>High</option>
+                  <option value="critical"${story.priority === 'critical' ? ' selected' : ''}>Critical</option>
+                </select>
+              </div>
+              <div class="usl-add-form__planning-cell">
+                <label class="usl-add-form__label" for="uslEditTargetDate">Target Date</label>
+                <input class="usl-add-form__input" id="uslEditTargetDate" type="date" value="${escHtml(story.target_date || '')}" />
+              </div>
+              <div class="usl-add-form__planning-cell">
+                <label class="usl-add-form__label" for="uslEditEstHours">Est. Hours</label>
+                <input class="usl-add-form__input" id="uslEditEstHours" type="number" min="0" step="0.5" placeholder="—" value="${story.estimated_hours ?? ''}" />
+              </div>
+              <div class="usl-add-form__planning-cell">
+                <label class="usl-add-form__label" for="uslEditRemHours">Rem. Hours</label>
+                <input class="usl-add-form__input" id="uslEditRemHours" type="number" min="0" step="0.5" placeholder="—" value="${story.remaining_hours ?? ''}" />
+              </div>
             </div>
           </div>
 
-          <div class="usl-prompts-section">
-            <div class="usl-prompts-section__header">
-              <span class="usl-prompts-section__title">Prompts</span>
-              <button class="usl-prompts-section__add-btn" id="uslEditPromptBtn" type="button" title="Add prompt">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                Add
-              </button>
+          <div class="usl-tab-content" data-tab-content="criterias">
+            <div class="usl-add-form__field usl-add-form__field--ac">
+              <div class="usl-add-form__label-row">
+                <label class="usl-add-form__label" for="uslEditAC">Acceptance Criteria</label>
+                <button class="usl-add-form__expand" type="button" data-expand="uslEditAC" title="Expand" aria-label="Expand Acceptance Criteria">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+              <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="6">${escHtml(story.acceptance_criteria || '')}</textarea>
             </div>
-            <div class="usl-prompts-list" id="uslEditPromptsList"></div>
+          </div>
+
+          <div class="usl-tab-content" data-tab-content="tasks">
+            <div class="usl-prompts-section">
+              <div class="usl-prompts-section__header">
+                <span class="usl-prompts-section__title">Tasks</span>
+                <button class="usl-prompts-section__add-btn" id="uslEditPromptBtn" type="button" title="Add task">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Add
+                </button>
+              </div>
+              <div class="usl-prompts-list" id="uslEditPromptsList"></div>
+            </div>
+          </div>
+
+          <div class="usl-tab-content" data-tab-content="issues">
+            <div class="usl-issues-tab" id="uslIssuesList">
+              <div class="project-related__empty">Loading…</div>
+            </div>
           </div>
 
         </div>
@@ -434,12 +487,71 @@ export class UserStoryDetail {
       }
     };
 
+    this._bindTabToggle(this._detailEl, story.id);
     this._bindPromptsSection(this._detailEl, story.id);
     this._loadPrompts(story.id);
     saveBtn.addEventListener('click', save);
     this._bindCtrlS(save);
     this._bindExpandBtns(this._detailEl, save);
 
+  }
+
+  // ----------------------------------------------------------------
+  // Tab toggle
+  // ----------------------------------------------------------------
+  _bindTabToggle(container, storyId) {
+    const tabs  = container.querySelectorAll('[data-tab]');
+    const panes = container.querySelectorAll('[data-tab-content]');
+
+    const activate = (name) => {
+      this._activeTab = name;
+      tabs.forEach(t  => t.classList.toggle('usl-view-toggle__btn--active', t.dataset.tab === name));
+      panes.forEach(p => p.classList.toggle('usl-tab-content--active', p.dataset.tabContent === name));
+      if (name === 'issues' && storyId) this._loadIssuesTab(container, storyId);
+    };
+
+    tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
+    activate(this._activeTab);
+  }
+
+  async _loadIssuesTab(container, storyId) {
+    const el = container.querySelector('#uslIssuesList');
+    if (!el) return;
+    el.innerHTML = '<div class="project-related__empty">Loading…</div>';
+    try {
+      const issues = await window.db.issues.list({ project_id: this._projectId, user_story_id: storyId });
+      if (issues.length === 0) {
+        el.innerHTML = '<div class="project-related__empty">No issues for this story</div>';
+        return;
+      }
+      el.innerHTML = issues.map((issue, i) => {
+        const sm = IS_STATUS[issue.status]     || IS_STATUS.open;
+        const sv = IS_SEVERITY[issue.severity] || IS_SEVERITY.medium;
+        return `
+          <div class="related-item" data-id="${issue.id}">
+            <div class="related-item__header">
+              <span class="related-item__seq">#${i + 1}</span>
+              <span class="related-item__title">${escHtml(issue.title)}</span>
+            </div>
+            <div class="related-item__footer">
+              <span class="rs-badge ${sm.cls}">${sm.label}</span>
+              <span class="rs-badge ${sv.cls}">${sv.label}</span>
+            </div>
+          </div>`;
+      }).join('');
+    } catch {
+      el.innerHTML = '<div class="project-related__empty">Failed to load issues</div>';
+    }
+  }
+
+  _refreshTasksTabLabel() {
+    if (!this._detailEl) return;
+    const tab    = this._detailEl.querySelector('[data-tab="tasks"]');
+    const listEl = this._detailEl.querySelector('#uslEditPromptsList, #uslAddPromptsList');
+    if (!tab || !listEl) return;
+    const total = listEl.querySelectorAll('.usl-pl-item').length;
+    const done  = listEl.querySelectorAll('.usl-pl-status--executed').length;
+    tab.textContent = total === 0 ? 'Tasks' : `Tasks (${done}/${total})`;
   }
 
   // ----------------------------------------------------------------
@@ -453,6 +565,7 @@ export class UserStoryDetail {
       if (!listEl) return;
       // New items start expanded so user can type immediately
       this._addPromptRow(listEl, userStoryId, null);
+      this._refreshTasksTabLabel();
     });
   }
 
@@ -464,11 +577,7 @@ export class UserStoryDetail {
     if (!listEl) return;
     listEl.innerHTML = '';
     list.forEach(p => this._addPromptRow(listEl, userStoryId, p));
-    const firstItem = listEl.querySelector('.usl-pl-item');
-    if (firstItem) {
-      firstItem.classList.add('usl-pl-item--open');
-      firstItem.querySelector('.usl-pl-item__body').hidden = false;
-    }
+    this._refreshTasksTabLabel();
   }
 
   _showConfirm(message, confirmLabel = 'Delete') {
@@ -690,6 +799,7 @@ export class UserStoryDetail {
       if (item.dataset.rowId) {
         await window.db.prompts.update({ id: parseInt(item.dataset.rowId), is_executed: nowExecuted ? 1 : 0 });
       }
+      this._refreshTasksTabLabel();
     });
 
     // Expand overlay
@@ -706,6 +816,7 @@ export class UserStoryDetail {
       if (!confirmed) return;
       if (item.dataset.rowId) await window.db.prompts.delete(parseInt(item.dataset.rowId));
       item.remove();
+      this._refreshTasksTabLabel();
       // Re-number remaining items that still have default labels
       listEl.querySelectorAll('.usl-pl-item').forEach((el, i) => {
         const ti = el.querySelector('.usl-pl-item__tag-input');

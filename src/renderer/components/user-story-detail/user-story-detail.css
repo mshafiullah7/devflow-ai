@@ -66,6 +66,13 @@
   color: #fff;
 }
 
+/* Tab panes */
+.usl-tab-content          { display: none; }
+.usl-tab-content--active  { display: block; }
+
+/* Issues tab list */
+.usl-issues-tab { padding: 4px 0; }
+
 .usl-add-form__status-select {
   background: rgba(59, 130, 246, 0.06);
   border: 1px solid rgba(59, 130, 246, 0.5);
