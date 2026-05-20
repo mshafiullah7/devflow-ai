@@ -273,12 +273,16 @@ export class UserStoryList {
       const created = formatDate(s.created_at);
 
       const card = document.createElement('div');
-      card.className = 'usl-card' + (s.id === this._activeId ? ' usl-card--active' : '');
+      const isExtracted = !!s.is_extracted;
+      card.className = 'usl-card'
+        + (s.id === this._activeId ? ' usl-card--active' : '')
+        + (isExtracted ? ' usl-card--extracted' : '');
       card.dataset.id = s.id;
       card.innerHTML = `
         <div class="usl-card__header">
           <span class="usl-card__id">#${s.id}</span>
           <span class="usl-card__title">${escHtml(s.title)}</span>
+          ${isExtracted ? '<span class="usl-card__ai-badge" title="AI-generated — needs review">AI</span>' : ''}
         </div>
         ${s.description ? `<p class="usl-card__desc">${escHtml(s.description)}</p>` : ''}
         <div class="usl-card__footer">
