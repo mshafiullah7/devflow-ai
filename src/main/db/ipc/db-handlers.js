@@ -282,6 +282,34 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // acceptance_criteria
+  // ----------------------------------------------------------------
+  safeHandle('db:acceptance_criteria:list', (_e, user_story_id) => {
+    return db.prepare(
+      'SELECT * FROM acceptance_criteria WHERE user_story_id = ? AND is_active = 1 ORDER BY created_at ASC'
+    ).all(user_story_id);
+  });
+
+  safeHandle('db:acceptance_criteria:create', (_e, { user_story_id, description }) => {
+    const result = db.prepare(
+      'INSERT INTO acceptance_criteria (user_story_id, description) VALUES (?, ?)'
+    ).run(user_story_id, description ?? '');
+    return db.prepare('SELECT * FROM acceptance_criteria WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  safeHandle('db:acceptance_criteria:update', (_e, { id, description }) => {
+    db.prepare(
+      `UPDATE acceptance_criteria SET description = coalesce(?, description), updated_at = datetime('now') WHERE id = ?`
+    ).run(description ?? null, id);
+    return db.prepare('SELECT * FROM acceptance_criteria WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:acceptance_criteria:delete', (_e, id) => {
+    db.prepare(`UPDATE acceptance_criteria SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
   // test_run_history
   // ----------------------------------------------------------------
   safeHandle('testRunHistory:list', (_e, project_id) => {

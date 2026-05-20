@@ -85,6 +85,18 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- ACCEPTANCE CRITERIA
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS acceptance_criteria (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
+      description   TEXT    NOT NULL DEFAULT '',
+      is_active     INTEGER NOT NULL DEFAULT 1,
+      created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- PROMPT HISTORY
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS prompt_history (

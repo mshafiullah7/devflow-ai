@@ -54,6 +54,12 @@ contextBridge.exposeInMainWorld('db', {
     update: (data)          => invoke('db:prompts:update', data),
     delete: (id)            => invoke('db:prompts:delete', id),
   },
+  acceptanceCriteria: {
+    list:   (user_story_id) => invoke('db:acceptance_criteria:list', user_story_id),
+    create: (data)          => invoke('db:acceptance_criteria:create', data),
+    update: (data)          => invoke('db:acceptance_criteria:update', data),
+    delete: (id)            => invoke('db:acceptance_criteria:delete', id),
+  },
   documentTemplates: {
     list: () => invoke('db:document_templates:list'),
   },

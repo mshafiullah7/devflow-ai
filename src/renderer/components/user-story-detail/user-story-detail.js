@@ -34,7 +34,6 @@ export class UserStoryDetail {
     this._activeTab              = 'description';
     this._titleEl                = null;
     this._descEl                 = null;
-    this._acEl                   = null;
     this._priorityEl             = null;
     this._targetDateEl           = null;
     this._estHoursEl             = null;
@@ -64,7 +63,6 @@ export class UserStoryDetail {
         id:                  this._currentStory.id,
         title,
         description:         this._descEl?.value.trim()      || null,
-        acceptance_criteria: this._acEl?.value.trim()        || null,
         priority:            this._priorityEl?.value         || 'medium',
         target_date:         this._targetDateEl?.value       || null,
         estimated_hours:     this._estHoursEl?.value !== '' && this._estHoursEl?.value != null
@@ -82,7 +80,6 @@ export class UserStoryDetail {
     this._currentStory = null;
     this._titleEl      = null;
     this._descEl       = null;
-    this._acEl         = null;
     this._priorityEl   = null;
     this._targetDateEl = null;
     this._estHoursEl   = null;
@@ -106,7 +103,6 @@ export class UserStoryDetail {
     this._currentStory = null;
     this._titleEl      = null;
     this._descEl       = null;
-    this._acEl         = null;
     this._priorityEl   = null;
     this._targetDateEl = null;
     this._estHoursEl   = null;
@@ -191,14 +187,15 @@ export class UserStoryDetail {
           </div>
 
           <div class="usl-tab-content" data-tab-content="criterias">
-            <div class="usl-add-form__field usl-add-form__field--ac">
-              <div class="usl-add-form__label-row">
-                <label class="usl-add-form__label" for="uslAddAC">Acceptance Criteria</label>
-                <button class="usl-add-form__expand" type="button" data-expand="uslAddAC" title="Expand" aria-label="Expand Acceptance Criteria">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="usl-prompts-section">
+              <div class="usl-prompts-section__header">
+                <span class="usl-prompts-section__title">Acceptance Criteria</span>
+                <button class="usl-prompts-section__add-btn" id="uslAddCriteriaBtn" type="button" title="Add criterion">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Add
                 </button>
               </div>
-              <textarea class="usl-add-form__textarea" id="uslAddAC" placeholder="Given… When… Then…" rows="6"></textarea>
+              <div class="usl-prompts-list" id="uslAddCriteriaList"></div>
             </div>
           </div>
 
@@ -230,7 +227,6 @@ export class UserStoryDetail {
 
     const titleEl      = this._detailEl.querySelector('#uslAddTitle');
     const descEl       = this._detailEl.querySelector('#uslAddDesc');
-    const acEl         = this._detailEl.querySelector('#uslAddAC');
     const statusEl     = this._detailEl.querySelector('#uslAddStatus');
     const priorityEl   = this._detailEl.querySelector('#uslAddPriority');
     const targetDateEl = this._detailEl.querySelector('#uslAddTargetDate');
@@ -242,6 +238,7 @@ export class UserStoryDetail {
 
     this._bindTabToggle(this._detailEl, null);
     this._bindPromptsSection(this._detailEl, null);
+    this._bindCriteriaSection(this._detailEl, null);
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
 
@@ -257,18 +254,28 @@ export class UserStoryDetail {
       saveBtn.textContent = 'Adding…';
 
       try {
-        await window.db.userStories.create({
-          feature_id:          this._featureId,
-          project_id:          this._projectId,
+        const newStory = await window.db.userStories.create({
+          feature_id:      this._featureId,
+          project_id:      this._projectId,
           title,
-          description:         descEl.value.trim()        || null,
-          acceptance_criteria: acEl.value.trim()          || null,
-          status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
-          priority:            priorityEl.value            || 'medium',
-          target_date:         targetDateEl.value          || null,
-          estimated_hours:     estHoursEl.value !== ''     ? parseFloat(estHoursEl.value)  : null,
-          remaining_hours:     remHoursEl.value !== ''     ? parseFloat(remHoursEl.value)  : null,
+          description:     descEl.value.trim()        || null,
+          status_id:       statusEl.value ? parseInt(statusEl.value, 10) : null,
+          priority:        priorityEl.value            || 'medium',
+          target_date:     targetDateEl.value          || null,
+          estimated_hours: estHoursEl.value !== ''     ? parseFloat(estHoursEl.value)  : null,
+          remaining_hours: remHoursEl.value !== ''     ? parseFloat(remHoursEl.value)  : null,
         });
+        // Flush any pending criteria rows added before save
+        const criteriaListEl = this._detailEl.querySelector('#uslAddCriteriaList');
+        if (criteriaListEl && newStory?.id) {
+          for (const row of criteriaListEl.querySelectorAll('.usl-pl-item')) {
+            const desc = row.querySelector('.usl-pl-item__textarea')?.value.trim();
+            if (desc && !row.dataset.rowId) {
+              const created = await window.db.acceptanceCriteria.create({ user_story_id: newStory.id, description: desc });
+              row.dataset.rowId = created.id;
+            }
+          }
+        }
         this.showEmpty();
         this._onStoryUpdated();
       } catch {
@@ -361,14 +368,15 @@ export class UserStoryDetail {
           </div>
 
           <div class="usl-tab-content" data-tab-content="criterias">
-            <div class="usl-add-form__field usl-add-form__field--ac">
-              <div class="usl-add-form__label-row">
-                <label class="usl-add-form__label" for="uslEditAC">Acceptance Criteria</label>
-                <button class="usl-add-form__expand" type="button" data-expand="uslEditAC" title="Expand" aria-label="Expand Acceptance Criteria">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="usl-prompts-section">
+              <div class="usl-prompts-section__header">
+                <span class="usl-prompts-section__title">Acceptance Criteria</span>
+                <button class="usl-prompts-section__add-btn" id="uslEditCriteriaBtn" type="button" title="Add criterion">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Add
                 </button>
               </div>
-              <textarea class="usl-add-form__textarea" id="uslEditAC" placeholder="Given… When… Then…" rows="6">${escHtml(story.acceptance_criteria || '')}</textarea>
+              <div class="usl-prompts-list" id="uslEditCriteriaList"></div>
             </div>
           </div>
 
@@ -397,7 +405,6 @@ export class UserStoryDetail {
 
     const titleEl      = this._detailEl.querySelector('#uslEditTitle');
     const descEl       = this._detailEl.querySelector('#uslEditDesc');
-    const acEl         = this._detailEl.querySelector('#uslEditAC');
     const statusEl     = this._detailEl.querySelector('#uslEditStatus');
     const priorityEl   = this._detailEl.querySelector('#uslEditPriority');
     const targetDateEl = this._detailEl.querySelector('#uslEditTargetDate');
@@ -407,7 +414,6 @@ export class UserStoryDetail {
     this._currentStory = story;
     this._titleEl      = titleEl;
     this._descEl       = descEl;
-    this._acEl         = acEl;
     this._priorityEl   = priorityEl;
     this._targetDateEl = targetDateEl;
     this._estHoursEl   = estHoursEl;
@@ -468,15 +474,14 @@ export class UserStoryDetail {
 
       try {
         await window.db.userStories.update({
-          id:                  story.id,
+          id:              story.id,
           title,
-          description:         descEl.value.trim()        || null,
-          acceptance_criteria: acEl.value.trim()          || null,
-          status_id:           statusEl.value ? parseInt(statusEl.value, 10) : null,
-          priority:            priorityEl.value            || 'medium',
-          target_date:         targetDateEl.value          || null,
-          estimated_hours:     estHoursEl.value !== ''     ? parseFloat(estHoursEl.value)  : null,
-          remaining_hours:     remHoursEl.value !== ''     ? parseFloat(remHoursEl.value)  : null,
+          description:     descEl.value.trim()        || null,
+          status_id:       statusEl.value ? parseInt(statusEl.value, 10) : null,
+          priority:        priorityEl.value            || 'medium',
+          target_date:     targetDateEl.value          || null,
+          estimated_hours: estHoursEl.value !== ''     ? parseFloat(estHoursEl.value)  : null,
+          remaining_hours: remHoursEl.value !== ''     ? parseFloat(remHoursEl.value)  : null,
         });
         saveBtn.disabled    = false;
         saveBtn.textContent = 'Save Changes';
@@ -490,6 +495,8 @@ export class UserStoryDetail {
     this._bindTabToggle(this._detailEl, story.id);
     this._bindPromptsSection(this._detailEl, story.id);
     this._loadPrompts(story.id);
+    this._bindCriteriaSection(this._detailEl, story.id);
+    this._loadCriteria(story.id);
     saveBtn.addEventListener('click', save);
     this._bindCtrlS(save);
     this._bindExpandBtns(this._detailEl, save);
@@ -552,6 +559,158 @@ export class UserStoryDetail {
     const total = listEl.querySelectorAll('.usl-pl-item').length;
     const done  = listEl.querySelectorAll('.usl-pl-status--executed').length;
     tab.textContent = total === 0 ? 'Tasks' : `Tasks (${done}/${total})`;
+  }
+
+  _refreshCriteriaTabLabel() {
+    if (!this._detailEl) return;
+    const tab    = this._detailEl.querySelector('[data-tab="criterias"]');
+    const listEl = this._detailEl.querySelector('#uslEditCriteriaList, #uslAddCriteriaList');
+    if (!tab || !listEl) return;
+    const total = listEl.querySelectorAll('.usl-pl-item').length;
+    tab.textContent = total === 0 ? "Criteria's" : `Criteria's (${total})`;
+  }
+
+  // ----------------------------------------------------------------
+  // Acceptance Criteria CRUD section
+  // ----------------------------------------------------------------
+  _bindCriteriaSection(container, userStoryId) {
+    const addBtn = container.querySelector('#uslAddCriteriaBtn, #uslEditCriteriaBtn');
+    if (!addBtn) return;
+    addBtn.addEventListener('click', () => {
+      const listEl = container.querySelector('#uslEditCriteriaList, #uslAddCriteriaList');
+      if (!listEl) return;
+      this._addCriteriaRow(listEl, userStoryId, null);
+      this._refreshCriteriaTabLabel();
+    });
+  }
+
+  async _loadCriteria(userStoryId) {
+    if (!userStoryId) return;
+    const list   = await window.db.acceptanceCriteria.list(userStoryId);
+    const listEl = this._detailEl?.querySelector('#uslEditCriteriaList, #uslAddCriteriaList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    list.forEach(ac => this._addCriteriaRow(listEl, userStoryId, ac));
+    this._refreshCriteriaTabLabel();
+  }
+
+  _addCriteriaRow(listEl, userStoryId, existing) {
+    const itemCount = listEl.querySelectorAll('.usl-pl-item').length;
+
+    const _buildLabel = (text) => {
+      const first = (text || '').split('\n')[0].trim();
+      if (!first) return `Criteria ${itemCount + 1}`;
+      return first.length > 60 ? first.slice(0, 60) + '…' : first;
+    };
+
+    const item = document.createElement('div');
+    item.className     = 'usl-pl-item';
+    item.dataset.rowId = existing?.id ?? '';
+
+    item.innerHTML = `
+      <div class="usl-pl-item__header">
+        <span class="usl-pl-item__status usl-pl-status--pending" title="Pending">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/></svg>
+        </span>
+        <span class="usl-pl-item__label">${escHtml(_buildLabel(existing?.description || ''))}</span>
+        <div class="usl-pl-item__actions">
+          <button class="usl-pl-item__btn usl-pl-item__btn--expand" type="button" title="Expand to full editor">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Expand
+          </button>
+          <button class="usl-pl-item__btn usl-pl-item__btn--delete" type="button" title="Delete criterion">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <svg class="usl-pl-item__chevron" width="10" height="10" viewBox="0 0 16 16" fill="none">
+          <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="usl-pl-item__body" hidden>
+        <div class="usl-pl-item__preview usl-expand-preview"></div>
+        <textarea class="usl-pl-item__textarea" hidden placeholder="Given… When… Then…">${escHtml(existing?.description || '')}</textarea>
+      </div>
+    `;
+
+    listEl.appendChild(item);
+
+    const headerEl  = item.querySelector('.usl-pl-item__header');
+    const bodyEl    = item.querySelector('.usl-pl-item__body');
+    const labelEl   = item.querySelector('.usl-pl-item__label');
+    const taEl      = item.querySelector('.usl-pl-item__textarea');
+    const previewEl = item.querySelector('.usl-pl-item__preview');
+
+    const renderPreview = () => {
+      const text = taEl.value.trim();
+      previewEl.innerHTML = text
+        ? this._renderMarkdown(text)
+        : '<p class="usl-pl-preview--empty">No content · click &#x2922; to edit</p>';
+    };
+    renderPreview();
+
+    const save = async () => {
+      const description = taEl.value.trim();
+      if (!description) return;
+      if (item.dataset.rowId) {
+        await window.db.acceptanceCriteria.update({ id: parseInt(item.dataset.rowId), description });
+      } else if (userStoryId) {
+        const created = await window.db.acceptanceCriteria.create({ user_story_id: userStoryId, description });
+        item.dataset.rowId = created.id;
+      }
+    };
+
+    taEl.addEventListener('blur', save);
+    taEl.addEventListener('input', () => { labelEl.textContent = _buildLabel(taEl.value); });
+
+    // Open new (unsaved) rows immediately in expand overlay
+    if (!existing) {
+      item.classList.add('usl-pl-item--open');
+      bodyEl.hidden = false;
+      setTimeout(() => {
+        this._openExpandOverlay(taEl, 'Criterion', async () => { renderPreview(); await save(); }, false);
+      }, 0);
+    }
+
+    // Accordion toggle
+    headerEl.addEventListener('click', () => {
+      const isOpen = item.classList.contains('usl-pl-item--open');
+      listEl.querySelectorAll('.usl-pl-item').forEach(el => {
+        el.classList.remove('usl-pl-item--open');
+        el.querySelector('.usl-pl-item__body').hidden = true;
+      });
+      if (!isOpen) {
+        item.classList.add('usl-pl-item--open');
+        bodyEl.hidden = false;
+      }
+    });
+
+    // Expand overlay
+    item.querySelector('.usl-pl-item__btn--expand').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await save();
+      this._openExpandOverlay(taEl, 'Criterion', async () => { renderPreview(); await save(); }, false);
+    });
+
+    // Delete
+    item.querySelector('.usl-pl-item__btn--delete').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const confirmed = await this._showConfirm('Delete this criterion?', 'Delete');
+      if (!confirmed) return;
+      if (item.dataset.rowId) await window.db.acceptanceCriteria.delete(parseInt(item.dataset.rowId));
+      item.remove();
+      this._refreshCriteriaTabLabel();
+      // Re-number remaining items with default labels
+      listEl.querySelectorAll('.usl-pl-item').forEach((el, i) => {
+        const ta = el.querySelector('.usl-pl-item__textarea');
+        const li = el.querySelector('.usl-pl-item__label');
+        if (li) {
+          const first = (ta?.value || '').split('\n')[0].trim();
+          li.textContent = first
+            ? (first.length > 60 ? first.slice(0, 60) + '…' : first)
+            : `Criteria ${i + 1}`;
+        }
+      });
+    });
   }
 
   // ----------------------------------------------------------------

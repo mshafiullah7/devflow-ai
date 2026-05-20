@@ -350,6 +350,21 @@ function runMigrations(db) {
     `);
   }
 
+  // Add acceptance_criteria table for existing databases
+  const acCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='acceptance_criteria'").get();
+  if (!acCheck) {
+    db.exec(`
+      CREATE TABLE acceptance_criteria (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
+        description   TEXT    NOT NULL DEFAULT '',
+        is_active     INTEGER NOT NULL DEFAULT 1,
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
   // Add error_logs table for persistent error tracking
   const elCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='error_logs'").get();
   if (!elCheck) {
