@@ -1444,10 +1444,18 @@ export class MockupsPage {
     });
   }
 
+  _tgNotify(text) {
+    window.app.telegram.send(text).catch(() => {});
+  }
+
   async _runQueue(screens, panel, onFinish) {
     this._queueStopped = false;
     const model = this._getSelectedModel();
     if (!model) { alert('No model selected.'); onFinish(); return; }
+
+    const projectName = this._project?.name || 'project';
+    let doneCount  = 0;
+    let errorCount = 0;
 
     for (const screen of screens) {
       if (this._queueStopped) break;
@@ -1491,19 +1499,31 @@ export class MockupsPage {
         screen.html_content = result.html;
         screen.executed     = 1;
         screen.queued       = 0;
+        doneCount++;
         if (statusEl) {
           statusEl.textContent = 'Done';
           statusEl.className   = 'scr-queue-item__status scr-queue-item__status--done';
         }
+        this._tgNotify(`✅ *${screen.title}* generated successfully\n_Project: ${projectName}_`);
       } else {
+        errorCount++;
+        const errMsg = result.error || 'Unknown error';
         if (statusEl) {
-          statusEl.textContent = result.error || 'Error';
+          statusEl.textContent = errMsg;
           statusEl.className   = 'scr-queue-item__status scr-queue-item__status--error';
         }
+        this._tgNotify(`❌ *${screen.title}* failed\n\`${errMsg}\`\n_Project: ${projectName}_`);
       }
     }
 
     window.app.chat.offAll();
+
+    if (this._queueStopped) {
+      this._tgNotify(`⏹ Queue stopped — ${doneCount} done, ${errorCount} error${errorCount !== 1 ? 's' : ''}\n_Project: ${projectName}_`);
+    } else {
+      this._tgNotify(`🏁 Queue finished — ${doneCount} done, ${errorCount} error${errorCount !== 1 ? 's' : ''}\n_Project: ${projectName}_`);
+    }
+
     onFinish();
   }
 
