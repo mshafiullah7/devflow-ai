@@ -102,7 +102,7 @@ export class PromptQueuePage {
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <span class="pq-header__title">Prompt Queue</span>
+          <span class="pq-header__title">Tasks Queue</span>
 
           <div class="project-page__folder-display" id="pqHeaderFolderDisplay" title="Select folder" style="-webkit-app-region:no-drag;">
             <div class="project-page__folder-pill">
