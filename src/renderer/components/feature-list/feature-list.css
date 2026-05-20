@@ -14,7 +14,7 @@
   border-radius: 6px;
   padding: 6px 8px;
   padding-left: 5px; /* compensate for left border */
-  margin-bottom: 1px;
+  margin-bottom: 4px;
   cursor: pointer;
   transition: background 0.1s, border-left-color 0.1s;
 }
