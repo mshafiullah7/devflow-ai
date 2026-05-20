@@ -965,7 +965,7 @@ export class MockupsPage {
     const dlg = document.createElement('div');
     dlg.className = 'scr-overlay';
     dlg.innerHTML = `
-      <div class="scr-ns-dialog">
+      <div class="scr-ns-dialog scr-ns-dialog--compact">
         <div class="scr-ns-dialog__header">
           <span class="scr-ns-dialog__title">Edit Screen</span>
           <button class="scr-dialog__close" id="scrEditClose">&times;</button>
@@ -976,21 +976,10 @@ export class MockupsPage {
             <input class="scr-form__input" id="scrEditTitle" type="text"
               value="${escHtml(screen.title)}" autocomplete="off"/>
           </div>
-          <div class="scr-form__row scr-form__row--grow">
-            <label class="scr-form__label">Description</label>
-            <textarea class="scr-form__textarea scr-ns-dialog__desc" id="scrEditDesc">${escHtml(screen.description || '')}</textarea>
-          </div>
         </div>
         <div class="scr-ns-dialog__footer">
           <button class="scr-btn scr-btn--secondary" id="scrEditCancel">Cancel</button>
-          <button class="scr-btn scr-btn--primary" id="scrEditSave" title="Save (Ctrl+S)">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M3 3h8l2 2v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              <rect x="5.5" y="3" width="4" height="3" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-              <rect x="4.5" y="9" width="7" height="4" rx=".5" stroke="currentColor" stroke-width="1.2"/>
-            </svg>
-            <span><u>S</u>ave</span>
-          </button>
+          <button class="scr-btn scr-btn--primary" id="scrEditSave" title="Save (Enter)">Save</button>
         </div>
       </div>
     `;
@@ -1004,23 +993,13 @@ export class MockupsPage {
 
     const doSave = async () => {
       const title = dlg.querySelector('#scrEditTitle').value.trim();
-      const desc  = dlg.querySelector('#scrEditDesc').value.trim();
       if (!title) { dlg.querySelector('#scrEditTitle').focus(); return false; }
 
-      await window.db.screenDesigns.update({
-        id:          screen.id,
-        title,
-        description: desc,
-        tech_stack:  'html',
-      });
-      screen.title       = title;
-      screen.description = desc;
+      await window.db.screenDesigns.update({ id: screen.id, title });
+      screen.title = title;
 
       const titleEl = this.container.querySelector('.scr-viewer__title');
       if (titleEl) titleEl.textContent = title;
-
-      const descEl = this.container.querySelector('#scrDescription');
-      if (descEl) descEl.value = desc;
 
       this._screens = await window.db.screenDesigns.list(this._projectId);
       this._refreshSidebar();
@@ -1031,9 +1010,8 @@ export class MockupsPage {
       if (await doSave()) close();
     });
 
-    // Ctrl+S → Save
     dlg.addEventListener('keydown', async (e) => {
-      if (e.key === 's' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         if (await doSave()) close();
       }
