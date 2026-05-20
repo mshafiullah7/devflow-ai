@@ -1201,6 +1201,12 @@ export class MockupsPage {
             <button class="scr-desc-tab-btn scr-desc-tab-btn--active" id="scrDescTabEdit">Edit</button>
             <button class="scr-desc-tab-btn" id="scrDescTabPreview">Preview</button>
           </div>
+          <button class="scr-btn scr-btn--sm scr-btn--secondary scr-queue-btn${screen.queued ? ' scr-queue-btn--active' : ''}" id="scrDescQueueBtn" title="${screen.queued ? 'Remove from queue' : 'Add to queue'}">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Queue
+          </button>
         </div>
         <div class="scr-desc-editor__body">
           <textarea class="scr-desc-editor__textarea" id="scrDescTextarea" placeholder="Describe this screen… (supports Markdown)">${escHtml(screen.description || '')}</textarea>
@@ -1262,6 +1268,17 @@ export class MockupsPage {
 
     main.querySelector('#scrDescEditDetailsBtn').addEventListener('click', () => {
       this._showEditScreenModal(screen);
+    });
+
+    const queueBtn = main.querySelector('#scrDescQueueBtn');
+    queueBtn.addEventListener('click', async () => {
+      const queued = screen.queued ? 0 : 1;
+      await window.db.screenDesigns.update({ id: screen.id, queued });
+      screen.queued = queued;
+      queueBtn.classList.toggle('scr-queue-btn--active', !!queued);
+      queueBtn.title = queued ? 'Remove from queue' : 'Add to queue';
+      this._screens = await window.db.screenDesigns.list(this._projectId);
+      this._refreshSidebar();
     });
   }
 

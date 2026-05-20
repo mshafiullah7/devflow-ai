@@ -937,15 +937,9 @@
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s, background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
   -webkit-appearance: none;
   appearance: none;
-}
-
-.scr-sidebar__item:hover .scr-sidebar__queue-btn,
-.scr-sidebar__queue-btn--active {
-  opacity: 1;
 }
 
 .scr-sidebar__queue-btn:hover {
