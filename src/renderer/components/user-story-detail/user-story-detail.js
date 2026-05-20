@@ -822,31 +822,29 @@ export class UserStoryDetail {
           ${isExecuted ? statusIconExecuted : statusIconPending}
         </span>
         <span class="usl-pl-item__label">${escHtml(label)}</span>
+        <div class="usl-pl-item__actions">
+          <button class="usl-pl-item__btn usl-pl-item__btn--mark-executed${isExecuted ? ' is-executed' : ''}" type="button" title="${isExecuted ? 'Executed' : 'Mark as Executed'}">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Done
+          </button>
+          <button class="usl-pl-item__btn usl-pl-item__btn--queue" type="button" title="Add to prompt queue"${!userStoryId ? ' disabled' : ''}>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Add to Queue
+          </button>
+          <button class="usl-pl-item__btn usl-pl-item__btn--expand" type="button" title="Expand to full editor">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Expand
+          </button>
+          <button class="usl-pl-item__btn usl-pl-item__btn--delete" type="button" title="Delete prompt">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
         <svg class="usl-pl-item__chevron" width="10" height="10" viewBox="0 0 16 16" fill="none">
           <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
       <div class="usl-pl-item__body" hidden>
-        <div class="usl-pl-item__toolbar">
-          <input class="usl-pl-item__tag-input" type="text" placeholder="Label (optional)" value="${escHtml(tag)}" autocomplete="off"/>
-          <div class="usl-pl-item__actions">
-            <button class="usl-pl-item__btn usl-pl-item__btn--mark-executed${isExecuted ? ' is-executed' : ''}" type="button" title="${isExecuted ? 'Executed' : 'Mark as Executed'}">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Done
-            </button>
-            <button class="usl-pl-item__btn usl-pl-item__btn--queue" type="button" title="Add to prompt queue"${!userStoryId ? ' disabled' : ''}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-              Add to Queue
-            </button>
-            <button class="usl-pl-item__btn usl-pl-item__btn--expand" type="button" title="Expand to full editor">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2h4v4M6 14H2v-4M14 10v4h-4M2 6V2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Expand
-            </button>
-            <button class="usl-pl-item__btn usl-pl-item__btn--delete" type="button" title="Delete prompt">
-              <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          </div>
-        </div>
+        <input class="usl-pl-item__tag-input" type="text" placeholder="Label (optional)" value="${escHtml(tag)}" autocomplete="off"/>
         <div class="usl-pl-item__preview usl-expand-preview"></div>
         <textarea class="usl-pl-item__textarea" hidden>${escHtml(existing?.prompt || '')}</textarea>
       </div>
