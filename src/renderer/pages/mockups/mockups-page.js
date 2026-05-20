@@ -1283,6 +1283,14 @@ export class MockupsPage {
       this._runQueue(queued, panel, () => {
         runBtn.hidden  = false;
         stopBtn.hidden = true;
+        // Refresh toolbar badge after run
+        window.db.screenDesigns.list(this._projectId).then(all => {
+          const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
+          const badge = this.container.querySelector('#scrQueueCount');
+          if (badge) badge.textContent = remaining;
+          const btn = this.container.querySelector('#scrQueueBtn');
+          if (btn) btn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
+        });
       });
     });
 
@@ -1398,9 +1406,15 @@ export class MockupsPage {
           <div class="scr-preview-tabs">
             <button class="scr-preview-tab scr-preview-tab--active" id="scrTabPreview">Preview</button>
             <button class="scr-preview-tab" id="scrTabDescription">Description</button>
-            <button class="scr-preview-tab" id="scrTabQueue">Queue</button>
           </div>
           <div class="scr-viewer__actions">
+            <button class="scr-btn scr-btn--sm scr-btn--secondary scr-queue-btn" id="scrQueueBtn" title="Generation queue">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              Queue
+              <span class="scr-queue-btn__badge" id="scrQueueCount">…</span>
+            </button>
             <div class="scr-actions-menu" id="scrActionsMenu">
               <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrActionsMenuTrigger" title="Actions">
                 Actions
@@ -1682,17 +1696,36 @@ export class MockupsPage {
 
     const tabPreview     = main.querySelector('#scrTabPreview');
     const tabDescription = main.querySelector('#scrTabDescription');
-    const tabQueue       = main.querySelector('#scrTabQueue');
     const split          = main.querySelector('#scrSplit');
     const descPanel      = main.querySelector('#scrDescPanel');
     const queuePanel     = main.querySelector('#scrQueuePanel');
-    const allTabs        = [tabPreview, tabDescription, tabQueue];
+    const queueBtn       = main.querySelector('#scrQueueBtn');
+    const queueCountEl   = main.querySelector('#scrQueueCount');
+
+    // Load and display queue count
+    const refreshQueueCount = async () => {
+      const all = await window.db.screenDesigns.list(this._projectId);
+      const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
+      if (queueCountEl) queueCountEl.textContent = remaining;
+      if (queueBtn) queueBtn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
+    };
+    refreshQueueCount();
+
+    let queueOpen = false;
+    let lastActiveTab = tabPreview;
 
     const switchTab = (active) => {
-      allTabs.forEach(t => t.classList.toggle('scr-preview-tab--active', t === active));
-      split.hidden      = active !== tabPreview;
-      descPanel.hidden  = active !== tabDescription;
-      queuePanel.hidden = active !== tabQueue;
+      lastActiveTab = active;
+      [tabPreview, tabDescription].forEach(t => t.classList.toggle('scr-preview-tab--active', t === active));
+      split.hidden     = active !== tabPreview;
+      descPanel.hidden = active !== tabDescription;
+      if (queueOpen) {
+        queueOpen = false;
+        queuePanel.hidden = true;
+        queueBtn.classList.remove('scr-queue-btn--active');
+        split.hidden     = active !== tabPreview;
+        descPanel.hidden = active !== tabDescription;
+      }
     };
 
     tabPreview.addEventListener('click', () => switchTab(tabPreview));
@@ -1705,9 +1738,19 @@ export class MockupsPage {
         : '<p class="scr-md-preview__empty">No description added yet.</p>';
     });
 
-    tabQueue.addEventListener('click', () => {
-      switchTab(tabQueue);
-      this._renderQueuePanel(queuePanel);
+    queueBtn.addEventListener('click', () => {
+      queueOpen = !queueOpen;
+      queueBtn.classList.toggle('scr-queue-btn--active', queueOpen);
+      if (queueOpen) {
+        split.hidden     = true;
+        descPanel.hidden = true;
+        queuePanel.hidden = false;
+        this._renderQueuePanel(queuePanel).then(refreshQueueCount);
+      } else {
+        queuePanel.hidden = true;
+        split.hidden     = lastActiveTab !== tabPreview;
+        descPanel.hidden = lastActiveTab !== tabDescription;
+      }
     });
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {
