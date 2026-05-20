@@ -1341,12 +1341,21 @@ export class MockupsPage {
             ? '<p class="scr-queue-panel__empty">No screens are queued. Set <strong>queued = 1</strong> on screens to add them here.</p>'
             : queued.map(s => `
               <div class="scr-queue-item" data-id="${s.id}">
-                <svg class="scr-queue-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-                </svg>
-                <span class="scr-queue-item__title">${escHtml(s.title)}</span>
-                ${s.description ? '' : '<span class="scr-queue-item__no-desc" title="No description — will be skipped">No description</span>'}
-                <span class="scr-queue-item__status scr-queue-item__status--pending" id="scrQueueStatus-${s.id}">Pending</span>
+                <div class="scr-queue-item__row">
+                  <svg class="scr-queue-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
+                    <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
+                  </svg>
+                  <span class="scr-queue-item__title">${escHtml(s.title)}</span>
+                  ${s.description ? '' : '<span class="scr-queue-item__no-desc" title="No description — will be skipped">No description</span>'}
+                  ${s.description ? `<button class="scr-queue-item__prompt-btn" data-prompt-id="${s.id}" title="Show prompt">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+                      <path d="M8 7v4M8 5.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                    </svg>
+                  </button>` : ''}
+                  <span class="scr-queue-item__status scr-queue-item__status--pending" id="scrQueueStatus-${s.id}">Pending</span>
+                </div>
+                ${s.description ? `<pre class="scr-queue-item__prompt-pre" id="scrQueuePrompt-${s.id}" hidden></pre>` : ''}
               </div>
             `).join('')}
         </div>
@@ -1381,6 +1390,33 @@ export class MockupsPage {
       window.app.chat.offAll();
       stopBtn.hidden = true;
       runBtn.hidden  = false;
+    });
+
+    // Prompt preview toggles
+    panel.querySelectorAll('.scr-queue-item__prompt-btn').forEach(btn => {
+      const id      = Number(btn.dataset.promptId);
+      const screen  = queued.find(s => s.id === id);
+      const pre     = panel.querySelector(`#scrQueuePrompt-${id}`);
+      if (!screen || !pre) return;
+      btn.addEventListener('click', () => {
+        const open = !pre.hidden;
+        if (open) {
+          pre.hidden = true;
+          btn.classList.remove('scr-queue-item__prompt-btn--active');
+        } else {
+          if (!pre.dataset.built) {
+            pre.textContent = buildScreenPrompt(
+              screen.description,
+              this._project?.description || '',
+              '',
+              this._getDesignTemplateForPrompt()
+            );
+            pre.dataset.built = '1';
+          }
+          pre.hidden = false;
+          btn.classList.add('scr-queue-item__prompt-btn--active');
+        }
+      });
     });
   }
 
