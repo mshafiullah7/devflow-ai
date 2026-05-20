@@ -456,6 +456,9 @@
   padding: 6px 0;
   border-bottom: none;
 }
+.project-related--collapsed #btnRelatedGenerate {
+  display: none;
+}
 .project-related--collapsed .project-related__title > svg,
 .project-related--collapsed .project-related__title-text {
   display: none;
@@ -485,6 +488,14 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
+}
+
+/* Compact Generate button inside the Extract User Stories panel titlebar */
+.eus-generate-btn--sm {
+  font-size: 10px !important;
+  padding: 3px 8px !important;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .project-related__collapse-btn {

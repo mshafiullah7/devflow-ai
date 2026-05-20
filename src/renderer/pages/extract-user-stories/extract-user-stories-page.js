@@ -880,7 +880,9 @@ export class ExtractUserStoriesPage {
       "featureId": 1,
       "userStoryName": "...",
       "description": "...",
-      "acceptanceCriteria": "...",
+      "acceptanceCriteria": [
+        { "criteria": "Given ... When ... Then ..." }
+      ],
       "prompts": [
         { "tag": "UI", "prompt": "..." }
       ]
@@ -935,13 +937,24 @@ export class ExtractUserStoriesPage {
     for (const s of parsed.UserStories) {
       try {
         const story = await window.db.userStories.create({
-          feature_id:          featureId,
-          project_id:          this._projectId,
-          title:               s.userStoryName || 'Untitled Story',
-          description:         s.description        || null,
-          acceptance_criteria: s.acceptanceCriteria || null,
-          is_extracted:        1,
+          feature_id:   featureId,
+          project_id:   this._projectId,
+          title:        s.userStoryName || 'Untitled Story',
+          description:  s.description  || null,
+          is_extracted: 1,
         });
+        // Save each acceptance criterion as a separate row
+        if (Array.isArray(s.acceptanceCriteria)) {
+          for (const ac of s.acceptanceCriteria) {
+            const text = (typeof ac === 'string' ? ac : ac?.criteria) || '';
+            if (text.trim()) {
+              await window.db.acceptanceCriteria.create({ user_story_id: story.id, description: text.trim() });
+            }
+          }
+        } else if (typeof s.acceptanceCriteria === 'string' && s.acceptanceCriteria.trim()) {
+          // Fallback: plain string from older model responses
+          await window.db.acceptanceCriteria.create({ user_story_id: story.id, description: s.acceptanceCriteria.trim() });
+        }
         if (Array.isArray(s.prompts)) {
           for (const p of s.prompts) {
             await window.db.prompts.create({
@@ -998,14 +1011,17 @@ Use EXACTLY this structure:
   "UserStories": [
     {
       "featureId": ${feature.id},
-      "userStoryName": 'short action-oriented title',
-      "description": 'As a user, I want to [action] so that [benefit].',
-      "acceptanceCriteria": 'Given [context]\nWhen [action]\nThen [outcome]',
+      "userStoryName": "short action-oriented title",
+      "description": "As a user, I want to [action] so that [benefit].",
+      "acceptanceCriteria": [
+        { "criteria": "Given [context]\nWhen [action]\nThen [outcome]" },
+        { "criteria": "Given [another context]\nWhen [another action]\nThen [another outcome]" }
+      ],
       "prompts": [
         {
-          "promptName": 'descriptive name',
-          "prompt": 'detailed implementation prompt referencing exact UI details (colours, layout, components, spacing)',
-          "tag": 'UI or API or DB or Auth or Cache or other single technical domain word'
+          "promptName": "descriptive name",
+          "prompt": "detailed implementation prompt referencing exact UI details (colours, layout, components, spacing)",
+          "tag": "UI or API or DB or Auth or Cache or other single technical domain word"
         }
       ]
     }
@@ -1013,11 +1029,13 @@ Use EXACTLY this structure:
 }
 
 userStoryName: short action-oriented title
-description: 
+description:
 - Along with user story name, include some description about the user story (simple description, do not go technical level)
-acceptanceCriteria: 
-- Include at functional level, do not include color validations and technical validations.
-- Follows Given / When / Then on separate lines. Cover all the positive, negative and exceptional cases.
+acceptanceCriteria: MUST be an array of objects, each with a "criteria" string field.
+- Each object represents one acceptance criterion.
+- Each criterion follows Given / When / Then format on separate lines.
+- Include all positive, negative and exceptional cases — each as its own separate object in the array.
+- Include at functional level only, do not include color validations or technical validations.
 
 promptName: descriptive name
 prompt:
