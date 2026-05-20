@@ -10,6 +10,7 @@ function applySchema(db) {
     `ALTER TABLE projects ADD COLUMN design_template TEXT`,
     `ALTER TABLE screen_designs ADD COLUMN queued   INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE screen_designs ADD COLUMN executed INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -79,6 +80,7 @@ function applySchema(db) {
       user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
       tag           TEXT,
       prompt        TEXT    NOT NULL DEFAULT '',
+      is_executed   INTEGER NOT NULL DEFAULT 0,
       is_active     INTEGER NOT NULL DEFAULT 1,
       created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
