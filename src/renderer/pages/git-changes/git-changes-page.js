@@ -10,7 +10,6 @@ export class GitChangesPage {
     this._from           = params.from || 'project-home';
     this._project        = null;
     this._files          = [];
-    this._activeIdx      = 0;
     this._consoleRunning = false;
     this._qcmdModal      = null;
   }
@@ -101,14 +100,8 @@ export class GitChangesPage {
         </header>
 
         <div class="git-page__body">
-          <aside class="git-page__files" id="gitFileList">
-            <div class="git-page__files-loading">Loading changes…</div>
-          </aside>
-
-          <div class="git-page__diff-wrap">
-            <div class="git-diff-view" id="gitDiffView">
-              <div class="git-diff-loading">Select a file to view its diff.</div>
-            </div>
+          <div class="git-page__accordion-wrap" id="gitAccordionWrap">
+            <div class="git-diff-loading">Loading changes…</div>
           </div>
 
           <div class="git-page__console-divider" id="gitConsoleDivider"></div>
@@ -384,13 +377,13 @@ export class GitChangesPage {
   }
 
   // ----------------------------------------------------------------
-  // Resizable divider between diff and console
+  // Resizable divider between accordion and console
   // ----------------------------------------------------------------
   _bindConsoleDivider() {
     const divider     = this.container.querySelector('#gitConsoleDivider');
     const consoleEl   = this.container.querySelector('#gitConsole');
-    const diffWrap    = this.container.querySelector('.git-page__diff-wrap');
-    if (!divider || !consoleEl || !diffWrap) return;
+    const accordionWrap = this.container.querySelector('#gitAccordionWrap');
+    if (!divider || !consoleEl || !accordionWrap) return;
 
     const onMouseMove = e => {
       const bodyRect = this.container.querySelector('.git-page__body').getBoundingClientRect();
@@ -433,17 +426,19 @@ export class GitChangesPage {
   async _loadStatus() {
     const cwd = this._project?.project_path || '';
     const label = this.container.querySelector('#gitStatusLabel');
-    const fileList = this.container.querySelector('#gitFileList');
+    const wrap  = this.container.querySelector('#gitAccordionWrap');
 
     if (!cwd) {
       if (label) label.textContent = 'No folder selected';
-      if (fileList) fileList.innerHTML = `
+      if (wrap) wrap.innerHTML = `
         <div class="git-page__empty">
           <p>No project folder selected.</p>
           <p>Select a folder from the header to enable Git tracking.</p>
         </div>`;
       return;
     }
+
+    if (wrap) wrap.innerHTML = '<div class="git-diff-loading">Loading changes…</div>';
 
     try {
       const [result, ignorePatterns] = await Promise.all([
@@ -459,18 +454,15 @@ export class GitChangesPage {
           : `${this._files.length} changed file${this._files.length !== 1 ? 's' : ''}`;
       }
 
-      this._renderFileList();
-
-      if (this._files.length > 0) {
-        this._activeIdx = 0;
-        await this._loadDiff(this._files[0]);
-      } else {
-        const view = this.container.querySelector('#gitDiffView');
-        if (view) view.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
+      if (this._files.length === 0) {
+        if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
+        return;
       }
+
+      await this._renderAccordion();
     } catch {
       if (label) label.textContent = 'Not a git repository';
-      if (fileList) fileList.innerHTML = `
+      if (wrap) wrap.innerHTML = `
         <div class="git-page__empty">
           <p>Not a git repository.</p>
           <p>Initialise git in the selected folder to track changes.</p>
@@ -478,44 +470,51 @@ export class GitChangesPage {
     }
   }
 
-  _renderFileList() {
-    const fileList = this.container.querySelector('#gitFileList');
-    if (!fileList) return;
+  // ----------------------------------------------------------------
+  // Accordion rendering
+  // ----------------------------------------------------------------
+  async _renderAccordion() {
+    const wrap = this.container.querySelector('#gitAccordionWrap');
+    if (!wrap) return;
 
-    if (this._files.length === 0) {
-      fileList.innerHTML = '<div class="git-page__empty">No changed files.</div>';
-      return;
-    }
-
-    fileList.innerHTML = this._files.map((f, i) => `
-      <div class="git-diff-file${i === this._activeIdx ? ' git-diff-file--active' : ''}"
-           data-idx="${i}">
-        <span class="git-diff-file__status git-diff-file__status--${f.statusType}">
-          ${f.statusType}
-        </span>
-        <span class="git-diff-file__name" title="${escHtml(f.file)}">${escHtml(f.file)}</span>
+    // Build skeleton first so user sees file list immediately
+    wrap.innerHTML = this._files.map((f, i) => `
+      <div class="git-accordion__item" data-idx="${i}">
+        <button class="git-accordion__header" data-idx="${i}" aria-expanded="true">
+          <span class="git-diff-file__status git-diff-file__status--${f.statusType}">${f.statusType}</span>
+          <span class="git-accordion__filename">${escHtml(f.file)}</span>
+          <svg class="git-accordion__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="git-accordion__body" id="gitAccBody${i}">
+          <div class="git-diff-loading">Loading diff…</div>
+        </div>
       </div>
     `).join('');
 
-    fileList.querySelectorAll('.git-diff-file').forEach(el => {
-      el.addEventListener('click', async () => {
-        const idx = parseInt(el.dataset.idx);
-        this._activeIdx = idx;
-        fileList.querySelectorAll('.git-diff-file')
-          .forEach(f => f.classList.remove('git-diff-file--active'));
-        el.classList.add('git-diff-file--active');
-        await this._loadDiff(this._files[idx]);
+    // Bind toggle clicks
+    wrap.querySelectorAll('.git-accordion__header').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx  = btn.dataset.idx;
+        const body = wrap.querySelector(`#gitAccBody${idx}`);
+        const item = wrap.querySelector(`.git-accordion__item[data-idx="${idx}"]`);
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', String(!expanded));
+        item.classList.toggle('git-accordion__item--collapsed', expanded);
       });
     });
+
+    // Load all diffs in parallel
+    await Promise.all(this._files.map((f, i) => this._loadDiffInto(f, i)));
   }
 
   // ----------------------------------------------------------------
-  // Diff loading
+  // Diff loading into an accordion body
   // ----------------------------------------------------------------
-  async _loadDiff(fileInfo) {
-    const view = this.container.querySelector('#gitDiffView');
-    if (!view) return;
-    view.innerHTML = '<div class="git-diff-loading">Loading diff…</div>';
+  async _loadDiffInto(fileInfo, idx) {
+    const body = this.container.querySelector(`#gitAccBody${idx}`);
+    if (!body) return;
 
     const cwd = this._project?.project_path || '';
     try {
@@ -542,9 +541,9 @@ export class GitChangesPage {
           diffText = (r2.stdout || '').trim();
         }
       }
-      view.innerHTML = this._renderDiff(diffText, fileInfo.file);
+      body.innerHTML = this._renderDiffBody(diffText);
     } catch {
-      view.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
+      body.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
     }
   }
 
@@ -611,15 +610,15 @@ export class GitChangesPage {
       });
   }
 
-  _renderDiff(diffText, filename) {
-    const esc  = escHtml;
-    let html   = `<div class="git-diff-filename">${esc(filename)}</div>`;
+  /** Renders just the diff table (no filename bar — shown in accordion header) */
+  _renderDiffBody(diffText) {
+    const esc = escHtml;
 
     if (!diffText || !diffText.trim()) {
-      return html + '<div class="git-diff-empty">No diff available.</div>';
+      return '<div class="git-diff-empty">No diff available.</div>';
     }
 
-    html += '<table class="git-diff-table"><tbody>';
+    let html = '<table class="git-diff-table"><tbody>';
 
     let oldLine = 0, newLine = 0;
     for (const raw of diffText.split('\n')) {
