@@ -306,6 +306,13 @@
   opacity: 0.35;
   cursor: default;
 }
+.git-page__console-btn--text {
+  width: auto;
+  padding: 0 7px;
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+}
 
 .git-page__console-output {
   flex: 1;

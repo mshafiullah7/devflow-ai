@@ -122,11 +122,7 @@ export class GitChangesPage {
                     <rect x="2" y="2" width="8" height="8" rx="1" fill="currentColor"/>
                   </svg>
                 </button>
-                <button class="git-page__console-btn" id="gitConsoleClear" title="Clear (Ctrl+L)">
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 10L10 2M2 2l8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                  </svg>
-                </button>
+                <button class="git-page__console-btn git-page__console-btn--text" id="gitConsoleClear" title="Clear (Ctrl+L)">Clear</button>
               </div>
             </div>
             <div class="git-page__console-output" id="gitConsoleOutput">
