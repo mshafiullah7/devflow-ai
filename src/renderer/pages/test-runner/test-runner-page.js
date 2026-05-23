@@ -829,9 +829,60 @@ export class TestRunnerPage {
   }
 
   // ----------------------------------------------------------------
+  // Fetch git context for the project folder.
+  // Returns a concise summary string (deleted files + full status)
+  // that is injected into the AI prompt so the model can distinguish
+  // "page was deleted → remove the test" from "code is broken → fix it".
+  // ----------------------------------------------------------------
+  async _fetchGitContext() {
+    const cwd = this._project?.project_path;
+    if (!cwd) return '';
+    try {
+      // Run both commands in parallel; ignore errors (repo may not exist)
+      const [statusRes, nameStatusRes] = await Promise.all([
+        window.db.terminal.exec({ command: 'git status --short 2>&1', cwd }).catch(() => ({ stdout: '' })),
+        window.db.terminal.exec({ command: 'git diff --name-status HEAD 2>&1', cwd }).catch(() => ({ stdout: '' })),
+      ]);
+
+      const statusOut     = (statusRes.stdout     || '').trim();
+      const nameStatusOut = (nameStatusRes.stdout  || '').trim();
+
+      // Extract deleted entries from both sources so we catch staged,
+      // unstaged, and committed-but-not-yet-pushed deletions
+      const deletedFromStatus = statusOut.split('\n')
+        .filter(l => /^D[ D]|^ D/.test(l))           // "D " staged, " D" unstaged
+        .map(l => l.replace(/^.{2}\s+/, '').trim())
+        .filter(Boolean);
+
+      const deletedFromDiff = nameStatusOut.split('\n')
+        .filter(l => l.startsWith('D\t'))
+        .map(l => l.replace(/^D\t/, '').trim())
+        .filter(Boolean);
+
+      // Merge + deduplicate
+      const allDeleted = [...new Set([...deletedFromStatus, ...deletedFromDiff])];
+
+      const parts = [];
+      if (allDeleted.length) {
+        parts.push(`Deleted files:\n${allDeleted.map(f => `  - ${f}`).join('\n')}`);
+      }
+      if (statusOut) {
+        parts.push(`Full git status:\n${statusOut}`);
+      }
+
+      return parts.join('\n\n');
+    } catch {
+      return '';
+    }
+  }
+
+  // ----------------------------------------------------------------
   // Add to Queue — extract failures from raw output, no model call
   // ----------------------------------------------------------------
-  _showAddToQueueModal(rawOutput, runId) {
+  async _showAddToQueueModal(rawOutput, runId) {
+    // Fetch git context before building the modal so it can be embedded
+    // in the prompt. Done once here; referenced in the _buildPrompt closure.
+    const gitContext = await this._fetchGitContext();
     const overlay = document.createElement('div');
     overlay.className = 'tr-modal-overlay';
     overlay.innerHTML = `
@@ -877,31 +928,70 @@ export class TestRunnerPage {
       ? _initialFailures.map((f, i) => `[${i + 1}] ${f.name}\n${f.body}`).join('\n\n')
       : rawOutput.slice(-4000);
 
-    const _buildPrompt = (failures) =>
-`You are a test failure reporter for a software project queue system.
+    const _buildPrompt = (failures) => {
+      // ── Git context block ────────────────────────────────────────────
+      // This is actual git output from the project folder fetched moments
+      // ago. Use it as the primary signal for REMOVE classification.
+      const gitBlock = gitContext ? `
+## Git changes in this project (fetched now from the project folder)
+
+${gitContext}
+
+Classification rule from git:
+- If a failing test's target page, component, or route is listed under "Deleted files" above → classify as REMOVE
+- If only modified (M) or renamed (R) files are present → lean towards FIX unless error signals say otherwise
+- If the spec file itself is listed as deleted → REMOVE all failures from that file
+
+` : '';
+
+      return `You are a test failure analyst for a software project queue system.
 
 Below are pre-extracted test failure entries. Each has a name, file location, error details, and context already identified.
+${gitBlock}
+For each failure you must do two things:
 
-Your job is to clean and optimize each entry so it is concise and clear for a developer reading the queue. Remove noise (raw stack frames, repeated boilerplate) but keep all information needed to understand what failed.
+1. CLASSIFY the action needed — choose exactly one:
+   - REMOVE  → the test must be deleted because the feature/page/route it tests no longer exists.
+               Primary signal: the deleted files list above. Secondary signals: navigation failures
+               (net::ERR_ABORTED, ERR_CONNECTION_REFUSED), HTTP 404, missing routes,
+               "Cannot find module" for a deleted file, locator matched 0 elements consistently,
+               page.goto() timeout on a route that was intentionally removed.
+   - FIX     → the feature still exists but the code or test has a bug that needs fixing.
+               Signals: assertion mismatch (expected X received Y), wrong values, logic errors,
+               element present but in wrong state, intermittent timeout on something that should exist.
 
-Do NOT suggest solutions, fixes, or code changes. Only present what went wrong.
+2. CLEAN the error details — remove raw stack frames and repeated boilerplate, but keep everything
+   a developer needs to understand what failed (file:line, error message, expected vs received,
+   assertion line, relevant locators/selectors/timeouts).
 
 Output rules:
 - Separate each failure with a line containing exactly "---" on its own line
-- Start each failure with the test name on its own first line
-- Keep: test name, file:line, error message, expected vs received, failing assertion line, relevant context (locators, selectors, timeouts)
+- Line 1: test name (strip any leading index like "1)" or "[1]")
+- Line 2: Action: FIX   or   Action: REMOVE
+- Line 3: Reason: <one concise sentence explaining why you chose that action — mention the deleted file if applicable>
+- Remaining lines: cleaned error details (file:line, error, expected/received, assertion, context)
 
 Failures to process:
 ${failures}`;
+    };
 
     textEl.value = _buildPrompt(_filteredText);
     _updateTokens(textEl.value);
 
     // Helper: render grouped results into the textarea and refresh token count
     const _showGrouped = (grouped) => {
-      textEl.value = grouped.map(g =>
-        `════ ${g._file}  [${g._count} failure${g._count > 1 ? 's' : ''}] ════\n\n${g.body}`
-      ).join('\n\n' + '─'.repeat(60) + '\n\n');
+      textEl.value = grouped.map(g => {
+        const intentLabel = g._intent === 'REMOVE'
+          ? '⚠  ACTION: REMOVE TESTS'
+          : '🔧  ACTION: FIX CODE';
+        const reasonLine  = g._reason ? `Reason : ${g._reason}` : '';
+        const header = [
+          `════ ${g._file}  [${g._count} failure${g._count > 1 ? 's' : ''}] ════`,
+          intentLabel,
+          reasonLine,
+        ].filter(Boolean).join('\n');
+        return `${header}\n\n${g.body}`;
+      }).join('\n\n' + '─'.repeat(60) + '\n\n');
       textEl.scrollTop = 0;
       _updateTokens(textEl.value);
     };
@@ -975,8 +1065,19 @@ ${failures}`;
         const rawFailures = sections.map(sec => {
           const lines = sec.split('\n');
           const name  = lines[0].replace(/^\[?\d+[\].)]\s*/, '').trim();
-          const body  = lines.slice(1).join('\n').trim();
-          return { name, body };
+
+          // Parse AI-provided classification (Action: FIX | REMOVE)
+          const actionMatch = sec.match(/^Action:\s*(FIX|REMOVE)\s*$/im);
+          const reasonMatch = sec.match(/^Reason:\s*(.+)$/im);
+          const intent = actionMatch ? actionMatch[1].toUpperCase() : 'FIX';
+          const reason = reasonMatch ? reasonMatch[1].trim() : '';
+
+          // Strip the Action/Reason lines from body — they go into metadata, not the task text
+          const body = lines.slice(1)
+            .filter(l => !/^Action:\s*(FIX|REMOVE)/i.test(l.trim()) && !/^Reason:\s*/i.test(l.trim()))
+            .join('\n').trim();
+
+          return { name, body, intent, reason };
         });
 
         // Group by file and update textarea so the user sees the final grouped result
@@ -1004,27 +1105,36 @@ ${failures}`;
       sendBtn.textContent = 'Adding…';
 
       let created = 0;
+      let removedCount = 0;
       for (const f of extractedFailures) {
+        const isRemove   = f._intent === 'REMOVE';
+        const tag        = isRemove ? 'Remove Test' : 'Test Fix';
+        const promptText = isRemove
+          ? `The page or feature covered by this spec file has been removed. Delete the following obsolete test cases from the test file.\n\n${f.body}`
+          : f.body;
+
         await window.db.promptQueue.add({
           project_id:    this._projectId,
           user_story_id: null,
           story_title:   f.name,
           prompt_id:     null,
-          tag:           'Test Fix',
-          prompt_text:   f.body,
+          tag,
+          prompt_text:   promptText,
           layer_id:      null,
         });
         created++;
+        if (isRemove) removedCount++;
       }
 
       if (runId) localStorage.setItem(this._fixQueueKey(runId), '1');
       close();
 
       if (created > 0) {
-        this._showFixFeedback(
-          `${created} fix task${created > 1 ? 's' : ''} added to Tasks Queue ✓`,
-          true,
-        );
+        const fixCount = created - removedCount;
+        const parts = [];
+        if (fixCount    > 0) parts.push(`${fixCount} fix task${fixCount > 1 ? 's' : ''}`);
+        if (removedCount > 0) parts.push(`${removedCount} remove task${removedCount > 1 ? 's' : ''}`);
+        this._showFixFeedback(`${parts.join(' + ')} added to Tasks Queue ✓`, true);
       }
     });
   }
@@ -1065,13 +1175,26 @@ ${failures}`;
 
     return [...fileMap.values()].map(({ file, failures }) => {
       const shortName = file === '__unknown__' ? 'unknown file' : file.split(/[/\\]/).pop();
-      const title     = `Fix failing tests — ${shortName}`;
-      const body      = [
+
+      // If any failure in the group is classified REMOVE, treat the whole group as REMOVE.
+      // Rationale: when a page is deleted, every test in its spec file fails — a single
+      // REMOVE signal is enough to flag the entire file for deletion.
+      const _intent = failures.some(f => f.intent === 'REMOVE') ? 'REMOVE' : 'FIX';
+
+      // Surface the first REMOVE reason (most informative) as the group reason
+      const _reason = (failures.find(f => f.intent === 'REMOVE' && f.reason) || failures.find(f => f.reason) || {}).reason || '';
+
+      const title = _intent === 'REMOVE'
+        ? `Remove obsolete tests — ${shortName}`
+        : `Fix failing tests — ${shortName}`;
+
+      const body = [
         `File: ${file}`,
         '',
         ...failures.map((f, i) => `[${i + 1}] ${f.name}\n${f.body}`),
       ].join('\n\n');
-      return { name: title, body, _file: file, _count: failures.length };
+
+      return { name: title, body, _file: file, _count: failures.length, _intent, _reason };
     });
   }
 

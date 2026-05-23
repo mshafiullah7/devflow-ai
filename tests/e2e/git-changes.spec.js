@@ -79,7 +79,7 @@ test('VS Code button is disabled when no project folder is set', async () => {
 
 test('file list shows empty state when no project folder is set', async () => {
   await navigateToGitChanges(window);
-  await expect(window.locator('#gitFileList .git-page__empty')).toBeVisible();
+  await expect(window.locator('#gitAccordionWrap .git-page__empty')).toBeVisible();
 });
 
 // ----------------------------------------------------------------
