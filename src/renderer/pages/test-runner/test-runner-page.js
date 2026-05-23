@@ -87,6 +87,7 @@ export class TestRunnerPage {
     this._outputText    = '';
     this._activeEntry   = null; // command entry currently running
     this._history       = [];
+    this._lastRunId     = null; // DB id of the most recent test run (for dedup)
     this._modelCfg      = null;
     this._picker        = null;
     this._modelConfigsModal = null;
@@ -523,7 +524,7 @@ export class TestRunnerPage {
 
     const fixBtn = this.container.querySelector('#trFixIssueBtn');
     if (fixBtn) {
-      fixBtn.onclick = () => this._fixIssues(this._outputText, exitCode);
+      fixBtn.onclick = () => this._fixIssues(this._outputText, exitCode, this._lastRunId);
     }
 
     const logBtn = this.container.querySelector('#trLogIssueBtn');
@@ -738,7 +739,18 @@ export class TestRunnerPage {
   // ----------------------------------------------------------------
   // Fix Issues — analyze console output with AI → Tasks Queue
   // ----------------------------------------------------------------
-  async _fixIssues(outputText, exitCode) {
+  _fixQueueKey(runId) {
+    return `devflow-tr-fix-queued-${this._projectId}-${runId}`;
+  }
+
+  async _fixIssues(outputText, exitCode, runId) {
+    // ── Guard: already queued for this run ──────────────────────────
+    if (runId && localStorage.getItem(this._fixQueueKey(runId))) {
+      this._showAlreadyQueuedModal();
+      return;
+    }
+
+    // ── Guard: no model selected ─────────────────────────────────────
     if (!this._modelCfg) {
       this._showFixFeedback('Select a model from the header dropdown first.', false);
       return;
@@ -750,25 +762,17 @@ export class TestRunnerPage {
       return;
     }
 
-    // Find a button to show loading state (results bar or history btn)
+    // ── Loading state ────────────────────────────────────────────────
     const fixBtnBar  = this.container.querySelector('#trFixIssueBtn');
     const fixBtnHist = this.container.querySelector('#trLastRunFixBtn');
     const allFixBtns = [fixBtnBar, fixBtnHist].filter(Boolean);
-
     const origInners = allFixBtns.map(b => b.innerHTML);
     allFixBtns.forEach(b => { b.disabled = true; b.textContent = 'Analyzing…'; });
+    const restoreBtns = () => allFixBtns.forEach((b, i) => { b.disabled = false; b.innerHTML = origInners[i]; });
 
-    const restoreBtns = () => {
-      allFixBtns.forEach((b, i) => { b.disabled = false; b.innerHTML = origInners[i]; });
-    };
-
-    // Write the full output to a temp file so there is no size limit.
-    // CLI models (claude, gemini, etc.) are instructed to read the file directly.
-    // API / Ollama models receive the full text inline — the model's own context
-    // window is the only limit, not an artificial truncation on our end.
+    // ── Write output to temp file (no size limit) ────────────────────
     const tmpPath = await window.db.testRunner.saveTempOutput(src);
     const isCli   = this._modelCfg?.type === 'cli';
-
     const outputSection = isCli
       ? `The full console output has been saved to this file — read it before answering:\n${tmpPath}`
       : `Console output:\n${src}`;
@@ -819,20 +823,14 @@ Each item must have:
 ${outputSection}`;
 
     let accumulated = '';
-
-    const cleanup = () => {
-      window.db.promptQueue.removeListeners();
-      restoreBtns();
-    };
+    const cleanup = () => { window.db.promptQueue.removeListeners(); restoreBtns(); };
 
     window.db.promptQueue.removeListeners();
-
     window.db.promptQueue.onData(({ text }) => { accumulated += text; });
 
-    window.db.promptQueue.onDone(async ({ exitCode: code }) => {
+    window.db.promptQueue.onDone(async () => {
       cleanup();
 
-      // Extract JSON array from response
       let tasks = [];
       try {
         const match = accumulated.match(/\[[\s\S]*\]/);
@@ -846,39 +844,8 @@ ${outputSection}`;
         return;
       }
 
-      const ACTION_TAG = {
-        fix_code:    'Fix Code',
-        update_test: 'Update Test',
-        delete_test: 'Delete Test',
-        skip_flaky:  'Flaky Test',
-      };
-
-      let created = 0;
-      for (const task of tasks) {
-        const promptText = (task.prompt || task.prompt_text || '').trim();
-        const title      = (task.title || '').trim();
-        if (!promptText) continue;
-        const tag = ACTION_TAG[task.action] || 'Test Fix';
-        await window.db.promptQueue.add({
-          project_id:    this._projectId,
-          user_story_id: null,
-          story_title:   title || null,
-          prompt_id:     null,
-          tag,
-          prompt_text:   promptText,
-          layer_id:      null,
-        });
-        created++;
-      }
-
-      if (created > 0) {
-        this._showFixFeedback(
-          `${created} fix task${created > 1 ? 's' : ''} added to Tasks Queue ✓`,
-          true,
-        );
-      } else {
-        this._showFixFeedback('No actionable tasks found in AI response.', false);
-      }
+      // Show confirmation modal — task creation happens on confirm
+      this._showFixConfirmModal(tasks, runId);
     });
 
     try {
@@ -893,6 +860,148 @@ ${outputSection}`;
       cleanup();
       this._showFixFeedback(`Failed to start analysis: ${err.message}`, false);
     }
+  }
+
+  // ----------------------------------------------------------------
+  // Fix Issues — confirmation modal
+  // ----------------------------------------------------------------
+  _showFixConfirmModal(tasks, runId) {
+    const ACTION_META = {
+      fix_code:    { label: 'Fix Code',    cls: 'tr-fix-badge--code'   },
+      update_test: { label: 'Update Test', cls: 'tr-fix-badge--update' },
+      delete_test: { label: 'Delete Test', cls: 'tr-fix-badge--delete' },
+      skip_flaky:  { label: 'Flaky',       cls: 'tr-fix-badge--flaky'  },
+    };
+
+    const taskRows = tasks.map((t, i) => {
+      const meta  = ACTION_META[t.action] || { label: 'Fix', cls: 'tr-fix-badge--code' };
+      const title = escHtml((t.title || `Task ${i + 1}`).trim());
+      return `
+        <div class="tr-fc-row">
+          <span class="tr-fix-badge ${meta.cls}">${meta.label}</span>
+          <span class="tr-fc-row__title">${title}</span>
+        </div>`;
+    }).join('');
+
+    const n = tasks.length;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'tr-modal-overlay';
+    overlay.innerHTML = `
+      <div class="tr-modal tr-modal--sm">
+        <div class="tr-modal__header">
+          <h2 class="tr-modal__title">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="flex-shrink:0">
+              <path d="M13 2l1 1-2 2-1-1 2-2zM2 14l3-1-2-2-1 3zM4 10l6-6 2 2-6 6-2-2z" fill="currentColor"/>
+            </svg>
+            Create Fix Tasks
+          </h2>
+          <button class="tr-modal__close" id="trFcClose" aria-label="Close">&times;</button>
+        </div>
+        <div class="tr-modal__body">
+          <p class="tr-fc-summary">
+            <strong>${n} task${n > 1 ? 's' : ''}</strong> will be added to
+            <strong>Tasks Queue</strong> for the failed test cases:
+          </p>
+          <div class="tr-fc-list">${taskRows}</div>
+        </div>
+        <div class="tr-modal__footer">
+          <button class="tr-modal__btn tr-modal__btn--cancel" id="trFcCancel">Cancel</button>
+          <button class="tr-modal__btn tr-modal__btn--save"   id="trFcConfirm">
+            Add ${n} Task${n > 1 ? 's' : ''} to Queue
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#trFcClose').addEventListener('click', close);
+    overlay.querySelector('#trFcCancel').addEventListener('click', close);
+
+    overlay.querySelector('#trFcConfirm').addEventListener('click', async () => {
+      const confirmBtn = overlay.querySelector('#trFcConfirm');
+      confirmBtn.disabled    = true;
+      confirmBtn.textContent = 'Adding…';
+
+      const ACTION_TAG = {
+        fix_code:    'Fix Code',
+        update_test: 'Update Test',
+        delete_test: 'Delete Test',
+        skip_flaky:  'Flaky Test',
+      };
+
+      let created = 0;
+      for (const task of tasks) {
+        const promptText = (task.prompt || task.prompt_text || '').trim();
+        const title      = (task.title || '').trim();
+        if (!promptText) continue;
+        await window.db.promptQueue.add({
+          project_id:    this._projectId,
+          user_story_id: null,
+          story_title:   title || null,
+          prompt_id:     null,
+          tag:           ACTION_TAG[task.action] || 'Test Fix',
+          prompt_text:   promptText,
+          layer_id:      null,
+        });
+        created++;
+      }
+
+      close();
+
+      // Mark this run as queued so clicking Fix Issues again shows the warning
+      if (runId) localStorage.setItem(this._fixQueueKey(runId), '1');
+
+      if (created > 0) {
+        this._showFixFeedback(
+          `${created} fix task${created > 1 ? 's' : ''} added to Tasks Queue ✓`,
+          true,
+        );
+      }
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Fix Issues — "already queued" modal
+  // ----------------------------------------------------------------
+  _showAlreadyQueuedModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'tr-modal-overlay';
+    overlay.innerHTML = `
+      <div class="tr-modal tr-modal--sm">
+        <div class="tr-modal__header">
+          <h2 class="tr-modal__title">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="flex-shrink:0">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Already Queued
+          </h2>
+          <button class="tr-modal__close" id="trAqClose" aria-label="Close">&times;</button>
+        </div>
+        <div class="tr-modal__body">
+          <p class="tr-fc-summary">
+            Fix tasks for this test run have already been added to <strong>Tasks Queue</strong>.
+          </p>
+          <p class="tr-fc-hint">
+            To generate new fix tasks, run the tests again first — each fresh test run
+            gets its own set of tasks.
+          </p>
+        </div>
+        <div class="tr-modal__footer">
+          <button class="tr-modal__btn tr-modal__btn--save" id="trAqOk">OK</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#trAqClose').addEventListener('click', close);
+    overlay.querySelector('#trAqOk').addEventListener('click', close);
+
+    const escFn = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escFn); } };
+    document.addEventListener('keydown', escFn);
   }
 
   _showFixFeedback(message, success) {
@@ -924,7 +1033,7 @@ ${outputSection}`;
   // ----------------------------------------------------------------
   async _saveRun(exitCode, results) {
     if (!this._activeEntry) return;
-    await window.db.testRunHistory.create({
+    const run = await window.db.testRunHistory.create({
       project_id: this._projectId,
       framework:  this._activeEntry.framework ?? null,
       command:    this._activeEntry.cmd,
@@ -935,6 +1044,7 @@ ${outputSection}`;
       output:     this._outputText || null,
       exit_code:  exitCode,
     });
+    this._lastRunId = run?.id ?? null;
     this._history = await window.db.testRunHistory.list(this._projectId);
     this._renderHistory();
   }
@@ -955,7 +1065,7 @@ ${outputSection}`;
     lastRunEl.innerHTML = this._lastRunSectionHtml(last);
     const histFixBtn = lastRunEl.querySelector('#trLastRunFixBtn');
     if (histFixBtn) {
-      histFixBtn.addEventListener('click', () => this._fixIssues(last.output || '', last.exit_code));
+      histFixBtn.addEventListener('click', () => this._fixIssues(last.output || '', last.exit_code, last.id));
     }
     const histIssueBtn = lastRunEl.querySelector('#trLastRunIssueBtn');
     if (histIssueBtn) {
