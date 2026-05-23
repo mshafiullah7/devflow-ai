@@ -40,11 +40,12 @@ Extract every distinct user action, form, state, or interaction visible in this 
 
 IMPORTANT: Output ONLY a raw JSON array — no markdown fences, no explanation, no extra text. Start with [ and end with ].
 
-Each object MUST use EXACTLY these four field names — no other field names are accepted:
+Each object MUST use EXACTLY these five field names — no other field names are accepted:
 - title: short action-oriented title (string)
 - description: As a user, I want to [action] so that [benefit]. (string)
 - acceptance_criteria: all criteria as ONE string, each criterion on its own line starting with -  (string, NOT an array)
-- prompt: detailed implementation prompt referencing exact design details from the UI — colours, typography, spacing, layout, component styles (string)`;
+- prompt: detailed implementation prompt referencing exact design details from the UI — colours, typography, spacing, layout, component styles. Do NOT include E2E test generation here. (string)
+- e2e_tests: ONE string containing the prompt to generate the Playwright/Cypress E2E test file for this user story interaction. All test names must be prefixed with US-{{US_ID}}. Empty string "" for non-UI stories. (string)`;
 }
 
 function buildEditPromptInline(instruction, existingHtml, projectDescription) {

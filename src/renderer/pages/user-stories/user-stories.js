@@ -833,6 +833,18 @@ export class ProjectPage {
             });
           }
         }
+        if (Array.isArray(s.e2e_tests)) {
+          for (const t of s.e2e_tests) {
+            const prompt = (t.prompt || '').replaceAll('{{US_ID}}', story.id);
+            if (prompt.trim()) {
+              await window.db.prompts.create({
+                user_story_id: story.id,
+                tag:           'e2e',
+                prompt,
+              });
+            }
+          }
+        }
         saved++;
       } catch { /* skip bad entries */ }
     }
@@ -900,6 +912,12 @@ Use EXACTLY this structure:
           "prompt": 'detailed implementation prompt referencing exact UI details (colours, layout, components, spacing)',
           "layerId": <integer id from Project Layers list above, or null if no layers or none clearly applies>
         }
+      ],
+      "e2e_tests": [
+        {
+          "promptName": 'descriptive E2E test name',
+          "prompt": 'detailed prompt to generate the E2E test file (Playwright/Cypress) for this user story'
+        }
       ]
     }
   ]
@@ -914,16 +932,21 @@ acceptanceCriteria: MUST be an array of objects, each with a "criteria" string f
 - Include all positive, negative and exceptional cases — each as its own separate object in the array.
 - Include at functional level only, do not include color validations or technical validations.
 
-promptName: descriptive name
-prompt:
+prompts — implementation tasks only (NO test generation here):
 - The purpose of the prompt is to provide instructions to LLM to implement the production ready code for the user story.
 - Include design elements which needs to tell the prompt for the designing of the page. This should exactly match the mockup.
 - Include plain instructions (no code unless needed)
 - Need instructions to cover end to end development. It should exactly work as if it is calling APIs. Mock all the data in the data layer or services which calls the API (positive & negative cases). And should be able to replace that code by actual call later.
-- Include unit test prompts for API/DB/Auth stories, and E2E test prompts for UI stories.
-- When a prompt involves creating unit tests or E2E tests, ALL test function/case/suite names MUST be prefixed with \`US-{{US_ID}}\` (e.g. \`US-{{US_ID}}_login_renders_correctly\`, \`describe('US-{{US_ID}} Login Flow', ...)\`). Use the exact literal placeholder \`{{US_ID}}\` — it will be substituted with the real user story ID automatically.
+- For API/DB/Auth stories: include unit test generation as part of the implementation prompt.
+- Do NOT include E2E test generation here — put those in e2e_tests instead.
 
 layerId: The integer id from the Project Layers list above that best matches this prompt's technical domain. Use null if no layers are listed or none clearly applies.
+
+e2e_tests — E2E test generation prompts (UI stories only):
+- Generate one or more prompts that instruct the LLM to create E2E test files using Playwright or Cypress.
+- Each prompt covers the full test scenario for the user story (happy path + edge cases).
+- ALL test function/case/suite names MUST be prefixed with \`US-{{US_ID}}\` (e.g. \`describe('US-{{US_ID}} Login Flow', ...)\`, \`test('US-{{US_ID}}_submits_form', ...)\`). Use the exact literal placeholder \`{{US_ID}}\` — it will be substituted with the real user story ID automatically.
+- For API/DB/Auth-only stories that have no UI, set e2e_tests to an empty array [].
 
 Rules:
 - featureId MUST be ${feature.id}
@@ -1049,7 +1072,10 @@ Rules:
   // Export helpers
   // ----------------------------------------------------------------
   async _buildStoryExport(s) {
-    const prompts = await window.db.prompts.list(s.id);
+    const [prompts, e2eTests] = await Promise.all([
+      window.db.prompts.list(s.id),
+      window.db.prompts.listByTag(s.id, 'e2e'),
+    ]);
     return {
       title: s.title,
       description: s.description || null,
@@ -1057,6 +1083,10 @@ Rules:
       status: s.status_name || null,
       prompts: prompts.map(p => ({
         tag: p.tag || null,
+        prompt: p.prompt || null,
+        is_executed: !!p.is_executed,
+      })),
+      e2e_tests: e2eTests.map(p => ({
         prompt: p.prompt || null,
         is_executed: !!p.is_executed,
       })),

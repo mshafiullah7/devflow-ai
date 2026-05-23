@@ -259,9 +259,19 @@ function registerDbHandlers() {
       SELECT p.*, pl.name AS layer_name
         FROM prompts p
         LEFT JOIN project_layers pl ON p.layer_id = pl.id
-       WHERE p.user_story_id = ? AND p.is_active = 1
+       WHERE p.user_story_id = ? AND (p.tag IS NULL OR p.tag != 'e2e') AND p.is_active = 1
        ORDER BY p.created_at ASC
     `).all(user_story_id);
+  });
+
+  safeHandle('db:prompts:listByTag', (_e, { user_story_id, tag }) => {
+    return db.prepare(`
+      SELECT p.*, pl.name AS layer_name
+        FROM prompts p
+        LEFT JOIN project_layers pl ON p.layer_id = pl.id
+       WHERE p.user_story_id = ? AND p.tag = ? AND p.is_active = 1
+       ORDER BY p.created_at ASC
+    `).all(user_story_id, tag);
   });
 
   safeHandle('db:prompts:create', (_e, { user_story_id, tag, prompt, layer_id }) => {

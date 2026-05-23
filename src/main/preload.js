@@ -49,10 +49,11 @@ contextBridge.exposeInMainWorld('db', {
     deleteAll: (user_story_id) => invoke('db:prompt_history:deleteAll', user_story_id),
   },
   prompts: {
-    list:   (user_story_id) => invoke('db:prompts:list', user_story_id),
-    create: (data)          => invoke('db:prompts:create', data),
-    update: (data)          => invoke('db:prompts:update', data),
-    delete: (id)            => invoke('db:prompts:delete', id),
+    list:      (user_story_id)        => invoke('db:prompts:list', user_story_id),
+    listByTag: (user_story_id, tag)   => invoke('db:prompts:listByTag', { user_story_id, tag }),
+    create:    (data)                 => invoke('db:prompts:create', data),
+    update:    (data)                 => invoke('db:prompts:update', data),
+    delete:    (id)                   => invoke('db:prompts:delete', id),
   },
   acceptanceCriteria: {
     list:   (user_story_id) => invoke('db:acceptance_criteria:list', user_story_id),

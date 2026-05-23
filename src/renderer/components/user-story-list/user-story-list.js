@@ -142,6 +142,14 @@ export class UserStoryList {
           });
         }
       }
+      if (Array.isArray(record.e2e_tests)) {
+        for (const t of record.e2e_tests) {
+          const prompt = (typeof t === 'string' ? t : t?.prompt) || '';
+          if (prompt.trim()) {
+            await window.db.prompts.create({ user_story_id: story.id, tag: 'e2e', prompt });
+          }
+        }
+      }
       await this._load();
       this._showImportToast('User story imported successfully.');
     } catch {
@@ -163,8 +171,11 @@ export class UserStoryList {
         acceptance_criteria: record.acceptance_criteria || null,
         status_id:           statusId,
       });
-      const oldPrompts = await window.db.prompts.list(existingStory.id);
-      for (const p of oldPrompts) {
+      const [oldPrompts, oldE2e] = await Promise.all([
+        window.db.prompts.list(existingStory.id),
+        window.db.prompts.listByTag(existingStory.id, 'e2e'),
+      ]);
+      for (const p of [...oldPrompts, ...oldE2e]) {
         await window.db.prompts.delete(p.id);
       }
       if (Array.isArray(record.prompts)) {
@@ -174,6 +185,14 @@ export class UserStoryList {
             tag:           p.tag || null,
             prompt:        p.prompt || null,
           });
+        }
+      }
+      if (Array.isArray(record.e2e_tests)) {
+        for (const t of record.e2e_tests) {
+          const prompt = (typeof t === 'string' ? t : t?.prompt) || '';
+          if (prompt.trim()) {
+            await window.db.prompts.create({ user_story_id: existingStory.id, tag: 'e2e', prompt });
+          }
         }
       }
       await this._load();

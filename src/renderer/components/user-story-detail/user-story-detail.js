@@ -122,6 +122,7 @@ export class UserStoryDetail {
             <button class="usl-view-toggle__btn usl-view-toggle__btn--active" data-tab="description">Description</button>
             <button class="usl-view-toggle__btn" data-tab="criterias">Criteria's</button>
             <button class="usl-view-toggle__btn" data-tab="tasks">Tasks</button>
+            <button class="usl-view-toggle__btn" data-tab="e2e">E2E Tests</button>
             <button class="usl-view-toggle__btn" data-tab="issues">Issues</button>
           </div>
         </div>
@@ -213,6 +214,19 @@ export class UserStoryDetail {
             </div>
           </div>
 
+          <div class="usl-tab-content" data-tab-content="e2e">
+            <div class="usl-prompts-section">
+              <div class="usl-prompts-section__header">
+                <span class="usl-prompts-section__title">E2E Tests</span>
+                <button class="usl-prompts-section__add-btn" id="uslAddE2eBtn" type="button" title="Add E2E test">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Add
+                </button>
+              </div>
+              <div class="usl-prompts-list" id="uslAddE2eList"></div>
+            </div>
+          </div>
+
           <div class="usl-tab-content" data-tab-content="issues">
             <div class="usl-issues-tab" id="uslIssuesList">
               <div class="project-related__empty">Save the story first to see issues</div>
@@ -240,6 +254,7 @@ export class UserStoryDetail {
     this._bindTabToggle(this._detailEl, null);
     this._bindPromptsSection(this._detailEl, null);
     this._bindCriteriaSection(this._detailEl, null);
+    this._bindE2eSection(this._detailEl, null);
     titleEl.focus();
     this._bindExpandBtns(this._detailEl);
 
@@ -306,6 +321,7 @@ export class UserStoryDetail {
             <button class="usl-view-toggle__btn usl-view-toggle__btn--active" data-tab="description">Description</button>
             <button class="usl-view-toggle__btn" data-tab="criterias">Criteria's</button>
             <button class="usl-view-toggle__btn" data-tab="tasks">Tasks</button>
+            <button class="usl-view-toggle__btn" data-tab="e2e">E2E Tests</button>
             <button class="usl-view-toggle__btn" data-tab="issues">Issues</button>
           </div>
           <select class="usl-add-form__status-select" id="uslEditStatus">
@@ -391,6 +407,19 @@ export class UserStoryDetail {
                 </button>
               </div>
               <div class="usl-prompts-list" id="uslEditPromptsList"></div>
+            </div>
+          </div>
+
+          <div class="usl-tab-content" data-tab-content="e2e">
+            <div class="usl-prompts-section">
+              <div class="usl-prompts-section__header">
+                <span class="usl-prompts-section__title">E2E Tests</span>
+                <button class="usl-prompts-section__add-btn" id="uslEditE2eBtn" type="button" title="Add E2E test">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  Add
+                </button>
+              </div>
+              <div class="usl-prompts-list" id="uslEditE2eList"></div>
             </div>
           </div>
 
@@ -509,6 +538,8 @@ export class UserStoryDetail {
     this._loadPrompts(story.id);
     this._bindCriteriaSection(this._detailEl, story.id);
     this._loadCriteria(story.id);
+    this._bindE2eSection(this._detailEl, story.id);
+    this._loadE2eTests(story.id);
     // Eagerly fetch issue count so the tab label is visible before the tab is opened
     window.db.issues.list({ project_id: this._projectId, user_story_id: story.id })
       .then(issues => this._refreshIssuesTabLabel(issues.length))
@@ -592,6 +623,44 @@ export class UserStoryDetail {
     if (!tab || !listEl) return;
     const total = listEl.querySelectorAll('.usl-pl-item').length;
     tab.textContent = total === 0 ? "Criteria's" : `Criteria's (${total})`;
+  }
+
+  _refreshE2eTabLabel() {
+    if (!this._detailEl) return;
+    const tab    = this._detailEl.querySelector('[data-tab="e2e"]');
+    const listEl = this._detailEl.querySelector('#uslEditE2eList, #uslAddE2eList');
+    if (!tab || !listEl) return;
+    const total = listEl.querySelectorAll('.usl-pl-item').length;
+    const done  = listEl.querySelectorAll('.usl-pl-status--executed').length;
+    tab.textContent = total === 0 ? 'E2E Tests' : `E2E Tests (${done}/${total})`;
+  }
+
+  // ----------------------------------------------------------------
+  // E2E Tests CRUD section (stored as prompts with tag='e2e')
+  // ----------------------------------------------------------------
+  _bindE2eSection(container, userStoryId) {
+    const addBtn = container.querySelector('#uslAddE2eBtn, #uslEditE2eBtn');
+    if (!addBtn) return;
+    addBtn.addEventListener('click', () => {
+      const listEl = container.querySelector('#uslEditE2eList, #uslAddE2eList');
+      if (!listEl) return;
+      this._addPromptRow(listEl, userStoryId, null, { tag: 'e2e' });
+      this._refreshE2eTabLabel();
+    });
+  }
+
+  async _loadE2eTests(userStoryId) {
+    if (!userStoryId) return;
+    const [list, layers] = await Promise.all([
+      window.db.prompts.listByTag(userStoryId, 'e2e'),
+      window.db.projectLayers.list(this._projectId).catch(() => []),
+    ]);
+    this._layers = layers || [];
+    const listEl = this._detailEl?.querySelector('#uslEditE2eList, #uslAddE2eList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    list.forEach(p => this._addPromptRow(listEl, userStoryId, p, { tag: 'e2e' }));
+    this._refreshE2eTabLabel();
   }
 
   // ----------------------------------------------------------------
@@ -824,7 +893,9 @@ export class UserStoryDetail {
     });
   }
 
-  _addPromptRow(listEl, userStoryId, existing) {
+  _addPromptRow(listEl, userStoryId, existing, { tag = null } = {}) {
+    const rowTag    = tag ?? existing?.tag ?? null;
+    const isE2e     = rowTag === 'e2e';
     const layerId   = existing?.layer_id ?? null;
     const itemCount = listEl.querySelectorAll('.usl-pl-item').length;
     const isExecuted = !!existing?.is_executed;
@@ -832,7 +903,7 @@ export class UserStoryDetail {
     const _buildLabel = (promptText) => {
       const firstLine = (promptText || '').split('\n')[0].trim();
       const snippet = firstLine.length > 60 ? firstLine.slice(0, 60) + '…' : firstLine;
-      return snippet || `Prompt ${itemCount + 1}`;
+      return snippet || (isE2e ? `E2E Test ${itemCount + 1}` : `Prompt ${itemCount + 1}`);
     };
     const label = _buildLabel(existing?.prompt || '');
 
@@ -886,7 +957,7 @@ export class UserStoryDetail {
       <div class="usl-pl-item__body" hidden>
         ${layerSelectHtml}
         <div class="usl-pl-item__preview usl-expand-preview"></div>
-        <textarea class="usl-pl-item__textarea" hidden>${escHtml(existing?.prompt || '')}</textarea>
+        <textarea class="usl-pl-item__textarea" hidden placeholder="${isE2e ? 'Describe the E2E test scenario or write the Playwright/Cypress test script to generate…' : ''}">${escHtml(existing?.prompt || '')}</textarea>
       </div>
     `;
 
@@ -914,7 +985,7 @@ export class UserStoryDetail {
       item.classList.add('usl-pl-item--open');
       bodyEl.hidden = false;
       setTimeout(() => {
-        this._openExpandOverlay(taEl, 'Prompt', async () => { renderPreview(); await save(); }, true);
+        this._openExpandOverlay(taEl, isE2e ? 'E2E Test' : 'Prompt', async () => { renderPreview(); await save(); }, true);
       }, 0);
     }
 
@@ -945,7 +1016,7 @@ export class UserStoryDetail {
       if (item.dataset.rowId) {
         await window.db.prompts.update({ id: parseInt(item.dataset.rowId), prompt });
       } else if (userStoryId) {
-        const created = await window.db.prompts.create({ user_story_id: userStoryId, layer_id: layerVal, prompt });
+        const created = await window.db.prompts.create({ user_story_id: userStoryId, tag: rowTag, layer_id: layerVal, prompt });
         item.dataset.rowId = created.id;
       }
     };
@@ -1004,14 +1075,14 @@ export class UserStoryDetail {
       if (item.dataset.rowId) {
         await window.db.prompts.update({ id: parseInt(item.dataset.rowId), is_executed: nowExecuted ? 1 : 0 });
       }
-      this._refreshTasksTabLabel();
+      if (isE2e) this._refreshE2eTabLabel(); else this._refreshTasksTabLabel();
     });
 
     // Expand overlay
     item.querySelector('.usl-pl-item__btn--expand').addEventListener('click', async (e) => {
       e.stopPropagation();
       await save();
-      this._openExpandOverlay(taEl, 'Prompt', async () => { renderPreview(); await save(); }, true);
+      this._openExpandOverlay(taEl, isE2e ? 'E2E Test' : 'Prompt', async () => { renderPreview(); await save(); }, true);
     });
 
     // Delete
@@ -1021,7 +1092,7 @@ export class UserStoryDetail {
       if (!confirmed) return;
       if (item.dataset.rowId) await window.db.prompts.delete(parseInt(item.dataset.rowId));
       item.remove();
-      this._refreshTasksTabLabel();
+      if (isE2e) this._refreshE2eTabLabel(); else this._refreshTasksTabLabel();
       // Re-number remaining items
       listEl.querySelectorAll('.usl-pl-item').forEach((el, i) => {
         const ta = el.querySelector('.usl-pl-item__textarea');
