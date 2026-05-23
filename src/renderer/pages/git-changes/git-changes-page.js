@@ -12,6 +12,7 @@ export class GitChangesPage {
     this._files          = [];
     this._consoleRunning = false;
     this._qcmdModal      = null;
+    this._pendingCommits = 0;
   }
 
   // ----------------------------------------------------------------
@@ -156,6 +157,7 @@ export class GitChangesPage {
                   <path d="M8 1v4M8 11v4M1 8h4M11 8h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                 </svg>
                 Commit
+                <span class="git-page__commit-badge" id="gitCommitBadge" hidden></span>
               </button>
               <button class="git-page__qa-btn git-page__qa-btn--push" id="gitQaPush" title="git push">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -163,6 +165,7 @@ export class GitChangesPage {
                   <path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                 </svg>
                 Push
+                <span class="git-page__push-badge" id="gitPushBadge" hidden></span>
               </button>
               <button class="git-page__qa-btn" id="gitQaStatus" title="git status">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -415,6 +418,13 @@ export class GitChangesPage {
       if (runBtn)  { runBtn.disabled = false; runBtn.textContent = 'Run'; }
       if (killBtn) killBtn.disabled = true;
       if (input)   { input.disabled = false; input.focus(); }
+      // Refresh status + counts after commit or push
+      if (/\bgit\b.*\bcommit\b|\bgit\b.*\bpush\b/.test(cmd)) {
+        if (/\bgit\b.*\bcommit\b/.test(cmd)) {
+          this._loadStatus();   // reloads file list → updates commit badge
+        }
+        this._loadPendingCommits();
+      }
     });
 
     try {
@@ -474,6 +484,55 @@ export class GitChangesPage {
   }
 
   // ----------------------------------------------------------------
+  // Uncommitted files badge
+  // ----------------------------------------------------------------
+  _updateCommitBadge() {
+    const badge = this.container.querySelector('#gitCommitBadge');
+    if (!badge) return;
+    const count = this._files.length;
+    if (count > 0) {
+      badge.textContent = count;
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Pending (unpushed) commits count
+  // ----------------------------------------------------------------
+  async _loadPendingCommits() {
+    const cwd   = this._project?.project_path || '';
+    const badge = this.container.querySelector('#gitPushBadge');
+    if (!cwd || !badge) return;
+    try {
+      const r = await window.db.terminal.exec({
+        command: 'git rev-list --count @{u}..HEAD 2>&1',
+        cwd,
+      });
+      const raw   = (r.stdout || '').trim();
+      const count = parseInt(raw, 10);
+      if (!isNaN(count) && count > 0) {
+        const prev = this._pendingCommits;
+        this._pendingCommits = count;
+        badge.textContent = count;
+        badge.hidden = false;
+        // Flash the badge green when the count increases (new commit)
+        if (count > prev && prev !== 0) {
+          badge.classList.add('git-page__push-badge--new');
+          setTimeout(() => badge.classList.remove('git-page__push-badge--new'), 1200);
+        }
+      } else {
+        this._pendingCommits = 0;
+        badge.hidden = true;
+      }
+    } catch {
+      this._pendingCommits = 0;
+      if (badge) badge.hidden = true;
+    }
+  }
+
+  // ----------------------------------------------------------------
   // Git status
   // ----------------------------------------------------------------
   async _loadStatus() {
@@ -507,12 +566,16 @@ export class GitChangesPage {
           : `${this._files.length} changed file${this._files.length !== 1 ? 's' : ''}`;
       }
 
+      this._updateCommitBadge();
+
       if (this._files.length === 0) {
         if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
+        this._loadPendingCommits();
         return;
       }
 
       await this._renderAccordion();
+      this._loadPendingCommits();
     } catch {
       if (label) label.textContent = 'Not a git repository';
       if (wrap) wrap.innerHTML = `
