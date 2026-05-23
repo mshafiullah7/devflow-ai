@@ -1,6 +1,8 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { GitController } from '../../components/git/git-controller.js';
+import { ModelPicker } from '../../components/model-picker/model-picker.js';
+import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 
 function stripAnsi(str) {
   return str.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '').replace(/\x1B\][^\x07]*\x07/g, '');
@@ -85,6 +87,9 @@ export class TestRunnerPage {
     this._outputText    = '';
     this._activeEntry   = null; // command entry currently running
     this._history       = [];
+    this._modelCfg      = null;
+    this._picker        = null;
+    this._modelConfigsModal = null;
   }
 
   async mount() {
@@ -93,8 +98,24 @@ export class TestRunnerPage {
     applyStoredTheme();
 
     this._project = await window.db.projects.get(this._projectId);
+    const _mapping = await window.db.modelMapping.get('test-runner');
     this.container.innerHTML = this._template();
 
+    // Model picker
+    this._picker = new ModelPicker({
+      anchor:    this.container.querySelector('#trModelPicker'),
+      onSelect:  model => { this._modelCfg = model; },
+      initialId: _mapping?.model_config_id ?? null,
+    });
+    await this._picker.reload();
+
+    // Model configs modal
+    this._modelConfigsModal = new ModelConfigsModal({
+      onConfigsChanged: () => this._picker?.reload(),
+    });
+    this._modelConfigsModal.mount();
+    this.container.querySelector('#trBtnModelConfigs')
+      ?.addEventListener('click', () => this._modelConfigsModal.show());
 
     this._git = new GitController({
       getTermCwd:           () => this._project?.project_path || '',
@@ -127,7 +148,9 @@ export class TestRunnerPage {
     removeCss('pages/test-runner/test-runner-page.css');
     removeCss('pages/user-stories/user-stories.css');
     this._git?.stopPoll();
+    this._picker?.unmount();
     window.db.testRunner.removeListeners();
+    window.db.promptQueue.removeListeners();
     if (this._running) window.db.testRunner.kill();
   }
 
@@ -157,6 +180,16 @@ export class TestRunnerPage {
               </svg>
               <span class="project-page__folder-text" id="headerFolderText">Select folder</span>
             </div>
+          </div>
+          <div class="project-page__model-group tr-header__model" style="-webkit-app-region:no-drag;">
+            <div id="trModelPicker"></div>
+            <button class="project-page__model-cfg-btn" id="trBtnModelConfigs" title="Configure AI models">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
+                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
             <button class="project-page__git-btn" id="trBtnGit" title="Git changes">
@@ -219,13 +252,21 @@ export class TestRunnerPage {
             </span>
             <span class="tr-result tr-result--duration" id="trDuration" hidden></span>
             <span class="tr-result tr-result--exit" id="trExitCode" hidden></span>
-            <button class="tr-log-issue-btn" id="trLogIssueBtn" hidden>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M8 5v3M8 11h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              </svg>
-              Log as Issue
-            </button>
+            <div class="tr-results-actions" id="trResultsActions" hidden>
+              <button class="tr-fix-issue-btn" id="trFixIssueBtn">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M13 2l1 1-2 2-1-1 2-2zM2 14l3-1-2-2-1 3zM4 10l6-6 2 2-6 6-2-2z" fill="currentColor"/>
+                </svg>
+                Fix Issues
+              </button>
+              <button class="tr-log-issue-btn" id="trLogIssueBtn">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6"/>
+                  <path d="M8 5v3M8 11h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                </svg>
+                Log as Issue
+              </button>
+            </div>
           </div>
 
           <!-- Console + History split -->
@@ -477,9 +518,16 @@ export class TestRunnerPage {
     }
 
     const hasFailed = (results.failed !== null && results.failed > 0) || exitCode !== 0;
+    const actionsEl = this.container.querySelector('#trResultsActions');
+    if (actionsEl) actionsEl.hidden = !hasFailed;
+
+    const fixBtn = this.container.querySelector('#trFixIssueBtn');
+    if (fixBtn) {
+      fixBtn.onclick = () => this._fixIssues(this._outputText, exitCode);
+    }
+
     const logBtn = this.container.querySelector('#trLogIssueBtn');
     if (logBtn) {
-      logBtn.hidden = !hasFailed;
       logBtn.onclick = () => this._showLogIssueModal(results, exitCode);
     }
 
@@ -688,6 +736,190 @@ export class TestRunnerPage {
   }
 
   // ----------------------------------------------------------------
+  // Fix Issues — analyze console output with AI → Tasks Queue
+  // ----------------------------------------------------------------
+  async _fixIssues(outputText, exitCode) {
+    if (!this._modelCfg) {
+      this._showFixFeedback('Select a model from the header dropdown first.', false);
+      return;
+    }
+
+    const src = (outputText || '').trim();
+    if (!src) {
+      this._showFixFeedback('No test output to analyze.', false);
+      return;
+    }
+
+    // Find a button to show loading state (results bar or history btn)
+    const fixBtnBar  = this.container.querySelector('#trFixIssueBtn');
+    const fixBtnHist = this.container.querySelector('#trLastRunFixBtn');
+    const allFixBtns = [fixBtnBar, fixBtnHist].filter(Boolean);
+
+    const origInners = allFixBtns.map(b => b.innerHTML);
+    allFixBtns.forEach(b => { b.disabled = true; b.textContent = 'Analyzing…'; });
+
+    const restoreBtns = () => {
+      allFixBtns.forEach((b, i) => { b.disabled = false; b.innerHTML = origInners[i]; });
+    };
+
+    // Write the full output to a temp file so there is no size limit.
+    // CLI models (claude, gemini, etc.) are instructed to read the file directly.
+    // API / Ollama models receive the full text inline — the model's own context
+    // window is the only limit, not an artificial truncation on our end.
+    const tmpPath = await window.db.testRunner.saveTempOutput(src);
+    const isCli   = this._modelCfg?.type === 'cli';
+
+    const outputSection = isCli
+      ? `The full console output has been saved to this file — read it before answering:\n${tmpPath}`
+      : `Console output:\n${src}`;
+
+    const analysisPrompt =
+`You are a senior software engineer reviewing a test run that produced failures.
+Your job is to analyse each failed test and decide the correct remediation action,
+then produce a task that tells an AI coding agent exactly what to do.
+
+## Decision rules — apply in order
+
+1. **Fix the code** — the test describes valid, still-intended behaviour but the
+   implementation is broken or regressed. The agent should fix the production code
+   so the test passes. Do NOT modify the test.
+
+2. **Update the test** — the feature still exists but its contract or UI changed
+   intentionally (e.g. a selector, route, prop name, or response shape changed).
+   The agent should update the test to match the new behaviour. Do NOT change
+   production code.
+
+3. **Delete the test** — the feature or endpoint being tested has been removed
+   entirely from the codebase. The agent should delete the test (and the spec file
+   if it becomes empty). Do NOT add stubs or skips.
+
+4. **Skip / flag only** — the failure looks environment-specific, timing-related,
+   or intermittent (e.g. network timeout, port conflict). Mark the task title with
+   "[FLAKY]" and instruct the agent to mark the test as skipped with a comment
+   explaining why, rather than deleting or rewriting it.
+
+## Output format
+
+Output ONLY a raw JSON array — no explanation, no markdown, no code fences.
+The array must start with [ and end with ].
+
+Each item must have:
+- "title": short task title, e.g. "Fix login redirect test" or "Delete removed-feature spec"
+- "action": one of "fix_code" | "update_test" | "delete_test" | "skip_flaky"
+- "prompt": a self-contained prompt for an AI coding agent that includes:
+    • the exact test name and file path (if visible in the output)
+    • the verbatim error message or assertion failure
+    • which decision rule applies and why
+    • precise instructions: what to change, where, and what the correct behaviour is
+    • for "fix_code": describe the expected behaviour the test is asserting
+    • for "update_test": describe the new behaviour the test should assert
+    • for "delete_test": confirm the feature is gone and list files/blocks to remove
+    • for "skip_flaky": explain the environmental cause and the skip annotation to add
+
+${outputSection}`;
+
+    let accumulated = '';
+
+    const cleanup = () => {
+      window.db.promptQueue.removeListeners();
+      restoreBtns();
+    };
+
+    window.db.promptQueue.removeListeners();
+
+    window.db.promptQueue.onData(({ text }) => { accumulated += text; });
+
+    window.db.promptQueue.onDone(async ({ exitCode: code }) => {
+      cleanup();
+
+      // Extract JSON array from response
+      let tasks = [];
+      try {
+        const match = accumulated.match(/\[[\s\S]*\]/);
+        if (match) tasks = JSON.parse(match[0]);
+      } catch (err) {
+        console.error('[TestRunner] Failed to parse AI fix-tasks response:', err);
+      }
+
+      if (!Array.isArray(tasks) || tasks.length === 0) {
+        this._showFixFeedback('AI could not identify fixable failures. Try again.', false);
+        return;
+      }
+
+      const ACTION_TAG = {
+        fix_code:    'Fix Code',
+        update_test: 'Update Test',
+        delete_test: 'Delete Test',
+        skip_flaky:  'Flaky Test',
+      };
+
+      let created = 0;
+      for (const task of tasks) {
+        const promptText = (task.prompt || task.prompt_text || '').trim();
+        const title      = (task.title || '').trim();
+        if (!promptText) continue;
+        const tag = ACTION_TAG[task.action] || 'Test Fix';
+        await window.db.promptQueue.add({
+          project_id:    this._projectId,
+          user_story_id: null,
+          story_title:   title || null,
+          prompt_id:     null,
+          tag,
+          prompt_text:   promptText,
+          layer_id:      null,
+        });
+        created++;
+      }
+
+      if (created > 0) {
+        this._showFixFeedback(
+          `${created} fix task${created > 1 ? 's' : ''} added to Tasks Queue ✓`,
+          true,
+        );
+      } else {
+        this._showFixFeedback('No actionable tasks found in AI response.', false);
+      }
+    });
+
+    try {
+      window.db.promptQueue.run({
+        messages:    [{ role: 'user', content: analysisPrompt }],
+        modelConfig: this._modelCfg,
+        cwd:         this._project?.project_path || undefined,
+        itemLabel:   'Test Analysis',
+        projectName: this._project?.name || '',
+      });
+    } catch (err) {
+      cleanup();
+      this._showFixFeedback(`Failed to start analysis: ${err.message}`, false);
+    }
+  }
+
+  _showFixFeedback(message, success) {
+    // Remove any old feedback
+    document.querySelectorAll('.tr-fix-feedback').forEach(el => el.remove());
+
+    // Try to show inside the results bar; fall back to the last-run header
+    const bar      = this.container.querySelector('#trResultsBar');
+    const actionsEl = this.container.querySelector('#trResultsActions');
+    const parent   = (bar && !bar.hidden) ? bar : this.container.querySelector('.tr-last-run-header');
+    if (!parent) return;
+
+    const el = document.createElement('span');
+    el.className  = `tr-fix-feedback tr-result tr-result--${success ? 'pass' : 'fail'}`;
+    el.textContent = message;
+
+    // Insert before the actions group in the bar, or append elsewhere
+    if (actionsEl && parent === bar) {
+      bar.insertBefore(el, actionsEl);
+    } else {
+      parent.appendChild(el);
+    }
+
+    setTimeout(() => el.remove(), 5000);
+  }
+
+  // ----------------------------------------------------------------
   // History — save & render
   // ----------------------------------------------------------------
   async _saveRun(exitCode, results) {
@@ -721,6 +953,10 @@ export class TestRunnerPage {
     const [last, ...older] = this._history;
 
     lastRunEl.innerHTML = this._lastRunSectionHtml(last);
+    const histFixBtn = lastRunEl.querySelector('#trLastRunFixBtn');
+    if (histFixBtn) {
+      histFixBtn.addEventListener('click', () => this._fixIssues(last.output || '', last.exit_code));
+    }
     const histIssueBtn = lastRunEl.querySelector('#trLastRunIssueBtn');
     if (histIssueBtn) {
       histIssueBtn.addEventListener('click', () => this._showLogIssueModalFromHistory(last));
@@ -740,19 +976,27 @@ export class TestRunnerPage {
     const failed   = r.failed ?? null;
     const isFailed = r.exit_code !== 0 || (failed !== null && failed > 0);
     const outputText = r.output ? escHtml(r.output) : '<span class="tr-output-none">No output captured</span>';
-    const issueBtn = isFailed
-      ? `<button class="tr-log-issue-btn" id="trLastRunIssueBtn" title="Log as issue">
-           <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-             <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
-             <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-           </svg>
-           Log Issue
-         </button>`
+    const histBtns = isFailed
+      ? `<div class="tr-last-run-actions">
+           <button class="tr-fix-issue-btn tr-fix-issue-btn--sm" id="trLastRunFixBtn" title="Fix issues with AI">
+             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+               <path d="M13 2l1 1-2 2-1-1 2-2zM2 14l3-1-2-2-1 3zM4 10l6-6 2 2-6 6-2-2z" fill="currentColor"/>
+             </svg>
+             Fix Issues
+           </button>
+           <button class="tr-log-issue-btn" id="trLastRunIssueBtn" title="Log as issue">
+             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+               <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+               <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+             </svg>
+             Log Issue
+           </button>
+         </div>`
       : '';
     return `
       <div class="tr-last-run-header">
         <div class="tr-history-section-label">Last Run</div>
-        ${issueBtn}
+        ${histBtns}
       </div>
       ${this._historyCardHtml(r)}
       <div class="tr-last-run-output">

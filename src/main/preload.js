@@ -140,6 +140,7 @@ contextBridge.exposeInMainWorld('db', {
     detect:          (projectPath) => invoke('testRunner:detect', projectPath),
     run:             (data)        => invoke('testRunner:run', data),
     kill:            ()            => invoke('testRunner:kill'),
+    saveTempOutput:  (text)        => invoke('testRunner:saveTempOutput', text),
     onData:          (cb)          => ipcRenderer.on('testRunner:data', (_e, p) => cb(p)),
     onDone:          (cb)          => ipcRenderer.on('testRunner:done', (_e, p) => cb(p)),
     removeListeners: ()            => {

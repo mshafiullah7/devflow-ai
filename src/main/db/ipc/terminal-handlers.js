@@ -146,6 +146,17 @@ function registerTerminalHandlers() {
   safeHandle('testRunner:kill', () => {
     if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
   });
+
+  // Write the full console output to a temp file and return the path.
+  // Used by the "Fix Issues" feature so CLI models can read arbitrarily large
+  // output without any in-prompt truncation.
+  safeHandle('testRunner:saveTempOutput', (_e, text) => {
+    const dir  = path.join(os.tmpdir(), 'devflow-test-output');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `run-${Date.now()}.txt`);
+    fs.writeFileSync(file, text, 'utf8');
+    return file;
+  });
 }
 
 module.exports = { registerTerminalHandlers };

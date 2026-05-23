@@ -302,10 +302,49 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Results-bar action buttons group                                     */
+/* ------------------------------------------------------------------ */
+.tr-results-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+/* Fix Issues button */
+.tr-fix-issue-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--accent, #6366f1);
+  border-radius: var(--radius-sm);
+  color: var(--accent, #6366f1);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  -webkit-app-region: no-drag;
+}
+.tr-fix-issue-btn:hover:not(:disabled) {
+  background: var(--accent, #6366f1);
+  color: #fff;
+}
+.tr-fix-issue-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.tr-fix-issue-btn--sm {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
 /* Log as Issue button (in results bar)                                 */
 /* ------------------------------------------------------------------ */
 .tr-log-issue-btn {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -323,6 +362,15 @@
 .tr-log-issue-btn:hover {
   background: var(--danger, #ef4444);
   color: #fff;
+}
+
+/* Last-run header button group */
+.tr-last-run-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
 }
 
 /* ------------------------------------------------------------------ */
