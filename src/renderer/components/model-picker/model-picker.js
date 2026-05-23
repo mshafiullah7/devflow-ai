@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 
-const STORAGE_KEY = 'devflow-selected-model';
-const TYPE_LABEL  = { cli: 'CLI', api: 'API', ollama: 'LOCAL' };
+const TYPE_LABEL = { cli: 'CLI', api: 'API', ollama: 'LOCAL' };
 
 export class ModelPicker {
   constructor({ anchor, onSelect, initialId } = {}) {
@@ -20,8 +19,8 @@ export class ModelPicker {
 
   async reload() {
     this._models   = await window.db.modelConfigs.list();
-    const storedId = Number(localStorage.getItem(STORAGE_KEY)) || null;
-    const keep     = this._models.find(m => m.id === (this._selectedId || storedId));
+    // Selection priority: initialId from Settings model mapping → is_default → first model
+    const keep     = this._models.find(m => m.id === this._selectedId);
     const fallback = this._models.find(m => m.is_default) || this._models[0] || null;
     const target   = keep || fallback;
     if (target) this._selectedId = target.id;
@@ -115,7 +114,6 @@ export class ModelPicker {
     const model = this._models.find(m => m.id === id);
     if (!model) return;
     this._selectedId = id;
-    localStorage.setItem(STORAGE_KEY, id);
     this._open = false;
     document.removeEventListener('click', this._handleOutside, true);
     this._render();

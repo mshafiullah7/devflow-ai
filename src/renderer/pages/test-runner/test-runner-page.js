@@ -102,7 +102,7 @@ export class TestRunnerPage {
     const _mapping = await window.db.modelMapping.get('test-runner');
     this.container.innerHTML = this._template();
 
-    // Model picker
+    // Model picker — initialId comes from Settings model mapping for 'test-runner'
     this._picker = new ModelPicker({
       anchor:    this.container.querySelector('#trModelPicker'),
       onSelect:  model => { this._modelCfg = model; },
@@ -258,7 +258,7 @@ export class TestRunnerPage {
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                   <path d="M13 2l1 1-2 2-1-1 2-2zM2 14l3-1-2-2-1 3zM4 10l6-6 2 2-6 6-2-2z" fill="currentColor"/>
                 </svg>
-                Fix Issues
+                Add to Queue
               </button>
               <button class="tr-log-issue-btn" id="trLogIssueBtn">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -739,6 +739,75 @@ export class TestRunnerPage {
   // ----------------------------------------------------------------
   // Fix Issues — analyze console output with AI → Tasks Queue
   // ----------------------------------------------------------------
+
+  /**
+   * Robustly extract a JSON array of tasks from whatever the model returned.
+   * Handles: clean JSON, markdown code fences, JSON buried inside prose,
+   * ANSI escape codes from CLI models, and multiple candidate arrays
+   * (returns the last non-empty one).
+   */
+  _parseTasksJson(raw) {
+    if (!raw) return null;
+
+    // 1. Strip ANSI escape codes that CLI tools may emit
+    const text = raw
+      .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+      .replace(/\x1B\][^\x07]*\x07/g, '')
+      .trim();
+
+    // 2. Direct parse — model obeyed the instruction perfectly
+    if (text.startsWith('[')) {
+      try {
+        const r = JSON.parse(text);
+        if (Array.isArray(r) && r.length > 0) return r;
+      } catch (_) {}
+    }
+
+    // 3. Markdown code fence: ```json … ``` or ``` … ```
+    const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+    if (fenceMatch) {
+      try {
+        const r = JSON.parse(fenceMatch[1].trim());
+        if (Array.isArray(r) && r.length > 0) return r;
+      } catch (_) {}
+    }
+
+    // 4. Balanced-bracket scan — find every top-level [ … ] in the text and
+    //    return the last valid array with at least one entry.
+    //    This handles models that prepend/append explanatory prose.
+    let best   = null;
+    let depth  = 0;
+    let start  = -1;
+    let inStr  = false;
+    let escape = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+
+      if (escape)              { escape = false; continue; }
+      if (c === '\\' && inStr) { escape = true;  continue; }
+      if (c === '"')           { inStr = !inStr;  continue; }
+      if (inStr)               continue;
+
+      if (c === '[') {
+        if (depth === 0) start = i;
+        depth++;
+      } else if (c === ']') {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          try {
+            const candidate = text.slice(start, i + 1);
+            const parsed    = JSON.parse(candidate);
+            if (Array.isArray(parsed) && parsed.length > 0) best = parsed;
+          } catch (_) {}
+          start = -1;
+        }
+      }
+    }
+
+    return best;
+  }
+
   _fixQueueKey(runId) {
     return `devflow-tr-fix-queued-${this._projectId}-${runId}`;
   }
@@ -750,208 +819,206 @@ export class TestRunnerPage {
       return;
     }
 
-    // ── Guard: no model selected ─────────────────────────────────────
-    if (!this._modelCfg) {
-      this._showFixFeedback('Select a model from the header dropdown first.', false);
-      return;
-    }
-
     const src = (outputText || '').trim();
     if (!src) {
       this._showFixFeedback('No test output to analyze.', false);
       return;
     }
 
-    // ── Loading state ────────────────────────────────────────────────
-    const fixBtnBar  = this.container.querySelector('#trFixIssueBtn');
-    const fixBtnHist = this.container.querySelector('#trLastRunFixBtn');
-    const allFixBtns = [fixBtnBar, fixBtnHist].filter(Boolean);
-    const origInners = allFixBtns.map(b => b.innerHTML);
-    allFixBtns.forEach(b => { b.disabled = true; b.textContent = 'Analyzing…'; });
-    const restoreBtns = () => allFixBtns.forEach((b, i) => { b.disabled = false; b.innerHTML = origInners[i]; });
-
-    // ── Write output to temp file (no size limit) ────────────────────
-    const tmpPath = await window.db.testRunner.saveTempOutput(src);
-    const isCli   = this._modelCfg?.type === 'cli';
-    const outputSection = isCli
-      ? `The full console output has been saved to this file — read it before answering:\n${tmpPath}`
-      : `Console output:\n${src}`;
-
-    const analysisPrompt =
-`You are a senior software engineer reviewing a test run that produced failures.
-Your job is to analyse each failed test and decide the correct remediation action,
-then produce a task that tells an AI coding agent exactly what to do.
-
-## Decision rules — apply in order
-
-1. **Fix the code** — the test describes valid, still-intended behaviour but the
-   implementation is broken or regressed. The agent should fix the production code
-   so the test passes. Do NOT modify the test.
-
-2. **Update the test** — the feature still exists but its contract or UI changed
-   intentionally (e.g. a selector, route, prop name, or response shape changed).
-   The agent should update the test to match the new behaviour. Do NOT change
-   production code.
-
-3. **Delete the test** — the feature or endpoint being tested has been removed
-   entirely from the codebase. The agent should delete the test (and the spec file
-   if it becomes empty). Do NOT add stubs or skips.
-
-4. **Skip / flag only** — the failure looks environment-specific, timing-related,
-   or intermittent (e.g. network timeout, port conflict). Mark the task title with
-   "[FLAKY]" and instruct the agent to mark the test as skipped with a comment
-   explaining why, rather than deleting or rewriting it.
-
-## Output format
-
-Output ONLY a raw JSON array — no explanation, no markdown, no code fences.
-The array must start with [ and end with ].
-
-Each item must have:
-- "title": short task title, e.g. "Fix login redirect test" or "Delete removed-feature spec"
-- "action": one of "fix_code" | "update_test" | "delete_test" | "skip_flaky"
-- "prompt": a self-contained prompt for an AI coding agent that includes:
-    • the exact test name and file path (if visible in the output)
-    • the verbatim error message or assertion failure
-    • which decision rule applies and why
-    • precise instructions: what to change, where, and what the correct behaviour is
-    • for "fix_code": describe the expected behaviour the test is asserting
-    • for "update_test": describe the new behaviour the test should assert
-    • for "delete_test": confirm the feature is gone and list files/blocks to remove
-    • for "skip_flaky": explain the environmental cause and the skip annotation to add
-
-${outputSection}`;
-
-    let accumulated = '';
-    const cleanup = () => { window.db.promptQueue.removeListeners(); restoreBtns(); };
-
-    window.db.promptQueue.removeListeners();
-    window.db.promptQueue.onData(({ text }) => { accumulated += text; });
-
-    window.db.promptQueue.onDone(async () => {
-      cleanup();
-
-      let tasks = [];
-      try {
-        const match = accumulated.match(/\[[\s\S]*\]/);
-        if (match) tasks = JSON.parse(match[0]);
-      } catch (err) {
-        console.error('[TestRunner] Failed to parse AI fix-tasks response:', err);
-      }
-
-      if (!Array.isArray(tasks) || tasks.length === 0) {
-        this._showFixFeedback('AI could not identify fixable failures. Try again.', false);
-        return;
-      }
-
-      // Show confirmation modal — task creation happens on confirm
-      this._showFixConfirmModal(tasks, runId);
-    });
-
-    try {
-      window.db.promptQueue.run({
-        messages:    [{ role: 'user', content: analysisPrompt }],
-        modelConfig: this._modelCfg,
-        cwd:         this._project?.project_path || undefined,
-        itemLabel:   'Test Analysis',
-        projectName: this._project?.name || '',
-      });
-    } catch (err) {
-      cleanup();
-      this._showFixFeedback(`Failed to start analysis: ${err.message}`, false);
-    }
+    this._showAddToQueueModal(src, runId);
   }
 
   // ----------------------------------------------------------------
-  // Fix Issues — confirmation modal
+  // Add to Queue — extract failures from raw output, no model call
   // ----------------------------------------------------------------
-  _showFixConfirmModal(tasks, runId) {
-    const ACTION_META = {
-      fix_code:    { label: 'Fix Code',    cls: 'tr-fix-badge--code'   },
-      update_test: { label: 'Update Test', cls: 'tr-fix-badge--update' },
-      delete_test: { label: 'Delete Test', cls: 'tr-fix-badge--delete' },
-      skip_flaky:  { label: 'Flaky',       cls: 'tr-fix-badge--flaky'  },
-    };
-
-    const taskRows = tasks.map((t, i) => {
-      const meta  = ACTION_META[t.action] || { label: 'Fix', cls: 'tr-fix-badge--code' };
-      const title = escHtml((t.title || `Task ${i + 1}`).trim());
-      return `
-        <div class="tr-fc-row">
-          <span class="tr-fix-badge ${meta.cls}">${meta.label}</span>
-          <span class="tr-fc-row__title">${title}</span>
-        </div>`;
-    }).join('');
-
-    const n = tasks.length;
-
+  _showAddToQueueModal(rawOutput, runId) {
     const overlay = document.createElement('div');
     overlay.className = 'tr-modal-overlay';
     overlay.innerHTML = `
-      <div class="tr-modal tr-modal--sm">
+      <div class="tr-modal tr-modal--aq">
         <div class="tr-modal__header">
-          <h2 class="tr-modal__title">
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="flex-shrink:0">
-              <path d="M13 2l1 1-2 2-1-1 2-2zM2 14l3-1-2-2-1 3zM4 10l6-6 2 2-6 6-2-2z" fill="currentColor"/>
-            </svg>
-            Create Fix Tasks
-          </h2>
-          <button class="tr-modal__close" id="trFcClose" aria-label="Close">&times;</button>
+          <h2 class="tr-modal__title">Add to Queue</h2>
+          <span id="trAqStatus" class="tr-aq-status"></span>
+          <button class="tr-modal__close" id="trAqClose" aria-label="Close">&times;</button>
         </div>
-        <div class="tr-modal__body">
-          <p class="tr-fc-summary">
-            <strong>${n} task${n > 1 ? 's' : ''}</strong> will be added to
-            <strong>Tasks Queue</strong> for the failed test cases:
-          </p>
-          <div class="tr-fc-list">${taskRows}</div>
+        <div class="tr-modal__body tr-aq-body">
+          <textarea class="tr-aq-textarea" id="trAqText" spellcheck="false"></textarea>
         </div>
         <div class="tr-modal__footer">
-          <button class="tr-modal__btn tr-modal__btn--cancel" id="trFcCancel">Cancel</button>
-          <button class="tr-modal__btn tr-modal__btn--save"   id="trFcConfirm">
-            Add ${n} Task${n > 1 ? 's' : ''} to Queue
-          </button>
+          <span class="tr-aq-tokens" id="trAqTokens"></span>
+          <button class="tr-modal__btn tr-modal__btn--cancel"  id="trAqCancel">Cancel</button>
+          <button class="tr-modal__btn tr-modal__btn--extract" id="trAqExtract">Extract</button>
+          <button class="tr-modal__btn tr-modal__btn--save"    id="trAqSend" disabled>Send to Tasks</button>
         </div>
       </div>
     `;
 
     document.body.appendChild(overlay);
+
+    const textEl     = overlay.querySelector('#trAqText');
+    const statusEl   = overlay.querySelector('#trAqStatus');
+    const extractBtn = overlay.querySelector('#trAqExtract');
+    const sendBtn    = overlay.querySelector('#trAqSend');
+    const tokensEl   = overlay.querySelector('#trAqTokens');
+
+    // Live token estimator — ~4 chars/token is a reliable approximation for
+    // mixed code/prose. No AI call needed; updates on every textarea change.
+    const _updateTokens = (text) => {
+      if (!tokensEl) return;
+      const n = this._estimateTokens(text);
+      tokensEl.textContent = `~${n.toLocaleString()} tokens`;
+    };
+    textEl.addEventListener('input', () => _updateTokens(textEl.value));
+
+    // ── Build prompt on open so the user can review / edit it ───────────
+    // Pre-filter: extract only error sections, drop the rest of the console output
+    const _initialFailures = this._extractTestFailures(rawOutput);
+    const _filteredText    = _initialFailures.length
+      ? _initialFailures.map((f, i) => `[${i + 1}] ${f.name}\n${f.body}`).join('\n\n')
+      : rawOutput.slice(-4000);
+
+    const _buildPrompt = (failures) =>
+`You are a test failure reporter for a software project queue system.
+
+Below are pre-extracted test failure entries. Each has a name, file location, error details, and context already identified.
+
+Your job is to clean and optimize each entry so it is concise and clear for a developer reading the queue. Remove noise (raw stack frames, repeated boilerplate) but keep all information needed to understand what failed.
+
+Do NOT suggest solutions, fixes, or code changes. Only present what went wrong.
+
+Output rules:
+- Separate each failure with a line containing exactly "---" on its own line
+- Start each failure with the test name on its own first line
+- Keep: test name, file:line, error message, expected vs received, failing assertion line, relevant context (locators, selectors, timeouts)
+
+Failures to process:
+${failures}`;
+
+    textEl.value = _buildPrompt(_filteredText);
+    _updateTokens(textEl.value);
+
+    // Helper: render grouped results into the textarea and refresh token count
+    const _showGrouped = (grouped) => {
+      textEl.value = grouped.map(g =>
+        `════ ${g._file}  [${g._count} failure${g._count > 1 ? 's' : ''}] ════\n\n${g.body}`
+      ).join('\n\n' + '─'.repeat(60) + '\n\n');
+      textEl.scrollTop = 0;
+      _updateTokens(textEl.value);
+    };
+
     const close = () => overlay.remove();
-    overlay.querySelector('#trFcClose').addEventListener('click', close);
-    overlay.querySelector('#trFcCancel').addEventListener('click', close);
+    overlay.querySelector('#trAqClose').addEventListener('click', close);
+    overlay.querySelector('#trAqCancel').addEventListener('click', close);
 
-    overlay.querySelector('#trFcConfirm').addEventListener('click', async () => {
-      const confirmBtn = overlay.querySelector('#trFcConfirm');
-      confirmBtn.disabled    = true;
-      confirmBtn.textContent = 'Adding…';
+    let extractedFailures = null;
 
-      const ACTION_TAG = {
-        fix_code:    'Fix Code',
-        update_test: 'Update Test',
-        delete_test: 'Delete Test',
-        skip_flaky:  'Flaky Test',
-      };
+    // ── Extract — AI-assisted (streams into textarea) or regex fallback ──
+    extractBtn.addEventListener('click', () => {
+      const cfg = this._modelCfg;
+
+      // ── Fallback: no model selected → group and display ──────────────
+      if (!cfg) {
+        if (!_initialFailures.length) {
+          statusEl.textContent = '✗ No failures detected — check the output or select a model';
+          statusEl.className   = 'tr-aq-status tr-aq-status--err';
+          return;
+        }
+        const grouped    = this._groupFailuresByFile(_initialFailures);
+        extractedFailures = grouped;
+        _showGrouped(grouped);
+        const totalTests = _initialFailures.length;
+        const totalFiles = grouped.length;
+        statusEl.textContent = totalFiles === 1
+          ? `✓ ${totalTests} failure${totalTests > 1 ? 's' : ''} in 1 file`
+          : `✓ ${totalTests} failures across ${totalFiles} files`;
+        statusEl.className  = 'tr-aq-status tr-aq-status--ok';
+        sendBtn.disabled    = false;
+        sendBtn.textContent = `Send ${totalFiles} task${totalFiles > 1 ? 's' : ''} to Queue`;
+        return;
+      }
+
+      // ── AI-based extraction ───────────────────────────────────────────
+      extractBtn.disabled    = true;
+      extractBtn.textContent = 'Analyzing…';
+      statusEl.textContent   = '⏳ Analyzing with AI…';
+      statusEl.className     = 'tr-aq-status';
+
+      // Send whatever is in the textarea — the user may have edited the prompt
+      const fullPrompt = textEl.value;
+      textEl.value     = '';
+
+      let aiOutput = '';
+      window.app.chat.offAll();
+      window.app.chat.onToken(({ text }) => {
+        aiOutput     += text;
+        textEl.value  = aiOutput;
+        textEl.scrollTop = textEl.scrollHeight;
+        _updateTokens(aiOutput);
+      });
+      window.app.chat.onDone(() => {
+        window.app.chat.offAll();
+        extractBtn.disabled    = false;
+        extractBtn.textContent = 'Extract';
+
+        // Parse: split on "---" separators → one { name, body } per failure
+        const sections = aiOutput
+          .split(/\n---\n/)
+          .map(s => s.trim())
+          .filter(Boolean);
+
+        if (!sections.length) {
+          statusEl.textContent = '✗ No failures detected in the output';
+          statusEl.className   = 'tr-aq-status tr-aq-status--err';
+          return;
+        }
+
+        const rawFailures = sections.map(sec => {
+          const lines = sec.split('\n');
+          const name  = lines[0].replace(/^\[?\d+[\].)]\s*/, '').trim();
+          const body  = lines.slice(1).join('\n').trim();
+          return { name, body };
+        });
+
+        // Group by file and update textarea so the user sees the final grouped result
+        const grouped    = this._groupFailuresByFile(rawFailures);
+        extractedFailures = grouped;
+        _showGrouped(grouped);
+
+        const totalTests = rawFailures.length;
+        const totalFiles = grouped.length;
+        statusEl.textContent = totalFiles === 1
+          ? `✓ ${totalTests} failure${totalTests > 1 ? 's' : ''} in 1 file`
+          : `✓ ${totalTests} failures across ${totalFiles} files`;
+        statusEl.className  = 'tr-aq-status tr-aq-status--ok';
+        sendBtn.disabled    = false;
+        sendBtn.textContent = `Send ${totalFiles} task${totalFiles > 1 ? 's' : ''} to Queue`;
+      });
+
+      window.app.chat.generate({ prompt: fullPrompt, model: cfg });
+    });
+
+    // ── Send to Tasks ─────────────────────────────────────────────────
+    sendBtn.addEventListener('click', async () => {
+      if (!extractedFailures || !extractedFailures.length) return;
+      sendBtn.disabled    = true;
+      sendBtn.textContent = 'Adding…';
 
       let created = 0;
-      for (const task of tasks) {
-        const promptText = (task.prompt || task.prompt_text || '').trim();
-        const title      = (task.title || '').trim();
-        if (!promptText) continue;
+      for (const f of extractedFailures) {
         await window.db.promptQueue.add({
           project_id:    this._projectId,
           user_story_id: null,
-          story_title:   title || null,
+          story_title:   f.name,
           prompt_id:     null,
-          tag:           ACTION_TAG[task.action] || 'Test Fix',
-          prompt_text:   promptText,
+          tag:           'Test Fix',
+          prompt_text:   f.body,
           layer_id:      null,
         });
         created++;
       }
 
-      close();
-
-      // Mark this run as queued so clicking Fix Issues again shows the warning
       if (runId) localStorage.setItem(this._fixQueueKey(runId), '1');
+      close();
 
       if (created > 0) {
         this._showFixFeedback(
@@ -960,6 +1027,151 @@ ${outputSection}`;
         );
       }
     });
+  }
+
+  // ----------------------------------------------------------------
+  // Rough token estimator — no AI call required.
+  // Uses the standard ~4 chars/token heuristic which holds well for
+  // mixed English prose + code (Anthropic models use cl100k-style BPE).
+  // ----------------------------------------------------------------
+  _estimateTokens(text) {
+    if (!text) return 0;
+    return Math.ceil(text.length / 4);
+  }
+
+  // ----------------------------------------------------------------
+  // Group flat failures by source file → one queue task per file
+  // Input:  [{ name, body }]  (raw per-test failures)
+  // Output: [{ name, body, _file, _count }]  (one entry per file)
+  // ----------------------------------------------------------------
+  _groupFailuresByFile(rawFailures) {
+    const getFile = ({ name, body }) => {
+      const text = `${name}\n${body}`;
+      // "File:  path/to/foo.spec.js:42" (regex extractor format)
+      const fm = body.match(/^File:\s+([\S]+)/m);
+      if (fm) return fm[1].replace(/:\d+.*$/, '').trim();
+      // Bare path on its own line: tests\e2e\foo.spec.js:356:1
+      const pm = text.match(/((?:[\w.-]+[/\\])*[\w.-]+\.(?:spec|test)\.\w+)/i);
+      if (pm) return pm[1].replace(/:\d+.*$/, '').trim();
+      return '__unknown__';
+    };
+
+    const fileMap = new Map();
+    for (const f of rawFailures) {
+      const file = getFile(f);
+      if (!fileMap.has(file)) fileMap.set(file, { file, failures: [] });
+      fileMap.get(file).failures.push(f);
+    }
+
+    return [...fileMap.values()].map(({ file, failures }) => {
+      const shortName = file === '__unknown__' ? 'unknown file' : file.split(/[/\\]/).pop();
+      const title     = `Fix failing tests — ${shortName}`;
+      const body      = [
+        `File: ${file}`,
+        '',
+        ...failures.map((f, i) => `[${i + 1}] ${f.name}\n${f.body}`),
+      ].join('\n\n');
+      return { name: title, body, _file: file, _count: failures.length };
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Test failure parser — Playwright, Jest, Cypress
+  // Returns [{ name, body }] — one entry per failed test
+  // ----------------------------------------------------------------
+  _extractTestFailures(raw) {
+    if (!raw) return [];
+
+    // Strip ANSI escape codes
+    const text = raw
+      .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+      .replace(/\x1B\][^\x07]*\x07/g, '');
+
+    const failures = [];
+
+    // ── Playwright ────────────────────────────────────────────────────
+    // Header line: "  N) path/file.js:line:col › Test name ──────"
+    const pwSections = text.split(/\n(?=\s{0,6}\d+\)\s+\S)/);
+    for (const sec of pwSections) {
+      const hdr = sec.match(/^\s{0,6}(\d+)\)\s+(.+?):(\d+)(?::\d+)?\s+›\s+(.+?)(?:\s*─+)?\s*$/m);
+      if (!hdr) continue;
+
+      const [, , filePath, line, testName] = hdr;
+
+      const errorMsg  = (sec.match(/^\s+Error:\s+(.+)/m)  || [])[1]?.trim() || '';
+      const locator   = (sec.match(/^\s+Locator:\s+(.+)/m)|| [])[1]?.trim() || '';
+      const expected  = (sec.match(/^\s+Expected:\s+(.+)/m)||[])[1]?.trim() || '';
+      const received  = (sec.match(/^\s+Received:\s+(.+)/m)||[])[1]?.trim() || '';
+      // The assertion line marked with ">"
+      const codeLine  = (sec.match(/^\s*>\s+\d+\s+\|\s+(.+)/m)||[])[1]?.trim() || '';
+
+      const parts = [
+        `File:     ${filePath}:${line}`,
+        errorMsg  && `Error:    ${errorMsg}`,
+        locator   && `Locator:  ${locator}`,
+        expected  && `Expected: ${expected}`,
+        received  && `Received: ${received}`,
+        codeLine  && `Line:     ${codeLine}`,
+      ].filter(Boolean);
+
+      failures.push({ name: testName.trim(), body: parts.join('\n') });
+    }
+
+    if (failures.length) return failures;
+
+    // ── Jest ──────────────────────────────────────────────────────────
+    // Header line: "● Test suite name > test name"  or  "● test name"
+    const jestSections = text.split(/\n(?=\s*●\s+)/);
+    for (const sec of jestSections) {
+      const hdr = sec.match(/^\s*●\s+(.+)/);
+      if (!hdr) continue;
+
+      const testName  = hdr[1].trim();
+      const errorMsg  = (sec.match(/^\s+(expect\(.+\)|Error:.+|Received:.+)/m)||[])[1]?.trim() || '';
+      const expected  = (sec.match(/Expected[:\s]+(.+)/m)||[])[1]?.trim() || '';
+      const received  = (sec.match(/Received[:\s]+(.+)/m)||[])[1]?.trim() || '';
+      const fileMatch = sec.match(/at .+\((.+\.(?:js|ts|jsx|tsx)):(\d+):\d+\)/);
+      const fileLine  = fileMatch ? `${fileMatch[1]}:${fileMatch[2]}` : '';
+      const codeLine  = (sec.match(/^\s*>\s+\d+\s+\|\s+(.+)/m)||[])[1]?.trim() || '';
+
+      const parts = [
+        fileLine  && `File:     ${fileLine}`,
+        errorMsg  && `Error:    ${errorMsg}`,
+        expected  && `Expected: ${expected}`,
+        received  && `Received: ${received}`,
+        codeLine  && `Line:     ${codeLine}`,
+      ].filter(Boolean);
+
+      if (!parts.length) continue;
+      failures.push({ name: testName, body: parts.join('\n') });
+    }
+
+    if (failures.length) return failures;
+
+    // ── Cypress ───────────────────────────────────────────────────────
+    // Header: "  N) Suite: test name"
+    const cypSections = text.split(/\n(?=\s+\d+\)\s+)/);
+    for (const sec of cypSections) {
+      const hdr = sec.match(/^\s+(\d+)\)\s+(.+)/);
+      if (!hdr) continue;
+
+      const testName = hdr[2].trim();
+      const errorMsg = (sec.match(/AssertionError[:\s]+(.+)/m)||[])[1]?.trim() ||
+                       (sec.match(/Error[:\s]+(.+)/m)          ||[])[1]?.trim() || '';
+      const fileLine = (sec.match(/at .+\((.+\.(?:js|ts)):(\d+):\d+\)/)||[])[1]
+                     ? `${(sec.match(/at .+\((.+\.(?:js|ts)):(\d+):\d+\)/)||[])[1]}:${(sec.match(/at .+\((.+\.(?:js|ts)):(\d+):\d+\)/)||[])[2]}`
+                     : '';
+
+      const parts = [
+        fileLine  && `File:  ${fileLine}`,
+        errorMsg  && `Error: ${errorMsg}`,
+      ].filter(Boolean);
+
+      if (!parts.length) continue;
+      failures.push({ name: testName, body: parts.join('\n') });
+    }
+
+    return failures;
   }
 
   // ----------------------------------------------------------------
@@ -1088,11 +1300,11 @@ ${outputSection}`;
     const outputText = r.output ? escHtml(r.output) : '<span class="tr-output-none">No output captured</span>';
     const histBtns = isFailed
       ? `<div class="tr-last-run-actions">
-           <button class="tr-fix-issue-btn tr-fix-issue-btn--sm" id="trLastRunFixBtn" title="Fix issues with AI">
+           <button class="tr-fix-issue-btn tr-fix-issue-btn--sm" id="trLastRunFixBtn" title="Add fix tasks to queue">
              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                <path d="M13 2l1 1-2 2-1-1 2-2zM2 14l3-1-2-2-1 3zM4 10l6-6 2 2-6 6-2-2z" fill="currentColor"/>
              </svg>
-             Fix Issues
+             Add to Queue
            </button>
            <button class="tr-log-issue-btn" id="trLastRunIssueBtn" title="Log as issue">
              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
