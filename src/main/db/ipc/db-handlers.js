@@ -255,24 +255,34 @@ function registerDbHandlers() {
   // prompts
   // ----------------------------------------------------------------
   safeHandle('db:prompts:list', (_e, user_story_id) => {
-    return db.prepare(
-      'SELECT * FROM prompts WHERE user_story_id = ? AND is_active = 1 ORDER BY created_at ASC'
-    ).all(user_story_id);
+    return db.prepare(`
+      SELECT p.*, pl.name AS layer_name
+        FROM prompts p
+        LEFT JOIN project_layers pl ON p.layer_id = pl.id
+       WHERE p.user_story_id = ? AND p.is_active = 1
+       ORDER BY p.created_at ASC
+    `).all(user_story_id);
   });
 
-  safeHandle('db:prompts:create', (_e, { user_story_id, tag, prompt }) => {
+  safeHandle('db:prompts:create', (_e, { user_story_id, tag, prompt, layer_id }) => {
     const result = db.prepare(
-      'INSERT INTO prompts (user_story_id, tag, prompt) VALUES (?, ?, ?)'
-    ).run(user_story_id, tag ?? null, prompt);
+      'INSERT INTO prompts (user_story_id, tag, prompt, layer_id) VALUES (?, ?, ?, ?)'
+    ).run(user_story_id, tag ?? null, prompt, layer_id ?? null);
     return db.prepare('SELECT * FROM prompts WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:prompts:update', (_e, { id, tag, prompt, is_executed }) => {
+  safeHandle('db:prompts:update', (_e, { id, tag, prompt, is_executed, layer_id }) => {
     db.prepare(
       `UPDATE prompts SET tag = coalesce(?, tag), prompt = coalesce(?, prompt),
        is_executed = CASE WHEN ? IS NOT NULL THEN ? ELSE is_executed END,
+       layer_id    = CASE WHEN ? = -1 THEN NULL WHEN ? IS NOT NULL THEN ? ELSE layer_id END,
        updated_at = datetime('now') WHERE id = ?`
-    ).run(tag ?? null, prompt ?? null, is_executed ?? null, is_executed ?? null, id);
+    ).run(
+      tag ?? null, prompt ?? null,
+      is_executed ?? null, is_executed ?? null,
+      layer_id ?? null, layer_id ?? null, layer_id ?? null,
+      id
+    );
     return db.prepare('SELECT * FROM prompts WHERE id = ?').get(id);
   });
 
@@ -774,19 +784,21 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   safeHandle('db:prompt_queue:list', (_e, { project_id }) => {
     return db.prepare(`
-      SELECT * FROM prompt_queue
-      WHERE project_id = ?
-      ORDER BY sort_order ASC, created_at ASC
+      SELECT pq.*, pl.name AS layer_name, pl.folder_path AS layer_folder_path
+        FROM prompt_queue pq
+        LEFT JOIN project_layers pl ON pq.layer_id = pl.id
+       WHERE pq.project_id = ?
+       ORDER BY pq.sort_order ASC, pq.created_at ASC
     `).all(project_id);
   });
 
-  safeHandle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text }) => {
+  safeHandle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text, layer_id }) => {
     const max = db.prepare('SELECT MAX(sort_order) AS m FROM prompt_queue WHERE project_id = ?').get(project_id);
     const sort_order = (max?.m ?? -1) + 1;
     const result = db.prepare(`
-      INSERT INTO prompt_queue (project_id, user_story_id, story_title, prompt_id, tag, prompt_text, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(project_id, user_story_id ?? null, story_title ?? null, prompt_id ?? null, tag ?? null, prompt_text, sort_order);
+      INSERT INTO prompt_queue (project_id, user_story_id, story_title, prompt_id, tag, prompt_text, sort_order, layer_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(project_id, user_story_id ?? null, story_title ?? null, prompt_id ?? null, tag ?? null, prompt_text, sort_order, layer_id ?? null);
     return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(result.lastInsertRowid);
   });
 

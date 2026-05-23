@@ -12,6 +12,8 @@ function applySchema(db) {
     `ALTER TABLE screen_designs ADD COLUMN executed INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE project_layers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE prompts      ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
+    `ALTER TABLE prompt_queue ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}

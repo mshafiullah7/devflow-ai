@@ -214,17 +214,20 @@ export class PromptQueuePage {
   }
 
   _itemHtml(item) {
-    const icon    = STATUS_ICONS[item.status] || STATUS_ICONS.pending;
-    const label   = item.tag || item.story_title || `Item ${item.id}`;
-    const snippet = (item.prompt_text || '').split('\n')[0].slice(0, 60);
-    const canSkip = item.status === 'pending';
-    const canDel  = item.status !== 'running';
+    const icon       = STATUS_ICONS[item.status] || STATUS_ICONS.pending;
+    const label      = item.tag || item.story_title || `Item ${item.id}`;
+    const snippet    = (item.prompt_text || '').split('\n')[0].slice(0, 60);
+    const canSkip    = item.status === 'pending';
+    const canDel     = item.status !== 'running';
+    const layerBadge = item.layer_name
+      ? `<span class="pq-item__layer-badge" title="Layer: ${escHtml(item.layer_name)}">${escHtml(item.layer_name)}</span>`
+      : '';
 
     return `
       <div class="pq-item pq-item--${item.status}${this._selectedId === item.id ? ' pq-item--selected' : ''}" data-id="${item.id}">
         <span class="pq-item__icon">${icon}</span>
         <div class="pq-item__body">
-          <div class="pq-item__label">${escHtml(label)}</div>
+          <div class="pq-item__label">${escHtml(label)}${layerBadge}</div>
           <div class="pq-item__snippet">${escHtml(snippet)}</div>
         </div>
         <div class="pq-item__actions">
@@ -500,12 +503,15 @@ export class PromptQueuePage {
     this._startRunTimer();
 
     // Kick off execution with the approved plan
-    const cfg = this._modelCfg || {};
+    const cfg         = this._modelCfg || {};
+    const resolvedCwd = (item.layer_folder_path && item.layer_folder_path.trim())
+      ? item.layer_folder_path
+      : (this._project?.project_path || null);
     window.db.promptQueue.approvePlan({
       plan:        JSON.stringify(plan),
       messages:    [{ role: 'user', content: item.prompt_text }],
       modelConfig: cfg,
-      cwd:         this._project?.project_path || null,
+      cwd:         resolvedCwd,
       itemLabel:   item.tag || item.story_title || `#${item.id}`,
       projectName: this._project?.name || '',
     });
@@ -649,11 +655,14 @@ export class PromptQueuePage {
       }
     });
 
-    const cfg = this._modelCfg || {};
+    const cfg         = this._modelCfg || {};
+    const resolvedCwd = (item.layer_folder_path && item.layer_folder_path.trim())
+      ? item.layer_folder_path
+      : (this._project?.project_path || null);
     window.db.promptQueue.run({
       messages:    [{ role: 'user', content: item.prompt_text }],
       modelConfig: cfg,
-      cwd:         this._project?.project_path || null,
+      cwd:         resolvedCwd,
       itemLabel:   item.tag || item.story_title || `#${item.id}`,
       projectName: this._project?.name || '',
     });

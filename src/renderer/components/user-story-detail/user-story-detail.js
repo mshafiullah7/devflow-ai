@@ -29,6 +29,7 @@ export class UserStoryDetail {
     this._onDelete               = onDelete || null;
     this._featureId              = null;
     this._statuses               = [];
+    this._layers                 = [];
     this._ctrlSHandler           = null;
     this._currentStory           = null;
     this._activeTab              = 'description';
@@ -753,7 +754,11 @@ export class UserStoryDetail {
 
   async _loadPrompts(userStoryId) {
     if (!userStoryId) return;
-    const list = await window.db.prompts.list(userStoryId);
+    const [list, layers] = await Promise.all([
+      window.db.prompts.list(userStoryId),
+      window.db.projectLayers.list(this._projectId).catch(() => []),
+    ]);
+    this._layers = layers || [];
     const container = this._detailEl;
     const listEl = container.querySelector('#uslEditPromptsList, #uslAddPromptsList');
     if (!listEl) return;
@@ -820,17 +825,24 @@ export class UserStoryDetail {
   }
 
   _addPromptRow(listEl, userStoryId, existing) {
-    const tag      = existing?.tag?.trim() || '';
+    const layerId   = existing?.layer_id ?? null;
     const itemCount = listEl.querySelectorAll('.usl-pl-item').length;
     const isExecuted = !!existing?.is_executed;
 
-    const _buildLabel = (tagVal, promptText) => {
-      const t = tagVal?.trim() || `Prompt ${itemCount + 1}`;
+    const _buildLabel = (promptText) => {
       const firstLine = (promptText || '').split('\n')[0].trim();
-      const snippet = firstLine.length > 50 ? firstLine.slice(0, 50) + '…' : firstLine;
-      return snippet ? `${t} — ${snippet}` : t;
+      const snippet = firstLine.length > 60 ? firstLine.slice(0, 60) + '…' : firstLine;
+      return snippet || `Prompt ${itemCount + 1}`;
     };
-    const label = _buildLabel(tag, existing?.prompt || '');
+    const label = _buildLabel(existing?.prompt || '');
+
+    const buildLayerOptions = (selectedId) => {
+      const none = '<option value="">— No layer —</option>';
+      const opts = (this._layers || []).map(l =>
+        `<option value="${l.id}"${l.id === selectedId ? ' selected' : ''}>${escHtml(l.name)}</option>`
+      ).join('');
+      return none + opts;
+    };
 
     const item = document.createElement('div');
     item.className     = 'usl-pl-item';
@@ -838,6 +850,11 @@ export class UserStoryDetail {
 
     const statusIconExecuted = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     const statusIconPending  = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/></svg>`;
+
+    // Only render the layer select when layers exist for this project
+    const layerSelectHtml = this._layers.length > 0
+      ? `<select class="usl-pl-item__layer-select" title="Project Layer">${buildLayerOptions(layerId)}</select>`
+      : '';
 
     item.innerHTML = `
       <div class="usl-pl-item__header">
@@ -867,7 +884,7 @@ export class UserStoryDetail {
         </svg>
       </div>
       <div class="usl-pl-item__body" hidden>
-        <input class="usl-pl-item__tag-input" type="text" placeholder="Label (optional)" value="${escHtml(tag)}" autocomplete="off"/>
+        ${layerSelectHtml}
         <div class="usl-pl-item__preview usl-expand-preview"></div>
         <textarea class="usl-pl-item__textarea" hidden>${escHtml(existing?.prompt || '')}</textarea>
       </div>
@@ -875,13 +892,13 @@ export class UserStoryDetail {
 
     listEl.appendChild(item);
 
-    const headerEl   = item.querySelector('.usl-pl-item__header');
-    const bodyEl     = item.querySelector('.usl-pl-item__body');
-    const statusEl   = item.querySelector('.usl-pl-item__status');
-    const labelEl    = item.querySelector('.usl-pl-item__label');
-    const tagInput   = item.querySelector('.usl-pl-item__tag-input');
-    const taEl       = item.querySelector('.usl-pl-item__textarea');
-    const previewEl  = item.querySelector('.usl-pl-item__preview');
+    const headerEl    = item.querySelector('.usl-pl-item__header');
+    const bodyEl      = item.querySelector('.usl-pl-item__body');
+    const statusEl    = item.querySelector('.usl-pl-item__status');
+    const labelEl     = item.querySelector('.usl-pl-item__label');
+    const layerSelect = item.querySelector('.usl-pl-item__layer-select');
+    const taEl        = item.querySelector('.usl-pl-item__textarea');
+    const previewEl   = item.querySelector('.usl-pl-item__preview');
     const markExecBtn = item.querySelector('.usl-pl-item__btn--mark-executed');
 
     const renderPreview = () => {
@@ -914,27 +931,34 @@ export class UserStoryDetail {
       }
     });
 
-    // Live-update label when tag or prompt changes
+    // Live-update label when prompt text changes
     const refreshLabel = () => {
-      labelEl.textContent = _buildLabel(tagInput.value, taEl.value);
+      labelEl.textContent = _buildLabel(taEl.value);
     };
-    tagInput.addEventListener('input', refreshLabel);
     taEl.addEventListener('input', refreshLabel);
 
     // Auto-save on blur
     const save = async () => {
-      const prompt = taEl.value.trim();
-      const tagVal = tagInput.value.trim() || null;
+      const prompt   = taEl.value.trim();
+      const layerVal = layerSelect?.value ? parseInt(layerSelect.value, 10) : null;
       if (!prompt) return;
       if (item.dataset.rowId) {
-        await window.db.prompts.update({ id: parseInt(item.dataset.rowId), tag: tagVal, prompt });
+        await window.db.prompts.update({ id: parseInt(item.dataset.rowId), prompt });
       } else if (userStoryId) {
-        const created = await window.db.prompts.create({ user_story_id: userStoryId, tag: tagVal, prompt });
+        const created = await window.db.prompts.create({ user_story_id: userStoryId, layer_id: layerVal, prompt });
         item.dataset.rowId = created.id;
       }
     };
-    tagInput.addEventListener('blur', save);
     taEl.addEventListener('blur', save);
+
+    // Save layer change immediately on select
+    if (layerSelect) {
+      layerSelect.addEventListener('change', async () => {
+        if (!item.dataset.rowId) return;
+        const newLayerId = layerSelect.value ? parseInt(layerSelect.value, 10) : -1;
+        await window.db.prompts.update({ id: parseInt(item.dataset.rowId), layer_id: newLayerId });
+      });
+    }
 
     // Add to prompt queue
     const queueBtn = item.querySelector('.usl-pl-item__btn--queue');
@@ -951,14 +975,15 @@ export class UserStoryDetail {
         } catch (_) {}
         const model      = this._getModel();
         const modelLabel = (typeof model === 'string' ? model : model?.label) || null;
+        const layerVal   = layerSelect?.value ? parseInt(layerSelect.value, 10) : null;
         await window.db.promptQueue.add({
           project_id:    this._projectId,
           user_story_id: userStoryId,
           story_title:   storyTitle,
           prompt_id:     item.dataset.rowId ? parseInt(item.dataset.rowId) : null,
-          tag:           tagInput.value.trim() || null,
           prompt_text:   prompt,
           model_label:   modelLabel,
+          layer_id:      layerVal,
         });
         const origHTML    = queueBtn.innerHTML;
         queueBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -986,7 +1011,7 @@ export class UserStoryDetail {
     item.querySelector('.usl-pl-item__btn--expand').addEventListener('click', async (e) => {
       e.stopPropagation();
       await save();
-      this._openExpandOverlay(taEl, tagInput.value.trim() || 'Prompt', async () => { renderPreview(); await save(); }, true);
+      this._openExpandOverlay(taEl, 'Prompt', async () => { renderPreview(); await save(); }, true);
     });
 
     // Delete
@@ -997,16 +1022,14 @@ export class UserStoryDetail {
       if (item.dataset.rowId) await window.db.prompts.delete(parseInt(item.dataset.rowId));
       item.remove();
       this._refreshTasksTabLabel();
-      // Re-number remaining items that still have default labels
+      // Re-number remaining items
       listEl.querySelectorAll('.usl-pl-item').forEach((el, i) => {
-        const ti = el.querySelector('.usl-pl-item__tag-input');
         const ta = el.querySelector('.usl-pl-item__textarea');
         const li = el.querySelector('.usl-pl-item__label');
-        if (ti && li) {
-          const t = ti.value.trim() || `Prompt ${i + 1}`;
+        if (li) {
           const firstLine = (ta?.value || '').split('\n')[0].trim();
-          const snippet = firstLine.length > 50 ? firstLine.slice(0, 50) + '…' : firstLine;
-          li.textContent = snippet ? `${t} — ${snippet}` : t;
+          const snippet = firstLine.length > 60 ? firstLine.slice(0, 60) + '…' : firstLine;
+          li.textContent = snippet || `Prompt ${i + 1}`;
         }
       });
     });

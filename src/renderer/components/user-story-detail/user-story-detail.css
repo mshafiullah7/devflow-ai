@@ -978,26 +978,27 @@
   flex-shrink: 0;
 }
 
-.usl-pl-item__tag-input {
+.usl-pl-item__layer-select {
   flex: 1;
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-family: inherit;
   padding: 2px 4px;
   outline: none;
   min-width: 0;
+  cursor: pointer;
   transition: border-color 0.15s;
 }
-.usl-pl-item__tag-input:focus {
+.usl-pl-item__layer-select:focus {
   border-bottom-color: var(--accent, #6366f1);
   color: var(--text-primary);
 }
-.usl-pl-item__tag-input::placeholder {
-  color: var(--text-muted);
-  opacity: 0.5;
+.usl-pl-item__layer-select option {
+  background: var(--bg-secondary, #1e1e2e);
+  color: var(--text-primary);
 }
 
 .usl-pl-item__actions {

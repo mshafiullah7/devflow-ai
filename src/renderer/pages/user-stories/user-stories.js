@@ -615,7 +615,10 @@ export class ProjectPage {
 
   async _buildRelatedPromptForModal(feature, mockup, docs) {
     const isCli    = !this._aiModelConfig?.type || this._aiModelConfig.type === 'cli';
-    const docsFull = await Promise.all(docs.map(d => window.db.documents.get(d.id)));
+    const [docsFull, layers] = await Promise.all([
+      Promise.all(docs.map(d => window.db.documents.get(d.id))),
+      window.db.projectLayers.list(this.projectId).catch(() => []),
+    ]);
 
     if (isCli) {
       const filesToWrite = [
@@ -625,11 +628,11 @@ export class ProjectPage {
       const paths = await window.app.writeTempFiles(filesToWrite);
       const [mockupPath, ...docPaths] = paths;
       const docRefs = docsFull.map((d, i) => ({ title: d?.title || docs[i].title, path: docPaths[i] }));
-      return this._buildUserStoriesPrompt(feature, mockupPath, docRefs, true);
+      return this._buildUserStoriesPrompt(feature, mockupPath, docRefs, true, layers);
     }
 
     const docRefs = docsFull.map(d => ({ title: d?.title || '', content: d?.content || '' }));
-    return this._buildUserStoriesPrompt(feature, mockup.html_content || '', docRefs, false);
+    return this._buildUserStoriesPrompt(feature, mockup.html_content || '', docRefs, false, layers);
   }
 
   async _handleRelatedRun(overlay, featureId) {
@@ -750,7 +753,7 @@ export class ProjectPage {
         { "criteria": "Given ... When ... Then ..." }
       ],
       "prompts": [
-        { "tag": "UI", "prompt": "..." }
+        { "prompt": "..." }
       ]
     }
   ]
@@ -825,7 +828,7 @@ export class ProjectPage {
           for (const p of s.prompts) {
             await window.db.prompts.create({
               user_story_id: story.id,
-              tag:           p.tag    || null,
+              layer_id:      (p.layerId != null && p.layerId !== '') ? parseInt(p.layerId, 10) : null,
               prompt:        (p.prompt || '').replaceAll('{{US_ID}}', story.id),
             });
           }
@@ -848,9 +851,15 @@ export class ProjectPage {
     }
   }
 
-  _buildUserStoriesPrompt(feature, mockupRef, docRefs, isCli) {
+  _buildUserStoriesPrompt(feature, mockupRef, docRefs, isCli, layers = []) {
     const featureCtx = feature.description
       ? `Feature Description: ${feature.description}\n`
+      : '';
+
+    const layersSection = layers.length > 0
+      ? `\nProject Layers (architectural sub-folders; assign each prompt to the most relevant layer):\n` +
+        layers.map(l => `- id:${l.id}  name:"${l.name}"${l.description ? `  (${l.description})` : ''}`).join('\n') +
+        '\n'
       : '';
 
     const mockupSection = isCli
@@ -864,7 +873,7 @@ export class ProjectPage {
     return `You are an expert product manager and software architect. Analyze the UI mockup and reference documents to extract user stories for the feature below.
 
 Feature: ${feature.name}
-${featureCtx}
+${featureCtx}${layersSection}
 ${mockupSection}
 
 Reference Documents:
@@ -889,7 +898,7 @@ Use EXACTLY this structure:
         {
           "promptName": 'descriptive name',
           "prompt": 'detailed implementation prompt referencing exact UI details (colours, layout, components, spacing)',
-          "tag": 'UI or API or DB or Auth or Cache or other single technical domain word'
+          "layerId": <integer id from Project Layers list above, or null if no layers or none clearly applies>
         }
       ]
     }
@@ -914,7 +923,7 @@ prompt:
 - Include unit test prompts for API/DB/Auth stories, and E2E test prompts for UI stories.
 - When a prompt involves creating unit tests or E2E tests, ALL test function/case/suite names MUST be prefixed with \`US-{{US_ID}}\` (e.g. \`US-{{US_ID}}_login_renders_correctly\`, \`describe('US-{{US_ID}} Login Flow', ...)\`). Use the exact literal placeholder \`{{US_ID}}\` — it will be substituted with the real user story ID automatically.
 
-tag: Is a SINGLE word (UI, API, DB, Auth, Cache, Queue, Email)
+layerId: The integer id from the Project Layers list above that best matches this prompt's technical domain. Use null if no layers are listed or none clearly applies.
 
 Rules:
 - featureId MUST be ${feature.id}

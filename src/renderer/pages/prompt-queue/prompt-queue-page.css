@@ -168,6 +168,19 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pq-item__layer-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent-muted, rgba(99,102,241,0.15));
+  color: var(--accent, #6366f1);
+  white-space: nowrap;
 }
 .pq-item__snippet {
   font-size: 11px;
