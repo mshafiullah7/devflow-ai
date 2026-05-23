@@ -650,5 +650,29 @@
   background: linear-gradient(rgba(99, 102, 241, 0.20), rgba(99, 102, 241, 0.20)) var(--bg);
 }
 [data-theme="light"] .git-accordion__filename {
+  color: #3730a3;
+}
+
+[data-theme="light"] .git-page__qa-btn--commit {
+  border-color: rgba(99, 102, 241, 0.35);
   color: #4338ca;
+}
+[data-theme="light"] .git-page__qa-btn--commit:hover {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.55);
+  color: #3730a3;
+}
+
+[data-theme="light"] .git-page__qa-btn--push {
+  border-color: rgba(22, 163, 74, 0.35);
+  color: #15803d;
+}
+[data-theme="light"] .git-page__qa-btn--push:hover {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.55);
+  color: #166534;
+}
+
+[data-theme="light"] .git-page__console-prompt {
+  color: var(--console-prompt);
 }

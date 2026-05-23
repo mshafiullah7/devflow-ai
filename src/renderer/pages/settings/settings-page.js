@@ -252,7 +252,7 @@ export class SettingsPage {
   async _renderModelMapping() {
     const main = this.container.querySelector('#stMainContent');
 
-    const PAGE_KEYS = ['mockups', 'documents', 'extract-user-stories', 'issues', 'git-changes', 'prompt-queue', 'ai-console'];
+    const PAGE_KEYS = ['mockups', 'documents', 'user-stories', 'issues', 'git-changes', 'prompt-queue', 'ai-console'];
 
     const [configs, ...mappings] = await Promise.all([
       window.db.modelConfigs.list(),
@@ -277,7 +277,7 @@ export class SettingsPage {
         features: [
           { key: 'mockups',             icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,                                                                                    name: 'Mockups' },
           { key: 'documents',           icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,                                                       name: 'Documents' },
-          { key: 'extract-user-stories', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,                                                                   name: 'Extract User Stories' },
+          { key: 'user-stories',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,                                                                   name: 'User Stories' },
         ],
       },
       {
@@ -295,7 +295,7 @@ export class SettingsPage {
       {
         label: 'Tools',
         features: [
-          { key: 'prompt-queue',        icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/></svg>`,                                                                                                        name: 'Prompt Queue', excludeTypes: ['ollama'], note: 'Ollama not supported yet' },
+          { key: 'prompt-queue',        icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/></svg>`,                                                                                                        name: 'Tasks Queue', excludeTypes: ['ollama'], note: 'Ollama not supported yet' },
           { key: 'ai-console',          icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,                                                                                     name: 'AI Chat' },
         ],
       },
