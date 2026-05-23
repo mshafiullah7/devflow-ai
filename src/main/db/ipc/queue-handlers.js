@@ -13,6 +13,28 @@ const { sendMessage: tgSend }  = require('../../telegram');
 
 let _activeQueueProc = null;
 
+// ----------------------------------------------------------------
+// AI call logger — prints every outgoing model invocation so you
+// can audit which model is actually used and what prompt is sent.
+// Format:  [HH:MM:SS] [queue:<type>]  exe --model NAME  "first line…"
+// ----------------------------------------------------------------
+function _logAiCall(type, modelName, exe, promptOrMessages, cwd) {
+  const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const label = exe ? `${exe} --model ${modelName}` : `model=${modelName}`;
+  const cwdStr = cwd ? `  cwd=${path.basename(cwd)}` : '';
+
+  let preview = '';
+  if (typeof promptOrMessages === 'string') {
+    preview = promptOrMessages.trimStart();
+  } else if (Array.isArray(promptOrMessages) && promptOrMessages.length) {
+    preview = (promptOrMessages.find(m => m.role === 'user')?.content || '').trimStart();
+  }
+  const lines   = preview.split('\n').map(l => l.trim()).filter(Boolean);
+  const snippet = lines.slice(0, 2).join(' ↵ ').slice(0, 120);
+
+  console.log(`[${ts}] [queue:${type}]  ${label}${cwdStr}  "${snippet}"`);
+}
+
 function killTree(proc) {
   if (!proc) return;
   if (process.platform === 'win32') {
@@ -137,6 +159,7 @@ function registerQueueHandlers() {
 //   approvedPlan {string}  — JSON string; pass --approved-plan; emit step events
 // ----------------------------------------------------------------
 function _runDevflowAgent(send, messages, modelConfig, cwd, options = {}) {
+  _logAiCall('devflow-agent', modelConfig?.model_name || 'qwen2.5-coder:7b', 'python devflow_agent.py', messages, cwd);
   const agentPath = path.join(__dirname, '../../../../agent/devflow_agent.py');
   const task      = messages.map(m => (typeof m === 'string' ? m : m.content || '')).join('\n');
 
@@ -302,6 +325,7 @@ function _runCli(send, messages, modelConfig, cwd) {
   const ts    = Date.now();
   const exe       = modelConfig?.executable || 'claude';
   const modelFlag = modelConfig?.model_name ? ` --model ${modelConfig.model_name}` : '';
+  _logAiCall('cli', modelConfig?.model_name || 'claude-haiku-4-5', exe, messages, cwd);
   const flags     = `${modelConfig?.flags || '--dangerously-skip-permissions --print'}${modelFlag}`;
 
   const promptText = messagesToText(messages);
@@ -359,6 +383,7 @@ function _runCli(send, messages, modelConfig, cwd) {
 // Anthropic SSE streaming
 // ----------------------------------------------------------------
 function _runAnthropic(send, messages, modelConfig) {
+  _logAiCall('anthropic', modelConfig.model_name || 'claude-sonnet-4-6', null, messages);
   let doneSent = false;
   const finish = (code) => { if (!doneSent) { doneSent = true; send('promptQueue:done', { exitCode: code }); } };
 
@@ -408,6 +433,7 @@ function _runAnthropic(send, messages, modelConfig) {
 // Ollama NDJSON streaming
 // ----------------------------------------------------------------
 function _runOllama(send, messages, modelConfig) {
+  _logAiCall('ollama', modelConfig.model_name || '(no model)', null, messages);
   let doneSent = false;
   const finish = (code) => { if (!doneSent) { doneSent = true; send('promptQueue:done', { exitCode: code }); } };
 
@@ -457,6 +483,7 @@ function _runOllama(send, messages, modelConfig) {
 // Generic API (OpenAI-compatible, non-streaming)
 // ----------------------------------------------------------------
 function _runApi(send, messages, modelConfig) {
+  _logAiCall('api', modelConfig.model_name || '(no model)', modelConfig.base_url || 'api', messages);
   const baseUrl = (modelConfig.base_url || '').replace(/\/$/, '');
   if (!baseUrl) {
     send('promptQueue:data', { text: 'Error: API base_url not configured\n' });

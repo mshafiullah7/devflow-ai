@@ -408,7 +408,7 @@ export class AiConsolePage {
               </label>
 
               <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="stories" checked disabled>
+                <input type="checkbox" class="aic-slice__check" data-slice="stories" disabled>
                 <div class="aic-slice__info">
                   <span class="aic-slice__name">User stories</span>
                   <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxStories">– stories</span>
@@ -983,9 +983,7 @@ export class AiConsolePage {
 
     this._builtContext = parts.length > 0
       ? `${projectLine}You are an AI assistant for the following software project.\nUse this context accurately when answering. Do not invent details not present below.\n\n${parts.join('\n\n══════════════════════════════════════\n\n')}`
-      : projectName
-        ? `${projectLine}You are an AI assistant for the ${projectName} project.`
-        : '';
+      : '';
 
     this._updateTokenEstimate();
     this._updateContextPreview();

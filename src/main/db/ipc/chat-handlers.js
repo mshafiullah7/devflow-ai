@@ -52,6 +52,28 @@ const DEFAULT_CLI_MODEL = 'claude-haiku-4-5';
 let _activeProc = null;
 let _cancelled  = false;
 
+// ----------------------------------------------------------------
+// AI call logger — prints every outgoing model invocation so you
+// can audit which model is actually used and what prompt is sent.
+// Format:  [HH:MM:SS] [chat:<type>]  exe --model NAME  "first line…"
+// ----------------------------------------------------------------
+function _logAiCall(type, modelName, exe, promptOrMessages) {
+  const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const label = exe ? `${exe} --model ${modelName}` : `model=${modelName}`;
+
+  let preview = '';
+  if (typeof promptOrMessages === 'string') {
+    preview = promptOrMessages.trimStart();
+  } else if (Array.isArray(promptOrMessages) && promptOrMessages.length) {
+    preview = (promptOrMessages.find(m => m.role === 'user')?.content || '').trimStart();
+  }
+  // Take first 2 non-empty lines, cap at 120 chars
+  const lines = preview.split('\n').map(l => l.trim()).filter(Boolean);
+  const snippet = lines.slice(0, 2).join(' ↵ ').slice(0, 120);
+
+  console.log(`[${ts}] [chat:${type}]  ${label}  "${snippet}"`);
+}
+
 function killActive() {
   _cancelled = true;
   if (_activeProc) {
@@ -163,6 +185,7 @@ function applyPatches(html, patches) {
 // Anthropic SSE streaming
 // ----------------------------------------------------------------
 function runAnthropic(wc, prompt, editPayload, model, messages) {
+  _logAiCall('anthropic', model.model_name || 'claude-sonnet-4-6', null, messages || prompt);
   let msgs;
   if (editPayload) {
     const content = buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
@@ -234,6 +257,7 @@ const OLLAMA_SYSTEM_DIFF = {
 };
 
 function runOllama(wc, prompt, editPayload, model, messages) {
+  _logAiCall('ollama', model.model_name || '(no model)', null, messages || prompt);
   let msgs;
   let isDiffMode = false;
 
@@ -324,6 +348,7 @@ function runOllama(wc, prompt, editPayload, model, messages) {
 function runCli(wc, prompt, editPayload, model, messages) {
   const exe       = model.executable || 'claude';
   const modelName = model.model_name || DEFAULT_CLI_MODEL;
+  _logAiCall('cli', modelName, exe, messages || prompt);
   const baseFlags = `--dangerously-skip-permissions --print --model ${modelName}`;
   const ts        = Date.now();
 
