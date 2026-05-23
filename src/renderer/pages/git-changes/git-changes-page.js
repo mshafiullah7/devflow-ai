@@ -149,6 +149,35 @@ export class GitChangesPage {
                 <div class="git-page__qcmd-menu" id="gitQcmdMenu" hidden></div>
               </div>
             </div>
+            <div class="git-page__quick-actions">
+              <button class="git-page__qa-btn git-page__qa-btn--commit" id="gitQaCommit" title="git add -A && git commit -m &quot;…&quot;">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M8 1v4M8 11v4M1 8h4M11 8h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                Commit
+              </button>
+              <button class="git-page__qa-btn git-page__qa-btn--push" id="gitQaPush" title="git push">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 11V3M4 6l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                Push
+              </button>
+              <button class="git-page__qa-btn" id="gitQaStatus" title="git status">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M8 7v4M8 5v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                Status
+              </button>
+              <button class="git-page__qa-btn" id="gitQaLog" title="git log --oneline -10">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                Log
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -233,6 +262,7 @@ export class GitChangesPage {
     });
 
     this._bindQcmdPicker(input, run);
+    this._bindQuickActions(input, run);
   }
 
   _bindQcmdPicker(input, run) {
@@ -280,6 +310,29 @@ export class GitChangesPage {
     });
 
     document.addEventListener('click', closeMenu);
+  }
+
+  // ----------------------------------------------------------------
+  // Quick action buttons
+  // ----------------------------------------------------------------
+  _bindQuickActions(input, run) {
+    const setCmd = cmd => { input.value = cmd; run(); };
+
+    this.container.querySelector('#gitQaCommit')?.addEventListener('click', () => {
+      this._showInputPrompt('git add -A; git commit -m "{{input}}"', resolved => {
+        input.value = resolved;
+        run();
+      });
+    });
+
+    this.container.querySelector('#gitQaPush')?.addEventListener('click', () =>
+      setCmd('git push'));
+
+    this.container.querySelector('#gitQaStatus')?.addEventListener('click', () =>
+      setCmd('git status'));
+
+    this.container.querySelector('#gitQaLog')?.addEventListener('click', () =>
+      setCmd('git log --oneline -10'));
   }
 
   // ----------------------------------------------------------------
