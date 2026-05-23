@@ -34,7 +34,10 @@ export class DocumentsPage {
       if (match) {
         this._activeId = match.id;
       } else {
-        const created = await window.db.documents.create({ project_id: this._projectId, title: this._docTitle, content: '' });
+        const templates = await window.db.documentTemplates.list();
+        const tpl = templates.find(t => t.name.toLowerCase() === this._docTitle.toLowerCase());
+        const content = tpl ? tpl.template_text : '';
+        const created = await window.db.documents.create({ project_id: this._projectId, title: this._docTitle, content });
         this._docs.push(created);
         this._activeId = created.id;
       }

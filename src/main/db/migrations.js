@@ -400,6 +400,12 @@ function runMigrations(db) {
   if (!pqCols.includes('commit_sha')) {
     db.exec('ALTER TABLE prompt_queue ADD COLUMN commit_sha TEXT');
   }
+
+  // Remove obsolete templates; 'Solution Architecture' is seeded separately via seedDocumentTemplates
+  const tplTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='document_templates'").get();
+  if (tplTables) {
+    db.prepare(`DELETE FROM document_templates WHERE name IN ('Technical Specification', 'Meeting Notes', 'Release Notes', 'Tasks')`).run();
+  }
 }
 
 /**
@@ -427,28 +433,22 @@ function seedDocumentTemplates(db) {
       2,
     ],
     [
-      'Technical Specification',
+      'Solution Architecture',
       'Architecture, components and design decisions',
-      `# Technical Specification\n\n## Overview\n\nBrief description of what is being built.\n\n## Architecture\n\nDescribe the high-level architecture.\n\n## Components\n\n### Component 1\n\nDescription.\n\n## API Design\n\n\`\`\`\nGET /api/resource\n\`\`\`\n\n## Data Model\n\nDescribe key entities.\n\n## Dependencies\n\n- Dependency 1\n- Dependency 2\n\n## Open Questions\n\n- [ ] Question 1\n`,
+      `# Solution Architecture\n\n## Overview\n\nBrief description of what is being built.\n\n## Architecture\n\nDescribe the high-level architecture.\n\n## Components\n\n### Component 1\n\nDescription.\n\n## API Design\n\n\`\`\`\nGET /api/resource\n\`\`\`\n\n## Data Model\n\nDescribe key entities.\n\n## Dependencies\n\n- Dependency 1\n- Dependency 2\n\n## Open Questions\n\n- [ ] Question 1\n`,
       3,
     ],
     [
-      'Meeting Notes',
-      'Record decisions and action items from a meeting',
-      `# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n\n1. Item 1\n2. Item 2\n\n## Discussion\n\n### Item 1\n\nNotes here.\n\n## Decisions\n\n- Decision 1\n\n## Action Items\n\n| Action | Owner | Due |\n|--------|-------|-----|\n|        |       |     |\n`,
+      'Tech Stack',
+      'Define the technologies used for this project',
+      `# Tech Stack\n\n## Frontend\n\n| Technology | Version | Purpose |\n|------------|---------|--------|\n|            |         |        |\n\n## Backend\n\n| Technology | Version | Purpose |\n|------------|---------|--------|\n|            |         |        |\n\n## Database\n\n| Technology | Version | Purpose |\n|------------|---------|--------|\n|            |         |        |\n\n## Infrastructure & DevOps\n\n| Technology | Version | Purpose |\n|------------|---------|--------|\n|            |         |        |\n\n## Third-Party Services & APIs\n\n| Service | Purpose |\n|---------|---------|\n|         |         |\n\n## Development Tools\n\n| Tool | Purpose |\n|------|---------|\n|      |         |\n`,
       4,
     ],
     [
-      'Tasks',
-      'Checklist of to-do items with sections',
-      `# Tasks\n\n## To Do\n\n- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n\n## In Progress\n\n- [ ] Task 4\n\n## Done\n\n- [x] Completed task\n`,
+      'Architecture Overview',
+      'Brief description of the solution architecture for user story generation',
+      `# Architecture Overview\n\n## Summary\n\nProvide a concise description of the overall solution architecture.\n\n## Key Design Decisions\n\n- Decision 1\n- Decision 2\n\n## System Context\n\nDescribe how this system fits into the broader landscape (users, external systems, integrations).\n\n## High-Level Components\n\n| Component | Responsibility |\n|-----------|----------------|\n|           |                |\n\n## Data Flow\n\nDescribe how data moves through the system.\n\n## Non-Functional Requirements\n\n| Requirement | Detail |\n|-------------|--------|\n| Performance |        |\n| Scalability |        |\n| Security    |        |\n\n## Constraints & Assumptions\n\n- Constraint 1\n- Assumption 1\n`,
       5,
-    ],
-    [
-      'Release Notes',
-      'What changed in this version',
-      `# Release Notes\n\n## Version X.Y.Z — \n\n### New Features\n\n- Feature 1\n\n### Bug Fixes\n\n- Fix 1\n\n### Breaking Changes\n\n_None_\n\n### Upgrade Notes\n\nDescribe any steps required to upgrade.\n`,
-      6,
     ],
   ];
 
