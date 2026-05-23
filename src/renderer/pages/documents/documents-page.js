@@ -218,12 +218,6 @@ export class DocumentsPage {
     const listEl = this.container.querySelector('#docList');
     if (!listEl) return;
     listEl.innerHTML = this._renderList();
-    listEl.addEventListener('click', e => {
-      const delBtn = e.target.closest('[data-del]');
-      if (delBtn) { e.stopPropagation(); this._deleteDoc(Number(delBtn.dataset.del)); return; }
-      const item = e.target.closest('[data-id]');
-      if (item) this._selectDoc(Number(item.dataset.id));
-    });
   }
 
   // ----------------------------------------------------------------
