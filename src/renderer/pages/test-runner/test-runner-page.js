@@ -836,43 +836,75 @@ export class TestRunnerPage {
   // ----------------------------------------------------------------
   async _fetchGitContext() {
     const cwd = this._project?.project_path;
-    if (!cwd) return '';
+    if (!cwd) return { summary: '', badge: '' };
     try {
-      // Run both commands in parallel; ignore errors (repo may not exist)
-      const [statusRes, nameStatusRes] = await Promise.all([
-        window.db.terminal.exec({ command: 'git status --short 2>&1', cwd }).catch(() => ({ stdout: '' })),
-        window.db.terminal.exec({ command: 'git diff --name-status HEAD 2>&1', cwd }).catch(() => ({ stdout: '' })),
+      // Three sources in parallel:
+      //   1. git status --short        → uncommitted staged/unstaged changes
+      //   2. git diff --name-status HEAD → vs current HEAD (unstaged vs staged HEAD)
+      //   3. git log --diff-filter=D   → files deleted in recent commits (already committed)
+      //      This is the critical one when the user deleted a page and committed it
+      //      before running tests.
+      const [statusRes, diffRes, logRes] = await Promise.all([
+        window.db.terminal.exec({ command: 'git status --short 2>&1',             cwd }).catch(() => ({ stdout: '' })),
+        window.db.terminal.exec({ command: 'git diff --name-status HEAD 2>&1',    cwd }).catch(() => ({ stdout: '' })),
+        window.db.terminal.exec({ command: 'git log --diff-filter=D --name-only --oneline -n 10 2>&1', cwd }).catch(() => ({ stdout: '' })),
       ]);
 
-      const statusOut     = (statusRes.stdout     || '').trim();
-      const nameStatusOut = (nameStatusRes.stdout  || '').trim();
+      const statusOut = (statusRes.stdout || '').trim();
+      const diffOut   = (diffRes.stdout   || '').trim();
+      const logOut    = (logRes.stdout    || '').trim();
 
-      // Extract deleted entries from both sources so we catch staged,
-      // unstaged, and committed-but-not-yet-pushed deletions
-      const deletedFromStatus = statusOut.split('\n')
-        .filter(l => /^D[ D]|^ D/.test(l))           // "D " staged, " D" unstaged
-        .map(l => l.replace(/^.{2}\s+/, '').trim())
+      // ── Deleted from working tree (uncommitted) ──────────────────
+      const deletedUncommitted = [
+        // from status: "D  file" (staged) or " D file" (unstaged)
+        ...statusOut.split('\n')
+          .filter(l => /^D[ D]|^ D/.test(l))
+          .map(l => l.replace(/^.{2}\s+/, '').trim()),
+        // from diff: "D\tfile"
+        ...diffOut.split('\n')
+          .filter(l => /^D\t/.test(l))
+          .map(l => l.slice(2).trim()),
+      ];
+
+      // ── Deleted in recent commits ────────────────────────────────
+      // git log --oneline output looks like:
+      //   abc1234 Remove dashboard page
+      //   src/pages/dashboard.js
+      //   tests/e2e/dashboard.spec.js
+      //
+      // Lines without a 7-char hex prefix that have a file extension are file paths.
+      const deletedCommitted = logOut.split('\n')
+        .map(l => l.trim())
+        .filter(l => l && !l.match(/^[0-9a-f]{5,}\s/i) && /\.\w+$/.test(l));
+
+      // Merge + deduplicate across all three sources
+      const allDeleted = [...new Set([...deletedUncommitted, ...deletedCommitted])]
         .filter(Boolean);
 
-      const deletedFromDiff = nameStatusOut.split('\n')
-        .filter(l => l.startsWith('D\t'))
-        .map(l => l.replace(/^D\t/, '').trim())
-        .filter(Boolean);
-
-      // Merge + deduplicate
-      const allDeleted = [...new Set([...deletedFromStatus, ...deletedFromDiff])];
-
+      // ── Build summary string for the prompt ─────────────────────
       const parts = [];
       if (allDeleted.length) {
-        parts.push(`Deleted files:\n${allDeleted.map(f => `  - ${f}`).join('\n')}`);
+        parts.push(`Deleted files (git):\n${allDeleted.map(f => `  - ${f}`).join('\n')}`);
       }
       if (statusOut) {
-        parts.push(`Full git status:\n${statusOut}`);
+        parts.push(`Git working-tree status:\n${statusOut}`);
       }
 
-      return parts.join('\n\n');
+      // ── Badge text for the modal UI ──────────────────────────────
+      let badge = '';
+      if (allDeleted.length) {
+        badge = `📂 ${allDeleted.length} deleted file${allDeleted.length > 1 ? 's' : ''} in git`;
+      } else if (statusOut) {
+        badge = `📂 Git: ${statusOut.split('\n').filter(Boolean).length} change${statusOut.split('\n').filter(Boolean).length > 1 ? 's' : ''}`;
+      } else if (logOut) {
+        badge = '📂 Git: clean working tree';
+      } else {
+        badge = '📂 Git: not available';
+      }
+
+      return { summary: parts.join('\n\n'), badge };
     } catch {
-      return '';
+      return { summary: '', badge: '📂 Git: not available' };
     }
   }
 
@@ -882,7 +914,7 @@ export class TestRunnerPage {
   async _showAddToQueueModal(rawOutput, runId) {
     // Fetch git context before building the modal so it can be embedded
     // in the prompt. Done once here; referenced in the _buildPrompt closure.
-    const gitContext = await this._fetchGitContext();
+    const { summary: gitContext, badge: gitBadge } = await this._fetchGitContext();
     const overlay = document.createElement('div');
     overlay.className = 'tr-modal-overlay';
     overlay.innerHTML = `
@@ -897,20 +929,27 @@ export class TestRunnerPage {
         </div>
         <div class="tr-modal__footer">
           <span class="tr-aq-tokens" id="trAqTokens"></span>
-          <button class="tr-modal__btn tr-modal__btn--cancel"  id="trAqCancel">Cancel</button>
-          <button class="tr-modal__btn tr-modal__btn--extract" id="trAqExtract">Extract</button>
-          <button class="tr-modal__btn tr-modal__btn--save"    id="trAqSend" disabled>Send to Tasks</button>
+          <span class="tr-aq-git-badge" id="trAqGitBadge"></span>
+          <button class="tr-modal__btn tr-modal__btn--cancel"         id="trAqCancel">Cancel</button>
+          <button class="tr-modal__btn tr-modal__btn--extract-direct" id="trAqExtractDirect">Extract (No AI)</button>
+          <button class="tr-modal__btn tr-modal__btn--extract"        id="trAqExtract">Extract</button>
+          <button class="tr-modal__btn tr-modal__btn--save"           id="trAqSend" disabled>Send to Tasks</button>
         </div>
       </div>
     `;
 
     document.body.appendChild(overlay);
 
-    const textEl     = overlay.querySelector('#trAqText');
-    const statusEl   = overlay.querySelector('#trAqStatus');
-    const extractBtn = overlay.querySelector('#trAqExtract');
-    const sendBtn    = overlay.querySelector('#trAqSend');
-    const tokensEl   = overlay.querySelector('#trAqTokens');
+    const textEl          = overlay.querySelector('#trAqText');
+    const statusEl        = overlay.querySelector('#trAqStatus');
+    const extractBtn      = overlay.querySelector('#trAqExtract');
+    const extractDirectBtn = overlay.querySelector('#trAqExtractDirect');
+    const sendBtn         = overlay.querySelector('#trAqSend');
+    const tokensEl        = overlay.querySelector('#trAqTokens');
+    const gitBadgeEl      = overlay.querySelector('#trAqGitBadge');
+
+    // Show git context badge so the user knows whether git info is available
+    if (gitBadgeEl && gitBadge) gitBadgeEl.textContent = gitBadge;
 
     // Live token estimator — ~4 chars/token is a reliable approximation for
     // mixed code/prose. No AI call needed; updates on every textarea change.
@@ -922,54 +961,46 @@ export class TestRunnerPage {
     textEl.addEventListener('input', () => _updateTokens(textEl.value));
 
     // ── Build prompt on open so the user can review / edit it ───────────
-    // Pre-filter: extract only error sections, drop the rest of the console output
+    // Use raw failure sections (full error + call log + code context) instead
+    // of the pre-cleaned minimal fields. This gives the model enough signal to
+    // classify FIX vs REMOVE — the pre-extractor strips too much (e.g. timeout
+    // messages don't start with "Error:" so errorMsg always came back empty).
     const _initialFailures = this._extractTestFailures(rawOutput);
-    const _filteredText    = _initialFailures.length
-      ? _initialFailures.map((f, i) => `[${i + 1}] ${f.name}\n${f.body}`).join('\n\n')
-      : rawOutput.slice(-4000);
+    const _rawSections     = this._extractRawSections(rawOutput);
+    const _filteredText    = _rawSections
+      || (_initialFailures.length
+        ? _initialFailures.map((f, i) => `[${i + 1}] ${f.name}\n${f.body}`).join('\n\n')
+        : rawOutput.slice(-4000));
 
     const _buildPrompt = (failures) => {
-      // ── Git context block ────────────────────────────────────────────
-      // This is actual git output from the project folder fetched moments
-      // ago. Use it as the primary signal for REMOVE classification.
-      const gitBlock = gitContext ? `
-## Git changes in this project (fetched now from the project folder)
-
-${gitContext}
-
-Classification rule from git:
-- If a failing test's target page, component, or route is listed under "Deleted files" above → classify as REMOVE
-- If only modified (M) or renamed (R) files are present → lean towards FIX unless error signals say otherwise
-- If the spec file itself is listed as deleted → REMOVE all failures from that file
-
-` : '';
-
       return `You are a test failure analyst for a software project queue system.
 
-Below are pre-extracted test failure entries. Each has a name, file location, error details, and context already identified.
-${gitBlock}
-For each failure you must do two things:
+Below are pre-extracted test failure entries. Group them by their source file and output in exactly this format:
 
-1. CLASSIFY the action needed — choose exactly one:
-   - REMOVE  → the test must be deleted because the feature/page/route it tests no longer exists.
-               Primary signal: the deleted files list above. Secondary signals: navigation failures
-               (net::ERR_ABORTED, ERR_CONNECTION_REFUSED), HTTP 404, missing routes,
-               "Cannot find module" for a deleted file, locator matched 0 elements consistently,
-               page.goto() timeout on a route that was intentionally removed.
-   - FIX     → the feature still exists but the code or test has a bug that needs fixing.
-               Signals: assertion mismatch (expected X received Y), wrong values, logic errors,
-               element present but in wrong state, intermittent timeout on something that should exist.
+---
+Test cases failed in - {relative/path/to/file.spec.js}
 
-2. CLEAN the error details — remove raw stack frames and repeated boilerplate, but keep everything
-   a developer needs to understand what failed (file:line, error message, expected vs received,
-   assertion line, relevant locators/selectors/timeouts).
+[1]
+e2e test case: {test name}
+Failed test case details:
 
-Output rules:
-- Separate each failure with a line containing exactly "---" on its own line
-- Line 1: test name (strip any leading index like "1)" or "[1]")
-- Line 2: Action: FIX   or   Action: REMOVE
-- Line 3: Reason: <one concise sentence explaining why you chose that action — mention the deleted file if applicable>
-- Remaining lines: cleaned error details (file:line, error, expected/received, assertion, context)
+{full error output, unchanged}
+
+[2]
+e2e test case: {test name}
+Failed test case details:
+
+{full error output, unchanged}
+
+---
+Test cases failed in - {next file if any}
+...
+
+Rules:
+- Do not modify or clean the error content — copy it verbatim
+- Use a line containing exactly "---" to separate file groups
+- Number test cases within each group starting at [1]
+- If the file path cannot be determined, use "unknown"
 
 Failures to process:
 ${failures}`;
@@ -981,17 +1012,9 @@ ${failures}`;
     // Helper: render grouped results into the textarea and refresh token count
     const _showGrouped = (grouped) => {
       textEl.value = grouped.map(g => {
-        const intentLabel = g._intent === 'REMOVE'
-          ? '⚠  ACTION: REMOVE TESTS'
-          : '🔧  ACTION: FIX CODE';
-        const reasonLine  = g._reason ? `Reason : ${g._reason}` : '';
-        const header = [
-          `════ ${g._file}  [${g._count} failure${g._count > 1 ? 's' : ''}] ════`,
-          intentLabel,
-          reasonLine,
-        ].filter(Boolean).join('\n');
-        return `${header}\n\n${g.body}`;
-      }).join('\n\n' + '─'.repeat(60) + '\n\n');
+        const header = `---\nTest cases failed in - ${g._file}\n`;
+        return `${header}\n${g.body}`;
+      }).join('\n\n') + '\n\n---';
       textEl.scrollTop = 0;
       _updateTokens(textEl.value);
     };
@@ -1050,43 +1073,41 @@ ${failures}`;
         extractBtn.disabled    = false;
         extractBtn.textContent = 'Extract';
 
-        // Parse: split on "---" separators → one { name, body } per failure
-        const sections = aiOutput
-          .split(/\n---\n/)
+        // Parse AI output: split on "---" → one block per file group.
+        // Each block starts with "Test cases failed in - {file}" and contains
+        // [N]-numbered test cases.
+        const fileBlocks = aiOutput
+          .split(/\n?---\n?/)
           .map(s => s.trim())
-          .filter(Boolean);
+          .filter(s => s && /^Test cases failed in\s*-\s*/i.test(s));
 
-        if (!sections.length) {
+        if (!fileBlocks.length) {
           statusEl.textContent = '✗ No failures detected in the output';
           statusEl.className   = 'tr-aq-status tr-aq-status--err';
           return;
         }
 
-        const rawFailures = sections.map(sec => {
-          const lines = sec.split('\n');
-          const name  = lines[0].replace(/^\[?\d+[\].)]\s*/, '').trim();
-
-          // Parse AI-provided classification (Action: FIX | REMOVE)
-          const actionMatch = sec.match(/^Action:\s*(FIX|REMOVE)\s*$/im);
-          const reasonMatch = sec.match(/^Reason:\s*(.+)$/im);
-          const intent = actionMatch ? actionMatch[1].toUpperCase() : 'FIX';
-          const reason = reasonMatch ? reasonMatch[1].trim() : '';
-
-          // Strip the Action/Reason lines from body — they go into metadata, not the task text
-          const body = lines.slice(1)
-            .filter(l => !/^Action:\s*(FIX|REMOVE)/i.test(l.trim()) && !/^Reason:\s*/i.test(l.trim()))
-            .join('\n').trim();
-
-          return { name, body, intent, reason };
+        // Build extractedFailures — one entry per file group.
+        // AI already grouped and formatted; we capture file path + full block as body.
+        extractedFailures = fileBlocks.map(block => {
+          const fileMatch = block.match(/^Test cases failed in\s*-\s*(.+)/i);
+          const file      = fileMatch ? fileMatch[1].trim() : 'unknown';
+          const shortName = file.split(/[/\\]/).pop();
+          // Count [N] entries inside the block
+          const count     = (block.match(/^\[\d+\]/gm) || []).length || 1;
+          return {
+            name:    `Fix failing tests — ${shortName}`,
+            body:    block,
+            _file:   file,
+            _count:  count,
+            _intent: 'FIX',
+            _reason: '',
+          };
         });
 
-        // Group by file and update textarea so the user sees the final grouped result
-        const grouped    = this._groupFailuresByFile(rawFailures);
-        extractedFailures = grouped;
-        _showGrouped(grouped);
-
-        const totalTests = rawFailures.length;
-        const totalFiles = grouped.length;
+        // AI output already shown in textarea from streaming — no need to reformat
+        const totalFiles = extractedFailures.length;
+        const totalTests = extractedFailures.reduce((s, g) => s + g._count, 0);
         statusEl.textContent = totalFiles === 1
           ? `✓ ${totalTests} failure${totalTests > 1 ? 's' : ''} in 1 file`
           : `✓ ${totalTests} failures across ${totalFiles} files`;
@@ -1096,6 +1117,26 @@ ${failures}`;
       });
 
       window.app.chat.generate({ prompt: fullPrompt, model: cfg });
+    });
+
+    // ── Extract (No AI) — always uses regex path, no model call ──────────
+    extractDirectBtn.addEventListener('click', () => {
+      if (!_initialFailures.length) {
+        statusEl.textContent = '✗ No failures detected in the output';
+        statusEl.className   = 'tr-aq-status tr-aq-status--err';
+        return;
+      }
+      const grouped     = this._groupFailuresByFile(_initialFailures);
+      extractedFailures = grouped;
+      _showGrouped(grouped);
+      const totalTests = _initialFailures.length;
+      const totalFiles = grouped.length;
+      statusEl.textContent = totalFiles === 1
+        ? `✓ ${totalTests} failure${totalTests > 1 ? 's' : ''} in 1 file`
+        : `✓ ${totalTests} failures across ${totalFiles} files`;
+      statusEl.className  = 'tr-aq-status tr-aq-status--ok';
+      sendBtn.disabled    = false;
+      sendBtn.textContent = `Send ${totalFiles} task${totalFiles > 1 ? 's' : ''} to Queue`;
     });
 
     // ── Send to Tasks ─────────────────────────────────────────────────
@@ -1176,30 +1217,78 @@ ${failures}`;
     return [...fileMap.values()].map(({ file, failures }) => {
       const shortName = file === '__unknown__' ? 'unknown file' : file.split(/[/\\]/).pop();
 
-      // If any failure in the group is classified REMOVE, treat the whole group as REMOVE.
-      // Rationale: when a page is deleted, every test in its spec file fails — a single
-      // REMOVE signal is enough to flag the entire file for deletion.
-      const _intent = failures.some(f => f.intent === 'REMOVE') ? 'REMOVE' : 'FIX';
+      const _intent = 'FIX';
+      const _reason = '';
+      const title   = `Fix failing tests — ${shortName}`;
 
-      // Surface the first REMOVE reason (most informative) as the group reason
-      const _reason = (failures.find(f => f.intent === 'REMOVE' && f.reason) || failures.find(f => f.reason) || {}).reason || '';
-
-      const title = _intent === 'REMOVE'
-        ? `Remove obsolete tests — ${shortName}`
-        : `Fix failing tests — ${shortName}`;
-
-      const body = [
-        `File: ${file}`,
-        '',
-        ...failures.map((f, i) => `[${i + 1}] ${f.name}\n${f.body}`),
-      ].join('\n\n');
+      const body = failures.map((f, i) =>
+        `[${i + 1}]\ne2e test case: ${f.name}\nFailed test case details:\n\n${f.body}`
+      ).join('\n\n');
 
       return { name: title, body, _file: file, _count: failures.length, _intent, _reason };
     });
   }
 
   // ----------------------------------------------------------------
-  // Test failure parser — Playwright, Jest, Cypress
+  // ----------------------------------------------------------------
+  // Raw failure section extractor — Playwright, Jest, Cypress
+  //
+  // Returns the raw console output for each failure block (up to 28 lines
+  // each) as a single string, numbered [1]…[N].
+  //
+  // Why raw instead of pre-cleaned fields?
+  //   The field-level extractor (below) uses single-line regexes that miss
+  //   multi-line errors. Playwright timeout errors look like:
+  //     "locator.click: Timeout 30000ms exceeded." — no "Error:" prefix
+  //   so errorMsg always comes back empty. The model needs the full block to
+  //   classify FIX vs REMOVE correctly.
+  // ----------------------------------------------------------------
+  _extractRawSections(raw) {
+    if (!raw) return '';
+
+    const text = raw
+      .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+      .replace(/\x1B\][^\x07]*\x07/g, '');
+
+    const _sectionText = (sec, i) => {
+      const lines = sec.replace(/\r/g, '').split('\n');
+      // 28 lines captures: header, error, call log, code snippet, locator
+      return `[${i + 1}]\n${lines.slice(0, 28).join('\n').trim()}`;
+    };
+
+    // ── Playwright: "  N) file:line:col › Test name ─────" ───────────
+    const pwSections = text.split(/\n(?=\s{0,6}\d+\)\s+\S)/);
+    const pwFailures = pwSections.filter(s => /^\s{0,6}\d+\)\s+/.test(s));
+    if (pwFailures.length > 0) {
+      return pwFailures.map(_sectionText).join('\n\n');
+    }
+
+    // ── Jest: "● Suite > test name" ──────────────────────────────────
+    const jestSections = text.split(/\n(?=\s*●\s+)/);
+    const jestFailures = jestSections.filter(s => /^\s*●\s+/.test(s));
+    if (jestFailures.length > 0) {
+      return jestFailures.map(_sectionText).join('\n\n');
+    }
+
+    // ── Cypress: "  N) Suite: test" ──────────────────────────────────
+    const cypSections = text.split(/\n(?=\s{2,6}\d+\)\s+)/);
+    const cypFailures = cypSections.filter(s => /^\s{2,6}\d+\)\s+/.test(s));
+    if (cypFailures.length > 0) {
+      return cypFailures.map(_sectionText).join('\n\n');
+    }
+
+    // ── Flutter: "MM:SS +N -M: Test name [E]" ────────────────────────
+    const flutterSections = text.split(/\n(?=\d{2}:\d{2}[\s+\d-]+:\s)/);
+    const flutterFailures = flutterSections.filter(s => /\[E\]/.test(s.split('\n')[0]));
+    if (flutterFailures.length > 0) {
+      return flutterFailures.map(_sectionText).join('\n\n');
+    }
+
+    return ''; // Unknown format — caller falls back to pre-extracted fields
+  }
+
+  // ----------------------------------------------------------------
+  // Test failure parser — Playwright, Jest, Cypress, Flutter
   // Returns [{ name, body }] — one entry per failed test
   // ----------------------------------------------------------------
   _extractTestFailures(raw) {
@@ -1288,6 +1377,44 @@ ${failures}`;
       const parts = [
         fileLine  && `File:  ${fileLine}`,
         errorMsg  && `Error: ${errorMsg}`,
+      ].filter(Boolean);
+
+      if (!parts.length) continue;
+      failures.push({ name: testName, body: parts.join('\n') });
+    }
+
+    if (failures.length) return failures;
+
+    // ── Flutter ───────────────────────────────────────────────────────
+    // Default reporter header: "MM:SS +N -M: Test name [E]"
+    // Each failure block ends at the next timestamp line or end of output.
+    const flutterSections = text.split(/\n(?=\d{2}:\d{2}[\s+\d-]+:\s)/);
+    for (const sec of flutterSections) {
+      const hdr = sec.match(/^\d{2}:\d{2}[\s+\d-]+:\s+(.+?)\s+\[E\]/);
+      if (!hdr) continue;
+
+      const testName = hdr[1].trim();
+
+      // "Expected: <value>" — strip angle brackets from matcher output
+      const expected = (sec.match(/Expected:\s*<?(.+?)>?\s*$/m) || [])[1]?.trim() || '';
+      const actual   = (sec.match(/Actual:\s*<?(.+?)>?\s*$/m)   || [])[1]?.trim() || '';
+      const which    = (sec.match(/Which:\s*(.+)/m)             || [])[1]?.trim() || '';
+      // Assertion thrown message: "The following assertion was thrown …: <msg>"
+      const errorMsg = (sec.match(/(?:The following \S+(?: \S+)* (?:was thrown|exception)[:\s]+)(.+)/m) || [])[1]?.trim()
+                    || (sec.match(/^Error:\s*(.+)/m) || [])[1]?.trim()
+                    || '';
+
+      // Flutter stack lines: "test/foo_test.dart 25:5" (space-delimited)
+      // or "test/foo_test.dart:25:5" (colon-delimited, some reporters)
+      const fileMatch = sec.match(/((?:[\w.-]+[/\\])*[\w.-]+_test\.dart)[:\s]+(\d+)/);
+      const fileLine  = fileMatch ? `${fileMatch[1]}:${fileMatch[2]}` : '';
+
+      const parts = [
+        fileLine  && `File:     ${fileLine}`,
+        errorMsg  && `Error:    ${errorMsg}`,
+        expected  && `Expected: ${expected}`,
+        actual    && `Actual:   ${actual}`,
+        which     && `Which:    ${which}`,
       ].filter(Boolean);
 
       if (!parts.length) continue;
