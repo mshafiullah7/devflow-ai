@@ -40,6 +40,10 @@ router.register('extract-user-stories', async () => {
   const { ExtractUserStoriesPage } = await import('./pages/extract-user-stories/extract-user-stories-page.js');
   return ExtractUserStoriesPage;
 });
+router.register('project-layers', async () => {
+  const { ProjectLayersPage } = await import('./pages/project-layers/project-layers-page.js');
+  return ProjectLayersPage;
+});
 router.register('user-stories', async () => {
   const { ProjectPage } = await import('./pages/user-stories/user-stories.js');
   return ProjectPage;

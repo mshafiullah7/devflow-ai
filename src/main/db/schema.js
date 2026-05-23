@@ -11,6 +11,7 @@ function applySchema(db) {
     `ALTER TABLE screen_designs ADD COLUMN queued   INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE screen_designs ADD COLUMN executed INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE project_layers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -279,6 +280,21 @@ function applySchema(db) {
       dark       TEXT    NOT NULL DEFAULT '',
       is_active  INTEGER NOT NULL DEFAULT 1,
       created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
+    -- PROJECT LAYERS (sub-projects / architectural layers)
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS project_layers (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name        TEXT    NOT NULL,
+      description TEXT,
+      folder_path TEXT,
+      sort_order  INTEGER NOT NULL DEFAULT 0,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
     -- ----------------------------------------------------------------

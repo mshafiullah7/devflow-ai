@@ -158,6 +158,13 @@ contextBridge.exposeInMainWorld('db', {
     delete: (id)         => invoke('db:issues:delete', id),
     count:  (project_id) => invoke('db:issues:count', project_id),
   },
+  projectLayers: {
+    list:   (project_id) => invoke('db:project_layers:list', project_id),
+    get:    (id)         => invoke('db:project_layers:get', id),
+    create: (data)       => invoke('db:project_layers:create', data),
+    update: (data)       => invoke('db:project_layers:update', data),
+    delete: (id)         => invoke('db:project_layers:delete', id),
+  },
   modelMapping: {
     get: (pageKey)              => invoke('db:model_mapping:get', pageKey),
     set: (pageKey, modelConfigId) => invoke('db:model_mapping:set', pageKey, modelConfigId),

@@ -16,7 +16,7 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, stories, features, statuses, documents, mockups, issueCount, testRunHistory, queuePending] = await Promise.all([
+    const [project, stories, features, statuses, documents, mockups, issueCount, testRunHistory, queuePending, layers] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.userStories.list({ project_id: this.projectId }),
       window.db.features.list(this.projectId),
@@ -26,6 +26,7 @@ export class ProjectHomePage {
       window.db.issues.count(this.projectId),
       window.db.testRunHistory.list(this.projectId),
       window.db.promptQueue.pendingCount(this.projectId),
+      window.db.projectLayers.list(this.projectId),
     ]);
 
     this._project          = project;
@@ -37,6 +38,7 @@ export class ProjectHomePage {
     this._issueCount       = issueCount;
     this._testRunHistory   = testRunHistory;
     this._queuePending     = queuePending ?? 0;
+    this._layers           = layers ?? [];
 
     this.container.innerHTML = this._template();
 
@@ -278,6 +280,18 @@ export class ProjectHomePage {
               </span>
               <span class="ph-nav-item__label">Documents</span>
               <span class="ph-nav-item__count">${documents.length}</span>
+            </button>
+
+            <button class="ph-nav-item" id="navLayers">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                  <polyline points="2 17 12 22 22 17"/>
+                  <polyline points="2 12 12 17 22 12"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Layers</span>
+              <span class="ph-nav-item__count">${this._layers.length}</span>
             </button>
 
             <button class="ph-nav-item" id="navMockups">
@@ -610,6 +624,9 @@ export class ProjectHomePage {
         this.router.navigate('git-changes', { projectId: this.projectId, from: 'project-home' }));
 
     // Sidebar navigation
+    this.container.querySelector('#navLayers')
+      .addEventListener('click', () => this.router.navigate('project-layers', { projectId: this.projectId }));
+
     this.container.querySelector('#navMockups')
       .addEventListener('click', () => this.router.navigate('mockups', { projectId: this.projectId }));
 

@@ -883,6 +883,50 @@ function registerDbHandlers() {
     `).run(pageKey, modelConfigId || null);
   });
 
+  // ----------------------------------------------------------------
+  // project_layers
+  // ----------------------------------------------------------------
+  safeHandle('db:project_layers:list', (_e, project_id) => {
+    return db
+      .prepare('SELECT * FROM project_layers WHERE is_active = 1 AND project_id = ? ORDER BY sort_order ASC, created_at ASC')
+      .all(project_id);
+  });
+
+  safeHandle('db:project_layers:get', (_e, id) => {
+    return db.prepare('SELECT * FROM project_layers WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:project_layers:create', (_e, { project_id, name, description, folder_path, sort_order }) => {
+    const result = db
+      .prepare('INSERT INTO project_layers (project_id, name, description, folder_path, sort_order) VALUES (?, ?, ?, ?, ?)')
+      .run(project_id, name, description ?? null, folder_path ?? null, sort_order ?? 0);
+    return db.prepare('SELECT * FROM project_layers WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  safeHandle('db:project_layers:update', (_e, { id, name, description, folder_path, sort_order }) => {
+    db.prepare(
+      `UPDATE project_layers
+          SET name        = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
+              description = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
+              folder_path = CASE WHEN ? IS NOT NULL THEN ? ELSE folder_path END,
+              sort_order  = CASE WHEN ? IS NOT NULL THEN ? ELSE sort_order END,
+              updated_at  = datetime('now')
+        WHERE id = ?`
+    ).run(
+      name ?? null, name ?? null,
+      description ?? null, description ?? null,
+      folder_path ?? null, folder_path ?? null,
+      sort_order ?? null, sort_order ?? null,
+      id
+    );
+    return db.prepare('SELECT * FROM project_layers WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:project_layers:delete', (_e, id) => {
+    db.prepare('DELETE FROM project_layers WHERE id = ?').run(id);
+    return { success: true };
+  });
+
   safeHandle('app:writeTempFiles', (_e, files) => {
     const dir = path.join(os.tmpdir(), 'devflow-ai-sdlc');
     fs.mkdirSync(dir, { recursive: true });
