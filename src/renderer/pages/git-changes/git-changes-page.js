@@ -507,7 +507,7 @@ export class GitChangesPage {
     if (!cwd || !badge) return;
     try {
       const r = await window.db.terminal.exec({
-        command: 'git rev-list --count @{u}..HEAD 2>&1',
+        command: "git rev-list --count '@{u}..HEAD' 2>&1",
         cwd,
       });
       const raw   = (r.stdout || '').trim();
