@@ -11,6 +11,7 @@ export class ProjectPage {
     this.router    = router;
     this.projectId = params.projectId;
     this._project             = null;
+    this._usMapping           = null;
     this._aiModelConfig       = null;
     this._activeStoryId       = null;
     this._selectedFeatureId   = null;
@@ -28,7 +29,10 @@ export class ProjectPage {
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     applyStoredTheme();
 
-    this._project = await window.db.projects.get(this.projectId);
+    [this._project, this._usMapping] = await Promise.all([
+      window.db.projects.get(this.projectId),
+      window.db.modelMapping.get('user-stories'),
+    ]);
     this.container.innerHTML = this._template();
 
     this._git = new GitController({ getTermCwd: () => this._project?.project_path || '' });
@@ -42,8 +46,9 @@ export class ProjectPage {
 
 
     this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#usModelPicker'),
-      onSelect: model => { this._aiModelConfig = model; },
+      anchor:    this.container.querySelector('#usModelPicker'),
+      onSelect:  model => { this._aiModelConfig = model; },
+      initialId: this._usMapping?.model_config_id ?? null,
     });
     await this._picker.reload();
     this._bindEvents();
