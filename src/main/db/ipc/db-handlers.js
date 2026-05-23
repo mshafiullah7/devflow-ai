@@ -790,14 +790,15 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:prompt_queue:update', (_e, { id, status, output, exit_code, ran_at, model_label }) => {
+  safeHandle('db:prompt_queue:update', (_e, { id, status, output, exit_code, ran_at, model_label, commit_sha }) => {
     db.prepare(`
       UPDATE prompt_queue
          SET status      = CASE WHEN ? IS NOT NULL THEN ? ELSE status END,
              output      = CASE WHEN ? IS NOT NULL THEN ? ELSE output END,
              exit_code   = CASE WHEN ? IS NOT NULL THEN ? ELSE exit_code END,
              ran_at      = CASE WHEN ? IS NOT NULL THEN ? ELSE ran_at END,
-             model_label = CASE WHEN ? IS NOT NULL THEN ? ELSE model_label END
+             model_label = CASE WHEN ? IS NOT NULL THEN ? ELSE model_label END,
+             commit_sha  = CASE WHEN ? IS NOT NULL THEN ? ELSE commit_sha END
        WHERE id = ?
     `).run(
       status      ?? null, status      ?? null,
@@ -805,6 +806,7 @@ function registerDbHandlers() {
       exit_code   ?? null, exit_code   ?? null,
       ran_at      ?? null, ran_at      ?? null,
       model_label ?? null, model_label ?? null,
+      commit_sha  ?? null, commit_sha  ?? null,
       id
     );
     return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(id);

@@ -334,6 +334,7 @@ export class PromptQueuePage {
             ${item.story_title ? `<span class="pq-detail__story">${escHtml(item.story_title)}</span>` : ''}
             ${item.tag ? `<span class="pq-detail__tag">${escHtml(item.tag)}</span>` : ''}
             ${item.ran_at ? `<span class="pq-detail__time">${new Date(item.ran_at + (item.ran_at.endsWith('Z') ? '' : 'Z')).toLocaleString()}</span>` : ''}
+            ${item.commit_sha ? `<span class="pq-detail__commit" title="${escHtml(item.commit_sha)}"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v4M8 11v4M1 8h4M11 8h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>${escHtml(item.commit_sha.slice(0, 7))}</span>` : ''}
           </div>
           ${isRunning && this._activePlan ? `
           <div class="pq-step-tracker" id="pqStepTracker"></div>` : ''}
@@ -462,12 +463,18 @@ export class PromptQueuePage {
       item.exit_code = exitCode;
       item.output    = this._outputBuf[item.id] || '';
 
+      // Auto-commit all changes made during the run and capture the SHA
+      if (succeeded) {
+        const sha = await this._commitAfterRun(item);
+        if (sha) item.commit_sha = sha;
+      }
+
       await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent || item.prompt_text });
       await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
       this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
       this._isRunning = false;
 
-      await window.db.promptQueue.update({ id: item.id, status: item.status, output: item.output, exit_code: exitCode });
+      await window.db.promptQueue.update({ id: item.id, status: item.status, output: item.output, exit_code: exitCode, commit_sha: item.commit_sha ?? null });
 
       if (succeeded && item.prompt_id) {
         await window.db.prompts.update({ id: item.prompt_id, is_executed: 1 });
@@ -598,6 +605,12 @@ export class PromptQueuePage {
       item.exit_code  = exitCode;
       item.output     = this._outputBuf[item.id] || '';
 
+      // Auto-commit all changes made during the run and capture the SHA
+      if (succeeded) {
+        const sha = await this._commitAfterRun(item);
+        if (sha) item.commit_sha = sha;
+      }
+
       // Persist the conversation turn — set _isRunning false only after saves
       // so the follow-up bar cannot appear with a stale empty history
       await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent || item.prompt_text });
@@ -606,10 +619,11 @@ export class PromptQueuePage {
       this._isRunning = false;
 
       await window.db.promptQueue.update({
-        id:        item.id,
-        status:    item.status,
-        output:    item.output,
-        exit_code: exitCode,
+        id:         item.id,
+        status:     item.status,
+        output:     item.output,
+        exit_code:  exitCode,
+        commit_sha: item.commit_sha ?? null,
       });
 
       if (succeeded && item.prompt_id) {
@@ -668,6 +682,37 @@ export class PromptQueuePage {
     const parts   = [`${pending} pending`, `${done} done`];
     if (failed > 0) parts.push(`${failed} failed`);
     el.textContent = parts.join(' · ');
+  }
+
+  // ----------------------------------------------------------------
+  // Git commit after successful run
+  // ----------------------------------------------------------------
+  async _commitAfterRun(item) {
+    if (!this._project?.project_path) return null;
+    const cwd = this._project.project_path;
+    try {
+      // Snapshot HEAD before committing so we can detect if a new commit was made
+      const before    = await window.db.terminal.exec({ command: 'git rev-parse HEAD 2>&1', cwd });
+      const beforeSha = before?.stdout?.trim();
+
+      // Build commit message from item context
+      const tag     = item.tag ? `[${item.tag}] ` : '';
+      const title   = (item.story_title || `Queue #${item.id}`).replace(/'/g, "''");
+      const message = `DevFlow: ${tag}${title}`;
+
+      // Stage all changes and commit
+      await window.db.terminal.exec({ command: 'git add -A', cwd });
+      await window.db.terminal.exec({ command: `git commit -m '${message}'`, cwd });
+
+      // Read HEAD after commit
+      const after    = await window.db.terminal.exec({ command: 'git rev-parse HEAD 2>&1', cwd });
+      const afterSha = after?.stdout?.trim();
+
+      // Only return a SHA if a new commit was actually created
+      return (afterSha && afterSha !== beforeSha) ? afterSha : null;
+    } catch {
+      return null; // not a git repo, git not installed, or nothing to commit — fail silently
+    }
   }
 
   // ----------------------------------------------------------------

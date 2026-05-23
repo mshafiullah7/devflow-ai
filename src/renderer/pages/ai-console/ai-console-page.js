@@ -978,9 +978,14 @@ export class AiConsolePage {
       parts.push(`DOCUMENTS (${selectedDocs.length}):\n\n${list}`);
     }
 
+    const projectName = this._project?.name || '';
+    const projectLine = projectName ? `PROJECT: ${projectName}\n\n` : '';
+
     this._builtContext = parts.length > 0
-      ? `You are an AI assistant for the following software project.\nUse this context accurately when answering. Do not invent details not present below.\n\n${parts.join('\n\n══════════════════════════════════════\n\n')}`
-      : '';
+      ? `${projectLine}You are an AI assistant for the following software project.\nUse this context accurately when answering. Do not invent details not present below.\n\n${parts.join('\n\n══════════════════════════════════════\n\n')}`
+      : projectName
+        ? `${projectLine}You are an AI assistant for the ${projectName} project.`
+        : '';
 
     this._updateTokenEstimate();
     this._updateContextPreview();

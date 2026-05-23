@@ -296,6 +296,7 @@ function applySchema(db) {
       output        TEXT,
       exit_code     INTEGER,
       model_label   TEXT,
+      commit_sha    TEXT,
       sort_order    INTEGER NOT NULL DEFAULT 0,
       created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
       ran_at        TEXT

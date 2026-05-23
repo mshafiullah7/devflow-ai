@@ -394,6 +394,12 @@ function runMigrations(db) {
   if (!mcCols.includes('use_devflow_agent')) {
     db.exec('ALTER TABLE model_configs ADD COLUMN use_devflow_agent INTEGER NOT NULL DEFAULT 0');
   }
+
+  // Add commit_sha to prompt_queue for git commit linkage
+  const pqCols = db.prepare('PRAGMA table_info(prompt_queue)').all().map(c => c.name);
+  if (!pqCols.includes('commit_sha')) {
+    db.exec('ALTER TABLE prompt_queue ADD COLUMN commit_sha TEXT');
+  }
 }
 
 /**
