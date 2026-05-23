@@ -805,9 +805,11 @@ export class TestRunnerPage {
           ${statusIcon}
           <span class="tr-hcard__cmd" title="${escHtml(r.command)}">${escHtml(r.command)}</span>
         </div>
-        ${r.framework ? `<div class="tr-hcard__fw">${escHtml(r.framework)}</div>` : ''}
-        <div class="tr-hcard__stats">${statsHtml}</div>
-        <div class="tr-hcard__time">${relativeTime(r.ran_at)}</div>
+        <div class="tr-hcard__meta">
+          ${r.framework ? `<span class="tr-hcard__fw">${escHtml(r.framework)}</span>` : ''}
+          <span class="tr-hcard__stats">${statsHtml}</span>
+          <span class="tr-hcard__time">${relativeTime(r.ran_at)}</span>
+        </div>
       </div>
     `;
   }

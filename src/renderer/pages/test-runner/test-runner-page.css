@@ -512,17 +512,29 @@
   min-width: 0;
 }
 
+.tr-hcard__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-left: 20px;
+  min-width: 0;
+}
+
 .tr-hcard__fw {
   font-size: 10px;
   color: var(--text-secondary);
-  margin-left: 20px;
+}
+.tr-hcard__fw:not(:empty)::after {
+  content: '·';
+  margin-left: 5px;
+  opacity: 0.4;
 }
 
 .tr-hcard__stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-left: 20px;
+  gap: 5px;
 }
 
 .tr-hcard__stat {
@@ -538,5 +550,6 @@
 .tr-hcard__time {
   font-size: 10px;
   color: var(--text-secondary);
-  margin-left: 20px;
+  margin-left: auto;
+  white-space: nowrap;
 }
