@@ -912,9 +912,8 @@ export class TestRunnerPage {
   // Add to Queue — extract failures from raw output, no model call
   // ----------------------------------------------------------------
   async _showAddToQueueModal(rawOutput, runId) {
-    // Fetch git context before building the modal so it can be embedded
-    // in the prompt. Done once here; referenced in the _buildPrompt closure.
-    const { summary: gitContext, badge: gitBadge } = await this._fetchGitContext();
+    // Build and show the modal immediately — no blocking awaits before this.
+    // Git context is fetched in the background and populates the badge once ready.
     const overlay = document.createElement('div');
     overlay.className = 'tr-modal-overlay';
     overlay.innerHTML = `
@@ -929,10 +928,9 @@ export class TestRunnerPage {
         </div>
         <div class="tr-modal__footer">
           <span class="tr-aq-tokens" id="trAqTokens"></span>
-          <span class="tr-aq-git-badge" id="trAqGitBadge"></span>
           <button class="tr-modal__btn tr-modal__btn--cancel"         id="trAqCancel">Cancel</button>
           <button class="tr-modal__btn tr-modal__btn--extract-direct" id="trAqExtractDirect">Extract (No AI)</button>
-          <button class="tr-modal__btn tr-modal__btn--extract"        id="trAqExtract">Extract</button>
+          <button class="tr-modal__btn tr-modal__btn--extract"        id="trAqExtract">Extract (AI)</button>
           <button class="tr-modal__btn tr-modal__btn--save"           id="trAqSend" disabled>Send to Tasks</button>
         </div>
       </div>
@@ -946,10 +944,6 @@ export class TestRunnerPage {
     const extractDirectBtn = overlay.querySelector('#trAqExtractDirect');
     const sendBtn         = overlay.querySelector('#trAqSend');
     const tokensEl        = overlay.querySelector('#trAqTokens');
-    const gitBadgeEl      = overlay.querySelector('#trAqGitBadge');
-
-    // Show git context badge so the user knows whether git info is available
-    if (gitBadgeEl && gitBadge) gitBadgeEl.textContent = gitBadge;
 
     // Live token estimator — ~4 chars/token is a reliable approximation for
     // mixed code/prose. No AI call needed; updates on every textarea change.
@@ -979,6 +973,7 @@ Below are pre-extracted test failure entries. Group them by their source file an
 
 ---
 Test cases failed in - {relative/path/to/file.spec.js}
+Analyze for the failed test cases and check if functionality is removed then delete the test case else fix the test cases
 
 [1]
 e2e test case: {test name}
@@ -994,6 +989,7 @@ Failed test case details:
 
 ---
 Test cases failed in - {next file if any}
+Analyze for the failed test cases and check if functionality is removed then delete the test case else fix the test cases
 ...
 
 Rules:
@@ -1001,6 +997,7 @@ Rules:
 - Use a line containing exactly "---" to separate file groups
 - Number test cases within each group starting at [1]
 - If the file path cannot be determined, use "unknown"
+- Always include the instruction line immediately after each "Test cases failed in" line
 
 Failures to process:
 ${failures}`;
@@ -1012,8 +1009,8 @@ ${failures}`;
     // Helper: render grouped results into the textarea and refresh token count
     const _showGrouped = (grouped) => {
       textEl.value = grouped.map(g => {
-        const header = `---\nTest cases failed in - ${g._file}\n`;
-        return `${header}\n${g.body}`;
+        const header = `---\nTest cases failed in - ${g._file}\nAnalyze for the failed test cases and check if functionality is removed then delete the test case else fix the test cases`;
+        return `${header}\n\n${g.body}`;
       }).join('\n\n') + '\n\n---';
       textEl.scrollTop = 0;
       _updateTokens(textEl.value);
@@ -1071,7 +1068,7 @@ ${failures}`;
       window.app.chat.onDone(() => {
         window.app.chat.offAll();
         extractBtn.disabled    = false;
-        extractBtn.textContent = 'Extract';
+        extractBtn.textContent = 'Extract (AI)';
 
         // Parse AI output: split on "---" → one block per file group.
         // Each block starts with "Test cases failed in - {file}" and contains
@@ -1119,14 +1116,38 @@ ${failures}`;
       window.app.chat.generate({ prompt: fullPrompt, model: cfg });
     });
 
-    // ── Extract (No AI) — always uses regex path, no model call ──────────
+    // ── Extract (No AI) — group by file, keep error content verbatim ────
     extractDirectBtn.addEventListener('click', () => {
       if (!_initialFailures.length) {
         statusEl.textContent = '✗ No failures detected in the output';
         statusEl.className   = 'tr-aq-status tr-aq-status--err';
         return;
       }
-      const grouped     = this._groupFailuresByFile(_initialFailures);
+
+      // Build failures with verbatim raw content (same source as the AI prompt)
+      // so the body is never stripped or reformatted.
+      // _initialFailures provides file-path metadata for grouping;
+      // _rawSections provides the intact error body for each failure.
+      let failures = _initialFailures;
+
+      if (_rawSections) {
+        // Split the numbered raw-section string back into individual blocks.
+        // Format: "[1]\ncontent...\n\n[2]\ncontent..."
+        const rawBlocks = _rawSections
+          .split(/\n(?=\[\d+\]\n)/)
+          .map(s => s.trim())
+          .filter(s => s);
+
+        if (rawBlocks.length === _initialFailures.length) {
+          failures = _initialFailures.map((f, i) => ({
+            name: f.name,
+            // Strip the [N] prefix — _groupFailuresByFile re-numbers within each file group
+            body: rawBlocks[i].replace(/^\[\d+\]\s*\n?/, '').trim(),
+          }));
+        }
+      }
+
+      const grouped     = this._groupFailuresByFile(failures);
       extractedFailures = grouped;
       _showGrouped(grouped);
       const totalTests = _initialFailures.length;
@@ -1150,9 +1171,10 @@ ${failures}`;
       for (const f of extractedFailures) {
         const isRemove   = f._intent === 'REMOVE';
         const tag        = isRemove ? 'Remove Test' : 'Test Fix';
+        const fileHeader = `Test cases failed in - ${f._file}\nAnalyze for the failed test cases and check if functionality is removed then delete the test case else fix the test cases`;
         const promptText = isRemove
-          ? `The page or feature covered by this spec file has been removed. Delete the following obsolete test cases from the test file.\n\n${f.body}`
-          : f.body;
+          ? `${fileHeader}\n\nThe page or feature covered by this spec file has been removed. Delete the following obsolete test cases from the test file.\n\n${f.body}`
+          : `${fileHeader}\n\n${f.body}`;
 
         await window.db.promptQueue.add({
           project_id:    this._projectId,

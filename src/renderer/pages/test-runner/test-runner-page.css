@@ -585,14 +585,7 @@
   color: var(--text-muted, #6b7280);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-.tr-aq-git-badge {
-  font-size: 11px;
-  color: var(--text-muted, #6b7280);
-  white-space: nowrap;
   margin-right: auto;  /* pushes buttons to the right */
-  padding-left: 10px;
 }
 
 /* Extract button */
