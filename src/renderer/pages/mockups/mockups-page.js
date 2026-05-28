@@ -278,7 +278,7 @@ export class MockupsPage {
   _renderList() {
     if (this._screens.length === 0) return '<p class="scr-sidebar__empty">No screens yet</p>';
     return this._screens.map(s => {
-      const canQueue = !s.executed && s.description;
+      const canQueue = !!s.description;
       const isQueued = !!s.queued;
       return `
         <div class="scr-sidebar__item${s.id === this._activeId ? ' scr-sidebar__item--active' : ''}" data-id="${s.id}">

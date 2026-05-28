@@ -149,6 +149,12 @@ export class QueueRunnerPage {
             </svg>
             Clear completed
           </button>
+          <button class="scr-btn scr-btn--sm scr-btn--secondary" id="qwRunSelectedBtn" ${queued.length === 0 ? 'disabled' : ''}>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <path d="M4 3l9 5-9 5V3z" fill="currentColor"/>
+            </svg>
+            Run Selected
+          </button>
           <button class="scr-btn scr-btn--primary scr-btn--sm" id="qwRunBtn" ${queued.length === 0 ? 'disabled' : ''}>
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
               <path d="M4 3l9 5-9 5V3z" fill="currentColor"/>
@@ -162,6 +168,8 @@ export class QueueRunnerPage {
             : queued.map(s => `
               <div class="scr-queue-item" data-id="${s.id}">
                 <div class="scr-queue-item__row">
+                  <input type="checkbox" class="qw-item-check" data-id="${s.id}" checked
+                    title="Select for Run Selected" style="margin:0 4px 0 0;cursor:pointer;flex-shrink:0;">
                   <svg class="scr-queue-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
                     <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
                   </svg>
@@ -182,27 +190,51 @@ export class QueueRunnerPage {
 
     if (queued.length === 0) return;
 
-    const runBtn   = panel.querySelector('#qwRunBtn');
-    const stopBtn  = panel.querySelector('#qwStopBtn');
-    const clearBtn = panel.querySelector('#qwClearBtn');
+    const runBtn         = panel.querySelector('#qwRunBtn');
+    const runSelectedBtn = panel.querySelector('#qwRunSelectedBtn');
+    const stopBtn        = panel.querySelector('#qwStopBtn');
+    const clearBtn       = panel.querySelector('#qwClearBtn');
 
-    runBtn.addEventListener('click', () => {
-      runBtn.hidden  = true;
-      stopBtn.hidden = false;
-      this._runQueue(queued, panel, () => {
-        runBtn.hidden   = false;
-        stopBtn.hidden  = true;
-        clearBtn.hidden = false;
+    // Keep Run Selected in sync with checkbox state
+    const syncRunSelected = () => {
+      const anyChecked = panel.querySelectorAll('.qw-item-check:checked').length > 0;
+      runSelectedBtn.disabled = !anyChecked;
+    };
+    panel.querySelectorAll('.qw-item-check').forEach(cb => {
+      cb.addEventListener('change', syncRunSelected);
+    });
+
+    const startRun = (screens) => {
+      runBtn.hidden         = true;
+      runSelectedBtn.hidden = true;
+      stopBtn.hidden        = false;
+      this._runQueue(screens, panel, () => {
+        runBtn.hidden         = false;
+        runSelectedBtn.hidden = false;
+        stopBtn.hidden        = true;
+        clearBtn.hidden       = false;
       });
+    };
+
+    runBtn.addEventListener('click', () => startRun(queued));
+
+    runSelectedBtn.addEventListener('click', () => {
+      const checkedIds = new Set(
+        [...panel.querySelectorAll('.qw-item-check:checked')].map(cb => Number(cb.dataset.id))
+      );
+      const selected = queued.filter(s => checkedIds.has(s.id));
+      if (selected.length === 0) return;
+      startRun(selected);
     });
 
     stopBtn.addEventListener('click', () => {
       this._queueStopped = true;
       window.app.queueChat.cancel();
       window.app.queueChat.offAll();
-      stopBtn.hidden  = true;
-      runBtn.hidden   = false;
-      clearBtn.hidden = false;
+      stopBtn.hidden        = true;
+      runBtn.hidden         = false;
+      runSelectedBtn.hidden = false;
+      clearBtn.hidden       = false;
     });
 
     clearBtn.addEventListener('click', async () => {
