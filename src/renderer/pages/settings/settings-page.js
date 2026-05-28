@@ -796,12 +796,11 @@ export class SettingsPage {
                 : `<div class="st-form__type-toggle">
                     <button type="button" class="st-type-btn active" data-type="cli">CLI</button>
                     <button type="button" class="st-type-btn" data-type="ollama">Ollama</button>
-                    <button type="button" class="st-type-btn st-type-btn--disabled" disabled title="Coming soon">
-                      API <span class="st-coming-soon">Soon</span>
-                    </button>
+                    <button type="button" class="st-type-btn" data-type="api">API</button>
                   </div>`
               }
               <input type="hidden" id="stFType" value="${config?.type || 'cli'}"/>
+              <span class="st-type-hint" id="stFTypeHint"></span>
             </div>
 
             <div id="stFFieldsCli">
@@ -834,13 +833,6 @@ export class SettingsPage {
                   placeholder="--dangerously-skip-permissions --print"
                   value="${escHtml(config?.flags || '')}"/>
                 <span class="st-form__hint">Flags appended when running inline in the console</span>
-              </div>
-              <div class="st-form__row">
-                <label class="st-form__label">Input mode</label>
-                <select class="st-form__select" id="stFInputMode">
-                  <option value="pipe"    ${(!config || config.input_mode === 'pipe')    ? 'selected' : ''}>Pipe (Write-Output $p | exe)</option>
-                  <option value="heredoc" ${config?.input_mode === 'heredoc'             ? 'selected' : ''}>Heredoc ($p = @'…'@; exe $p)</option>
-                </select>
               </div>
             </div>
 
@@ -876,6 +868,37 @@ export class SettingsPage {
                   Use Devflow Agent loop (agentic mode)
                 </label>
                 <span class="st-form__hint">Runs an autonomous coding loop instead of a single prompt.</span>
+              </div>
+            </div>
+
+            <div id="stFFieldsApi" style="display:none">
+              <div class="st-form__row">
+                <label class="st-form__label">Base URL *</label>
+                <input class="st-form__input" id="stFApiBaseUrl" type="text"
+                  placeholder="https://api.openai.com/v1"
+                  value="${escHtml(config?.type === 'api' ? (config?.base_url || '') : '')}"/>
+                <span class="st-form__hint">OpenAI-compatible endpoint (e.g. OpenAI, Groq, Together, Azure OpenAI, Ollama /v1)</span>
+              </div>
+              <div class="st-form__row">
+                <label class="st-form__label">API Key</label>
+                <input class="st-form__input" id="stFApiKey" type="password"
+                  placeholder="${config?.type === 'api' && config?.api_key ? '••••••••  (saved)' : 'sk-…'}"
+                  autocomplete="new-password"/>
+                <span class="st-form__hint">Stored as-is in the local database. Leave blank to keep existing key when editing.</span>
+              </div>
+              <div class="st-form__row">
+                <label class="st-form__label">Model *</label>
+                <input class="st-form__input" id="stFApiModel" type="text"
+                  placeholder="e.g. gpt-4o, mistral-large-latest, llama-3.1-70b"
+                  value="${escHtml(config?.type === 'api' ? (config?.model_name || '') : '')}"/>
+                <span class="st-form__error" id="stFApiModelError" style="display:none">Model name is required</span>
+              </div>
+              <div class="st-form__row">
+                <label class="st-form__label">Max Tokens</label>
+                <input class="st-form__input" id="stFApiMaxTokens" type="number"
+                  placeholder="4096"
+                  value="${escHtml(config?.type === 'api' ? String(config?.max_tokens || '') : '')}"/>
+                <span class="st-form__hint">Optional — leave blank for provider default</span>
               </div>
             </div>
 
@@ -950,9 +973,21 @@ export class SettingsPage {
       }
     };
 
+    const TYPE_HINTS = {
+      cli:    'Make sure to provide the Model and effort level correctly — wrong values will fall back to default models and burn tokens unexpectedly.',
+      ollama: 'For effective responses use 70B+ models (e.g. llama3.3:70b, qwen2.5-coder:72b). Smaller models may produce incomplete or low-quality output.',
+      api:    'Only OpenAI-compatible providers are supported: OpenAI, Groq, Mistral AI, Together AI, DeepSeek, Fireworks AI, OpenRouter, LM Studio, and others that expose a /chat/completions endpoint.',
+    };
+
     const applyType = type => {
       overlay.querySelector('#stFFieldsCli').style.display    = type === 'cli'    ? '' : 'none';
       overlay.querySelector('#stFFieldsOllama').style.display = type === 'ollama' ? '' : 'none';
+      overlay.querySelector('#stFFieldsApi').style.display    = type === 'api'    ? '' : 'none';
+      const hintEl = overlay.querySelector('#stFTypeHint');
+      if (hintEl) {
+        hintEl.textContent = TYPE_HINTS[type] || '';
+        hintEl.className = `st-type-hint st-type-hint--${type}`;
+      }
       if (type === 'ollama') loadOllamaModels();
     };
 
@@ -1048,13 +1083,26 @@ export class SettingsPage {
         data.executable  = overlay.querySelector('#stFExecutable')?.value.trim() || null;
         data.model_name  = cliModel;
         data.flags       = overlay.querySelector('#stFFlags')?.value.trim() || null;
-        data.input_mode  = overlay.querySelector('#stFInputMode')?.value || 'pipe';
       } else if (type === 'ollama') {
         const manual = overlay.querySelector('#stFOllamaModelManual');
         const select = overlay.querySelector('#stFOllamaModelSelect');
         data.base_url            = overlay.querySelector('#stFBaseUrl')?.value.trim() || 'http://localhost:11434';
         data.model_name          = (manual.style.display !== 'none' ? manual.value.trim() : select.value) || null;
         data.use_devflow_agent   = overlay.querySelector('#stFUseDevflow')?.checked ? 1 : 0;
+      } else if (type === 'api') {
+        const apiModel = overlay.querySelector('#stFApiModel')?.value.trim() || '';
+        if (!apiModel) {
+          const err = overlay.querySelector('#stFApiModelError');
+          if (err) err.style.display = '';
+          overlay.querySelector('#stFApiModel')?.focus();
+          return;
+        }
+        data.base_url   = overlay.querySelector('#stFApiBaseUrl')?.value.trim() || null;
+        data.model_name = apiModel;
+        const rawKey    = overlay.querySelector('#stFApiKey')?.value.trim();
+        if (rawKey) data.api_key = rawKey;
+        const maxTok    = overlay.querySelector('#stFApiMaxTokens')?.value.trim();
+        if (maxTok) data.max_tokens = Number(maxTok);
       }
 
       if (config) {
