@@ -54,6 +54,7 @@ export class QueueRunnerPage {
 
   mount() {
     injectCss('styles/screens.css');
+    injectCss('pages/mockups/mockups-page.css');
     injectCss('pages/queue-runner/queue-runner-page.css');
     applyStoredTheme();
 
@@ -68,6 +69,8 @@ export class QueueRunnerPage {
 
   unmount() {
     removeCss('styles/screens.css');
+    removeCss('pages/mockups/mockups-page.css');
+    removeCss('pages/queue-runner/queue-runner-page.css');
     window.app.queueChat.offAll();
   }
 
