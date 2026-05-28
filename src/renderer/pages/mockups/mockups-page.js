@@ -172,6 +172,10 @@ export class MockupsPage {
     this._git?.stopPoll();
     window.app.chat.offAll();
     window.app.chat.cancel();
+    if (this._ctrlSHandler) {
+      document.removeEventListener('keydown', this._ctrlSHandler);
+      this._ctrlSHandler = null;
+    }
   }
 
   _getProject()      { return this._project; }
@@ -295,9 +299,7 @@ export class MockupsPage {
             <button class="scr-sidebar__queue-btn${isQueued ? ' scr-sidebar__queue-btn--active' : ''}"
               data-queue-id="${s.id}" data-queued="${isQueued ? '1' : '0'}"
               title="${isQueued ? 'Remove from queue' : 'Add to queue'}">
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              </svg>
+              ${isQueued ? 'Queued' : 'Queue'}
             </button>
           ` : ''}
         </div>
@@ -326,6 +328,7 @@ export class MockupsPage {
         if (screen) screen.queued = queued;
         btn.dataset.queued = queued;
         btn.title = queued ? 'Remove from queue' : 'Add to queue';
+        btn.textContent = queued ? 'Queued' : 'Queue';
         btn.classList.toggle('scr-sidebar__queue-btn--active', !!queued);
         // Refresh badges and re-render any open queue panel
         const all = await window.db.screenDesigns.list(this._projectId);
@@ -698,7 +701,7 @@ export class MockupsPage {
       this._screens  = await window.db.screenDesigns.list(this._projectId);
       this._activeId = screen.id;
       this._refreshSidebar();
-      this._showDescriptionEditor(screen);
+      this._showScreenViewer(screen);
     });
   }
 
@@ -1195,119 +1198,6 @@ export class MockupsPage {
   }
 
   // ----------------------------------------------------------------
-  // Description editor (shown when screen.executed === 0)
-  // ----------------------------------------------------------------
-  _showDescriptionEditor(screen) {
-    const main = this.container.querySelector('#scrMain');
-    main.innerHTML = `
-      <div class="scr-desc-editor">
-        <div class="scr-desc-editor__toolbar">
-          <div class="scr-viewer__meta">
-            <span class="scr-viewer__title">${escHtml(screen.title)}</span>
-            <span class="scr-viewer__tech-badge">${TECH}</span>
-            <button class="scr-btn scr-btn--sm" id="scrDescEditDetailsBtn" title="Rename screen">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>
-          <div class="scr-desc-editor__tabs">
-            <button class="scr-desc-tab-btn scr-desc-tab-btn--active" id="scrDescTabEdit">Edit</button>
-            <button class="scr-desc-tab-btn" id="scrDescTabPreview">Preview</button>
-          </div>
-          <button class="scr-btn scr-btn--sm scr-btn--secondary scr-queue-btn" id="scrDescQueueBtn" title="Generation queue">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-              <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            Queue
-            <span class="scr-queue-btn__badge" id="scrDescQueueCount">…</span>
-          </button>
-        </div>
-        <div class="scr-viewer__queue-panel" id="scrDescQueuePanel" hidden></div>
-        <div class="scr-desc-editor__body" id="scrDescEditorBody">
-          <textarea class="scr-desc-editor__textarea" id="scrDescTextarea" placeholder="Describe this screen… (supports Markdown)">${escHtml(screen.description || '')}</textarea>
-          <div class="scr-desc-editor__preview scr-md-preview" id="scrDescPreview" hidden></div>
-        </div>
-        <div class="scr-desc-editor__footer">
-          <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrDescDeleteBtn">
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-              <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Delete
-          </button>
-          <button class="scr-btn scr-btn--primary" id="scrDescSaveBtn">Save Description</button>
-        </div>
-      </div>
-    `;
-
-    const textarea  = main.querySelector('#scrDescTextarea');
-    const preview   = main.querySelector('#scrDescPreview');
-    const tabEdit   = main.querySelector('#scrDescTabEdit');
-    const tabPrev   = main.querySelector('#scrDescTabPreview');
-
-    const showTab = (mode) => {
-      const isEdit = mode === 'edit';
-      textarea.hidden = !isEdit;
-      preview.hidden  = isEdit;
-      tabEdit.classList.toggle('scr-desc-tab-btn--active', isEdit);
-      tabPrev.classList.toggle('scr-desc-tab-btn--active', !isEdit);
-      if (!isEdit) {
-        const text = textarea.value.trim();
-        preview.innerHTML = text
-          ? renderMarkdown(text)
-          : '<p class="scr-md-preview__empty">Nothing to preview yet.</p>';
-      }
-    };
-
-    tabEdit.addEventListener('click', () => showTab('edit'));
-    tabPrev.addEventListener('click', () => showTab('preview'));
-
-    main.querySelector('#scrDescSaveBtn').addEventListener('click', async () => {
-      const desc = textarea.value.trim();
-      await window.db.screenDesigns.update({ id: screen.id, description: desc });
-      screen.description = desc;
-      this._refreshSidebar();
-    });
-
-    main.querySelector('#scrDescDeleteBtn').addEventListener('click', () => {
-      this._showDeleteConfirmDialog(screen, async () => {
-        await window.db.screenDesigns.delete(screen.id);
-        this._screens = await window.db.screenDesigns.list(this._projectId);
-        this._activeId = null;
-        this._refreshSidebar();
-        if (this._screens.length > 0) {
-          this._selectScreen(this._screens[0].id);
-        } else {
-          this._showEmptyState();
-        }
-      });
-    });
-
-    main.querySelector('#scrDescEditDetailsBtn').addEventListener('click', () => {
-      this._showEditScreenModal(screen);
-    });
-
-    const queueBtn      = main.querySelector('#scrDescQueueBtn');
-    const queueCountEl  = main.querySelector('#scrDescQueueCount');
-    const queuePanel    = main.querySelector('#scrDescQueuePanel');
-    const editorBody    = main.querySelector('#scrDescEditorBody');
-    const footer        = main.querySelector('.scr-desc-editor__footer');
-    const tabsEl        = main.querySelector('.scr-desc-editor__tabs');
-
-    const refreshDescQueueCount = async () => {
-      const all = await window.db.screenDesigns.list(this._projectId);
-      const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
-      queueCountEl.textContent = remaining;
-      queueBtn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
-    };
-    refreshDescQueueCount();
-
-    queueBtn.addEventListener('click', () => {
-      window.app.openQueueWindow(this._projectId);
-    });
-  }
-
-  // ----------------------------------------------------------------
   // Queue panel
   // ----------------------------------------------------------------
   async _renderQueuePanel(panel) {
@@ -1531,11 +1421,7 @@ export class MockupsPage {
     this._setActiveItem(id);
     const screen = await window.db.screenDesigns.get(id);
     if (!screen) return;
-    if (screen.executed) {
-      this._showScreenViewer(screen);
-    } else {
-      this._showDescriptionEditor(screen);
-    }
+    this._showScreenViewer(screen);
   }
 
   _setActiveItem(id) {
@@ -1560,8 +1446,8 @@ export class MockupsPage {
             </button>
           </div>
           <div class="scr-preview-tabs">
+            <button class="scr-preview-tab" id="scrTabEdit">Edit</button>
             <button class="scr-preview-tab scr-preview-tab--active" id="scrTabPreview">Preview</button>
-            <button class="scr-preview-tab" id="scrTabDescription">Description</button>
           </div>
           <div class="scr-viewer__actions">
             <button class="scr-btn scr-btn--sm scr-btn--secondary scr-queue-btn" id="scrQueueBtn" title="Generation queue">
@@ -1617,7 +1503,25 @@ export class MockupsPage {
           </div>
         </div>
 
-        <div class="scr-viewer__desc-panel scr-md-preview" id="scrDescPanel" hidden></div>
+        <div class="scr-viewer__edit-panel" id="scrEditPanel" hidden>
+          <textarea class="scr-desc-editor__textarea" id="scrViewerDescTextarea" placeholder="Describe this screen… (supports Markdown)"></textarea>
+          <div class="scr-viewer__edit-footer">
+            <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrEditPanelDeleteBtn">
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Delete
+            </button>
+            <button class="scr-btn scr-btn--sm scr-btn--primary" id="scrViewerSaveBtn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+              </svg>
+              Save
+            </button>
+          </div>
+        </div>
         <div class="scr-viewer__queue-panel" id="scrQueuePanel" hidden></div>
 
         <div class="scr-viewer__split" id="scrSplit">
@@ -1850,10 +1754,10 @@ export class MockupsPage {
 
     main.querySelector('#scrEditDetailsBtn').addEventListener('click', () => this._showEditScreenModal(screen));
 
+    const tabEdit        = main.querySelector('#scrTabEdit');
     const tabPreview     = main.querySelector('#scrTabPreview');
-    const tabDescription = main.querySelector('#scrTabDescription');
     const split          = main.querySelector('#scrSplit');
-    const descPanel      = main.querySelector('#scrDescPanel');
+    const editPanel      = main.querySelector('#scrEditPanel');
     const queuePanel     = main.querySelector('#scrQueuePanel');
     const queueBtn       = main.querySelector('#scrQueueBtn');
     const queueCountEl   = main.querySelector('#scrQueueCount');
@@ -1867,24 +1771,72 @@ export class MockupsPage {
     };
     refreshQueueCount();
 
-    let lastActiveTab = tabPreview;
-
     const switchTab = (active) => {
-      lastActiveTab = active;
-      [tabPreview, tabDescription].forEach(t => t.classList.toggle('scr-preview-tab--active', t === active));
+      [tabEdit, tabPreview].forEach(t => t.classList.toggle('scr-preview-tab--active', t === active));
       split.hidden     = active !== tabPreview;
-      descPanel.hidden = active !== tabDescription;
+      editPanel.hidden = active !== tabEdit;
     };
 
+    tabEdit.addEventListener('click', () => switchTab(tabEdit));
     tabPreview.addEventListener('click', () => switchTab(tabPreview));
 
-    tabDescription.addEventListener('click', () => {
-      switchTab(tabDescription);
-      const text = screen.description || '';
-      descPanel.innerHTML = text
-        ? renderMarkdown(text)
-        : '<p class="scr-md-preview__empty">No description added yet.</p>';
+    // Default to Edit tab when no HTML yet, otherwise Preview
+    switchTab(screen.html_content ? tabPreview : tabEdit);
+
+    // Edit panel — description textarea + save
+    const viewerDescTextarea = main.querySelector('#scrViewerDescTextarea');
+    viewerDescTextarea.value = screen.description || '';
+    const viewerSaveBtn = main.querySelector('#scrViewerSaveBtn');
+
+    const VIEWER_SAVE_DEFAULT = `
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+      </svg>
+      Save`;
+
+    const doViewerDescSave = async () => {
+      if (viewerSaveBtn.disabled) return;
+      viewerSaveBtn.disabled = true;
+      viewerSaveBtn.innerHTML = `<span class="scr-save-spinner"></span> Saving…`;
+      try {
+        const desc = viewerDescTextarea.value.trim();
+        await window.db.screenDesigns.update({ id: screen.id, description: desc });
+        screen.description = desc;
+        this._refreshSidebar();
+        viewerSaveBtn.textContent = '✓ Saved';
+        setTimeout(() => {
+          viewerSaveBtn.innerHTML = VIEWER_SAVE_DEFAULT;
+          viewerSaveBtn.disabled = false;
+        }, 1000);
+      } catch {
+        viewerSaveBtn.innerHTML = VIEWER_SAVE_DEFAULT;
+        viewerSaveBtn.disabled = false;
+      }
+    };
+
+    viewerSaveBtn.addEventListener('click', doViewerDescSave);
+
+    main.querySelector('#scrEditPanelDeleteBtn').addEventListener('click', () => {
+      this._showDeleteConfirmDialog(screen, async () => {
+        await window.db.screenDesigns.delete(screen.id);
+        this._screens  = await window.db.screenDesigns.list(this._projectId);
+        this._activeId = this._screens[0]?.id ?? null;
+        this._refreshSidebar();
+        if (this._activeId) this._selectScreen(this._activeId);
+        else                this._showEmptyState();
+      });
     });
+
+    if (this._ctrlSHandler) document.removeEventListener('keydown', this._ctrlSHandler);
+    this._ctrlSHandler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        const ep = main.querySelector('#scrEditPanel');
+        if (ep && !ep.hidden) { e.preventDefault(); doViewerDescSave(); }
+      }
+    };
+    document.addEventListener('keydown', this._ctrlSHandler);
 
     queueBtn.addEventListener('click', () => {
       window.app.openQueueWindow(this._projectId);
