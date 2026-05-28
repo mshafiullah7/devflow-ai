@@ -98,7 +98,9 @@ export class TestRunnerPage {
     injectCss('pages/test-runner/test-runner-page.css');
     applyStoredTheme();
 
-    this._project = await window.db.projects.get(this._projectId);
+    this._project    = await window.db.projects.get(this._projectId);
+    this._layers    = [];
+    this._activeCwd = this._project?.project_path || null;
     const _mapping = await window.db.modelMapping.get('test-runner');
     this.container.innerHTML = this._template();
 
@@ -131,6 +133,11 @@ export class TestRunnerPage {
     // Load history first so the panel is populated immediately
     this._history = await window.db.testRunHistory.list(this._projectId);
     this._renderHistory();
+
+    // Load layers — only show the bar when at least one has a folder set
+    const allLayers = await window.db.projectLayers.list(this._projectId);
+    this._layers = allLayers.filter(l => l.folder_path);
+    if (this._layers.length > 0) this._renderLayerBar();
 
     if (this._project?.project_path) {
       this._setHeaderFolderPath(this._project.project_path);
@@ -207,6 +214,9 @@ export class TestRunnerPage {
         </header>
 
         <div class="tr-body">
+
+          <!-- Layer selector (hidden until layers are loaded) -->
+          <div id="trLayerBar" class="tr-layer-bar" hidden></div>
 
           <!-- Command bar -->
           <div class="tr-command-bar">
@@ -362,6 +372,48 @@ export class TestRunnerPage {
   }
 
   // ----------------------------------------------------------------
+  // Layer selector
+  // ----------------------------------------------------------------
+  _renderLayerBar() {
+    const bar = this.container.querySelector('#trLayerBar');
+    if (!bar) return;
+
+    const pills = [
+      `<button class="tr-layer-pill tr-layer-pill--active" data-layer-id="">Project Root</button>`,
+      ...this._layers.map(l =>
+        `<button class="tr-layer-pill" data-layer-id="${l.id}">${escHtml(l.name)}</button>`
+      ),
+    ].join('');
+
+    bar.innerHTML = `
+      <span class="tr-layer-bar__label">Layer</span>
+      <div class="tr-layer-bar__pills">${pills}</div>`;
+    bar.hidden = false;
+
+    bar.querySelector('.tr-layer-bar__pills').addEventListener('click', e => {
+      const pill = e.target.closest('.tr-layer-pill');
+      if (!pill) return;
+      bar.querySelectorAll('.tr-layer-pill').forEach(p => p.classList.remove('tr-layer-pill--active'));
+      pill.classList.add('tr-layer-pill--active');
+      this._onLayerChange(pill.dataset.layerId);
+    });
+  }
+
+  async _onLayerChange(layerId) {
+    if (layerId) {
+      const layer      = this._layers.find(l => String(l.id) === String(layerId));
+      this._activeCwd  = layer?.folder_path || this._project?.project_path;
+    } else {
+      this._activeCwd = this._project?.project_path;
+    }
+
+    if (this._activeCwd) {
+      this._setHeaderFolderPath(this._activeCwd);
+      await this._detectFrameworks(this._activeCwd);
+    }
+  }
+
+  // ----------------------------------------------------------------
   // Framework detection
   // ----------------------------------------------------------------
   async _detectFrameworks(projectPath) {
@@ -429,7 +481,7 @@ export class TestRunnerPage {
 
     await window.db.testRunner.run({
       command: entry.cmd,
-      cwd:     this._project?.project_path || undefined,
+      cwd:     this._activeCwd || this._project?.project_path || undefined,
     });
   }
 

@@ -913,6 +913,7 @@
   background: var(--accent);
   color: #fff;
 }
+.scr-preview-tab--active:hover { color: #fff; }
 
 .scr-viewer__desc-panel {
   flex: 1;
@@ -1178,6 +1179,7 @@
   background: var(--accent);
   color: #fff;
 }
+.scr-desc-tab-btn--active:hover { color: #fff; }
 
 .scr-desc-editor__body {
   flex: 1;

@@ -16,12 +16,13 @@ let _activeQueueProc = null;
 // ----------------------------------------------------------------
 // AI call logger — prints every outgoing model invocation so you
 // can audit which model is actually used and what prompt is sent.
-// Format:  [HH:MM:SS] [queue:<type>]  exe --model NAME  "first line…"
+// Format:  [HH:MM:SS] [queue:<type>]  exe --model NAME [flags]  cwd=X  "first line…"
 // ----------------------------------------------------------------
-function _logAiCall(type, modelName, exe, promptOrMessages, cwd) {
-  const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const label = exe ? `${exe} --model ${modelName}` : `model=${modelName}`;
-  const cwdStr = cwd ? `  cwd=${path.basename(cwd)}` : '';
+function _logAiCall(type, modelName, exe, promptOrMessages, cwd, flags) {
+  const ts     = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const flagStr = flags ? `  ${flags}` : '';
+  const label   = exe ? `${exe} --model ${modelName}${flagStr}` : `model=${modelName}${flagStr}`;
+  const cwdStr  = cwd ? `  cwd=${path.basename(cwd)}` : '';
 
   let preview = '';
   if (typeof promptOrMessages === 'string') {
@@ -322,11 +323,16 @@ function _runDevflowAgent(send, messages, modelConfig, cwd, options = {}) {
 // CLI (PowerShell spawn)
 // ----------------------------------------------------------------
 function _runCli(send, messages, modelConfig, cwd) {
-  const ts    = Date.now();
+  const ts        = Date.now();
   const exe       = modelConfig?.executable || 'claude';
   const modelFlag = modelConfig?.model_name ? ` --model ${modelConfig.model_name}` : '';
-  _logAiCall('cli', modelConfig?.model_name || 'claude-haiku-4-5', exe, messages, cwd);
-  const flags     = `${modelConfig?.flags || '--dangerously-skip-permissions --print'}${modelFlag}`;
+
+  // Always include the required base flags; append any user-configured extra flags.
+  const baseFlags   = '--dangerously-skip-permissions --print';
+  const extraFlags  = (modelConfig?.flags || '').trim();
+  const flags       = `${baseFlags}${extraFlags ? ' ' + extraFlags : ''}${modelFlag}`;
+
+  _logAiCall('cli', modelConfig?.model_name || 'claude-haiku-4-5', exe, messages, cwd, extraFlags || null);
 
   const promptText = messagesToText(messages);
 

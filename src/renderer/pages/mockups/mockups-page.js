@@ -1266,6 +1266,7 @@ export class MockupsPage {
       const desc = textarea.value.trim();
       await window.db.screenDesigns.update({ id: screen.id, description: desc });
       screen.description = desc;
+      this._refreshSidebar();
     });
 
     main.querySelector('#scrDescDeleteBtn').addEventListener('click', () => {

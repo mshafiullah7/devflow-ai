@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "start": "electron-forge start",
-    "package": "electron-forge package",
+    "package": "electron-forge make",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
@@ -41,6 +41,7 @@
     "@playwright/test": "^1.60.0",
     "cross-env": "^10.1.0",
     "electron": "41.2.0",
+    "electron-forge-maker-nsis": "^26.8.1",
     "sharp": "^0.34.5"
   }
 }

@@ -147,6 +147,7 @@ function registerTerminalHandlers() {
     if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
   });
 
+
   // Write the full console output to a temp file and return the path.
   // Used by the "Fix Issues" feature so CLI models can read arbitrarily large
   // output without any in-prompt truncation.

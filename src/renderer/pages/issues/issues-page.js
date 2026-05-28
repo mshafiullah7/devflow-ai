@@ -413,8 +413,11 @@ export class IssuesPage {
     this._activeId = null;
     this.container.querySelectorAll('#isIssuesList .eus-src-item').forEach(c => c.classList.remove('eus-src-item--active'));
     const el       = this.container.querySelector('#isIssueDetail');
-    const features = await window.db.features.list(this._projectId) ?? [];
-    el.innerHTML   = this._formHtml(null, features);
+    const [features, layers] = await Promise.all([
+      window.db.features.list(this._projectId) ?? [],
+      window.db.projectLayers.list(this._projectId) ?? [],
+    ]);
+    el.innerHTML   = this._formHtml(null, features, layers);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Add Issue</button>';
     await this._bindFormEvents(el, null);
@@ -423,8 +426,11 @@ export class IssuesPage {
 
   async _showEditForm(issue) {
     const el       = this.container.querySelector('#isIssueDetail');
-    const features = await window.db.features.list(this._projectId) ?? [];
-    el.innerHTML   = this._formHtml(issue, features);
+    const [features, layers] = await Promise.all([
+      window.db.features.list(this._projectId) ?? [],
+      window.db.projectLayers.list(this._projectId) ?? [],
+    ]);
+    el.innerHTML   = this._formHtml(issue, features, layers);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Save Changes</button>';
     await this._bindFormEvents(el, issue);
@@ -433,7 +439,7 @@ export class IssuesPage {
   // ----------------------------------------------------------------
   // Form
   // ----------------------------------------------------------------
-  _formHtml(issue, features = []) {
+  _formHtml(issue, features = [], layers = []) {
     const isEdit = !!issue;
     const statusOptions = Object.entries(STATUS_META).map(([val, m]) =>
       `<option value="${val}"${(issue?.status ?? 'open') === val ? ' selected' : ''}>${m.label}</option>`
@@ -443,6 +449,9 @@ export class IssuesPage {
     ).join('');
     const featureOptions = features.map(f =>
       `<option value="${f.id}"${issue?.feature_id === f.id ? ' selected' : ''}>${escHtml(f.name)}</option>`
+    ).join('');
+    const layerOptions = layers.map(l =>
+      `<option value="${l.id}"${issue?.layer_id === l.id ? ' selected' : ''}>${escHtml(l.name)}</option>`
     ).join('');
 
     return `
@@ -460,9 +469,18 @@ export class IssuesPage {
               placeholder="Describe the issue…" autocomplete="off" value="${escHtml(issue?.title || '')}"/>
           </div>
 
-          <div class="is-form__field">
-            <label class="is-form__label" for="isFormSeverity">Severity</label>
-            <select class="is-form__select" id="isFormSeverity">${severityOptions}</select>
+          <div class="is-form__row">
+            <div class="is-form__field">
+              <label class="is-form__label" for="isFormSeverity">Severity</label>
+              <select class="is-form__select" id="isFormSeverity">${severityOptions}</select>
+            </div>
+            <div class="is-form__field">
+              <label class="is-form__label" for="isFormLayer">Layer <span class="is-form__required">*</span></label>
+              <select class="is-form__select" id="isFormLayer">
+                <option value="">— select layer —</option>
+                ${layerOptions}
+              </select>
+            </div>
           </div>
 
           <div class="is-form__row">
@@ -485,12 +503,6 @@ export class IssuesPage {
             <div class="is-desc-label-row">
               <label class="is-form__label" for="isFormDesc">Issue Details</label>
               <div class="is-desc-actions">
-                <button class="is-desc-btn is-desc-btn--clean" id="isDescCleanBtn" type="button" title="Clean &amp; structure with AI">
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M13 2L3 12M6 2H2v4M14 10v4h-4"/>
-                  </svg>
-                  Clean &amp; Structure
-                </button>
                 <button class="is-desc-btn" id="isDescExpandBtn" type="button" title="Expand to full editor">
                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                     <path d="M9 2h5v5M7 9L14 2M2 7v7h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -539,6 +551,7 @@ export class IssuesPage {
     const titleEl    = el.querySelector('#isFormTitle');
     const severityEl = el.querySelector('#isFormSeverity');
     const statusEl   = el.querySelector('#isFormStatus');
+    const layerEl    = el.querySelector('#isFormLayer');
     const featureEl  = el.querySelector('#isFormFeature');
     const storyEl    = el.querySelector('#isFormStoryLink');
     const descEl     = el.querySelector('#isFormDesc');
@@ -575,15 +588,22 @@ export class IssuesPage {
     }
 
     const save = async (silent = false) => {
-      const title = titleEl.value.trim();
+      const title   = titleEl.value.trim();
+      const layerId = parseInt(layerEl.value) || null;
       if (!title) { if (!silent) { titleEl.classList.add('is-form__input--error'); titleEl.focus(); } return; }
       titleEl.classList.remove('is-form__input--error');
+      if (!layerId) {
+        if (!silent) { layerEl.classList.add('is-form__input--error'); layerEl.focus(); }
+        return;
+      }
+      layerEl.classList.remove('is-form__input--error');
       this._pendingSave   = null;
       saveBtn.disabled    = true;
       saveBtn.textContent = issue ? 'Saving…' : 'Adding…';
 
       const payload = {
         project_id:         this._projectId,
+        layer_id:           layerId,
         feature_id:         parseInt(featureEl.value)  || null,
         user_story_id:      parseInt(storyEl.value)    || null,
         title,
@@ -624,8 +644,22 @@ export class IssuesPage {
     });
 
     el.querySelector('#isDescQueueBtn')?.addEventListener('click', async () => {
-      const text = descEl.value.trim();
+      const text    = descEl.value.trim();
+      const layerId = parseInt(layerEl.value) || null;
       if (!text) return;
+      if (!layerId) {
+        const existing = el.querySelector('#isQueueLayerMsg');
+        if (!existing) {
+          const msg = document.createElement('span');
+          msg.id        = 'isQueueLayerMsg';
+          msg.className = 'is-queue-layer-msg';
+          msg.textContent = 'Please select a Layer first';
+          el.querySelector('#isDescExpandBtn').insertAdjacentElement('beforebegin', msg);
+          setTimeout(() => msg.remove(), 2500);
+        }
+        return;
+      }
+      el.querySelector('#isQueueLayerMsg')?.remove();
       const queueBtn = el.querySelector('#isDescQueueBtn');
       await window.db.promptQueue.add({
         project_id:    this._projectId,
@@ -634,6 +668,7 @@ export class IssuesPage {
         prompt_id:     null,
         tag:           'Issue',
         prompt_text:   text,
+        layer_id:      layerId,
       });
       const origHTML = queueBtn.innerHTML;
       queueBtn.disabled = true;
@@ -641,48 +676,6 @@ export class IssuesPage {
       setTimeout(() => { queueBtn.innerHTML = origHTML; queueBtn.disabled = false; }, 1500);
     });
 
-    const cleanBtn = el.querySelector('#isDescCleanBtn');
-    cleanBtn?.addEventListener('click', async () => {
-      const cfg = this._aiModelConfig;
-      if (!cfg) return;
-
-      const title    = titleEl.value.trim();
-      const desc     = descEl.value.trim();
-      const steps    = stepsEl.value.trim();
-      const expected = expectedEl.value.trim();
-      const actual   = actualEl.value.trim();
-
-      const prompt = [
-        'You are a technical writer. Analyze the issues details and just list the failed items exclude any passed or counts of pass fail details. This is just remove not needed info from the Issue Details.',
-        'Output only the resulting text with no headings, labels, or commentary.',
-        'End your response with a blank line followed by exactly: Fix these issues',
-        '',
-        `Issue Title: ${title || '(untitled)'}`,
-        '',
-        'Issue Details to clean:',
-        desc || '(empty)',
-      ].join('\n');
-
-      const origHTML         = cleanBtn.innerHTML;
-      cleanBtn.disabled      = true;
-      cleanBtn.textContent   = 'Cleaning…';
-      const saveBtnEl        = this.container.querySelector('#isFormSave');
-      if (saveBtnEl) saveBtnEl.disabled = true;
-
-      let output = '';
-      window.app.chat.offAll();
-      window.app.chat.onToken(({ text }) => { output += text; });
-      window.app.chat.onDone(({ raw }) => {
-        window.app.chat.offAll();
-        cleanBtn.disabled = false;
-        cleanBtn.innerHTML = origHTML;
-        if (saveBtnEl) saveBtnEl.disabled = false;
-        if (!raw) return;
-        descEl.value = raw.trim();
-        save(true);
-      });
-      window.app.chat.generate({ prompt, model: cfg });
-    });
   }
 
   _refreshCardBadges(id, status, severity) {

@@ -135,6 +135,20 @@
 .is-desc-btn--clean       { border-color: var(--text-muted); color: var(--text-secondary); }
 .is-desc-btn--clean:hover { background: var(--surface-hover); color: var(--text-primary); }
 
+/* Inline validation message shown when Layer is not selected before Add to Queue */
+.is-queue-layer-msg {
+  font-size: 11px;
+  color: var(--danger, #f87171);
+  margin-left: 6px;
+  align-self: center;
+  white-space: nowrap;
+  animation: is-msg-fade 0.2s ease;
+}
+@keyframes is-msg-fade {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Issue Details expand overlay */
 .is-expand-overlay {
   position: fixed; inset: 0; z-index: 2000;

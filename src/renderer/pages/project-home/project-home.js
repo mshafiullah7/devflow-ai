@@ -328,6 +328,19 @@ export class ProjectHomePage {
               ${this._queuePending > 0 ? `<span class="ph-nav-item__count">${this._queuePending}</span>` : ''}
             </button>
 
+            <button class="ph-nav-item" id="navGitChanges">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                  <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Git Changes</span>
+            </button>
+
             <button class="ph-nav-item" id="navAiConsole">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -360,20 +373,7 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count ${issueTotal > 0 ? 'ph-nav-item__count--danger' : ''}">${issueTotal}</span>
             </button>
 
-            <div class="ph-sidebar-section">Code</div>
-            <button class="ph-nav-item" id="navGitChanges">
-              <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                  <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <span class="ph-nav-item__label">Git Changes</span>
-            </button>
-
+            <div class="ph-sidebar-section">Workspace</div>
             <button class="ph-nav-item" id="navOpenVSCode" ${!this._project?.project_path ? 'disabled title="Select a folder first"' : `title="${escHtml(this._project.project_path)}"`}>
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -382,6 +382,16 @@ export class ProjectHomePage {
                 </svg>
               </span>
               <span class="ph-nav-item__label">Open VS Code</span>
+            </button>
+
+            <button class="ph-nav-item" id="navOpenPowerShell" ${!this._project?.project_path ? 'disabled title="Select a folder first"' : `title="${escHtml(this._project.project_path)}"`}>
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="4 17 10 11 4 5"/>
+                  <line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Open Terminal</span>
             </button>
 
             <div class="ph-sidebar-section">System</div>
@@ -595,6 +605,12 @@ export class ProjectHomePage {
       vsCodeBtn.disabled = false;
       vsCodeBtn.title = folderPath;
     }
+
+    const psBtn = this.container.querySelector('#navOpenPowerShell');
+    if (psBtn) {
+      psBtn.disabled = false;
+      psBtn.title = folderPath;
+    }
   }
 
   // ----------------------------------------------------------------
@@ -656,6 +672,12 @@ export class ProjectHomePage {
       .addEventListener('click', () => {
         const path = this._project?.project_path;
         if (path) window.shell.openVSCode(path);
+      });
+
+    this.container.querySelector('#navOpenPowerShell')
+      .addEventListener('click', () => {
+        const path = this._project?.project_path;
+        if (path) window.shell.openPowerShell(path);
       });
 
     this.container.querySelector('#navSettings')

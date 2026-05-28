@@ -101,6 +101,18 @@ function registerDialogHandlers() {
     const proc = spawn('cmd.exe', ['/c', 'code', folderPath], { detached: true, stdio: 'ignore' });
     proc.unref();
   });
+
+  safeHandle('shell:openPowerShell', (_e, folderPath) => {
+    if (!folderPath) return;
+    // Use cmd /c start so PowerShell opens as a new detached window.
+    // Passing cwd makes it inherit the project folder as its working directory.
+    const proc = spawn(
+      'cmd.exe',
+      ['/c', 'start', 'powershell.exe', '-NoExit', '-NoLogo'],
+      { cwd: folderPath, detached: true, stdio: 'ignore' }
+    );
+    proc.unref();
+  });
 }
 
 module.exports = { registerDialogHandlers };

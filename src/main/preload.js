@@ -251,5 +251,6 @@ contextBridge.exposeInMainWorld('shell', {
   readFile:   (filepath)          => invoke('shell:readFile', filepath),
   writeFile:  (filepath, content) => invoke('shell:writeFile', { filepath, content }),
   statFile:   (filepath)          => invoke('shell:statFile', filepath),
-  openVSCode: (folderPath)        => invoke('shell:openVSCode', folderPath),
+  openVSCode:     (folderPath) => invoke('shell:openVSCode', folderPath),
+  openPowerShell: (folderPath) => invoke('shell:openPowerShell', folderPath),
 });

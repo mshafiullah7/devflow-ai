@@ -174,6 +174,17 @@ export class PromptQueuePage {
         const item = this._queue.find(q => q.id === id);
         if (item) this._selectItem(item);
       });
+      el.querySelector('.pq-item__retry')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id   = parseInt(el.dataset.id);
+        const item = this._queue.find(q => q.id === id);
+        if (!item || item.status !== 'failed') return;
+        await window.db.promptQueue.update({ id, status: 'pending' });
+        item.status = 'pending';
+        this._refreshItemEl(id);
+        this._updateSummary();
+        if (this._selectedId === id) this._renderDetail(item);
+      });
       el.querySelector('.pq-item__skip')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         const id   = parseInt(el.dataset.id);
@@ -218,6 +229,7 @@ export class PromptQueuePage {
     const label      = item.tag || item.story_title || `Item ${item.id}`;
     const snippet    = (item.prompt_text || '').split('\n')[0].slice(0, 60);
     const canSkip    = item.status === 'pending';
+    const canRetry   = item.status === 'failed';
     const canDel     = item.status !== 'running';
     const layerBadge = item.layer_name
       ? `<span class="pq-item__layer-badge" title="Layer: ${escHtml(item.layer_name)}">${escHtml(item.layer_name)}</span>`
@@ -231,6 +243,9 @@ export class PromptQueuePage {
           <div class="pq-item__snippet">${escHtml(snippet)}</div>
         </div>
         <div class="pq-item__actions">
+          ${canRetry ? `<button class="pq-item__retry" title="Re-enable for re-run">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M13.5 2.5A6.5 6.5 0 1 0 14 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10 2.5h3.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>` : ''}
           ${canSkip ? `<button class="pq-item__skip" title="Skip">
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 8h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>` : ''}
@@ -255,6 +270,16 @@ export class PromptQueuePage {
     newEl.addEventListener('click', () => {
       const i = this._queue.find(q => q.id === id);
       if (i) this._selectItem(i);
+    });
+    newEl.querySelector('.pq-item__retry')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const i = this._queue.find(q => q.id === id);
+      if (!i || i.status !== 'failed') return;
+      await window.db.promptQueue.update({ id, status: 'pending' });
+      i.status = 'pending';
+      this._refreshItemEl(id);
+      this._updateSummary();
+      if (this._selectedId === id) this._renderDetail(i);
     });
     newEl.querySelector('.pq-item__skip')?.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -296,13 +321,41 @@ export class PromptQueuePage {
   }
 
   // ----------------------------------------------------------------
+  // Build the "runs in" cwd badge shown in the detail panel.
+  // Returns an HTML string — empty string if nothing useful to show.
+  // ----------------------------------------------------------------
+  async _buildCwdBadge(item) {
+    const { cwd, error } = await this._resolveItemCwd(item);
+    if (error) {
+      return `<div class="pq-cwd-row pq-cwd-row--error">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6.5" stroke="#ef4444" stroke-width="1.4"/>
+          <path d="M8 5v3.5M8 10.5v.5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>${escHtml(error)}</span>
+      </div>`;
+    }
+    if (!cwd) return '';
+    const layerLabel = item.layer_name ? ` <span class="pq-cwd-layer">[${escHtml(item.layer_name)}]</span>` : '';
+    return `<div class="pq-cwd-row">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
+        <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+          stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      <span class="pq-cwd-path" title="${escHtml(cwd)}">${escHtml(cwd)}</span>${layerLabel}
+    </div>`;
+  }
+
+  // ----------------------------------------------------------------
   // Detail panel
   // ----------------------------------------------------------------
-  _renderDetail(item) {
+  async _renderDetail(item) {
     const panel = this.container.querySelector('#pqDetailPanel');
     if (!panel) return;
 
     if (item.status === 'pending' || item.status === 'skipped') {
+      // Resolve cwd to display it before the user runs
+      const cwdDisplay = await this._buildCwdBadge(item);
       panel.innerHTML = `
         <div class="pq-detail">
           <div class="pq-detail__meta">
@@ -311,6 +364,7 @@ export class PromptQueuePage {
             ${item.tag ? `<span class="pq-detail__tag">${escHtml(item.tag)}</span>` : ''}
             ${item.model_label ? `<span class="pq-detail__model">${escHtml(item.model_label)}</span>` : ''}
           </div>
+          ${cwdDisplay}
           <div class="pq-detail__prompt-wrap">
             <div class="pq-detail__prompt">${this._renderMarkdown(item.prompt_text || '')}</div>
           </div>
@@ -329,6 +383,7 @@ export class PromptQueuePage {
       // running / done / failed — show conversation thread + follow-up bar
       const msgs = this._messages[item.id] || [];
       const isRunning = item.status === 'running';
+      const isFailed  = item.status === 'failed';
 
       panel.innerHTML = `
         <div class="pq-detail pq-detail--convo">
@@ -354,13 +409,154 @@ export class PromptQueuePage {
               </div>
             </div>` : ''}
           </div>
+          ${!isRunning ? `
+          <div class="pq-followup" id="pqFollowUp">
+            ${isFailed ? `
+            <button class="pq-followup__rerun" id="pqBtnReEnable" title="Reset and re-run the original prompt">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M13.5 2.5A6.5 6.5 0 1 0 14 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M10 2.5h3.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Re-run
+            </button>` : ''}
+            <textarea
+              id="pqFollowUpInput"
+              class="pq-followup__input"
+              placeholder="Send a follow-up… (Enter to send, Shift+Enter for newline)"
+              rows="1"
+            ></textarea>
+            <button class="pq-followup__send" id="pqFollowUpSend" title="Send (Enter)">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.6"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>` : ''}
         </div>`;
 
       // Scroll to bottom of convo
       const convo = panel.querySelector('#pqConvo');
       if (convo) convo.scrollTop = convo.scrollHeight;
 
+      // Re-enable & Run (failed tasks) — resets to pending and re-runs the original prompt
+      panel.querySelector('#pqBtnReEnable')?.addEventListener('click', async () => {
+        if (this._isRunning) return;
+        await window.db.promptQueueMessages.clear(item.id);
+        this._messages[item.id] = [];
+        await window.db.promptQueue.update({ id: item.id, status: 'pending' });
+        item.status = 'pending';
+        this._refreshItemEl(item.id);
+        this._updateSummary();
+        this._runItem(item);
+      });
+
+      // Follow-up input bar
+      const followUpInput = panel.querySelector('#pqFollowUpInput');
+      const followUpSend  = panel.querySelector('#pqFollowUpSend');
+      if (followUpInput && followUpSend) {
+        // Auto-grow textarea height with content
+        followUpInput.addEventListener('input', () => {
+          followUpInput.style.height = 'auto';
+          followUpInput.style.height = Math.min(followUpInput.scrollHeight, 140) + 'px';
+        });
+
+        const doSend = () => {
+          const text = followUpInput.value.trim();
+          if (!text || this._isRunning) return;
+          followUpInput.value = '';
+          followUpInput.style.height = 'auto';
+          this._sendFollowUp(item, text);
+        };
+
+        // Enter = send, Shift+Enter = newline
+        followUpInput.addEventListener('keydown', e => {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+        });
+        followUpSend.addEventListener('click', doSend);
+      }
     }
+  }
+
+  // ----------------------------------------------------------------
+  // Follow-up — continue an existing conversation after first run
+  // ----------------------------------------------------------------
+  async _sendFollowUp(item, text) {
+    if (this._isRunning) return;
+
+    const { cwd: resolvedCwd, error: cwdError } = await this._resolveItemCwd(item);
+    if (cwdError) return;
+    item._resolvedCwd = resolvedCwd;
+
+    // Optimistically add new user turn to local message list
+    const newUserMsg = { role: 'user', content: text, created_at: new Date().toISOString() };
+    this._messages[item.id] = [...(this._messages[item.id] || []), newUserMsg];
+    item._pendingUserContent = text;
+
+    // Switch item back to running
+    this._isRunning = true;
+    this._outputBuf[item.id] = '';
+    item.status = 'running';
+    const ranAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    item.ran_at = ranAt;
+    await window.db.promptQueue.update({ id: item.id, status: 'running', ran_at: ranAt });
+
+    this._refreshItemEl(item.id);
+    this._updateSummary();
+    this._updateToolbarRunState(true);
+    this._startRunTimer();
+    if (this._selectedId === item.id) this._renderDetail(item);
+
+    // Send only the new follow-up message — no prior conversation context
+    const history = [{ role: 'user', content: text }];
+
+    // Wire listeners — skip plan phase for follow-ups, go straight to execution
+    window.db.promptQueue.removeListeners();
+    window.db.promptQueue.onData(({ text: chunk }) => this._appendOutput(item.id, chunk));
+    window.db.promptQueue.onStep(stepInfo => this._updateStepProgress(stepInfo));
+
+    window.db.promptQueue.onDone(async ({ exitCode }) => {
+      window.db.promptQueue.removeListeners();
+      this._stopRunTimer();
+      this._activePlan = null;
+
+      const succeeded = exitCode === 0;
+      item.status    = succeeded ? 'done' : 'failed';
+      item.exit_code = exitCode;
+      item.output    = this._outputBuf[item.id] || '';
+
+      if (succeeded) {
+        const sha = await this._commitAfterRun(item);
+        if (sha) item.commit_sha = sha;
+      }
+
+      // Persist only the new turn — prior turns are already in DB
+      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent });
+      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
+      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
+      this._isRunning = false;
+
+      await window.db.promptQueue.update({
+        id:         item.id,
+        status:     item.status,
+        output:     item.output,
+        exit_code:  exitCode,
+        commit_sha: item.commit_sha ?? null,
+      });
+
+      this._refreshItemEl(item.id);
+      this._updateSummary();
+      this._updateToolbarRunState(false);
+      if (this._selectedId === item.id) this._renderDetail(item);
+    });
+
+    const cfg = this._modelCfg || {};
+    window.db.promptQueue.run({
+      messages:    history,
+      modelConfig: cfg,
+      cwd:         item._resolvedCwd,
+      itemLabel:   item.tag || item.story_title || `#${item.id}`,
+      projectName: this._project?.name || '',
+    });
   }
 
   _renderConvoHtml(msgs) {
@@ -502,16 +698,15 @@ export class PromptQueuePage {
     this._renderDetail(item);
     this._startRunTimer();
 
-    // Kick off execution with the approved plan
-    const cfg         = this._modelCfg || {};
-    const resolvedCwd = (item.layer_folder_path && item.layer_folder_path.trim())
-      ? item.layer_folder_path
-      : (this._project?.project_path || null);
+    // Kick off execution with the approved plan.
+    // item._resolvedCwd was set by _resolveItemCwd() in _runItem() at the start
+    // of this same run, so it is already validated and up-to-date.
+    const cfg = this._modelCfg || {};
     window.db.promptQueue.approvePlan({
       plan:        JSON.stringify(plan),
       messages:    [{ role: 'user', content: item.prompt_text }],
       modelConfig: cfg,
-      cwd:         resolvedCwd,
+      cwd:         item._resolvedCwd,
       itemLabel:   item.tag || item.story_title || `#${item.id}`,
       projectName: this._project?.name || '',
     });
@@ -557,10 +752,59 @@ export class PromptQueuePage {
   }
 
   // ----------------------------------------------------------------
+  // Resolve the working directory for a queue item.
+  // Always fetches the layer's folder_path fresh from the DB so stale
+  // in-memory data never causes a run in the wrong directory.
+  // Returns { cwd, error } — if error is set, execution should be aborted.
+  // ----------------------------------------------------------------
+  async _resolveItemCwd(item) {
+    if (item.layer_id) {
+      const layer = await window.db.projectLayers.get(item.layer_id);
+      if (layer?.folder_path?.trim()) {
+        return { cwd: layer.folder_path.trim(), error: null };
+      }
+      // Layer exists but has no folder path configured
+      const layerName = layer?.name || item.layer_name || `#${item.layer_id}`;
+      return {
+        cwd:   null,
+        error: `Layer "${layerName}" has no folder path set.\nConfigure it in Layers before running this task.`,
+      };
+    }
+    // No layer attached — fall back to project path
+    const cwd = this._project?.project_path?.trim() || null;
+    if (!cwd) {
+      return { cwd: null, error: 'No project folder selected. Open the project folder first.' };
+    }
+    return { cwd, error: null };
+  }
+
+  // ----------------------------------------------------------------
   // Run logic
   // ----------------------------------------------------------------
   async _runItem(item) {
     if (this._isRunning) return;
+
+    // Resolve cwd BEFORE locking _isRunning so a bad config doesn't
+    // leave the toolbar stuck in the running state.
+    const { cwd: resolvedCwd, error: cwdError } = await this._resolveItemCwd(item);
+    if (cwdError) {
+      const panel = this.container.querySelector('#pqDetailPanel');
+      if (panel) panel.innerHTML = `
+        <div class="pq-detail">
+          <div class="pq-cwd-error">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6.5" stroke="#ef4444" stroke-width="1.4"/>
+              <path d="M8 5v3.5M8 10.5v.5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span>${escHtml(cwdError)}</span>
+          </div>
+        </div>`;
+      return;
+    }
+
+    // Store for _approvePlan to reuse (same run, fresh path already validated)
+    item._resolvedCwd = resolvedCwd;
+
     this._isRunning = true;
     this._outputBuf[item.id] = '';
 
@@ -655,14 +899,11 @@ export class PromptQueuePage {
       }
     });
 
-    const cfg         = this._modelCfg || {};
-    const resolvedCwd = (item.layer_folder_path && item.layer_folder_path.trim())
-      ? item.layer_folder_path
-      : (this._project?.project_path || null);
+    const cfg = this._modelCfg || {};
     window.db.promptQueue.run({
       messages:    [{ role: 'user', content: item.prompt_text }],
       modelConfig: cfg,
-      cwd:         resolvedCwd,
+      cwd:         item._resolvedCwd,   // set by _resolveItemCwd above
       itemLabel:   item.tag || item.story_title || `#${item.id}`,
       projectName: this._project?.name || '',
     });

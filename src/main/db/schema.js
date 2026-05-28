@@ -14,6 +14,7 @@ function applySchema(db) {
     `ALTER TABLE project_layers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE prompts      ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE prompt_queue ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
+    `ALTER TABLE issues       ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -231,6 +232,7 @@ function applySchema(db) {
       user_story_id       INTEGER REFERENCES user_stories(id) ON DELETE SET NULL,
       feature_id          INTEGER REFERENCES features(id) ON DELETE SET NULL,
       project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      layer_id            INTEGER REFERENCES project_layers(id) ON DELETE SET NULL,
       title               TEXT    NOT NULL,
       description         TEXT,
       steps_to_reproduce  TEXT,

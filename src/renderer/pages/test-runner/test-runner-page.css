@@ -13,6 +13,58 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Layer selector bar                                                   */
+/* ------------------------------------------------------------------ */
+.tr-layer-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 5px);
+  flex-shrink: 0;
+}
+
+.tr-layer-bar__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.tr-layer-bar__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tr-layer-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 11px;
+  font-size: 11.5px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.tr-layer-pill:hover { border-color: var(--accent); color: var(--text-primary); }
+.tr-layer-pill--active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+
+/* ------------------------------------------------------------------ */
 /* Command bar                                                          */
 /* ------------------------------------------------------------------ */
 .tr-command-bar {
@@ -56,6 +108,7 @@
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .tr-run-btn,
