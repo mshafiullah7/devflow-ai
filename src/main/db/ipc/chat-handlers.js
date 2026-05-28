@@ -43,46 +43,46 @@ Existing HTML:
 ${existingHtml}`;
 }
 
-// Fallback model used when CLI model config has no model_name set.
-// Uses the undated alias so it survives patch/date-suffix rotations within the same
-// model generation. Update this constant when Anthropic retires the haiku-4-5 family.
-// Set model_name explicitly in the model config to override per-profile.
 const DEFAULT_CLI_MODEL = 'claude-haiku-4-5';
 
-let _activeProc = null;
-let _cancelled  = false;
+// ----------------------------------------------------------------
+// Per-session context — each chat session (main window, queue window)
+// gets its own context so their subprocesses never clobber each other.
+// ----------------------------------------------------------------
+function createCtx() {
+  return { proc: null, req: null, cancelled: false };
+}
 
-// ----------------------------------------------------------------
-// AI call logger — prints every outgoing model invocation so you
-// can audit which model is actually used and what prompt is sent.
-// Format:  [HH:MM:SS] [chat:<type>]  exe --model NAME  "first line…"
-// ----------------------------------------------------------------
+const _mainCtx  = createCtx();
+const _queueCtx = createCtx();
+
 function _logAiCall(type, modelName, exe, promptOrMessages) {
   const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const label = exe ? `${exe} --model ${modelName}` : `model=${modelName}`;
-
   let preview = '';
   if (typeof promptOrMessages === 'string') {
     preview = promptOrMessages.trimStart();
   } else if (Array.isArray(promptOrMessages) && promptOrMessages.length) {
     preview = (promptOrMessages.find(m => m.role === 'user')?.content || '').trimStart();
   }
-  // Take first 2 non-empty lines, cap at 120 chars
-  const lines = preview.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines   = preview.split('\n').map(l => l.trim()).filter(Boolean);
   const snippet = lines.slice(0, 2).join(' ↵ ').slice(0, 120);
-
   console.log(`[${ts}] [chat:${type}]  ${label}  "${snippet}"`);
 }
 
-function killActive() {
-  _cancelled = true;
-  if (_activeProc) {
+function killCtx(ctx) {
+  ctx.cancelled = true;
+  if (ctx.req) {
+    try { ctx.req.destroy(); } catch (_) {}
+    ctx.req = null;
+  }
+  if (ctx.proc) {
     if (process.platform === 'win32') {
-      try { execSync(`taskkill /F /T /PID ${_activeProc.pid}`, { windowsHide: true }); } catch (_) {}
+      try { execSync(`taskkill /F /T /PID ${ctx.proc.pid}`, { windowsHide: true }); } catch (_) {}
     } else {
-      try { _activeProc.kill('SIGTERM'); } catch (_) {}
+      try { ctx.proc.kill('SIGTERM'); } catch (_) {}
     }
-    _activeProc = null;
+    ctx.proc = null;
   }
 }
 
@@ -98,16 +98,13 @@ function stripAnsi(str) {
 
 function extractHtml(text) {
   const clean = stripAnsi(text);
-  // Direct match — greedy so it captures the entire document
   const direct = clean.match(/<!DOCTYPE\s+html[\s\S]*<\/html>/i);
   if (direct) return direct[0].trim();
-  // Fallback: model wrapped output in a markdown code fence
   const fenced = clean.match(/```(?:html)?\s*\n(<!DOCTYPE\s+html[\s\S]*<\/html>)\s*\n```/i);
   if (fenced) return fenced[1].trim();
   return null;
 }
 
-// Inline variant: HTML embedded directly (used by Ollama which has no file access).
 function buildDiffPromptInline(instruction, existingHtml, projectDescription) {
   const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
   return `Apply the instruction below to the existing HTML.${ctx}
@@ -130,7 +127,6 @@ Rules:
 - Multiple patches are fine and applied in order`;
 }
 
-// File-ref variant: CLI tools read the HTML from disk.
 function buildDiffPromptWithRef(instruction, htmlFilePath, projectDescription) {
   const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
   return `You are an expert UI/UX developer. Apply the instruction below to the HTML file.
@@ -152,7 +148,6 @@ Rules:
 - Multiple patches are fine and applied in order`;
 }
 
-// Parse [{search, replace}] patches from model output.
 function extractPatches(text) {
   const clean = stripAnsi(text);
   const start = clean.indexOf('[');
@@ -168,8 +163,6 @@ function extractPatches(text) {
   return null;
 }
 
-// Apply [{search, replace}] patches sequentially to html.
-// Throws if any search string is not found.
 function applyPatches(html, patches) {
   let result = html;
   for (const { search, replace } of patches) {
@@ -183,8 +176,9 @@ function applyPatches(html, patches) {
 
 // ----------------------------------------------------------------
 // Anthropic SSE streaming
+// ctx controls subprocess lifetime; tokenCh/doneCh are the IPC channels.
 // ----------------------------------------------------------------
-function runAnthropic(wc, prompt, editPayload, model, messages) {
+function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
   _logAiCall('anthropic', model.model_name || 'claude-sonnet-4-6', null, messages || prompt);
   let msgs;
   if (editPayload) {
@@ -202,6 +196,14 @@ function runAnthropic(wc, prompt, editPayload, model, messages) {
     stream:     true,
     messages:   msgs,
   });
+
+  let finished = false;
+  const finish = (result) => {
+    if (finished) return;
+    finished  = true;
+    ctx.req   = null;
+    send(wc, doneCh, result);
+  };
 
   const req = https.request({
     hostname: 'api.anthropic.com',
@@ -224,27 +226,29 @@ function runAnthropic(wc, prompt, editPayload, model, messages) {
           const data = JSON.parse(raw);
           if (data.type === 'content_block_delta' && data.delta?.text) {
             accumulated += data.delta.text;
-            send(wc, 'chat:token', { text: data.delta.text });
+            send(wc, tokenCh, { text: data.delta.text });
           }
           if (data.type === 'message_stop') {
             const html = extractHtml(accumulated);
-            send(wc, 'chat:done', { html, raw: accumulated, error: html ? null : 'Could not extract HTML from response' });
+            finish({ html, raw: accumulated, error: html ? null : 'Could not extract HTML from response' });
           }
         } catch (_) {}
       }
     });
-    res.on('error', (err) => send(wc, 'chat:done', { html: null, raw: '', error: err.message }));
+    res.on('error', (err) => finish({ html: null, raw: '', error: err.message }));
   });
 
-  req.on('error', (err) => send(wc, 'chat:done', { html: null, raw: '', error: err.message }));
+  req.on('error', (err) => {
+    finish({ html: null, raw: '', error: ctx.cancelled ? 'Cancelled' : err.message });
+  });
+
+  ctx.req = req;
   req.write(body);
   req.end();
 }
 
 // ----------------------------------------------------------------
 // Ollama — Python proxy subprocess
-// Uses agent/ollama_proxy.py instead of direct HTTP to inherit the
-// reliability of the Python ollama client and consistent streaming.
 // ----------------------------------------------------------------
 const OLLAMA_SYSTEM_HTML = {
   role: 'system',
@@ -256,13 +260,12 @@ const OLLAMA_SYSTEM_DIFF = {
   content: 'You are an expert UI/UX developer. You MUST output ONLY a raw JSON array of search-replace patches. Never explain, never output HTML, never use markdown. The output must start with [ and end with ].',
 };
 
-function runOllama(wc, prompt, editPayload, model, messages) {
+function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
   _logAiCall('ollama', model.model_name || '(no model)', null, messages || prompt);
   let msgs;
   let isDiffMode = false;
 
   if (editPayload) {
-    // Diff/patch mode for edits — much smaller output than full HTML
     isDiffMode = true;
     const content = buildDiffPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
     msgs = [OLLAMA_SYSTEM_DIFF, { role: 'user', content }];
@@ -277,7 +280,7 @@ function runOllama(wc, prompt, editPayload, model, messages) {
   try {
     fs.writeFileSync(tmpFile, JSON.stringify(msgs), 'utf8');
   } catch (err) {
-    send(wc, 'chat:done', { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
+    send(wc, doneCh, { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
     return;
   }
 
@@ -286,7 +289,7 @@ function runOllama(wc, prompt, editPayload, model, messages) {
   const cleanup   = () => { try { fs.unlinkSync(tmpFile); } catch (_) {} };
   let accumulated = '';
 
-  _activeProc = spawn('python', [
+  ctx.proc = spawn('python', [
     agentPath,
     '--messages-file', tmpFile,
     '--model',         model.model_name,
@@ -294,19 +297,19 @@ function runOllama(wc, prompt, editPayload, model, messages) {
     '--verbose',
   ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env } });
 
-  _activeProc.stdout.on('data', (chunk) => {
+  ctx.proc.stdout.on('data', (chunk) => {
     const text = chunk.toString('utf8');
     accumulated += text;
-    send(wc, 'chat:token', { text });
+    send(wc, tokenCh, { text });
   });
 
-  _activeProc.stderr.on('data', (chunk) => {
-    send(wc, 'chat:token', { text: chunk.toString('utf8') });
+  ctx.proc.stderr.on('data', (chunk) => {
+    send(wc, tokenCh, { text: chunk.toString('utf8') });
   });
 
-  _activeProc.on('close', (code) => {
+  ctx.proc.on('close', (code) => {
     cleanup();
-    if (_cancelled) return;
+    if (ctx.cancelled) return;
 
     let html  = null;
     let error = null;
@@ -317,12 +320,10 @@ function runOllama(wc, prompt, editPayload, model, messages) {
         try {
           html = applyPatches(editPayload.htmlContent, patches);
         } catch (err) {
-          // Patch failed — fall back to full HTML extraction
           html  = extractHtml(accumulated);
           error = html ? null : `Patch failed (${err.message}) and no full HTML found`;
         }
       } else {
-        // Model output full HTML despite instructions — accept it
         html  = extractHtml(accumulated);
         error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'No patches or HTML found in response');
       }
@@ -331,21 +332,21 @@ function runOllama(wc, prompt, editPayload, model, messages) {
       error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
     }
 
-    send(wc, 'chat:done', { html, raw: accumulated, error });
-    _activeProc = null;
+    send(wc, doneCh, { html, raw: accumulated, error });
+    ctx.proc = null;
   });
 
-  _activeProc.on('error', (err) => {
+  ctx.proc.on('error', (err) => {
     cleanup();
-    send(wc, 'chat:done', { html: null, raw: accumulated, error: err.message });
-    _activeProc = null;
+    send(wc, doneCh, { html: null, raw: accumulated, error: err.message });
+    ctx.proc = null;
   });
 }
 
 // ----------------------------------------------------------------
 // CLI — hidden PowerShell spawn, prompt via temp file
 // ----------------------------------------------------------------
-function runCli(wc, prompt, editPayload, model, messages) {
+function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
   const exe       = model.executable || 'claude';
   const modelName = model.model_name || DEFAULT_CLI_MODEL;
   _logAiCall('cli', modelName, exe, messages || prompt);
@@ -361,13 +362,12 @@ function runCli(wc, prompt, editPayload, model, messages) {
     try {
       fs.writeFileSync(htmlTmpFile, editPayload.htmlContent, 'utf8');
     } catch (err) {
-      send(wc, 'chat:done', { html: null, raw: '', error: `Failed to write HTML temp file: ${err.message}` });
+      send(wc, doneCh, { html: null, raw: '', error: `Failed to write HTML temp file: ${err.message}` });
       return;
     }
     promptText = buildDiffPromptWithRef(editPayload.instruction, htmlTmpFile, editPayload.projectDescription);
     isDiffMode = true;
   } else if (messages && messages.length > 1) {
-    // Format conversation history as plain text for stateless CLI tools
     const lines = messages.slice(0, -1).map(m =>
       `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
     ).join('\n\n');
@@ -379,21 +379,16 @@ function runCli(wc, prompt, editPayload, model, messages) {
     promptText = prompt;
   }
 
-  // Write prompt to a temp file — avoids PowerShell here-string length
-  // limits and breakage on '@ sequences inside the content
   const tmpFile = path.join(os.tmpdir(), `ai-sdlc-chat-${ts}.txt`);
   try {
     fs.writeFileSync(tmpFile, promptText, 'utf8');
   } catch (err) {
     if (htmlTmpFile) { try { fs.unlinkSync(htmlTmpFile); } catch (_) {} }
-    send(wc, 'chat:done', { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
+    send(wc, doneCh, { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
     return;
   }
 
   const safeTmp = tmpFile.replace(/'/g, "''");
-  // Pipe file content via stdin instead of passing as a CLI argument.
-  // Passing $p unquoted splits multi-line strings into separate tokens and
-  // causes "---" section markers to be interpreted as end-of-flags by the CLI.
   const psCmd = [
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null;',
     `Get-Content -Path '${safeTmp}' -Raw | ${exe} ${baseFlags}`,
@@ -406,22 +401,22 @@ function runCli(wc, prompt, editPayload, model, messages) {
     if (htmlTmpFile) { try { fs.unlinkSync(htmlTmpFile); } catch (_) {} }
   };
 
-  _activeProc = spawn(
+  ctx.proc = spawn(
     'powershell.exe',
     ['-NoLogo', '-NonInteractive', '-Command', psCmd],
     { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' } }
   );
 
-  _activeProc.stdout.on('data', (chunk) => {
+  ctx.proc.stdout.on('data', (chunk) => {
     const text = chunk.toString('utf8');
     accumulated += text;
-    send(wc, 'chat:token', { text });
+    send(wc, tokenCh, { text });
   });
-  _activeProc.stderr.on('data', () => {});
+  ctx.proc.stderr.on('data', () => {});
 
-  _activeProc.on('close', (code) => {
+  ctx.proc.on('close', (code) => {
     cleanup();
-    if (_cancelled) return;
+    if (ctx.cancelled) return;
 
     let html  = null;
     let error = null;
@@ -432,12 +427,10 @@ function runCli(wc, prompt, editPayload, model, messages) {
         try {
           html = applyPatches(editPayload.htmlContent, patches);
         } catch (err) {
-          // Patch application failed — fall back to full HTML extraction
           html  = extractHtml(accumulated);
           error = html ? null : `Patch failed (${err.message}) and no full HTML found`;
         }
       } else {
-        // Model output full HTML despite instructions — accept it
         html  = extractHtml(accumulated);
         error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'No patches or HTML found in response');
       }
@@ -446,36 +439,51 @@ function runCli(wc, prompt, editPayload, model, messages) {
       error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
     }
 
-    send(wc, 'chat:done', { html, raw: accumulated, error });
-    _activeProc = null;
+    send(wc, doneCh, { html, raw: accumulated, error });
+    ctx.proc = null;
   });
 
-  _activeProc.on('error', (err) => {
+  ctx.proc.on('error', (err) => {
     cleanup();
-    send(wc, 'chat:done', { html: null, raw: accumulated, error: err.message });
-    _activeProc = null;
+    send(wc, doneCh, { html: null, raw: accumulated, error: err.message });
+    ctx.proc = null;
   });
 }
 
 // ----------------------------------------------------------------
-// Register
+// Dispatch helper — picks the right backend
+// ----------------------------------------------------------------
+function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
+  if (model.type === 'anthropic') {
+    runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
+  } else if (model.type === 'ollama') {
+    runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
+  } else {
+    runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
+  }
+}
+
+// ----------------------------------------------------------------
+// Register IPC handlers
 // ----------------------------------------------------------------
 function registerChatHandlers() {
-  safeHandle('chat:cancel', () => killActive());
+  // --- Main window chat (chat:*) ---
+  safeHandle('chat:cancel', () => killCtx(_mainCtx));
 
   safeHandle('chat:generate', (event, { prompt, messages, editPayload, model }) => {
-    if (_activeProc) killActive();
-    _cancelled = false;
-    const wc   = event.sender;
+    if (_mainCtx.proc || _mainCtx.req) killCtx(_mainCtx);
+    _mainCtx.cancelled = false;
+    dispatch(event.sender, prompt, editPayload, model, messages, _mainCtx, 'chat:token', 'chat:done');
+    return { started: true };
+  });
 
-    if (model.type === 'anthropic') {
-      runAnthropic(wc, prompt, editPayload, model, messages);
-    } else if (model.type === 'ollama') {
-      runOllama(wc, prompt, editPayload, model, messages);
-    } else {
-      runCli(wc, prompt, editPayload, model, messages);
-    }
+  // --- Queue window chat (queueChat:*) — separate subprocess slot ---
+  safeHandle('queueChat:cancel', () => killCtx(_queueCtx));
 
+  safeHandle('queueChat:generate', (event, { prompt, model }) => {
+    if (_queueCtx.proc || _queueCtx.req) killCtx(_queueCtx);
+    _queueCtx.cancelled = false;
+    dispatch(event.sender, prompt, null, model, null, _queueCtx, 'queueChat:token', 'queueChat:done');
     return { started: true };
   });
 }

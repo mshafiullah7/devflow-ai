@@ -5,6 +5,7 @@ const path = require('node:path');
 const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
 const { closeDb } = require('./db/database');
+const { openQueueWindow }  = require('./queue-window');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
 const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
 const { sendMessage: telegramSend } = require('./telegram');
@@ -45,6 +46,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:agent-cli-path', () =>
     path.join(app.getAppPath(), 'agent-cli', 'index.js')
   );
+
+  ipcMain.handle('app:openQueueWindow', (_e, projectId) => {
+    openQueueWindow(projectId);
+    return { ok: true };
+  });
 
   ipcMain.handle('app:config:get', (_e, key) => getConfigValue(key));
   ipcMain.handle('app:config:set', (_e, key, value) => { setConfigValue(key, value); });

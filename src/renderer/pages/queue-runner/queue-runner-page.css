@@ -1,0 +1,39 @@
+.scr-queue-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.scr-queue-window__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  flex-shrink: 0;
+}
+
+.scr-queue-window__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #111);
+  flex: 1;
+}
+
+.scr-queue-window__model-select {
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--bg, #fff);
+  color: var(--text, #111);
+  max-width: 160px;
+}
+
+.scr-queue-window__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}

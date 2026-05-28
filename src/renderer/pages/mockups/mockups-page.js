@@ -1302,15 +1302,8 @@ export class MockupsPage {
     };
     refreshDescQueueCount();
 
-    let queueOpen = false;
     queueBtn.addEventListener('click', () => {
-      queueOpen = !queueOpen;
-      queueBtn.classList.toggle('scr-queue-btn--active', queueOpen);
-      queuePanel.hidden  = !queueOpen;
-      editorBody.hidden  = queueOpen;
-      footer.hidden      = queueOpen;
-      tabsEl.hidden      = queueOpen;
-      if (queueOpen) this._renderQueuePanel(queuePanel).then(refreshDescQueueCount);
+      window.app.openQueueWindow(this._projectId);
     });
   }
 
@@ -1874,7 +1867,6 @@ export class MockupsPage {
     };
     refreshQueueCount();
 
-    let queueOpen = false;
     let lastActiveTab = tabPreview;
 
     const switchTab = (active) => {
@@ -1882,13 +1874,6 @@ export class MockupsPage {
       [tabPreview, tabDescription].forEach(t => t.classList.toggle('scr-preview-tab--active', t === active));
       split.hidden     = active !== tabPreview;
       descPanel.hidden = active !== tabDescription;
-      if (queueOpen) {
-        queueOpen = false;
-        queuePanel.hidden = true;
-        queueBtn.classList.remove('scr-queue-btn--active');
-        split.hidden     = active !== tabPreview;
-        descPanel.hidden = active !== tabDescription;
-      }
     };
 
     tabPreview.addEventListener('click', () => switchTab(tabPreview));
@@ -1902,18 +1887,7 @@ export class MockupsPage {
     });
 
     queueBtn.addEventListener('click', () => {
-      queueOpen = !queueOpen;
-      queueBtn.classList.toggle('scr-queue-btn--active', queueOpen);
-      if (queueOpen) {
-        split.hidden     = true;
-        descPanel.hidden = true;
-        queuePanel.hidden = false;
-        this._renderQueuePanel(queuePanel).then(refreshQueueCount);
-      } else {
-        queuePanel.hidden = true;
-        split.hidden     = lastActiveTab !== tabPreview;
-        descPanel.hidden = lastActiveTab !== tabDescription;
-      }
+      window.app.openQueueWindow(this._projectId);
     });
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {

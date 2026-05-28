@@ -239,6 +239,21 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('chat:done');
     },
   },
+  // Separate AI channel for the detached queue window — own subprocess slot.
+  queueChat: {
+    generate: (data) => ipcRenderer.invoke('queueChat:generate', data),
+    cancel:   ()     => ipcRenderer.invoke('queueChat:cancel'),
+    onToken:  (cb)   => ipcRenderer.on('queueChat:token', (_e, p) => cb(p)),
+    onDone:   (cb)   => ipcRenderer.on('queueChat:done',  (_e, p) => cb(p)),
+    offAll:   ()     => {
+      ipcRenderer.removeAllListeners('queueChat:token');
+      ipcRenderer.removeAllListeners('queueChat:done');
+    },
+  },
+  openQueueWindow: (projectId) => ipcRenderer.invoke('app:openQueueWindow', projectId),
+  queueWindow: {
+    onInit: (cb) => ipcRenderer.on('queue:init', (_e, p) => cb(p)),
+  },
 });
 
 
