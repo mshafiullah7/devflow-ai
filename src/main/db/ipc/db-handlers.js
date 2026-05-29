@@ -839,7 +839,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:screen_designs:update', (_e, { id, title, description, tech_stack, html_content, queued, executed }) => {
+  safeHandle('db:screen_designs:update', (_e, { id, title, description, tech_stack, html_content, queued, executed, style_valid, style_issues }) => {
     db.prepare(
       `UPDATE screen_designs
           SET title        = coalesce(?, title),
@@ -848,10 +848,13 @@ function registerDbHandlers() {
               html_content = coalesce(?, html_content),
               queued       = CASE WHEN ? IS NOT NULL THEN ? ELSE queued END,
               executed     = CASE WHEN ? IS NOT NULL THEN ? ELSE executed END,
+              style_valid  = CASE WHEN ? IS NOT NULL THEN ? ELSE style_valid END,
+              style_issues = CASE WHEN ? IS NOT NULL THEN ? ELSE style_issues END,
               updated_at   = datetime('now')
         WHERE id = ?`
     ).run(title ?? null, description ?? null, tech_stack ?? null, html_content ?? null,
-          queued ?? null, queued ?? null, executed ?? null, executed ?? null, id);
+          queued ?? null, queued ?? null, executed ?? null, executed ?? null,
+          style_valid ?? null, style_valid ?? null, style_issues ?? null, style_issues ?? null, id);
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
   });
 

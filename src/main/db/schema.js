@@ -8,8 +8,10 @@ function applySchema(db) {
   // Safe column migrations — silently ignored if column already exists
   const migrations = [
     `ALTER TABLE projects ADD COLUMN design_template TEXT`,
-    `ALTER TABLE screen_designs ADD COLUMN queued   INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE screen_designs ADD COLUMN executed INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE screen_designs ADD COLUMN queued       INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE screen_designs ADD COLUMN executed     INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE screen_designs ADD COLUMN style_valid  INTEGER`,
+    `ALTER TABLE screen_designs ADD COLUMN style_issues TEXT`,
     `ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE project_layers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE prompts      ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,

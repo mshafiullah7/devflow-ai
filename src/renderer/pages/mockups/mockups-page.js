@@ -172,6 +172,8 @@ export class MockupsPage {
     this._git?.stopPoll();
     window.app.chat.offAll();
     window.app.chat.cancel();
+    window.app.validate.offAll();
+    window.app.validate.cancel();
     if (this._ctrlSHandler) {
       document.removeEventListener('keydown', this._ctrlSHandler);
       this._ctrlSHandler = null;
@@ -293,6 +295,8 @@ export class MockupsPage {
             <div class="scr-sidebar__item-row">
               <span class="scr-sidebar__item-id">#${s.id}</span>
               <span class="scr-sidebar__item-title">${escHtml(s.title)}</span>
+              ${s.style_valid === 1 ? '<span class="scr-val-dot scr-val-dot--ok" title="Style valid"></span>' : ''}
+              ${s.style_valid === 0 ? `<span class="scr-val-dot scr-val-dot--warn" title="Style issues found"></span>` : ''}
             </div>
           </div>
           ${canQueue ? `
@@ -1430,6 +1434,104 @@ export class MockupsPage {
     });
   }
 
+  _renderValidationBar(screen) {
+    if (screen.style_valid === null || screen.style_valid === undefined) return '';
+    if (screen.style_valid === 1) {
+      return `<div class="scr-val-bar scr-val-bar--ok">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Style validation passed — all design system rules applied correctly.
+      </div>`;
+    }
+    let issues = [];
+    try { issues = JSON.parse(screen.style_issues || '[]'); } catch (_) {}
+    const list = issues.map(i => `<li>${escHtml(i)}</li>`).join('');
+    return `<div class="scr-val-bar scr-val-bar--warn">
+      <div class="scr-val-bar__header">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <path d="M8 2L14 13H2L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          <path d="M8 7v3M8 11.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        ${issues.length} style issue${issues.length !== 1 ? 's' : ''} found
+        <button class="scr-val-bar__fix" id="scrAutoFixBtn">Auto-fix</button>
+      </div>
+      ${list ? `<ul class="scr-val-bar__list">${list}</ul>` : ''}
+    </div>`;
+  }
+
+  _runValidation(screen) {
+    const model = this._getSelectedModel();
+    if (!model) { alert('No model selected.'); return; }
+    if (!screen.html_content) { alert('Generate the screen first before validating.'); return; }
+    const designTemplate = this._getDesignTemplateForPrompt();
+    if (!designTemplate) { alert('No design system defined. Open Styles to create one.'); return; }
+
+    const bar = this.container.querySelector('#scrValidationBar');
+    const btn = this.container.querySelector('#scrValidateBtn');
+    if (bar) bar.innerHTML = `<div class="scr-val-bar scr-val-bar--running">
+      <span class="scr-chat-stream-dot"></span> Validating style…
+    </div>`;
+    if (btn) { btn.disabled = true; btn.textContent = 'Validating…'; }
+
+    let accumulated = '';
+    window.app.validate.offAll();
+
+    window.app.validate.onToken(({ text }) => { accumulated += text; });
+
+    window.app.validate.onDone(async ({ raw, error }) => {
+      window.app.validate.offAll();
+      if (btn) { btn.disabled = false; btn.textContent = 'Validate'; }
+
+      const fullText = raw || accumulated;
+      let result = { valid: false, issues: [error || 'Could not parse validation response.'] };
+      if (fullText) {
+        try {
+          const start = fullText.indexOf('{');
+          const end   = fullText.lastIndexOf('}');
+          if (start !== -1 && end > start) result = JSON.parse(fullText.slice(start, end + 1));
+        } catch (_) {}
+      }
+
+      const styleValid  = result.valid ? 1 : 0;
+      const styleIssues = JSON.stringify(result.issues || []);
+      await window.db.screenDesigns.update({ id: screen.id, style_valid: styleValid, style_issues: styleIssues });
+      screen.style_valid  = styleValid;
+      screen.style_issues = styleIssues;
+
+      if (bar) bar.innerHTML = this._renderValidationBar(screen);
+      this._refreshSidebar();
+      this._bindValidationBarEvents(screen);
+    });
+
+    window.app.validate.run({
+      screenTitle:    screen.title,
+      htmlContent:    screen.html_content,
+      designTemplate,
+      model,
+    });
+  }
+
+  _bindValidationBarEvents(screen) {
+    const fixBtn = this.container.querySelector('#scrAutoFixBtn');
+    if (!fixBtn) return;
+    fixBtn.addEventListener('click', () => {
+      let issues = [];
+      try { issues = JSON.parse(screen.style_issues || '[]'); } catch (_) {}
+      if (!issues.length) return;
+
+      const fixPrompt = `Fix the following style violations so the screen matches the design system exactly:\n${issues.map((i, n) => `${n + 1}. ${i}`).join('\n')}`;
+      const chatInput = this.container.querySelector('#scrDescription');
+      if (chatInput) {
+        chatInput.value = fixPrompt;
+        chatInput.style.height = 'auto';
+        chatInput.style.height = chatInput.scrollHeight + 'px';
+        chatInput.focus();
+      }
+    });
+  }
+
   _showScreenViewer(screen) {
     const main   = this.container.querySelector('#scrMain');
 
@@ -1450,6 +1552,15 @@ export class MockupsPage {
             <button class="scr-preview-tab scr-preview-tab--active" id="scrTabPreview">Preview</button>
           </div>
           <div class="scr-viewer__actions">
+            ${screen.html_content && this._hasAnyTemplate() ? `
+            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrValidateBtn" title="Validate style against design system">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Validate
+            </button>
+            ` : ''}
             <button class="scr-btn scr-btn--sm scr-btn--secondary scr-queue-btn" id="scrQueueBtn" title="Generation queue">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -1523,6 +1634,7 @@ export class MockupsPage {
           </div>
         </div>
         <div class="scr-viewer__queue-panel" id="scrQueuePanel" hidden></div>
+        <div class="scr-validation-bar" id="scrValidationBar">${this._renderValidationBar(screen)}</div>
 
         <div class="scr-viewer__split" id="scrSplit">
           <div class="scr-viewer__preview-pane" id="scrPreviewPane">
@@ -1753,6 +1865,9 @@ export class MockupsPage {
     });
 
     main.querySelector('#scrEditDetailsBtn').addEventListener('click', () => this._showEditScreenModal(screen));
+
+    main.querySelector('#scrValidateBtn')?.addEventListener('click', () => this._runValidation(screen));
+    this._bindValidationBarEvents(screen);
 
     const tabEdit        = main.querySelector('#scrTabEdit');
     const tabPreview     = main.querySelector('#scrTabPreview');
