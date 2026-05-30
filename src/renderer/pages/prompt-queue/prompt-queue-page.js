@@ -675,9 +675,7 @@ export class PromptQueuePage {
 
       await window.db.promptQueue.update({ id: item.id, status: item.status, output: item.output, exit_code: exitCode, commit_sha: item.commit_sha ?? null });
 
-      if (succeeded && item.prompt_id) {
-        await window.db.prompts.update({ id: item.prompt_id, is_executed: 1 });
-      }
+      // prompt_id linkage removed in v2 architecture
 
       this._refreshItemEl(item.id);
       this._updateSummary();
@@ -876,9 +874,7 @@ export class PromptQueuePage {
         commit_sha: item.commit_sha ?? null,
       });
 
-      if (succeeded && item.prompt_id) {
-        await window.db.prompts.update({ id: item.prompt_id, is_executed: 1 });
-      }
+      // prompt_id linkage removed in v2 architecture
 
       this._refreshItemEl(item.id);
       this._updateSummary();

@@ -5,7 +5,8 @@ const path = require('node:path');
 const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
 const { closeDb } = require('./db/database');
-const { openQueueWindow }  = require('./queue-window');
+const { openQueueWindow }    = require('./queue-window');
+const { openWorkflowWindow } = require('./workflow-window');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
 const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
 const { sendMessage: telegramSend } = require('./telegram');
@@ -49,6 +50,11 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:openQueueWindow', (_e, projectId) => {
     openQueueWindow(projectId);
+    return { ok: true };
+  });
+
+  ipcMain.handle('app:openWorkflowWindow', (_e, data) => {
+    openWorkflowWindow(data);
     return { ok: true };
   });
 

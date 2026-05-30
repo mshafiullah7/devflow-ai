@@ -56,6 +56,7 @@ function createCtx() {
 const _mainCtx     = createCtx();
 const _queueCtx    = createCtx();
 const _validateCtx = createCtx();
+const _workflowCtx = createCtx();
 
 function _logAiCall(type, modelName, exe, promptOrMessages) {
   const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -517,6 +518,16 @@ function registerChatHandlers() {
     if (_queueCtx.proc || _queueCtx.req) killCtx(_queueCtx);
     _queueCtx.cancelled = false;
     dispatch(event.sender, prompt, null, model, null, _queueCtx, 'queueChat:token', 'queueChat:done');
+    return { started: true };
+  });
+
+  // --- Workflow runner window chat (workflowChat:*) — separate subprocess slot ---
+  safeHandle('workflowChat:cancel', () => killCtx(_workflowCtx));
+
+  safeHandle('workflowChat:generate', (event, { prompt, model }) => {
+    if (_workflowCtx.proc || _workflowCtx.req) killCtx(_workflowCtx);
+    _workflowCtx.cancelled = false;
+    dispatch(event.sender, prompt, null, model, null, _workflowCtx, 'workflowChat:token', 'workflowChat:done');
     return { started: true };
   });
 }

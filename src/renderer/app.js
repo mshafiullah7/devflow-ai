@@ -40,17 +40,9 @@ router.register('project-layers', async () => {
   const { ProjectLayersPage } = await import('./pages/project-layers/project-layers-page.js');
   return ProjectLayersPage;
 });
-router.register('user-stories', async () => {
-  const { ProjectPage } = await import('./pages/user-stories/user-stories.js');
-  return ProjectPage;
-});
 router.register('test-runner', async () => {
   const { TestRunnerPage } = await import('./pages/test-runner/test-runner-page.js');
   return TestRunnerPage;
-});
-router.register('test-cases', async () => {
-  const { TestCasesPage } = await import('./pages/test-cases/test-cases-page.js');
-  return TestCasesPage;
 });
 router.register('style-guide', async () => {
   const { StyleGuidePage } = await import('./pages/style-guide/style-guide-page.js');
@@ -75,5 +67,9 @@ router.register('settings', async () => {
 router.register('ai-console', async () => {
   const { AiConsolePage } = await import('./pages/ai-console/ai-console-page.js');
   return AiConsolePage;
+});
+router.register('workflows', async () => {
+  const { WorkflowsPage } = await import('./pages/workflows/workflows-page.js');
+  return WorkflowsPage;
 });
 router.navigate('launcher');

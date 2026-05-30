@@ -16,11 +16,9 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, stories, features, statuses, documents, mockups, issueCount, testRunHistory, queuePending, layers] = await Promise.all([
+    const [project, workflows, documents, mockups, issueCount, testRunHistory, queuePending, layers] = await Promise.all([
       window.db.projects.get(this.projectId),
-      window.db.userStories.list({ project_id: this.projectId }),
-      window.db.features.list(this.projectId),
-      window.db.status.list(),
+      window.db.workflows.list(this.projectId),
       window.db.documents.list(this.projectId),
       window.db.screenDesigns.list(this.projectId),
       window.db.issues.count(this.projectId),
@@ -30,9 +28,7 @@ export class ProjectHomePage {
     ]);
 
     this._project          = project;
-    this._stories          = stories;
-    this._features         = features;
-    this._statuses         = statuses;
+    this._workflows        = workflows ?? [];
     this._documents        = documents;
     this._mockups          = mockups;
     this._issueCount       = issueCount;
@@ -76,25 +72,16 @@ export class ProjectHomePage {
   // Stats boxes (3-up: stories, features, issues)
   // ----------------------------------------------------------------
   _statsHtml() {
-    const stories  = this._stories  || [];
-    const features = this._features || [];
+    const workflows   = this._workflows  || [];
     const openIssues  = this._issueCount?.open  ?? 0;
     const totalIssues = this._issueCount?.total ?? 0;
-
-    const openStories  = stories.filter(s => s.status_name !== 'Done');
-    const openFeatures = features.filter(f => f.status_name !== 'Done');
 
     return `
       <div class="ph-stats-strip">
         <div class="ph-stat-box ph-stat-box--accent">
-          <div class="ph-stat-box__value">${openStories.length}</div>
-          <div class="ph-stat-box__label">Open Stories</div>
-          <div class="ph-stat-box__total">of ${stories.length} total</div>
-        </div>
-        <div class="ph-stat-box">
-          <div class="ph-stat-box__value">${openFeatures.length}</div>
-          <div class="ph-stat-box__label">Open Features</div>
-          <div class="ph-stat-box__total">of ${features.length} total</div>
+          <div class="ph-stat-box__value">${workflows.length}</div>
+          <div class="ph-stat-box__label">Workflows</div>
+          <div class="ph-stat-box__total">&nbsp;</div>
         </div>
         <div class="ph-stat-box ${openIssues > 0 ? 'ph-stat-box--danger' : ''}">
           <div class="ph-stat-box__value">${openIssues}</div>
@@ -104,47 +91,6 @@ export class ProjectHomePage {
       </div>`;
   }
 
-  // ----------------------------------------------------------------
-  // Status breakdown with progress bars
-  // ----------------------------------------------------------------
-  _statusBreakdownHtml() {
-    const stories  = this._stories  || [];
-    const statuses = this._statuses || [];
-    const total    = stories.length;
-
-    if (total === 0) {
-      return `<p class="ph-status-empty">No stories yet</p>`;
-    }
-
-    const storyCounts = {};
-    for (const s of stories) {
-      const label = s.status_name || 'No Status';
-      storyCounts[label] = (storyCounts[label] || 0) + 1;
-    }
-
-    const rows = [];
-    for (const st of statuses) {
-      if (storyCounts[st.name]) {
-        rows.push({ label: st.name, count: storyCounts[st.name] });
-      }
-    }
-    if (storyCounts['No Status']) {
-      rows.push({ label: 'No Status', count: storyCounts['No Status'] });
-    }
-
-    return rows.map(r => {
-      const pct = Math.round((r.count / total) * 100);
-      return `
-        <div class="ph-status-row">
-          <span class="ph-status-dot"></span>
-          <span class="ph-status-name">${escHtml(r.label)}</span>
-          <div class="ph-status-bar-wrap">
-            <div class="ph-status-bar" style="width:${pct}%"></div>
-          </div>
-          <span class="ph-status-count">${r.count} of ${total}</span>
-        </div>`;
-    }).join('');
-  }
 
   // ----------------------------------------------------------------
   // Quick links
@@ -185,8 +131,6 @@ export class ProjectHomePage {
   _template() {
     const name        = this._project?.name ?? 'Project';
     const initial     = name.trim()[0]?.toUpperCase() ?? '?';
-    const stories     = this._stories  || [];
-    const features    = this._features || [];
     const mockups     = this._mockups  || [];
     const documents   = this._documents || [];
     const failed      = this._testRunHistory[0]?.failed ?? 0;
@@ -270,6 +214,19 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count">${documents.length}</span>
             </button>
 
+            <button class="ph-nav-item" id="navWorkflows">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1"/>
+                  <rect x="14" y="3" width="7" height="7" rx="1"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1"/>
+                  <rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Workflows</span>
+              <span class="ph-nav-item__count">${this._workflows.length}</span>
+            </button>
+
             <button class="ph-nav-item" id="navLayers">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -293,17 +250,6 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count">${mockups.length}</span>
             </button>
 
-
-            <button class="ph-nav-item" id="navUserStories">
-              <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9 11l3 3L22 4"/>
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>
-              </span>
-              <span class="ph-nav-item__label">User Stories</span>
-              <span class="ph-nav-item__count">${stories.length}</span>
-            </button>
 
             <div class="ph-sidebar-section">Tools</div>
             <button class="ph-nav-item" id="navPromptQueue">
@@ -417,161 +363,10 @@ export class ProjectHomePage {
   }
 
   // ----------------------------------------------------------------
-  // Metrics charts — burndown + priority distribution + hours bars
+  // Metrics charts — placeholder until workflow screens are built
   // ----------------------------------------------------------------
   _chartsHtml() {
-    const stories = this._stories || [];
-
-    const PRIOS  = ['critical', 'high', 'medium', 'low'];
-    const COLORS = { critical: '#f87171', high: '#fb923c', medium: '#fbbf24', low: '#60a5fa' };
-    const LABELS = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
-
-    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
-    const est    = { critical: 0, high: 0, medium: 0, low: 0 };
-    const rem    = { critical: 0, high: 0, medium: 0, low: 0 };
-
-    for (const s of stories) {
-      const p = PRIOS.includes(s.priority) ? s.priority : 'medium';
-      counts[p]++;
-      est[p] += (s.estimated_hours  || 0);
-      rem[p] += (s.remaining_hours  || 0);
-    }
-
-    const total    = stories.length;
-    const totalEst = PRIOS.reduce((a, p) => a + est[p], 0);
-    const totalRem = PRIOS.reduce((a, p) => a + rem[p], 0);
-    const burnPct  = totalEst > 0 ? Math.min(100, Math.round(((totalEst - totalRem) / totalEst) * 100)) : 0;
-
-    // ── Donut SVG ──────────────────────────────────────────────────
-    const cx = 60, cy = 60, R = 50, r = 32;
-    const ptOuter = (deg) => {
-      const rad = (deg - 90) * Math.PI / 180;
-      return { x: +(cx + R * Math.cos(rad)).toFixed(3), y: +(cy + R * Math.sin(rad)).toFixed(3) };
-    };
-    const ptInner = (deg) => {
-      const rad = (deg - 90) * Math.PI / 180;
-      return { x: +(cx + r * Math.cos(rad)).toFixed(3), y: +(cy + r * Math.sin(rad)).toFixed(3) };
-    };
-
-    let cursor = 0;
-    const donutPaths = total === 0
-      ? `<circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="var(--border)" stroke-width="${R - r}"/>`
-      : PRIOS.map(p => {
-          if (!counts[p]) return '';
-          const sweep = Math.min((counts[p] / total) * 360, 359.99);
-          const end   = cursor + sweep;
-          const large = sweep > 180 ? 1 : 0;
-          const o1 = ptOuter(cursor), o2 = ptOuter(end);
-          const i2 = ptInner(cursor), i1 = ptInner(end);
-          const d  = `M${o1.x} ${o1.y} A${R} ${R} 0 ${large} 1 ${o2.x} ${o2.y} L${i1.x} ${i1.y} A${r} ${r} 0 ${large} 0 ${i2.x} ${i2.y}Z`;
-          cursor   = end;
-          return `<path d="${d}" fill="${COLORS[p]}"/>`;
-        }).join('');
-
-    const legend = PRIOS.map(p => `
-      <div class="ph-dleg-item">
-        <span class="ph-dleg-dot" style="background:${COLORS[p]}"></span>
-        <span class="ph-dleg-name">${LABELS[p]}</span>
-        <span class="ph-dleg-cnt">${counts[p]}</span>
-      </div>`).join('');
-
-    // ── Hours-by-priority bars ─────────────────────────────────────
-    const maxEst = Math.max(...PRIOS.map(p => est[p]), 0.01);
-
-    const burnRows = PRIOS.map(p => {
-      const e  = est[p];
-      const rr = rem[p];
-      if (e === 0 && rr === 0) return `
-        <div class="ph-hrow">
-          <span class="ph-hrow-lbl ph-hrow-lbl--${p}">${LABELS[p]}</span>
-          <div class="ph-hrow-bars"><span class="ph-hrow-none">—</span></div>
-          <span class="ph-hrow-val">—</span>
-        </div>`;
-      const trackPct = Math.round((e / maxEst) * 100);
-      const remPct   = e > 0 ? Math.round((rr / e) * 100) : 0;
-      const donePct  = 100 - remPct;
-      return `
-        <div class="ph-hrow">
-          <span class="ph-hrow-lbl ph-hrow-lbl--${p}">${LABELS[p]}</span>
-          <div class="ph-hrow-bars">
-            <div class="ph-hrow-track" style="width:${trackPct}%">
-              <div class="ph-hrow-rem" style="width:${remPct}%;background:${COLORS[p]}"></div>
-            </div>
-            <span class="ph-hrow-pct">${donePct}%</span>
-          </div>
-          <span class="ph-hrow-val" style="color:${COLORS[p]}">${rr > 0 ? rr.toFixed(1) + 'h' : '0h'}</span>
-        </div>`;
-    }).join('');
-
-    // ── Stories by status bars ─────────────────────────────────────
-    const statuses  = this._statuses || [];
-    const stCounts  = {};
-    for (const s of stories) {
-      const lbl = s.status_name || 'No Status';
-      stCounts[lbl] = (stCounts[lbl] || 0) + 1;
-    }
-    const stRows = [
-      ...statuses.filter(st => stCounts[st.name]).map(st => ({ label: st.name, count: stCounts[st.name] })),
-      ...(stCounts['No Status'] ? [{ label: 'No Status', count: stCounts['No Status'] }] : []),
-    ];
-    const statusBars = stRows.length === 0
-      ? `<span class="ph-hrow-none">No stories yet</span>`
-      : stRows.map(r => {
-          const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
-          return `
-            <div class="ph-status-row">
-              <span class="ph-status-dot"></span>
-              <span class="ph-status-name">${escHtml(r.label)}</span>
-              <span class="ph-status-count">${r.count}</span>
-              <div class="ph-status-bar-wrap">
-                <div class="ph-status-bar" style="width:${pct}%"></div>
-              </div>
-              <span class="ph-status-total">${total}</span>
-            </div>`;
-        }).join('');
-
-    const bdStatText = totalEst > 0
-      ? `${totalRem.toFixed(1)}h remaining of ${totalEst.toFixed(1)}h estimated`
-      : 'No hours tracked yet';
-
-    return `
-      <div class="ph-metrics-wrap">
-        <div class="ph-section-label" style="margin-top:28px">Metrics</div>
-
-        <div class="ph-bd-card">
-          <div class="ph-bd-hdr">
-            <span class="ph-bd-title">Burndown</span>
-            <span class="ph-bd-stat">${bdStatText}</span>
-            <span class="ph-bd-pct">${burnPct}%</span>
-          </div>
-          <div class="ph-bd-track">
-            <div class="ph-bd-fill" style="width:${burnPct}%"></div>
-          </div>
-        </div>
-
-        <div class="ph-mc-grid">
-          <div class="ph-mc-card">
-            <div class="ph-mc-title">Priority Distribution</div>
-            <div class="ph-donut-layout">
-              <svg viewBox="0 0 120 120" class="ph-donut-svg" xmlns="http://www.w3.org/2000/svg">
-                ${donutPaths}
-                <text x="60" y="55" class="ph-donut-num" text-anchor="middle" dominant-baseline="middle">${total}</text>
-                <text x="60" y="70" class="ph-donut-sub" text-anchor="middle">stories</text>
-              </svg>
-              <div class="ph-donut-legend">${legend}</div>
-            </div>
-          </div>
-          <div class="ph-mc-card">
-            <div class="ph-mc-title">Hours by Priority</div>
-            <div class="ph-hrows">${burnRows}</div>
-          </div>
-        </div>
-
-        <div class="ph-mc-card ph-mc-card--full">
-          <div class="ph-mc-title">Stories by Status</div>
-          <div class="ph-hrows ph-hrows--grid">${statusBars}</div>
-        </div>
-      </div>`;
+    return '';
   }
 
   // ----------------------------------------------------------------
@@ -628,6 +423,9 @@ export class ProjectHomePage {
         this.router.navigate('git-changes', { projectId: this.projectId, from: 'project-home' }));
 
     // Sidebar navigation
+    this.container.querySelector('#navWorkflows')
+      .addEventListener('click', () => this.router.navigate('workflows', { projectId: this.projectId }));
+
     this.container.querySelector('#navLayers')
       .addEventListener('click', () => this.router.navigate('project-layers', { projectId: this.projectId }));
 
@@ -637,9 +435,6 @@ export class ProjectHomePage {
     this.container.querySelector('#navDocuments')
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId }));
 
-
-    this.container.querySelector('#navUserStories')
-      .addEventListener('click', () => this.router.navigate('user-stories', { projectId: this.projectId }));
 
     this.container.querySelector('#navTestRunner')
       .addEventListener('click', () => this.router.navigate('test-runner', { projectId: this.projectId }));

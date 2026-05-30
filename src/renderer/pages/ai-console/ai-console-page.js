@@ -171,8 +171,6 @@ export class AiConsolePage {
 
     // Project data (loaded once on mount)
     this._project   = null;
-    this._features  = [];
-    this._stories   = [];
     this._issues    = [];
     this._documents = [];
   }
@@ -246,15 +244,11 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   async _loadData() {
     try {
-      const [features, stories, allIssues, documents] = await Promise.all([
-        window.db.features.list(this.projectId),
-        window.db.userStories.list({ project_id: this.projectId }),
+      const [allIssues, documents] = await Promise.all([
         window.db.issues.list({ project_id: this.projectId }),
         window.db.documents.list(this.projectId),
       ]);
 
-      this._features  = features || [];
-      this._stories   = stories  || [];
       this._issues    = (allIssues || []).filter(i => i.status === 'open');
       this._documents = documents || [];
 
@@ -270,9 +264,7 @@ export class AiConsolePage {
   _updateContextCounts() {
     const set = (id, text) => { const el = this.container.querySelector(id); if (el) el.textContent = text; };
 
-    set('#aicCtxFeatures', `${this._features.length} feature${this._features.length !== 1 ? 's' : ''}`);
-    set('#aicCtxStories',  `${this._stories.length} stor${this._stories.length !== 1 ? 'ies' : 'y'}`);
-    set('#aicCtxIssues',   `${this._issues.length} open`);
+    set('#aicCtxIssues', `${this._issues.length} open`);
 
     this._renderDocumentSlices();
   }
@@ -329,7 +321,7 @@ export class AiConsolePage {
 
     const name = this._project?.name || 'your project';
     thread.innerHTML = `<p class="aic-thread__loading">
-      Ready to help with <strong>${escHtml(name)}</strong>. ${this._features.length} features, ${this._stories.length} stories, ${this._issues.length} open issues. Select context slices on the right, then send a message.
+      Ready to help with <strong>${escHtml(name)}</strong>. ${this._issues.length} open issues. Select context slices on the right, then send a message.
     </p>`;
   }
 
@@ -398,22 +390,6 @@ export class AiConsolePage {
             <p class="aic-context__desc">Choose what project data is injected into the AI prompt.</p>
 
             <div class="aic-context__slices">
-
-              <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="features" disabled>
-                <div class="aic-slice__info">
-                  <span class="aic-slice__name">Features</span>
-                  <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxFeatures">– features</span>
-                </div>
-              </label>
-
-              <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="stories" disabled>
-                <div class="aic-slice__info">
-                  <span class="aic-slice__name">User stories</span>
-                  <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxStories">– stories</span>
-                </div>
-              </label>
 
               <label class="aic-slice">
                 <input type="checkbox" class="aic-slice__check" data-slice="issues" disabled>
@@ -921,42 +897,13 @@ export class AiConsolePage {
 
     const parts = [];
 
-    // ── Features ────────────────────────────────────────────────────
-    // DB column is `name` (not `title`); status comes from `status_name` join
-    if (slices.features && this._features.length > 0) {
-      const list = this._features.map(f => {
-        let line = `  [Feature] ${f.name}`;                      // f.name — correct column
-        if (f.description) line += `\n    Description: ${f.description}`;
-        if (f.status_name)  line += `\n    Status: ${f.status_name}`;
-        return line;
-      }).join('\n\n');
-      parts.push(`FEATURES (${this._features.length}):\n\n${list}`);
-    }
-
-    // ── User stories ─────────────────────────────────────────────────
-    // DB returns: title, description, acceptance_criteria, status_name (join), feature_id
-    if (slices.stories && this._stories.length > 0) {
-      const list = this._stories.map(s => {
-        let block = `  [Story] ${s.title}`;
-        block += `\n    Status: ${s.status_name || 'Backlog'}`;   // status_name — correct column
-        if (s.description)          block += `\n    Description: ${s.description}`;
-        if (s.acceptance_criteria)  block += `\n    Acceptance Criteria:\n${
-          s.acceptance_criteria.split('\n').map(l => `      ${l}`).join('\n')
-        }`;
-        return block;
-      }).join('\n\n');
-      parts.push(`USER STORIES (${this._stories.length}):\n\n${list}`);
-    }
-
     // ── Open issues ──────────────────────────────────────────────────
-    // DB returns: title, severity, status, description, story_title, feature_name (joins)
     if (slices.issues && this._issues.length > 0) {
       const list = this._issues.map(i => {
         let block = `  [Issue] ${i.title}`;
         block += `\n    Severity: ${i.severity || 'medium'} | Status: ${i.status || 'open'}`;
-        if (i.feature_name)  block += `\n    Feature: ${i.feature_name}`;
-        if (i.story_title)   block += `\n    Story: ${i.story_title}`;
-        if (i.description)   block += `\n    Description: ${i.description}`;
+        if (i.layer_name)         block += `\n    Layer: ${i.layer_name}`;
+        if (i.description)        block += `\n    Description: ${i.description}`;
         if (i.steps_to_reproduce) block += `\n    Steps: ${i.steps_to_reproduce}`;
         return block;
       }).join('\n\n');

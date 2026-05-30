@@ -413,11 +413,8 @@ export class IssuesPage {
     this._activeId = null;
     this.container.querySelectorAll('#isIssuesList .eus-src-item').forEach(c => c.classList.remove('eus-src-item--active'));
     const el       = this.container.querySelector('#isIssueDetail');
-    const [features, layers] = await Promise.all([
-      window.db.features.list(this._projectId) ?? [],
-      window.db.projectLayers.list(this._projectId) ?? [],
-    ]);
-    el.innerHTML   = this._formHtml(null, features, layers);
+    const layers = await window.db.projectLayers.list(this._projectId) ?? [];
+    el.innerHTML   = this._formHtml(null, layers);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Add Issue</button>';
     await this._bindFormEvents(el, null);
@@ -426,11 +423,8 @@ export class IssuesPage {
 
   async _showEditForm(issue) {
     const el       = this.container.querySelector('#isIssueDetail');
-    const [features, layers] = await Promise.all([
-      window.db.features.list(this._projectId) ?? [],
-      window.db.projectLayers.list(this._projectId) ?? [],
-    ]);
-    el.innerHTML   = this._formHtml(issue, features, layers);
+    const layers = await window.db.projectLayers.list(this._projectId) ?? [];
+    el.innerHTML   = this._formHtml(issue, layers);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Save Changes</button>';
     await this._bindFormEvents(el, issue);
@@ -439,16 +433,13 @@ export class IssuesPage {
   // ----------------------------------------------------------------
   // Form
   // ----------------------------------------------------------------
-  _formHtml(issue, features = [], layers = []) {
+  _formHtml(issue, layers = []) {
     const isEdit = !!issue;
     const statusOptions = Object.entries(STATUS_META).map(([val, m]) =>
       `<option value="${val}"${(issue?.status ?? 'open') === val ? ' selected' : ''}>${m.label}</option>`
     ).join('');
     const severityOptions = Object.entries(SEVERITY_META).map(([val, m]) =>
       `<option value="${val}"${(issue?.severity ?? 'medium') === val ? ' selected' : ''}>${m.label}</option>`
-    ).join('');
-    const featureOptions = features.map(f =>
-      `<option value="${f.id}"${issue?.feature_id === f.id ? ' selected' : ''}>${escHtml(f.name)}</option>`
     ).join('');
     const layerOptions = layers.map(l =>
       `<option value="${l.id}"${issue?.layer_id === l.id ? ' selected' : ''}>${escHtml(l.name)}</option>`
@@ -479,22 +470,6 @@ export class IssuesPage {
               <select class="is-form__select" id="isFormLayer">
                 <option value="">— select layer —</option>
                 ${layerOptions}
-              </select>
-            </div>
-          </div>
-
-          <div class="is-form__row">
-            <div class="is-form__field">
-              <label class="is-form__label" for="isFormFeature">Feature <span class="is-form__label-opt">(optional)</span></label>
-              <select class="is-form__select" id="isFormFeature">
-                <option value="">— none —</option>
-                ${featureOptions}
-              </select>
-            </div>
-            <div class="is-form__field">
-              <label class="is-form__label" for="isFormStoryLink">User Story <span class="is-form__label-opt">(optional)</span></label>
-              <select class="is-form__select" id="isFormStoryLink" ${issue?.feature_id ? '' : 'disabled'}>
-                <option value="">— select feature first —</option>
               </select>
             </div>
           </div>
@@ -552,8 +527,6 @@ export class IssuesPage {
     const severityEl = el.querySelector('#isFormSeverity');
     const statusEl   = el.querySelector('#isFormStatus');
     const layerEl    = el.querySelector('#isFormLayer');
-    const featureEl  = el.querySelector('#isFormFeature');
-    const storyEl    = el.querySelector('#isFormStoryLink');
     const descEl     = el.querySelector('#isFormDesc');
     const stepsEl    = el.querySelector('#isFormSteps');
     const expectedEl = el.querySelector('#isFormExpected');
@@ -565,26 +538,6 @@ export class IssuesPage {
         await window.db.issues.update({ id: issue.id, status: statusEl.value });
         this._refreshCardBadges(issue.id, statusEl.value, severityEl.value);
       });
-    }
-
-    const loadStories = async (featureId, preselectId = null) => {
-      if (!featureId) {
-        storyEl.innerHTML = '<option value="">— none —</option>';
-        storyEl.disabled  = true;
-        return;
-      }
-      const stories = await window.db.userStories.list({ feature_id: featureId }) ?? [];
-      storyEl.innerHTML = '<option value="">— none —</option>' +
-        stories.map(s =>
-          `<option value="${s.id}"${s.id === preselectId ? ' selected' : ''}>${escHtml(s.title)}</option>`
-        ).join('');
-      storyEl.disabled = stories.length === 0;
-    };
-
-    featureEl.addEventListener('change', () => loadStories(parseInt(featureEl.value) || null));
-
-    if (issue?.feature_id) {
-      await loadStories(issue.feature_id, issue.user_story_id ?? null);
     }
 
     const save = async (silent = false) => {
@@ -604,8 +557,6 @@ export class IssuesPage {
       const payload = {
         project_id:         this._projectId,
         layer_id:           layerId,
-        feature_id:         parseInt(featureEl.value)  || null,
-        user_story_id:      parseInt(storyEl.value)    || null,
         title,
         description:        descEl.value.trim()        || null,
         steps_to_reproduce: stepsEl.value.trim()       || null,

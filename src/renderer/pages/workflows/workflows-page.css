@@ -1,0 +1,778 @@
+/* ------------------------------------------------------------------ */
+/* Workflows Page                                                       */
+/* Builds on top of user-stories.css + issues-page.css classes         */
+/* ------------------------------------------------------------------ */
+
+/* Left panel — fixed 30% */
+#wfPanelList {
+  flex: 0 0 30%;
+  min-width: 160px;
+}
+
+/* Workflow list items are divs — ensure cursor and no-drag */
+.eus-src-item[data-wf] {
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+/* pl-list-* layout helpers (from project-layers — not injected on this page) */
+.pl-list-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  flex: 1;
+}
+.pl-list-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+}
+.pl-list-title-row .eus-src-item__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.pl-list-path {
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  text-align: left;
+}
+.pl-list-path--empty {
+  font-style: italic;
+  font-family: inherit;
+}
+
+/* Workflow header icon buttons (edit / delete) */
+.is-edit-btn,
+.is-del-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+.is-edit-btn:hover { background: var(--surface-hover); color: var(--text-secondary); }
+.is-del-btn:hover  { background: rgba(220,38,38,.08); color: #dc2626; }
+
+/* Group count badge + add button so space-between only sees 2 children */
+.wf-list-hd-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Inline add-workflow form inside the list panel */
+.wf-inline-add {
+  padding: 8px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+/* Detail panel root — must fill the flex column so children can use flex:1 */
+#wfDetailRoot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Override project-panel__header fixed 40px height when it contains
+   the workflow title block or the edit form (which need variable height) */
+#wfDetailRoot .project-panel__header {
+  height: auto;
+  min-height: 40px;
+  padding: 10px 12px;
+  align-items: flex-start;
+}
+
+/* ── Workflow detail header ─────────────────────────────────────── */
+.wf-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+.wf-detail-title-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.wf-detail-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────── */
+.wf-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0 12px;
+  gap: 0;
+  flex-shrink: 0;
+}
+.wf-tab {
+  padding: 9px 14px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+.wf-tab:hover { color: var(--text-secondary); }
+.wf-tab--active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+.wf-tab-count {
+  display: inline-block;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+.wf-tab--active .wf-tab-count {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+/* Override project-panel__content defaults — tab body is a flex column,
+   not a single scroll area, so toolbar stays fixed and list scrolls */
+.wf-tab-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  min-height: 0;
+}
+
+/* ── Layers toolbar — sticky at top of the layers tab ──────────── */
+.wf-layers-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.wf-run-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  -webkit-app-region: no-drag;
+}
+.wf-run-all-btn:hover:not(:disabled) { opacity: 0.88; }
+.wf-run-all-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Layer rows ─────────────────────────────────────────────────── */
+.wf-layers-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.wf-layer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  cursor: default;
+}
+.wf-layer-row:hover { background: var(--surface-hover); }
+.wf-layer-row:hover .wf-layer-actions { opacity: 1; }
+.wf-layer-row--dragging { opacity: 0.4; }
+
+.wf-drag-handle {
+  color: var(--text-muted);
+  cursor: grab;
+  font-size: 14px;
+  line-height: 1.6;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.wf-drag-handle:active { cursor: grabbing; }
+
+.wf-layer-order {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 14px;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.wf-layer-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wf-layer-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.wf-layer-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wf-meta-row {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-meta-row b { color: var(--text-secondary); font-weight: 500; }
+
+.wf-layer-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  flex-shrink: 0;
+}
+
+/* ── Layer / Criterion icon buttons ─────────────────────────────── */
+.wf-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.1s, color 0.1s;
+  -webkit-app-region: no-drag;
+}
+.wf-icon-btn:hover { background: var(--surface-hover); color: var(--text-secondary); }
+.wf-run-btn:hover  { color: var(--accent); }
+.wf-del-btn:hover  { color: #dc2626; }
+
+/* ── Layer inline edit form ──────────────────────────────────────── */
+.wf-layer-edit-form {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wf-layer-edit-form--new {
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-sm);
+  margin: 8px 12px;
+}
+
+/* ── Shared form elements ────────────────────────────────────────── */
+.wf-edit-form,
+.wf-crit-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.wf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wf-field--grow { flex: 1; min-width: 0; }
+.wf-field--sm   { width: 70px; flex-shrink: 0; }
+.wf-field-row   { display: flex; gap: 8px; }
+
+.wf-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wf-input {
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.12s;
+}
+.wf-input:focus { outline: none; border-color: var(--accent); }
+
+.wf-textarea {
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  transition: border-color 0.12s;
+}
+.wf-textarea:focus { outline: none; border-color: var(--accent); }
+.wf-textarea--tall { min-height: 80px; }
+
+.wf-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  padding-top: 4px;
+}
+.wf-form-actions--inline { padding-top: 0; }
+
+.wf-btn-cancel {
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.wf-btn-cancel:hover { background: var(--surface-hover); }
+
+.wf-btn-save {
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.wf-btn-save:hover { opacity: 0.88; }
+
+.wf-btn-run {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  -webkit-app-region: no-drag;
+}
+.wf-btn-run:hover { opacity: 0.88; }
+
+/* ── Success Criteria tab ────────────────────────────────────────── */
+.wf-criteria-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 8px 0;
+}
+
+.wf-criteria-list { display: flex; flex-direction: column; }
+
+.wf-crit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.wf-crit-row:hover { background: var(--surface-hover); }
+.wf-crit-row:hover .wf-icon-btn { opacity: 1; }
+
+.wf-crit-check { flex-shrink: 0; color: var(--accent); }
+.wf-crit-text {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+.wf-crit-row .wf-icon-btn { opacity: 0; transition: opacity 0.1s; }
+
+.wf-crit-edit-form {
+  flex-direction: row;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+  gap: 6px;
+}
+.wf-crit-edit-form .wf-input { flex: 1; }
+.wf-crit-edit-form--new { border: 1px dashed var(--accent); margin: 6px 12px; border-radius: var(--radius-sm); }
+
+.wf-add-crit-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 0.1s;
+  text-align: left;
+  -webkit-app-region: no-drag;
+}
+.wf-add-crit-btn:hover { color: var(--accent); }
+
+/* ── Run drawer ──────────────────────────────────────────────────── */
+.wf-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -6px 0 24px rgba(0,0,0,.12);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+.wf-drawer__header {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.wf-drawer__title { font-size: 13px; font-weight: 600; flex: 1; }
+.wf-drawer__close {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 18px; line-height: 1;
+  padding: 2px 5px; border-radius: 4px;
+}
+.wf-drawer__close:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+.wf-drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wf-drawer__section-hd {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+.wf-drawer__section-hd:first-child { margin-top: 0; }
+.wf-drawer__layer-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.wf-drawer__text { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.wf-drawer__prompt-preview {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.wf-drawer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 11px 14px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Run panel ───────────────────────────────────────────────────── */
+.wf-run-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wf-run-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.wf-run-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+.wf-run-elapsed {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.wf-stop-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  -webkit-app-region: no-drag;
+}
+.wf-stop-btn:hover { background: rgba(239,68,68,.1); color: #dc2626; border-color: rgba(239,68,68,.4); }
+
+.wf-run-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+.wf-run-status--running { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.wf-run-status--done    { background: rgba(34,197,94,.1); color: #16a34a; }
+.wf-run-status--error   { background: rgba(239,68,68,.1); color: #dc2626; }
+
+.wf-run-output {
+  flex: 1;
+  margin: 0;
+  padding: 12px 14px;
+  overflow-y: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.wf-run-footer {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  background: var(--surface);
+}
+.wf-footer-done  { color: #16a34a; }
+.wf-footer-error { color: #dc2626; }
+
+.wf-run-panel__back-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.wf-back-detail-btn {
+  padding: 5px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  -webkit-app-region: no-drag;
+}
+.wf-back-detail-btn:hover { background: var(--surface-hover); }
+
+/* ── Navigation guard overlay ────────────────────────────────────── */
+.wf-guard-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.wf-guard-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 12px 40px rgba(0,0,0,.22);
+}
+
+.wf-guard-msg {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+  line-height: 1.6;
+}
+
+.wf-guard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.wf-guard-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  border: 1px solid var(--border);
+  -webkit-app-region: no-drag;
+}
+.wf-guard-btn--keep {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.wf-guard-btn--keep:hover { background: var(--surface-hover); }
+.wf-guard-btn--cancel {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+.wf-guard-btn--cancel:hover { background: #b91c1c; }
+
+/* Make detail panel position:relative so the drawer can position absolute inside it */
+#wfPanelDetail { position: relative; overflow: hidden; }
+
+/* ── Add Workflow modal ──────────────────────────────────────────── */
+.wf-add-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+}
+
+.wf-add-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 420px;
+  max-width: 92vw;
+  box-shadow: 0 16px 48px rgba(0,0,0,.28);
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-add-modal__header {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.wf-add-modal__title {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.wf-add-modal__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.wf-add-modal__close:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+.wf-add-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.wf-add-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.wf-label-required { color: var(--accent); }
+
+.wf-input--error {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 2px rgba(220,38,38,.15);
+}

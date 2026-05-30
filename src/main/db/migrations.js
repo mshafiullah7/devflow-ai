@@ -39,24 +39,7 @@ function runMigrations(db) {
     db.exec('ALTER TABLE projects ADD COLUMN project_path TEXT');
   }
 
-  // Add prompt_history table for existing databases
-  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t) => t.name);
-  if (!tables.includes('prompt_history')) {
-    db.exec(`
-      CREATE TABLE prompt_history (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
-        prompt        TEXT    NOT NULL,
-        is_active     INTEGER NOT NULL DEFAULT 1,
-        executed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-      )
-    `);
-  } else {
-    const phCols = db.prepare('PRAGMA table_info(prompt_history)').all().map(c => c.name);
-    if (!phCols.includes('is_active')) {
-      db.exec('ALTER TABLE prompt_history ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
-    }
-  }
+  // no-op: prompt_history removed in v2 architecture
 
   // Add quick_commands table for existing databases
   const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
@@ -110,21 +93,7 @@ function runMigrations(db) {
     seedDocumentTemplates(db);
   }
 
-  // Add prompts table for existing databases
-  const promptsCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='prompts'").get();
-  if (!promptsCheck) {
-    db.exec(`
-      CREATE TABLE prompts (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
-        tag           TEXT,
-        prompt        TEXT    NOT NULL DEFAULT '',
-        is_active     INTEGER NOT NULL DEFAULT 1,
-        created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
-        updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-      )
-    `);
-  }
+  // no-op: prompts table removed in v2 architecture
 
   // Add queued/executed to screen_designs
   const sdCols = db.prepare('PRAGMA table_info(screen_designs)').all().map(c => c.name);
@@ -135,32 +104,7 @@ function runMigrations(db) {
     db.exec('ALTER TABLE screen_designs ADD COLUMN executed INTEGER NOT NULL DEFAULT 0');
   }
 
-  // Add is_executed to prompts
-  const promptsCols = db.prepare('PRAGMA table_info(prompts)').all().map(c => c.name);
-  if (!promptsCols.includes('is_executed')) {
-    db.exec('ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0');
-  }
-
-  // Add is_extracted to user_stories (marks AI-extracted stories not yet confirmed as final)
-  const usCols = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
-  if (!usCols.includes('is_extracted')) {
-    db.exec('ALTER TABLE user_stories ADD COLUMN is_extracted INTEGER NOT NULL DEFAULT 0');
-  }
-
-  // Add planning fields to user_stories
-  const usColsPlanning = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
-  if (!usColsPlanning.includes('priority')) {
-    db.exec("ALTER TABLE user_stories ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'");
-  }
-  if (!usColsPlanning.includes('estimated_hours')) {
-    db.exec('ALTER TABLE user_stories ADD COLUMN estimated_hours REAL');
-  }
-  if (!usColsPlanning.includes('remaining_hours')) {
-    db.exec('ALTER TABLE user_stories ADD COLUMN remaining_hours REAL');
-  }
-  if (!usColsPlanning.includes('target_date')) {
-    db.exec('ALTER TABLE user_stories ADD COLUMN target_date TEXT');
-  }
+  // no-op: prompts and user_stories removed in v2 architecture
 
   // Add screen_prompt_history table for existing databases
   const sphCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='screen_prompt_history'").get();
@@ -188,9 +132,8 @@ function runMigrations(db) {
     db.exec(`
       CREATE TABLE issues (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_story_id       INTEGER REFERENCES user_stories(id) ON DELETE SET NULL,
-        feature_id          INTEGER REFERENCES features(id) ON DELETE SET NULL,
         project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        layer_id            INTEGER REFERENCES project_layers(id) ON DELETE SET NULL,
         title               TEXT    NOT NULL,
         description         TEXT,
         steps_to_reproduce  TEXT,
@@ -275,96 +218,6 @@ function runMigrations(db) {
     `);
   }
 
-  // Drop prompt and is_executed columns from user_stories (replaced by the prompts table)
-  const usColsNow = db.prepare('PRAGMA table_info(user_stories)').all().map(c => c.name);
-  if (usColsNow.includes('prompt') || usColsNow.includes('is_executed')) {
-    // Triggers that reference these columns must be dropped first
-    db.exec(`
-      DROP TRIGGER IF EXISTS trg_user_stories_insert;
-      DROP TRIGGER IF EXISTS trg_user_stories_update;
-      DROP TRIGGER IF EXISTS trg_user_stories_delete;
-    `);
-    if (usColsNow.includes('prompt')) {
-      db.exec('ALTER TABLE user_stories DROP COLUMN prompt');
-    }
-    if (usColsNow.includes('is_executed')) {
-      db.exec('ALTER TABLE user_stories DROP COLUMN is_executed');
-    }
-    // Recreate triggers without the removed fields
-    db.exec(`
-      CREATE TRIGGER IF NOT EXISTS trg_user_stories_insert
-      AFTER INSERT ON user_stories
-      BEGIN
-        INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
-        VALUES (
-          NEW.id, 'INSERT', NULL,
-          json_object(
-            'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
-            'title', NEW.title, 'description', NEW.description,
-            'acceptance_criteria', NEW.acceptance_criteria,
-            'status_id', NEW.status_id, 'is_active', NEW.is_active,
-            'created_at', NEW.created_at, 'updated_at', NEW.updated_at
-          )
-        );
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS trg_user_stories_update
-      AFTER UPDATE ON user_stories
-      BEGIN
-        INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
-        VALUES (
-          NEW.id, 'UPDATE',
-          json_object(
-            'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
-            'title', OLD.title, 'description', OLD.description,
-            'acceptance_criteria', OLD.acceptance_criteria,
-            'status_id', OLD.status_id, 'is_active', OLD.is_active,
-            'created_at', OLD.created_at, 'updated_at', OLD.updated_at
-          ),
-          json_object(
-            'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
-            'title', NEW.title, 'description', NEW.description,
-            'acceptance_criteria', NEW.acceptance_criteria,
-            'status_id', NEW.status_id, 'is_active', NEW.is_active,
-            'created_at', NEW.created_at, 'updated_at', NEW.updated_at
-          )
-        );
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS trg_user_stories_delete
-      AFTER DELETE ON user_stories
-      BEGIN
-        INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
-        VALUES (
-          OLD.id, 'DELETE',
-          json_object(
-            'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
-            'title', OLD.title, 'description', OLD.description,
-            'acceptance_criteria', OLD.acceptance_criteria,
-            'status_id', OLD.status_id, 'is_active', OLD.is_active,
-            'created_at', OLD.created_at, 'updated_at', OLD.updated_at
-          ),
-          NULL
-        );
-      END;
-    `);
-  }
-
-  // Add acceptance_criteria table for existing databases
-  const acCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='acceptance_criteria'").get();
-  if (!acCheck) {
-    db.exec(`
-      CREATE TABLE acceptance_criteria (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
-        description   TEXT    NOT NULL DEFAULT '',
-        is_active     INTEGER NOT NULL DEFAULT 1,
-        created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
-        updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-      )
-    `);
-  }
-
   // Add error_logs table for persistent error tracking
   const elCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='error_logs'").get();
   if (!elCheck) {
@@ -416,6 +269,63 @@ function runMigrations(db) {
   const pqCols = db.prepare('PRAGMA table_info(prompt_queue)').all().map(c => c.name);
   if (!pqCols.includes('commit_sha')) {
     db.exec('ALTER TABLE prompt_queue ADD COLUMN commit_sha TEXT');
+  }
+
+  // ---- v2 architecture: drop old user-story tables, create workflow tables ----
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+    DROP TABLE IF EXISTS prompt_history;
+    DROP TABLE IF EXISTS acceptance_criteria;
+    DROP TABLE IF EXISTS prompts;
+    DROP TABLE IF EXISTS test_cases;
+    DROP TABLE IF EXISTS user_stories;
+    DROP TABLE IF EXISTS features;
+    DROP TABLE IF EXISTS features_log;
+    DROP TABLE IF EXISTS user_stories_log;
+    DROP TRIGGER IF EXISTS trg_features_insert;
+    DROP TRIGGER IF EXISTS trg_features_update;
+    DROP TRIGGER IF EXISTS trg_features_delete;
+    DROP TRIGGER IF EXISTS trg_user_stories_insert;
+    DROP TRIGGER IF EXISTS trg_user_stories_update;
+    DROP TRIGGER IF EXISTS trg_user_stories_delete;
+    PRAGMA foreign_keys = ON;
+  `);
+
+  const v2Tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+  if (!v2Tables.includes('workflows')) {
+    db.exec(`
+      CREATE TABLE workflows (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        workflow_id TEXT    NOT NULL,
+        feature     TEXT    NOT NULL,
+        description TEXT,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE success_criteria (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        workflow_id INTEGER NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+        description TEXT    NOT NULL,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE layers (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        workflow_id INTEGER NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+        layer       TEXT    NOT NULL,
+        order_num   INTEGER NOT NULL DEFAULT 1,
+        purpose     TEXT,
+        inputs      TEXT,
+        outputs     TEXT,
+        prompt      TEXT,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
   }
 
   // Remove obsolete templates; 'Solution Architecture' is seeded separately via seedDocumentTemplates

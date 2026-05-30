@@ -12,45 +12,6 @@ function registerDbHandlers() {
   const db = getDb();
 
   // ----------------------------------------------------------------
-  // Status cascade helpers
-  // ----------------------------------------------------------------
-
-  // Look up a status_master ID by name (synchronous SQLite read)
-  function getStatusId(name) {
-    const row = db.prepare('SELECT id FROM status_master WHERE name = ?').get(name);
-    return row?.id ?? null;
-  }
-
-  // Recalculate and persist feature status based on its active, confirmed user stories.
-  // Rules:
-  //   ALL stories Done  → feature = "Done"
-  //   ANY story not Backlog (and not Done) → feature = "In Progress"
-  //   Otherwise → no change (all Backlog; don't demote a feature that was set manually)
-  function recalculateFeatureStatus(featureId) {
-    if (!featureId) return;
-    const stories = db.prepare(`
-      SELECT sm.name AS status_name
-        FROM user_stories us
-        LEFT JOIN status_master sm ON us.status_id = sm.id
-       WHERE us.feature_id = ? AND us.is_active = 1 AND us.is_extracted = 0
-    `).all(featureId);
-    if (!stories.length) return;
-
-    const names     = stories.map(s => s.status_name || 'Backlog');
-    const allDone   = names.every(n => n === 'Done');
-    const anyActive = names.some(n => n && n !== 'Backlog');
-
-    let newName = null;
-    if (allDone)        newName = 'Done';
-    else if (anyActive) newName = 'In Progress';
-
-    if (newName) {
-      const sid = getStatusId(newName);
-      if (sid) db.prepare(`UPDATE features SET status_id = ?, updated_at = datetime('now') WHERE id = ?`).run(sid, featureId);
-    }
-  }
-
-  // ----------------------------------------------------------------
   // status_master
   // ----------------------------------------------------------------
   safeHandle('db:status:list', () => {
@@ -123,147 +84,130 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
-  // features
+  // workflows
   // ----------------------------------------------------------------
-  safeHandle('db:features:list', (_e, project_id) => {
-    const base = `
-      SELECT f.*, sm.name AS status_name
-      FROM features f
-      LEFT JOIN status_master sm ON f.status_id = sm.id
-      WHERE f.is_active = 1`;
-    if (project_id) {
-      return db.prepare(base + ' AND f.project_id = ? ORDER BY f.created_at DESC').all(project_id);
-    }
-    return db.prepare(base + ' ORDER BY f.created_at DESC').all();
+  safeHandle('db:workflows:list', (_e, project_id) => {
+    const sql = 'SELECT * FROM workflows WHERE is_active = 1 AND project_id = ? ORDER BY created_at ASC';
+    return db.prepare(sql).all(project_id);
   });
 
-  safeHandle('db:features:get', (_e, id) => {
-    return db.prepare('SELECT * FROM features WHERE id = ?').get(id);
+  safeHandle('db:workflows:get', (_e, id) => {
+    return db.prepare('SELECT * FROM workflows WHERE id = ?').get(id);
   });
 
-  safeHandle('db:features:create', (_e, { project_id, name, description, status_id }) => {
-    const result = db
-      .prepare('INSERT INTO features (project_id, name, description, status_id) VALUES (?, ?, ?, ?)')
-      .run(project_id, name, description ?? null, status_id ?? null);
-    return db.prepare('SELECT * FROM features WHERE id = ?').get(result.lastInsertRowid);
+  safeHandle('db:workflows:create', (_e, { project_id, workflow_id, feature, description }) => {
+    const wfId = workflow_id || require('crypto').randomUUID();
+    const result = db.prepare(
+      'INSERT INTO workflows (project_id, workflow_id, feature, description) VALUES (?, ?, ?, ?)'
+    ).run(project_id, wfId, feature, description ?? null);
+    return db.prepare('SELECT * FROM workflows WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:features:update', (_e, { id, name, description, status_id, is_active }) => {
+  safeHandle('db:workflows:update', (_e, { id, workflow_id, feature, description, is_active }) => {
     db.prepare(
-      `UPDATE features
-          SET name = coalesce(?, name),
-              description = coalesce(?, description),
-              status_id = coalesce(?, status_id),
-              is_active = coalesce(?, is_active),
+      `UPDATE workflows
+          SET workflow_id = CASE WHEN ? IS NOT NULL THEN ? ELSE workflow_id END,
+              feature     = CASE WHEN ? IS NOT NULL THEN ? ELSE feature END,
+              description = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
+              is_active   = CASE WHEN ? IS NOT NULL THEN ? ELSE is_active END,
+              updated_at  = datetime('now')
+        WHERE id = ?`
+    ).run(
+      workflow_id ?? null, workflow_id ?? null,
+      feature     ?? null, feature     ?? null,
+      description ?? null, description ?? null,
+      is_active   ?? null, is_active   ?? null,
+      id
+    );
+    return db.prepare('SELECT * FROM workflows WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:workflows:delete', (_e, id) => {
+    db.prepare(`UPDATE workflows SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
+  // success_criteria
+  // ----------------------------------------------------------------
+  safeHandle('db:success_criteria:list', (_e, workflow_id) => {
+    return db.prepare(
+      'SELECT * FROM success_criteria WHERE workflow_id = ? AND is_active = 1 ORDER BY created_at ASC'
+    ).all(workflow_id);
+  });
+
+  safeHandle('db:success_criteria:create', (_e, { workflow_id, description }) => {
+    const result = db.prepare(
+      'INSERT INTO success_criteria (workflow_id, description) VALUES (?, ?)'
+    ).run(workflow_id, description);
+    return db.prepare('SELECT * FROM success_criteria WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  safeHandle('db:success_criteria:update', (_e, { id, description }) => {
+    db.prepare(
+      `UPDATE success_criteria SET description = coalesce(?, description), updated_at = datetime('now') WHERE id = ?`
+    ).run(description ?? null, id);
+    return db.prepare('SELECT * FROM success_criteria WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:success_criteria:delete', (_e, id) => {
+    db.prepare(`UPDATE success_criteria SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
+  // layers (workflow layers)
+  // ----------------------------------------------------------------
+  safeHandle('db:layers:list', (_e, workflow_id) => {
+    return db.prepare(
+      'SELECT * FROM layers WHERE workflow_id = ? AND is_active = 1 ORDER BY order_num ASC'
+    ).all(workflow_id);
+  });
+
+  safeHandle('db:layers:get', (_e, id) => {
+    return db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:layers:create', (_e, { workflow_id, layer, order_num, purpose, inputs, outputs, prompt }) => {
+    const result = db.prepare(
+      'INSERT INTO layers (workflow_id, layer, order_num, purpose, inputs, outputs, prompt) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(
+      workflow_id, layer, order_num ?? 1,
+      purpose ?? null,
+      inputs  ? JSON.stringify(inputs)  : null,
+      outputs ? JSON.stringify(outputs) : null,
+      prompt  ?? null
+    );
+    return db.prepare('SELECT * FROM layers WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  safeHandle('db:layers:update', (_e, { id, layer, order_num, purpose, inputs, outputs, prompt, is_active }) => {
+    db.prepare(
+      `UPDATE layers
+          SET layer     = CASE WHEN ? IS NOT NULL THEN ? ELSE layer END,
+              order_num = CASE WHEN ? IS NOT NULL THEN ? ELSE order_num END,
+              purpose   = CASE WHEN ? IS NOT NULL THEN ? ELSE purpose END,
+              inputs    = CASE WHEN ? IS NOT NULL THEN ? ELSE inputs END,
+              outputs   = CASE WHEN ? IS NOT NULL THEN ? ELSE outputs END,
+              prompt    = CASE WHEN ? IS NOT NULL THEN ? ELSE prompt END,
+              is_active = CASE WHEN ? IS NOT NULL THEN ? ELSE is_active END,
               updated_at = datetime('now')
         WHERE id = ?`
-    ).run(name ?? null, description ?? null, status_id ?? null, is_active ?? null, id);
-    return db.prepare('SELECT * FROM features WHERE id = ?').get(id);
+    ).run(
+      layer     ?? null, layer     ?? null,
+      order_num ?? null, order_num ?? null,
+      purpose   ?? null, purpose   ?? null,
+      inputs  != null ? JSON.stringify(inputs)  : null, inputs  != null ? JSON.stringify(inputs)  : null,
+      outputs != null ? JSON.stringify(outputs) : null, outputs != null ? JSON.stringify(outputs) : null,
+      prompt    ?? null, prompt    ?? null,
+      is_active ?? null, is_active ?? null,
+      id
+    );
+    return db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
   });
 
-  safeHandle('db:features:delete', (_e, id) => {
-    db.prepare('DELETE FROM features WHERE id = ?').run(id);
-    return { success: true };
-  });
-
-  // ----------------------------------------------------------------
-  // user_stories
-  // ----------------------------------------------------------------
-  safeHandle('db:user_stories:list', (_e, { feature_id, project_id, include_extracted = false } = {}) => {
-    const base = `
-      SELECT us.*, sm.name AS status_name
-      FROM user_stories us
-      LEFT JOIN status_master sm ON us.status_id = sm.id
-      WHERE us.is_active = 1${include_extracted ? '' : ' AND us.is_extracted = 0'}`;
-    if (feature_id) {
-      return db.prepare(base + ' AND us.feature_id = ? ORDER BY us.created_at DESC').all(feature_id);
-    }
-    if (project_id) {
-      return db.prepare(base + ' AND us.project_id = ? ORDER BY us.created_at DESC').all(project_id);
-    }
-    return db.prepare(base + ' ORDER BY us.created_at DESC').all();
-  });
-
-  safeHandle('db:user_stories:get', (_e, id) => {
-    return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(id);
-  });
-
-  safeHandle(
-    'db:user_stories:create',
-    (_e, { feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted = 0, priority, estimated_hours, remaining_hours, target_date }) => {
-      const result = db
-        .prepare(
-          `INSERT INTO user_stories
-            (feature_id, project_id, title, description, acceptance_criteria, status_id, is_extracted, priority, estimated_hours, remaining_hours, target_date)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          feature_id, project_id, title,
-          description ?? null, acceptance_criteria ?? null,
-          status_id ?? null, is_extracted,
-          priority ?? 'medium',
-          estimated_hours ?? null, remaining_hours ?? null, target_date ?? null
-        );
-      return db.prepare('SELECT * FROM user_stories WHERE id = ?').get(result.lastInsertRowid);
-    }
-  );
-
-  safeHandle(
-    'db:user_stories:update',
-    (_e, data) => {
-      const { id, title, description, acceptance_criteria, status_id, is_active, is_extracted,
-              priority, estimated_hours, remaining_hours, target_date } = data;
-      const sets = ["updated_at = datetime('now')"];
-      const params = [];
-      if (title             !== undefined) { sets.push('title = ?');               params.push(title ?? null); }
-      if ('description'     in data)       { sets.push('description = ?');          params.push(description ?? null); }
-      if ('acceptance_criteria' in data)   { sets.push('acceptance_criteria = ?');  params.push(acceptance_criteria ?? null); }
-      if (status_id         !== undefined) { sets.push('status_id = ?');            params.push(status_id ?? null); }
-      if (is_active         !== undefined) { sets.push('is_active = ?');            params.push(is_active ?? null); }
-      if (is_extracted      !== undefined) { sets.push('is_extracted = ?');         params.push(is_extracted ?? null); }
-      if (priority          !== undefined) { sets.push('priority = ?');             params.push(priority ?? 'medium'); }
-      if ('estimated_hours' in data)       { sets.push('estimated_hours = ?');      params.push(estimated_hours ?? null); }
-      if ('remaining_hours' in data)       { sets.push('remaining_hours = ?');      params.push(remaining_hours ?? null); }
-      if ('target_date'     in data)       { sets.push('target_date = ?');          params.push(target_date ?? null); }
-      params.push(id);
-      db.prepare(`UPDATE user_stories SET ${sets.join(', ')} WHERE id = ?`).run(...params);
-      const updated = db.prepare('SELECT * FROM user_stories WHERE id = ?').get(id);
-      // CASCADE: any manual or auto status change recalculates the parent feature status
-      recalculateFeatureStatus(updated?.feature_id);
-      return updated;
-    }
-  );
-
-  safeHandle('db:user_stories:delete', (_e, id) => {
-    db.prepare('DELETE FROM user_stories WHERE id = ?').run(id);
-    return { success: true };
-  });
-
-  // ----------------------------------------------------------------
-  // prompt_history
-  // ----------------------------------------------------------------
-  safeHandle('db:prompt_history:list', (_e, user_story_id) => {
-    return db
-      .prepare(
-        'SELECT * FROM prompt_history WHERE user_story_id = ? AND is_active = 1 ORDER BY executed_at DESC LIMIT 20'
-      )
-      .all(user_story_id);
-  });
-
-  safeHandle('db:prompt_history:create', (_e, { user_story_id, prompt }) => {
-    const result = db
-      .prepare('INSERT INTO prompt_history (user_story_id, prompt) VALUES (?, ?)')
-      .run(user_story_id, prompt);
-    return db.prepare('SELECT * FROM prompt_history WHERE id = ?').get(result.lastInsertRowid);
-  });
-
-  safeHandle('db:prompt_history:delete', (_e, id) => {
-    db.prepare('UPDATE prompt_history SET is_active = 0 WHERE id = ?').run(id);
-    return { success: true };
-  });
-
-  safeHandle('db:prompt_history:deleteAll', (_e, user_story_id) => {
-    db.prepare('UPDATE prompt_history SET is_active = 0 WHERE user_story_id = ?').run(user_story_id);
+  safeHandle('db:layers:delete', (_e, id) => {
+    db.prepare(`UPDATE layers SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
     return { success: true };
   });
 
@@ -290,134 +234,6 @@ function registerDbHandlers() {
 
   safeHandle('db:screen_prompt_history:deleteAll', (_e, { project_id, screen_design_id }) => {
     db.prepare('UPDATE screen_prompt_history SET is_active = 0 WHERE project_id = ? AND screen_design_id = ?').run(project_id, screen_design_id);
-    return { success: true };
-  });
-
-  // ----------------------------------------------------------------
-  // prompts
-  // ----------------------------------------------------------------
-  safeHandle('db:prompts:list', (_e, user_story_id) => {
-    return db.prepare(`
-      SELECT p.*, pl.name AS layer_name
-        FROM prompts p
-        LEFT JOIN project_layers pl ON p.layer_id = pl.id
-       WHERE p.user_story_id = ? AND (p.tag IS NULL OR p.tag != 'e2e') AND p.is_active = 1
-       ORDER BY p.created_at ASC
-    `).all(user_story_id);
-  });
-
-  safeHandle('db:prompts:listByTag', (_e, { user_story_id, tag }) => {
-    return db.prepare(`
-      SELECT p.*, pl.name AS layer_name
-        FROM prompts p
-        LEFT JOIN project_layers pl ON p.layer_id = pl.id
-       WHERE p.user_story_id = ? AND p.tag = ? AND p.is_active = 1
-       ORDER BY p.created_at ASC
-    `).all(user_story_id, tag);
-  });
-
-  safeHandle('db:prompts:create', (_e, { user_story_id, tag, prompt, layer_id }) => {
-    const result = db.prepare(
-      'INSERT INTO prompts (user_story_id, tag, prompt, layer_id) VALUES (?, ?, ?, ?)'
-    ).run(user_story_id, tag ?? null, prompt, layer_id ?? null);
-    return db.prepare('SELECT * FROM prompts WHERE id = ?').get(result.lastInsertRowid);
-  });
-
-  safeHandle('db:prompts:update', (_e, { id, tag, prompt, is_executed, layer_id }) => {
-    db.prepare(
-      `UPDATE prompts SET tag = coalesce(?, tag), prompt = coalesce(?, prompt),
-       is_executed = CASE WHEN ? IS NOT NULL THEN ? ELSE is_executed END,
-       layer_id    = CASE WHEN ? = -1 THEN NULL WHEN ? IS NOT NULL THEN ? ELSE layer_id END,
-       updated_at = datetime('now') WHERE id = ?`
-    ).run(
-      tag ?? null, prompt ?? null,
-      is_executed ?? null, is_executed ?? null,
-      layer_id ?? null, layer_id ?? null, layer_id ?? null,
-      id
-    );
-
-    // AUTO-STATUS: when a prompt is marked executed, advance the user story status
-    if (is_executed === 1) {
-      const promptRow = db.prepare('SELECT user_story_id, tag AS prompt_tag FROM prompts WHERE id = ?').get(id);
-      const storyId   = promptRow?.user_story_id;
-      if (storyId) {
-        const isE2e = promptRow.prompt_tag === 'e2e';
-
-        if (isE2e) {
-          // All e2e prompts done for this story → "Tested"
-          const e2eRows = db.prepare(
-            `SELECT is_executed FROM prompts WHERE user_story_id = ? AND tag = 'e2e' AND is_active = 1`
-          ).all(storyId);
-          if (e2eRows.length && e2eRows.every(p => p.is_executed === 1)) {
-            const story = db.prepare(`
-              SELECT sm.name AS status_name
-                FROM user_stories us
-                LEFT JOIN status_master sm ON us.status_id = sm.id
-               WHERE us.id = ?`).get(storyId);
-            if (story?.status_name !== 'Done') {
-              const sid = getStatusId('Tested');
-              if (sid) db.prepare(`UPDATE user_stories SET status_id = ?, updated_at = datetime('now') WHERE id = ?`).run(sid, storyId);
-            }
-          }
-        } else {
-          // All non-e2e prompts done for this story → "Implemented"
-          const implRows = db.prepare(
-            `SELECT is_executed FROM prompts WHERE user_story_id = ? AND (tag != 'e2e' OR tag IS NULL) AND is_active = 1`
-          ).all(storyId);
-          if (implRows.length && implRows.every(p => p.is_executed === 1)) {
-            const story = db.prepare(`
-              SELECT sm.name AS status_name
-                FROM user_stories us
-                LEFT JOIN status_master sm ON us.status_id = sm.id
-               WHERE us.id = ?`).get(storyId);
-            const s = story?.status_name;
-            // Don't regress from Tested or Done
-            if (!s || s === 'Backlog' || s === 'In Progress') {
-              const sid = getStatusId('Implemented');
-              if (sid) db.prepare(`UPDATE user_stories SET status_id = ?, updated_at = datetime('now') WHERE id = ?`).run(sid, storyId);
-            }
-          }
-        }
-
-        // Cascade to parent feature
-        const storyRow = db.prepare('SELECT feature_id FROM user_stories WHERE id = ?').get(storyId);
-        recalculateFeatureStatus(storyRow?.feature_id);
-      }
-    }
-
-    return db.prepare('SELECT * FROM prompts WHERE id = ?').get(id);
-  });
-
-  safeHandle('db:prompts:delete', (_e, id) => {
-    db.prepare(`UPDATE prompts SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
-    return { success: true };
-  });
-
-  // ----------------------------------------------------------------
-  // acceptance_criteria
-  // ----------------------------------------------------------------
-  safeHandle('db:acceptance_criteria:list', (_e, user_story_id) => {
-    return db.prepare(
-      'SELECT * FROM acceptance_criteria WHERE user_story_id = ? AND is_active = 1 ORDER BY created_at ASC'
-    ).all(user_story_id);
-  });
-
-  safeHandle('db:acceptance_criteria:create', (_e, { user_story_id, description }) => {
-    const result = db.prepare(
-      'INSERT INTO acceptance_criteria (user_story_id, description) VALUES (?, ?)'
-    ).run(user_story_id, description ?? '');
-    return db.prepare('SELECT * FROM acceptance_criteria WHERE id = ?').get(result.lastInsertRowid);
-  });
-
-  safeHandle('db:acceptance_criteria:update', (_e, { id, description }) => {
-    db.prepare(
-      `UPDATE acceptance_criteria SET description = coalesce(?, description), updated_at = datetime('now') WHERE id = ?`
-    ).run(description ?? null, id);
-    return db.prepare('SELECT * FROM acceptance_criteria WHERE id = ?').get(id);
-  });
-
-  safeHandle('db:acceptance_criteria:delete', (_e, id) => {
-    db.prepare(`UPDATE acceptance_criteria SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
     return { success: true };
   });
 
@@ -532,23 +348,16 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // issues
   // ----------------------------------------------------------------
-  safeHandle('db:issues:list', (_e, { project_id, feature_id, user_story_id, status, severity } = {}) => {
+  safeHandle('db:issues:list', (_e, { project_id, status, severity } = {}) => {
     let sql = `
-      SELECT i.*,
-             us.title  AS story_title,
-             f.name    AS feature_name,
-             pl.name   AS layer_name
+      SELECT i.*, pl.name AS layer_name
         FROM issues i
-        LEFT JOIN user_stories  us ON i.user_story_id = us.id
-        LEFT JOIN features      f  ON i.feature_id = f.id
         LEFT JOIN project_layers pl ON i.layer_id = pl.id
        WHERE i.is_active = 1`;
     const params = [];
-    if (project_id)    { sql += ' AND i.project_id = ?';     params.push(project_id); }
-    if (feature_id)    { sql += ' AND i.feature_id = ?';     params.push(feature_id); }
-    if (user_story_id) { sql += ' AND i.user_story_id = ?';  params.push(user_story_id); }
-    if (status)        { sql += ' AND i.status = ?';         params.push(status); }
-    if (severity)      { sql += ' AND i.severity = ?';       params.push(severity); }
+    if (project_id) { sql += ' AND i.project_id = ?'; params.push(project_id); }
+    if (status)     { sql += ' AND i.status = ?';     params.push(status); }
+    if (severity)   { sql += ' AND i.severity = ?';   params.push(severity); }
     sql += ' ORDER BY i.created_at DESC';
     return db.prepare(sql).all(...params);
   });
@@ -557,15 +366,13 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM issues WHERE id = ?').get(id);
   });
 
-  safeHandle('db:issues:create', (_e, { project_id, feature_id, user_story_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status }) => {
+  safeHandle('db:issues:create', (_e, { project_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status }) => {
     const result = db.prepare(`
-      INSERT INTO issues (project_id, feature_id, user_story_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO issues (project_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       project_id,
-      feature_id      ?? null,
-      user_story_id   ?? null,
-      layer_id        ?? null,
+      layer_id             ?? null,
       title,
       description          ?? null,
       steps_to_reproduce   ?? null,
@@ -575,21 +382,17 @@ function registerDbHandlers() {
       status   ?? 'open'
     );
     return db.prepare(`
-      SELECT i.*, us.title AS story_title, f.name AS feature_name, pl.name AS layer_name
+      SELECT i.*, pl.name AS layer_name
         FROM issues i
-        LEFT JOIN user_stories   us ON i.user_story_id = us.id
-        LEFT JOIN features        f ON i.feature_id = f.id
         LEFT JOIN project_layers pl ON i.layer_id = pl.id
        WHERE i.id = ?
     `).get(result.lastInsertRowid);
   });
 
-  safeHandle('db:issues:update', (_e, { id, feature_id, user_story_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active }) => {
+  safeHandle('db:issues:update', (_e, { id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active }) => {
     db.prepare(`
       UPDATE issues
-         SET feature_id         = CASE WHEN ? IS NOT NULL THEN ? ELSE feature_id END,
-             user_story_id      = CASE WHEN ? IS NOT NULL THEN ? ELSE user_story_id END,
-             layer_id           = CASE WHEN ? IS NOT NULL THEN ? ELSE layer_id END,
+         SET layer_id           = CASE WHEN ? IS NOT NULL THEN ? ELSE layer_id END,
              title              = coalesce(?, title),
              description        = coalesce(?, description),
              steps_to_reproduce = coalesce(?, steps_to_reproduce),
@@ -601,8 +404,6 @@ function registerDbHandlers() {
              updated_at         = datetime('now')
        WHERE id = ?
     `).run(
-      feature_id    ?? null, feature_id    ?? null,
-      user_story_id ?? null, user_story_id ?? null,
       layer_id      ?? null, layer_id      ?? null,
       title               ?? null,
       description         ?? null,
@@ -615,10 +416,8 @@ function registerDbHandlers() {
       id
     );
     return db.prepare(`
-      SELECT i.*, us.title AS story_title, f.name AS feature_name, pl.name AS layer_name
+      SELECT i.*, pl.name AS layer_name
         FROM issues i
-        LEFT JOIN user_stories   us ON i.user_story_id = us.id
-        LEFT JOIN features        f ON i.feature_id = f.id
         LEFT JOIN project_layers pl ON i.layer_id = pl.id
        WHERE i.id = ?
     `).get(id);
@@ -956,21 +755,6 @@ function registerDbHandlers() {
       INSERT INTO prompt_queue (project_id, user_story_id, story_title, prompt_id, tag, prompt_text, sort_order, layer_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(project_id, user_story_id ?? null, story_title ?? null, prompt_id ?? null, tag ?? null, prompt_text, sort_order, layer_id ?? null);
-
-    // AUTO-STATUS: advance user story to "In Progress" when a task is queued (only if Backlog or unset)
-    if (user_story_id) {
-      const story = db.prepare(`
-        SELECT us.id, us.feature_id, sm.name AS status_name
-          FROM user_stories us
-          LEFT JOIN status_master sm ON us.status_id = sm.id
-         WHERE us.id = ?`).get(user_story_id);
-      const curStatus = story?.status_name ?? null;
-      if (!curStatus || curStatus === 'Backlog') {
-        const sid = getStatusId('In Progress');
-        if (sid) db.prepare(`UPDATE user_stories SET status_id = ?, updated_at = datetime('now') WHERE id = ?`).run(sid, user_story_id);
-      }
-      recalculateFeatureStatus(story?.feature_id);
-    }
 
     return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(result.lastInsertRowid);
   });

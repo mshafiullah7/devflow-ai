@@ -28,38 +28,25 @@ contextBridge.exposeInMainWorld('db', {
     recent:  ()       => invoke('db:projects:recent'),
     setPath: (data)   => invoke('db:projects:setPath', data),
   },
-  features: {
-    list:   (project_id) => invoke('db:features:list', project_id),
-    get:    (id)         => invoke('db:features:get', id),
-    create: (data)       => invoke('db:features:create', data),
-    update: (data)       => invoke('db:features:update', data),
-    delete: (id)         => invoke('db:features:delete', id),
+  workflows: {
+    list:   (project_id) => invoke('db:workflows:list', project_id),
+    get:    (id)         => invoke('db:workflows:get', id),
+    create: (data)       => invoke('db:workflows:create', data),
+    update: (data)       => invoke('db:workflows:update', data),
+    delete: (id)         => invoke('db:workflows:delete', id),
   },
-  userStories: {
-    list:   (filters) => invoke('db:user_stories:list', filters),
-    get:    (id)      => invoke('db:user_stories:get', id),
-    create: (data)    => invoke('db:user_stories:create', data),
-    update: (data)    => invoke('db:user_stories:update', data),
-    delete: (id)      => invoke('db:user_stories:delete', id),
+  successCriteria: {
+    list:   (workflow_id) => invoke('db:success_criteria:list', workflow_id),
+    create: (data)        => invoke('db:success_criteria:create', data),
+    update: (data)        => invoke('db:success_criteria:update', data),
+    delete: (id)          => invoke('db:success_criteria:delete', id),
   },
-  promptHistory: {
-    list:      (user_story_id) => invoke('db:prompt_history:list', user_story_id),
-    create:    (data)          => invoke('db:prompt_history:create', data),
-    delete:    (id)            => invoke('db:prompt_history:delete', id),
-    deleteAll: (user_story_id) => invoke('db:prompt_history:deleteAll', user_story_id),
-  },
-  prompts: {
-    list:      (user_story_id)        => invoke('db:prompts:list', user_story_id),
-    listByTag: (user_story_id, tag)   => invoke('db:prompts:listByTag', { user_story_id, tag }),
-    create:    (data)                 => invoke('db:prompts:create', data),
-    update:    (data)                 => invoke('db:prompts:update', data),
-    delete:    (id)                   => invoke('db:prompts:delete', id),
-  },
-  acceptanceCriteria: {
-    list:   (user_story_id) => invoke('db:acceptance_criteria:list', user_story_id),
-    create: (data)          => invoke('db:acceptance_criteria:create', data),
-    update: (data)          => invoke('db:acceptance_criteria:update', data),
-    delete: (id)            => invoke('db:acceptance_criteria:delete', id),
+  layers: {
+    list:   (workflow_id) => invoke('db:layers:list', workflow_id),
+    get:    (id)          => invoke('db:layers:get', id),
+    create: (data)        => invoke('db:layers:create', data),
+    update: (data)        => invoke('db:layers:update', data),
+    delete: (id)          => invoke('db:layers:delete', id),
   },
   documentTemplates: {
     list:   ()     => invoke('db:document_templates:list'),
@@ -277,6 +264,21 @@ contextBridge.exposeInMainWorld('app', {
   openQueueWindow: (projectId) => ipcRenderer.invoke('app:openQueueWindow', projectId),
   queueWindow: {
     onInit: (cb) => ipcRenderer.on('queue:init', (_e, p) => cb(p)),
+  },
+  // Separate AI channel for the detached workflow runner window.
+  workflowChat: {
+    generate: (data) => ipcRenderer.invoke('workflowChat:generate', data),
+    cancel:   ()     => ipcRenderer.invoke('workflowChat:cancel'),
+    onToken:  (cb)   => ipcRenderer.on('workflowChat:token', (_e, p) => cb(p)),
+    onDone:   (cb)   => ipcRenderer.on('workflowChat:done',  (_e, p) => cb(p)),
+    offAll:   ()     => {
+      ipcRenderer.removeAllListeners('workflowChat:token');
+      ipcRenderer.removeAllListeners('workflowChat:done');
+    },
+  },
+  openWorkflowWindow: (data) => ipcRenderer.invoke('app:openWorkflowWindow', data),
+  workflowWindow: {
+    onInit: (cb) => ipcRenderer.on('workflow:init', (_e, p) => cb(p)),
   },
 });
 

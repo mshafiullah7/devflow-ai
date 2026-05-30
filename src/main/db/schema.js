@@ -12,10 +12,8 @@ function applySchema(db) {
     `ALTER TABLE screen_designs ADD COLUMN executed     INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE screen_designs ADD COLUMN style_valid  INTEGER`,
     `ALTER TABLE screen_designs ADD COLUMN style_issues TEXT`,
-    `ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE project_layers ADD COLUMN sort_order          INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE project_layers ADD COLUMN setup_instructions  TEXT`,
-    `ALTER TABLE prompts      ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE prompt_queue ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE issues       ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE document_templates ADD COLUMN group_name TEXT NOT NULL DEFAULT 'General'`,
@@ -52,69 +50,44 @@ function applySchema(db) {
       project_path    TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS features (
+    CREATE TABLE IF NOT EXISTS workflows (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      name        TEXT    NOT NULL,
+      workflow_id TEXT    NOT NULL,
+      feature     TEXT    NOT NULL,
       description TEXT,
-      status_id   INTEGER REFERENCES status_master(id),
       is_active   INTEGER NOT NULL DEFAULT 1,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS user_stories (
-      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-      feature_id          INTEGER NOT NULL REFERENCES features(id) ON DELETE CASCADE,
-      project_id          INTEGER NOT NULL REFERENCES projects(id),
-      title               TEXT    NOT NULL,
-      description         TEXT,
-      acceptance_criteria TEXT,
-      status_id           INTEGER REFERENCES status_master(id),
-      priority            TEXT    NOT NULL DEFAULT 'medium',
-      estimated_hours     REAL,
-      remaining_hours     REAL,
-      target_date         TEXT,
-      is_active           INTEGER NOT NULL DEFAULT 1,
-      created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
-      updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    -- ----------------------------------------------------------------
+    -- SUCCESS CRITERIA
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS success_criteria (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      workflow_id INTEGER NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+      description TEXT    NOT NULL,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
     -- ----------------------------------------------------------------
-    -- PROMPTS
+    -- LAYERS
     -- ----------------------------------------------------------------
-    CREATE TABLE IF NOT EXISTS prompts (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
-      tag           TEXT,
-      prompt        TEXT    NOT NULL DEFAULT '',
-      is_executed   INTEGER NOT NULL DEFAULT 0,
-      is_active     INTEGER NOT NULL DEFAULT 1,
-      created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
-      updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-    );
-
-    -- ----------------------------------------------------------------
-    -- ACCEPTANCE CRITERIA
-    -- ----------------------------------------------------------------
-    CREATE TABLE IF NOT EXISTS acceptance_criteria (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
-      description   TEXT    NOT NULL DEFAULT '',
-      is_active     INTEGER NOT NULL DEFAULT 1,
-      created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
-      updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-    );
-
-    -- ----------------------------------------------------------------
-    -- PROMPT HISTORY
-    -- ----------------------------------------------------------------
-    CREATE TABLE IF NOT EXISTS prompt_history (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_story_id INTEGER NOT NULL REFERENCES user_stories(id) ON DELETE CASCADE,
-      prompt        TEXT    NOT NULL,
-      is_active     INTEGER NOT NULL DEFAULT 1,
-      executed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    CREATE TABLE IF NOT EXISTS layers (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      workflow_id INTEGER NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+      layer       TEXT    NOT NULL,
+      order_num   INTEGER NOT NULL DEFAULT 1,
+      purpose     TEXT,
+      inputs      TEXT,
+      outputs     TEXT,
+      prompt      TEXT,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
     -- ----------------------------------------------------------------
@@ -209,32 +182,10 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
-    -- TEST CASES
-    -- ----------------------------------------------------------------
-    CREATE TABLE IF NOT EXISTS test_cases (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_story_id   INTEGER REFERENCES user_stories(id) ON DELETE SET NULL,
-      feature_id      INTEGER REFERENCES features(id) ON DELETE SET NULL,
-      project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      title           TEXT    NOT NULL,
-      description     TEXT,
-      test_steps      TEXT,
-      expected_result TEXT,
-      actual_result   TEXT,
-      status          TEXT    NOT NULL DEFAULT 'not_run',
-      priority        TEXT    NOT NULL DEFAULT 'medium',
-      is_active       INTEGER NOT NULL DEFAULT 1,
-      created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-      updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
-    );
-
-    -- ----------------------------------------------------------------
     -- ISSUES
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS issues (
       id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_story_id       INTEGER REFERENCES user_stories(id) ON DELETE SET NULL,
-      feature_id          INTEGER REFERENCES features(id) ON DELETE SET NULL,
       project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       layer_id            INTEGER REFERENCES project_layers(id) ON DELETE SET NULL,
       title               TEXT    NOT NULL,
@@ -326,9 +277,9 @@ function applySchema(db) {
     CREATE TABLE IF NOT EXISTS prompt_queue (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id    INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      user_story_id INTEGER REFERENCES user_stories(id) ON DELETE SET NULL,
+      user_story_id INTEGER,
       story_title   TEXT,
-      prompt_id     INTEGER REFERENCES prompts(id) ON DELETE SET NULL,
+      prompt_id     INTEGER,
       tag           TEXT,
       prompt_text   TEXT    NOT NULL,
       status        TEXT    NOT NULL DEFAULT 'pending',
@@ -369,24 +320,6 @@ function applySchema(db) {
       old_data   TEXT,            -- JSON
       new_data   TEXT,            -- JSON
       changed_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS features_log (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      feature_id INTEGER,
-      action     TEXT NOT NULL,
-      old_data   TEXT,
-      new_data   TEXT,
-      changed_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS user_stories_log (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_story_id INTEGER,
-      action        TEXT NOT NULL,
-      old_data      TEXT,
-      new_data      TEXT,
-      changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     -- ----------------------------------------------------------------
@@ -436,115 +369,6 @@ function applySchema(db) {
       );
     END;
 
-    -- ----------------------------------------------------------------
-    -- TRIGGERS — features
-    -- ----------------------------------------------------------------
-    CREATE TRIGGER IF NOT EXISTS trg_features_insert
-    AFTER INSERT ON features
-    BEGIN
-      INSERT INTO features_log (feature_id, action, old_data, new_data)
-      VALUES (
-        NEW.id, 'INSERT', NULL,
-        json_object(
-          'id', NEW.id, 'project_id', NEW.project_id, 'name', NEW.name,
-          'description', NEW.description, 'status_id', NEW.status_id,
-          'is_active', NEW.is_active, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at
-        )
-      );
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS trg_features_update
-    AFTER UPDATE ON features
-    BEGIN
-      INSERT INTO features_log (feature_id, action, old_data, new_data)
-      VALUES (
-        NEW.id, 'UPDATE',
-        json_object(
-          'id', OLD.id, 'project_id', OLD.project_id, 'name', OLD.name,
-          'description', OLD.description, 'status_id', OLD.status_id,
-          'is_active', OLD.is_active, 'created_at', OLD.created_at, 'updated_at', OLD.updated_at
-        ),
-        json_object(
-          'id', NEW.id, 'project_id', NEW.project_id, 'name', NEW.name,
-          'description', NEW.description, 'status_id', NEW.status_id,
-          'is_active', NEW.is_active, 'created_at', NEW.created_at, 'updated_at', NEW.updated_at
-        )
-      );
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS trg_features_delete
-    AFTER DELETE ON features
-    BEGIN
-      INSERT INTO features_log (feature_id, action, old_data, new_data)
-      VALUES (
-        OLD.id, 'DELETE',
-        json_object(
-          'id', OLD.id, 'project_id', OLD.project_id, 'name', OLD.name,
-          'description', OLD.description, 'status_id', OLD.status_id,
-          'is_active', OLD.is_active, 'created_at', OLD.created_at, 'updated_at', OLD.updated_at
-        ),
-        NULL
-      );
-    END;
-
-    -- ----------------------------------------------------------------
-    -- TRIGGERS — user_stories
-    -- ----------------------------------------------------------------
-    CREATE TRIGGER IF NOT EXISTS trg_user_stories_insert
-    AFTER INSERT ON user_stories
-    BEGIN
-      INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
-      VALUES (
-        NEW.id, 'INSERT', NULL,
-        json_object(
-          'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
-          'title', NEW.title, 'description', NEW.description,
-          'acceptance_criteria', NEW.acceptance_criteria,
-          'status_id', NEW.status_id, 'is_active', NEW.is_active,
-          'created_at', NEW.created_at, 'updated_at', NEW.updated_at
-        )
-      );
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS trg_user_stories_update
-    AFTER UPDATE ON user_stories
-    BEGIN
-      INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
-      VALUES (
-        NEW.id, 'UPDATE',
-        json_object(
-          'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
-          'title', OLD.title, 'description', OLD.description,
-          'acceptance_criteria', OLD.acceptance_criteria,
-          'status_id', OLD.status_id, 'is_active', OLD.is_active,
-          'created_at', OLD.created_at, 'updated_at', OLD.updated_at
-        ),
-        json_object(
-          'id', NEW.id, 'feature_id', NEW.feature_id, 'project_id', NEW.project_id,
-          'title', NEW.title, 'description', NEW.description,
-          'acceptance_criteria', NEW.acceptance_criteria,
-          'status_id', NEW.status_id, 'is_active', NEW.is_active,
-          'created_at', NEW.created_at, 'updated_at', NEW.updated_at
-        )
-      );
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS trg_user_stories_delete
-    AFTER DELETE ON user_stories
-    BEGIN
-      INSERT INTO user_stories_log (user_story_id, action, old_data, new_data)
-      VALUES (
-        OLD.id, 'DELETE',
-        json_object(
-          'id', OLD.id, 'feature_id', OLD.feature_id, 'project_id', OLD.project_id,
-          'title', OLD.title, 'description', OLD.description,
-          'acceptance_criteria', OLD.acceptance_criteria,
-          'status_id', OLD.status_id, 'is_active', OLD.is_active,
-          'created_at', OLD.created_at, 'updated_at', OLD.updated_at
-        ),
-        NULL
-      );
-    END;
   `);
 }
 

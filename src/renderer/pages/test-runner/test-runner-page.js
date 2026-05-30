@@ -627,12 +627,6 @@ export class TestRunnerPage {
     const actual   = this._buildActualText(results, exitCode);
     const snippet  = this._extractErrorSnippet(outputSrc);
 
-    const features = await window.db.features.list(this._projectId);
-
-    const featureOptions = features.map(f =>
-      `<option value="${f.id}">${escHtml(f.name)}</option>`
-    ).join('');
-
     const overlay = document.createElement('div');
     overlay.className = 'tr-modal-overlay';
     overlay.innerHTML = `
@@ -647,22 +641,6 @@ export class TestRunnerPage {
         </div>
 
         <div class="tr-modal__body">
-
-          <div class="tr-modal__row tr-modal__row--2col">
-            <div class="tr-modal__field">
-              <label class="tr-modal__label" for="trMFeature">Feature <span class="tr-modal__hint">(optional)</span></label>
-              <select class="tr-modal__select" id="trMFeature">
-                <option value="">— none —</option>
-                ${featureOptions}
-              </select>
-            </div>
-            <div class="tr-modal__field">
-              <label class="tr-modal__label" for="trMStory">User Story <span class="tr-modal__hint">(optional)</span></label>
-              <select class="tr-modal__select" id="trMStory" disabled>
-                <option value="">— select feature first —</option>
-              </select>
-            </div>
-          </div>
 
           <div class="tr-modal__row tr-modal__row--2col">
             <div class="tr-modal__field">
@@ -724,8 +702,6 @@ export class TestRunnerPage {
 
     document.body.appendChild(overlay);
 
-    const featureEl  = overlay.querySelector('#trMFeature');
-    const storyEl    = overlay.querySelector('#trMStory');
     const titleEl    = overlay.querySelector('#trMTitle');
     const severityEl = overlay.querySelector('#trMSeverity');
     const statusEl   = overlay.querySelector('#trMStatus');
@@ -740,19 +716,6 @@ export class TestRunnerPage {
     overlay.querySelector('#trModalClose').addEventListener('click', close);
     overlay.querySelector('#trModalCancel').addEventListener('click', close);
 
-    featureEl.addEventListener('change', async () => {
-      const fid = parseInt(featureEl.value);
-      if (!fid) {
-        storyEl.innerHTML = '<option value="">— select feature first —</option>';
-        storyEl.disabled = true;
-        return;
-      }
-      const stories = await window.db.userStories.list({ feature_id: fid });
-      storyEl.innerHTML = '<option value="">— none —</option>' +
-        stories.map(s => `<option value="${s.id}">${escHtml(s.title)}</option>`).join('');
-      storyEl.disabled = stories.length === 0;
-    });
-
     saveBtn.addEventListener('click', async () => {
       const t = titleEl.value.trim();
       if (!t) { titleEl.classList.add('tr-modal__input--error'); titleEl.focus(); return; }
@@ -761,14 +724,9 @@ export class TestRunnerPage {
       saveBtn.disabled    = true;
       saveBtn.textContent = 'Logging…';
 
-      const featureId = parseInt(featureEl.value) || null;
-      const storyId   = parseInt(storyEl.value)   || null;
-
       try {
         await window.db.issues.create({
           project_id:         this._projectId,
-          feature_id:         featureId,
-          user_story_id:      storyId,
           title:              t,
           description:        descEl.value.trim()     || null,
           steps_to_reproduce: stepsEl.value.trim()    || null,
