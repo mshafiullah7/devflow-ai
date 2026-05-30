@@ -380,6 +380,23 @@ function runMigrations(db) {
     `);
   }
 
+  // Add screen_templates table for existing databases
+  const stCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='screen_templates'").get();
+  if (!stCheck) {
+    db.exec(`
+      CREATE TABLE screen_templates (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_name  TEXT    NOT NULL DEFAULT 'General',
+        name        TEXT    NOT NULL UNIQUE,
+        description TEXT    NOT NULL DEFAULT '',
+        sort_order  INTEGER NOT NULL DEFAULT 0,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
+
   // Add fallback AI columns to model_configs for devflow-agent support
   const mcCols = db.prepare('PRAGMA table_info(model_configs)').all().map(c => c.name);
   if (!mcCols.includes('gemini_api_key')) {
@@ -404,7 +421,11 @@ function runMigrations(db) {
   // Remove obsolete templates; 'Solution Architecture' is seeded separately via seedDocumentTemplates
   const tplTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='document_templates'").get();
   if (tplTables) {
-    db.prepare(`DELETE FROM document_templates WHERE name IN ('Technical Specification', 'Meeting Notes', 'Release Notes', 'Tasks')`).run();
+    db.prepare(`DELETE FROM document_templates WHERE name IN ('Technical Specification', 'Meeting Notes', 'Release Notes', 'Tasks', 'Tech Stack', 'Architecture Overview')`).run();
+
+    // Update Project Overview template to MacroStore project context
+    const newProjectOverview = `# MacroStore Movie App — Project Context\n\n## Overview\nTwo-role (Admin/User) movie catalogue with approval-based registration,\nsearch, and CRUD management. Runs on-prem, IIS hosted, Oracle 19c database.\n\n**In scope:** registration with admin approval, movie CRUD, movie search  \n**Out of scope:** payments, media hosting, mobile app\n\n---\n\n## Users & Roles\n\n| Role  | Capabilities                              |\n|-------|-------------------------------------------|\n| Admin | Approve users, manage movies, view all    |\n| User  | Browse movies, search, view details       |\n\n---\n\n## System Structure\n\n\`\`\`yaml\nlayers:\n  - name: ui\n    tech: Angular 17\n    communicates_with: [api_gateway]\n\n  - name: api_gateway\n    tech: YARP (.NET 8)\n    routes:\n      - /auth/**    → identity_service   # no auth required\n      - /movies/**  → movie_service      # JWT required\n\n  - name: identity_service\n    tech: .NET 8, Oracle 19c\n    schema: MSI_AUTH\n    responsibilities: [registration, approval, JWT issuance]\n\n  - name: movie_service\n    tech: .NET 8, Oracle 19c\n    schema: MS_MACRO\n    responsibilities: [movie CRUD, search]\n\nauth:\n  header: Authorization\n  mechanism: JWT Bearer\n  issuer: identity_service\n  roles: [Admin, User]\n  token_expiry: 30m access / 7d refresh\n\nconventions:\n  api_prefix: /api/v1\n  error_format: "{ code, message, details }"\n  dates: UTC ISO 8601\n\n\`\`\`\n`;
+    db.prepare(`UPDATE document_templates SET template_text = ? WHERE name = 'Project Overview'`).run(newProjectOverview);
   }
 }
 
@@ -429,7 +450,7 @@ function seedDocumentTemplates(db) {
     [
       'Project Overview',
       'High-level summary of the project',
-      `# Project Overview\n\n## Purpose\n\nDescribe the purpose of this project.\n\n## Goals\n\n- Goal 1\n- Goal 2\n- Goal 3\n\n## Stakeholders\n\n| Name | Role |\n|------|------|\n|      |      |\n\n## Timeline\n\nOutline key milestones here.\n`,
+      `# MacroStore Movie App — Project Context\n\n## Overview\nTwo-role (Admin/User) movie catalogue with approval-based registration,\nsearch, and CRUD management. Runs on-prem, IIS hosted, Oracle 19c database.\n\n**In scope:** registration with admin approval, movie CRUD, movie search  \n**Out of scope:** payments, media hosting, mobile app\n\n---\n\n## Users & Roles\n\n| Role  | Capabilities                              |\n|-------|-------------------------------------------|\n| Admin | Approve users, manage movies, view all    |\n| User  | Browse movies, search, view details       |\n\n---\n\n## System Structure\n\n\`\`\`yaml\nlayers:\n  - name: ui\n    tech: Angular 17\n    communicates_with: [api_gateway]\n\n  - name: api_gateway\n    tech: YARP (.NET 8)\n    routes:\n      - /auth/**    → identity_service   # no auth required\n      - /movies/**  → movie_service      # JWT required\n\n  - name: identity_service\n    tech: .NET 8, Oracle 19c\n    schema: MSI_AUTH\n    responsibilities: [registration, approval, JWT issuance]\n\n  - name: movie_service\n    tech: .NET 8, Oracle 19c\n    schema: MS_MACRO\n    responsibilities: [movie CRUD, search]\n\nauth:\n  header: Authorization\n  mechanism: JWT Bearer\n  issuer: identity_service\n  roles: [Admin, User]\n  token_expiry: 30m access / 7d refresh\n\nconventions:\n  api_prefix: /api/v1\n  error_format: "{ code, message, details }"\n  dates: UTC ISO 8601\n\n\`\`\`\n`,
       2,
     ],
     [
@@ -437,18 +458,6 @@ function seedDocumentTemplates(db) {
       'Architecture, components and design decisions',
       `# Solution Architecture\n\n## Overview\n\nBrief description of what is being built.\n\n## Architecture\n\nDescribe the high-level architecture.\n\n## Components\n\n### Component 1\n\nDescription.\n\n## API Design\n\n\`\`\`\nGET /api/resource\n\`\`\`\n\n## Data Model\n\nDescribe key entities.\n\n## Dependencies\n\n- Dependency 1\n- Dependency 2\n\n## Open Questions\n\n- [ ] Question 1\n`,
       3,
-    ],
-    [
-      'Tech Stack',
-      'Define the technologies used for this project',
-      `# Tech Stack\n\n## Frontend\n\n| Technology | Version | Purpose |\n|------------|---------|--------|\n|            |         |        |\n\n## Backend\n\n| Technology | Version | Purpose |\n|------------|---------|--------|\n|            |         |        |\n\n## Database\n\n| Technology | Version | Purpose |\n|------------|---------|--------|\n|            |         |        |\n\n## Infrastructure & DevOps\n\n| Technology | Version | Purpose |\n|------------|---------|--------|\n|            |         |        |\n\n## Third-Party Services & APIs\n\n| Service | Purpose |\n|---------|---------|\n|         |         |\n\n## Development Tools\n\n| Tool | Purpose |\n|------|---------|\n|      |         |\n`,
-      4,
-    ],
-    [
-      'Architecture Overview',
-      'Brief description of the solution architecture for user story generation',
-      `# Architecture Overview\n\n## Summary\n\nProvide a concise description of the overall solution architecture.\n\n## Key Design Decisions\n\n- Decision 1\n- Decision 2\n\n## System Context\n\nDescribe how this system fits into the broader landscape (users, external systems, integrations).\n\n## High-Level Components\n\n| Component | Responsibility |\n|-----------|----------------|\n|           |                |\n\n## Data Flow\n\nDescribe how data moves through the system.\n\n## Non-Functional Requirements\n\n| Requirement | Detail |\n|-------------|--------|\n| Performance |        |\n| Scalability |        |\n| Security    |        |\n\n## Constraints & Assumptions\n\n- Constraint 1\n- Assumption 1\n`,
-      5,
     ],
   ];
 

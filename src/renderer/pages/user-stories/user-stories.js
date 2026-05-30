@@ -374,7 +374,7 @@ export class ProjectPage {
       this._selectedRelatedMockupId = this._relatedMockups[0].id;
     }
     this._relatedDocuments = docs ?? [];
-    const defaultTitles = new Set(['Project Overview', 'Architecture Overview', 'Tech Stack']);
+    const defaultTitles = new Set(['Project Overview']);
     this._relatedDocuments.forEach(d => {
       if (defaultTitles.has(d.title)) this._selectedRelatedDocIds.add(d.id);
     });

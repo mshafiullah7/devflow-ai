@@ -62,7 +62,19 @@ contextBridge.exposeInMainWorld('db', {
     delete: (id)            => invoke('db:acceptance_criteria:delete', id),
   },
   documentTemplates: {
-    list: () => invoke('db:document_templates:list'),
+    list:   ()     => invoke('db:document_templates:list'),
+    get:    (id)   => invoke('db:document_templates:get', id),
+    create: (data) => invoke('db:document_templates:create', data),
+    update: (data) => invoke('db:document_templates:update', data),
+    delete: (id)   => invoke('db:document_templates:delete', id),
+  },
+  screenTemplates: {
+    list:   ()         => invoke('db:screen_templates:list'),
+    get:    (id)       => invoke('db:screen_templates:get', id),
+    create: (data)     => invoke('db:screen_templates:create', data),
+    update: (data)     => invoke('db:screen_templates:update', data),
+    delete: (id)       => invoke('db:screen_templates:delete', id),
+    seed:   (templates) => invoke('db:screen_templates:seed', templates),
   },
   documents: {
     list:   (project_id) => invoke('db:documents:list', project_id),

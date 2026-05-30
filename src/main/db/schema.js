@@ -13,10 +13,12 @@ function applySchema(db) {
     `ALTER TABLE screen_designs ADD COLUMN style_valid  INTEGER`,
     `ALTER TABLE screen_designs ADD COLUMN style_issues TEXT`,
     `ALTER TABLE prompts ADD COLUMN is_executed INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE project_layers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE project_layers ADD COLUMN sort_order          INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE project_layers ADD COLUMN setup_instructions  TEXT`,
     `ALTER TABLE prompts      ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE prompt_queue ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE issues       ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
+    `ALTER TABLE document_templates ADD COLUMN group_name TEXT NOT NULL DEFAULT 'General'`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -277,6 +279,20 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- SCREEN TEMPLATES (global library of mockup design templates)
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS screen_templates (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_name  TEXT    NOT NULL DEFAULT 'General',
+      name        TEXT    NOT NULL UNIQUE,
+      description TEXT    NOT NULL DEFAULT '',
+      sort_order  INTEGER NOT NULL DEFAULT 0,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- SAVED THEMES (global library, shared across all projects)
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS saved_themes (
@@ -295,8 +311,9 @@ function applySchema(db) {
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       name        TEXT    NOT NULL,
-      description TEXT,
-      folder_path TEXT,
+      description         TEXT,
+      folder_path         TEXT,
+      setup_instructions  TEXT,
       sort_order  INTEGER NOT NULL DEFAULT 0,
       is_active   INTEGER NOT NULL DEFAULT 1,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now')),

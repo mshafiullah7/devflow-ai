@@ -741,8 +741,45 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   safeHandle('db:document_templates:list', () => {
     return db
-      .prepare('SELECT * FROM document_templates WHERE is_active = 1 ORDER BY sort_order ASC')
+      .prepare('SELECT * FROM document_templates WHERE is_active = 1 ORDER BY group_name, sort_order, name ASC')
       .all();
+  });
+
+  safeHandle('db:document_templates:get', (_e, id) => {
+    return db.prepare('SELECT * FROM document_templates WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:document_templates:create', (_e, { group_name, name, description, template_text, sort_order }) => {
+    const result = db
+      .prepare('INSERT INTO document_templates (group_name, name, description, template_text, sort_order) VALUES (?, ?, ?, ?, ?)')
+      .run(group_name ?? 'General', name, description ?? null, template_text ?? '', sort_order ?? 0);
+    return db.prepare('SELECT * FROM document_templates WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  safeHandle('db:document_templates:update', (_e, { id, group_name, name, description, template_text, sort_order }) => {
+    db.prepare(
+      `UPDATE document_templates
+          SET group_name    = coalesce(?, group_name),
+              name          = coalesce(?, name),
+              description   = ?,
+              template_text = coalesce(?, template_text),
+              sort_order    = coalesce(?, sort_order),
+              updated_at    = datetime('now')
+        WHERE id = ?`
+    ).run(
+      group_name ?? null,
+      name ?? null,
+      description ?? null,
+      template_text ?? null,
+      sort_order ?? null,
+      id
+    );
+    return db.prepare('SELECT * FROM document_templates WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:document_templates:delete', (_e, id) => {
+    db.prepare('DELETE FROM document_templates WHERE id = ?').run(id);
+    return { success: true };
   });
 
   // ----------------------------------------------------------------
@@ -1044,26 +1081,28 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM project_layers WHERE id = ?').get(id);
   });
 
-  safeHandle('db:project_layers:create', (_e, { project_id, name, description, folder_path, sort_order }) => {
+  safeHandle('db:project_layers:create', (_e, { project_id, name, description, folder_path, setup_instructions, sort_order }) => {
     const result = db
-      .prepare('INSERT INTO project_layers (project_id, name, description, folder_path, sort_order) VALUES (?, ?, ?, ?, ?)')
-      .run(project_id, name, description ?? null, folder_path ?? null, sort_order ?? 0);
+      .prepare('INSERT INTO project_layers (project_id, name, description, folder_path, setup_instructions, sort_order) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(project_id, name, description ?? null, folder_path ?? null, setup_instructions ?? null, sort_order ?? 0);
     return db.prepare('SELECT * FROM project_layers WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:project_layers:update', (_e, { id, name, description, folder_path, sort_order }) => {
+  safeHandle('db:project_layers:update', (_e, { id, name, description, folder_path, setup_instructions, sort_order }) => {
     db.prepare(
       `UPDATE project_layers
-          SET name        = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
-              description = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
-              folder_path = CASE WHEN ? IS NOT NULL THEN ? ELSE folder_path END,
-              sort_order  = CASE WHEN ? IS NOT NULL THEN ? ELSE sort_order END,
-              updated_at  = datetime('now')
+          SET name               = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
+              description        = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
+              folder_path        = CASE WHEN ? IS NOT NULL THEN ? ELSE folder_path END,
+              setup_instructions = CASE WHEN ? IS NOT NULL THEN ? ELSE setup_instructions END,
+              sort_order         = CASE WHEN ? IS NOT NULL THEN ? ELSE sort_order END,
+              updated_at         = datetime('now')
         WHERE id = ?`
     ).run(
       name ?? null, name ?? null,
       description ?? null, description ?? null,
       folder_path ?? null, folder_path ?? null,
+      setup_instructions ?? null, setup_instructions ?? null,
       sort_order ?? null, sort_order ?? null,
       id
     );
@@ -1073,6 +1112,59 @@ function registerDbHandlers() {
   safeHandle('db:project_layers:delete', (_e, id) => {
     db.prepare('DELETE FROM project_layers WHERE id = ?').run(id);
     return { success: true };
+  });
+
+  // ----------------------------------------------------------------
+  // screen_templates
+  // ----------------------------------------------------------------
+  safeHandle('db:screen_templates:list', () => {
+    return db.prepare('SELECT * FROM screen_templates WHERE is_active = 1 ORDER BY group_name, sort_order, name').all();
+  });
+
+  safeHandle('db:screen_templates:get', (_e, id) => {
+    return db.prepare('SELECT * FROM screen_templates WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:screen_templates:create', (_e, { group_name, name, description, sort_order }) => {
+    const result = db
+      .prepare('INSERT INTO screen_templates (group_name, name, description, sort_order) VALUES (?, ?, ?, ?)')
+      .run(group_name ?? 'General', name, description ?? '', sort_order ?? 0);
+    return db.prepare('SELECT * FROM screen_templates WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  safeHandle('db:screen_templates:update', (_e, { id, group_name, name, description, sort_order }) => {
+    db.prepare(
+      `UPDATE screen_templates
+          SET group_name  = CASE WHEN ? IS NOT NULL THEN ? ELSE group_name END,
+              name        = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
+              description = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
+              sort_order  = CASE WHEN ? IS NOT NULL THEN ? ELSE sort_order END,
+              updated_at  = datetime('now')
+        WHERE id = ?`
+    ).run(
+      group_name ?? null, group_name ?? null,
+      name ?? null, name ?? null,
+      description ?? null, description ?? null,
+      sort_order ?? null, sort_order ?? null,
+      id
+    );
+    return db.prepare('SELECT * FROM screen_templates WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:screen_templates:delete', (_e, id) => {
+    db.prepare('DELETE FROM screen_templates WHERE id = ?').run(id);
+    return { success: true };
+  });
+
+  safeHandle('db:screen_templates:seed', (_e, templates) => {
+    const insert = db.prepare(
+      'INSERT OR IGNORE INTO screen_templates (group_name, name, description, sort_order) VALUES (?, ?, ?, ?)'
+    );
+    const insertMany = db.transaction((rows) => {
+      rows.forEach((t, i) => insert.run(t.group, t.name, t.description, i));
+    });
+    insertMany(templates);
+    return db.prepare('SELECT * FROM screen_templates WHERE is_active = 1 ORDER BY group_name, sort_order, name').all();
   });
 
   safeHandle('app:writeTempFiles', (_e, files) => {

@@ -100,6 +100,23 @@ export class SettingsPage {
               </span>
               <span class="st-nav-item__label">Cloud Sync</span>
             </button>
+            <div class="st-sidebar-section">Templates</div>
+            <button class="st-nav-item" id="stNavTemplates">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><path d="M13 17h8M17 13v8"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Mockups</span>
+            </button>
+            <button class="st-nav-item" id="stNavDocTemplates">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Documents</span>
+            </button>
             <div class="st-sidebar-section">Backup &amp; Restore</div>
             <button class="st-nav-item" id="stNavBackupConfig">
               <span class="st-nav-item__icon">
@@ -143,6 +160,18 @@ export class SettingsPage {
       .addEventListener('click', () => {
         this._setActiveNav('stNavCloudSync');
         this._renderCloudSync();
+      });
+
+    this.container.querySelector('#stNavTemplates')
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavTemplates');
+        this._renderTemplates();
+      });
+
+    this.container.querySelector('#stNavDocTemplates')
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavDocTemplates');
+        this._renderDocumentTemplates();
       });
 
     this.container.querySelector('#stNavBackupConfig')
@@ -762,6 +791,327 @@ export class SettingsPage {
       await window.app.cloudSync.set(data);
       hint.textContent = 'Saved';
       setTimeout(() => { hint.textContent = ''; }, 1500);
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Templates (Mockup Screen Templates)
+  // ----------------------------------------------------------------
+  async _renderTemplates() {
+    const main = this.container.querySelector('#stMainContent');
+    const templates = await window.db.screenTemplates.list();
+
+    const groups = {};
+    templates.forEach(t => {
+      const g = t.group_name || 'General';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(t);
+    });
+
+    const rows = templates.length === 0
+      ? `<div class="st-model-empty">No templates yet. Click <strong>Add Template</strong> to create one.</div>`
+      : Object.entries(groups).map(([g, items]) => `
+          <div class="st-section-header" style="margin-top:16px">
+            <div class="st-section-label">${escHtml(g)}</div>
+          </div>
+          <div class="st-model-list">
+            ${items.map(t => `
+              <div class="st-model-item st-model-item--clickable" data-tpl-id="${t.id}">
+                <div class="st-model-item__info">
+                  <div class="st-model-item__top">
+                    <span class="st-model-item__label">${escHtml(t.name)}</span>
+                  </div>
+                  <div class="st-model-item__sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${escHtml((t.description || '').split('\n')[0])}
+                  </div>
+                </div>
+                <div class="st-model-item__actions">
+                  <button class="st-btn" data-tpl-action="edit" data-tpl-id="${t.id}" title="Edit">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="st-btn st-btn--delete" data-tpl-action="delete" data-tpl-id="${t.id}" title="Delete">
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                      <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `).join('');
+
+    main.innerHTML = `
+      <div class="st-content-title">Screen Templates</div>
+      <div class="st-content-sub">Manage templates used in the Mockups "New Screen" dialog</div>
+      <div class="st-section-header">
+        <div class="st-section-label">Templates</div>
+        <button class="st-add-btn" id="stBtnAddTemplate">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M7 1v12M1 7h12"/>
+          </svg>
+          Add Template
+        </button>
+      </div>
+      ${rows}
+    `;
+
+    main.querySelector('#stBtnAddTemplate').addEventListener('click', () => this._openTemplateModal(null));
+
+    main.querySelectorAll('.st-model-item--clickable[data-tpl-id]').forEach(card => {
+      card.addEventListener('click', async () => {
+        const t = await window.db.screenTemplates.get(Number(card.dataset.tplId));
+        this._openTemplateModal(t);
+      });
+    });
+
+    main.querySelectorAll('[data-tpl-action]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id     = Number(btn.dataset.tplId);
+        const action = btn.dataset.tplAction;
+        if (action === 'edit') {
+          const t = await window.db.screenTemplates.get(id);
+          this._openTemplateModal(t);
+        } else if (action === 'delete') {
+          await window.db.screenTemplates.delete(id);
+          this._renderTemplates();
+        }
+      });
+    });
+  }
+
+  _openTemplateModal(template) {
+    document.querySelector('.st-overlay')?.remove();
+
+    const isEdit = !!template;
+    const overlay = document.createElement('div');
+    overlay.className = 'st-overlay';
+    overlay.innerHTML = `
+      <div class="st-modal" style="max-width:680px;width:95vw;">
+        <div class="st-modal__header">
+          <span class="st-modal__title">${isEdit ? 'Edit Template' : 'Add Template'}</span>
+          <button class="st-modal__close" id="stTplClose">&times;</button>
+        </div>
+        <div class="st-modal__body">
+          <form id="stTplForm" autocomplete="off">
+            <div class="st-form__row">
+              <label class="st-form__label">Group *</label>
+              <input class="st-form__input" id="stTplGroup" type="text"
+                placeholder="e.g. Authentication, Dashboard &amp; Navigation…"
+                value="${escHtml(template?.group_name || '')}"/>
+            </div>
+            <div class="st-form__row">
+              <label class="st-form__label">Name *</label>
+              <input class="st-form__input" id="stTplName" type="text"
+                placeholder="e.g. Login / Sign In"
+                value="${escHtml(template?.name || '')}"/>
+            </div>
+            <div class="st-form__row">
+              <label class="st-form__label">Description <span style="font-weight:400;opacity:.6">(used as AI prompt)</span></label>
+              <textarea class="st-form__input" id="stTplDesc" rows="14"
+                style="resize:vertical;min-height:200px;font-family:monospace;font-size:12px;"
+                placeholder="Describe the screen layout, components, and style…">${escHtml(template?.description || '')}</textarea>
+            </div>
+          </form>
+        </div>
+        <div class="st-modal__body" style="padding-top:0;padding-bottom:16px;">
+          <div class="st-form__footer">
+            <button type="button" class="st-form__cancel-btn" id="stTplCancel">Cancel</button>
+            <button type="button" class="st-form__save-btn"   id="stTplSave">${isEdit ? 'Save changes' : 'Create'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('#stTplName').focus();
+
+    const close = () => overlay.remove();
+    overlay.querySelector('#stTplClose').addEventListener('click', close);
+    overlay.querySelector('#stTplCancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('#stTplSave').addEventListener('click', async () => {
+      const group_name  = overlay.querySelector('#stTplGroup').value.trim() || 'General';
+      const name        = overlay.querySelector('#stTplName').value.trim();
+      const description = overlay.querySelector('#stTplDesc').value;
+
+      if (!name) { overlay.querySelector('#stTplName').focus(); return; }
+
+      if (isEdit) {
+        await window.db.screenTemplates.update({ id: template.id, group_name, name, description });
+      } else {
+        await window.db.screenTemplates.create({ group_name, name, description });
+      }
+
+      close();
+      this._renderTemplates();
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Document Templates
+  // ----------------------------------------------------------------
+  async _renderDocumentTemplates() {
+    const main = this.container.querySelector('#stMainContent');
+    const templates = await window.db.documentTemplates.list();
+
+    const groups = {};
+    templates.forEach(t => {
+      const g = t.group_name || 'General';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(t);
+    });
+
+    const rows = templates.length === 0
+      ? `<div class="st-model-empty">No document templates yet. Click <strong>Add Template</strong> to create one.</div>`
+      : Object.entries(groups).map(([g, items]) => `
+          <div class="st-section-header" style="margin-top:16px">
+            <div class="st-section-label">${escHtml(g)}</div>
+          </div>
+          <div class="st-model-list">
+            ${items.map(t => `
+              <div class="st-model-item st-model-item--clickable" data-dtpl-id="${t.id}">
+                <div class="st-model-item__info">
+                  <div class="st-model-item__top">
+                    <span class="st-model-item__label">${escHtml(t.name)}</span>
+                  </div>
+                  <div class="st-model-item__sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${escHtml((t.description || '').split('\n')[0])}
+                  </div>
+                </div>
+                <div class="st-model-item__actions">
+                  <button class="st-btn" data-dtpl-action="edit" data-dtpl-id="${t.id}" title="Edit">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="st-btn st-btn--delete" data-dtpl-action="delete" data-dtpl-id="${t.id}" title="Delete">
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                      <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `).join('');
+
+    main.innerHTML = `
+      <div class="st-content-title">Document Templates</div>
+      <div class="st-content-sub">Manage templates used when creating new project documents</div>
+      <div class="st-section-header">
+        <div class="st-section-label">Templates</div>
+        <button class="st-add-btn" id="stBtnAddDocTemplate">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M7 1v12M1 7h12"/>
+          </svg>
+          Add Template
+        </button>
+      </div>
+      ${rows}
+    `;
+
+    main.querySelector('#stBtnAddDocTemplate').addEventListener('click', () => this._openDocumentTemplateModal(null));
+
+    main.querySelectorAll('.st-model-item--clickable[data-dtpl-id]').forEach(card => {
+      card.addEventListener('click', async () => {
+        const t = await window.db.documentTemplates.get(Number(card.dataset.dtplId));
+        this._openDocumentTemplateModal(t);
+      });
+    });
+
+    main.querySelectorAll('[data-dtpl-action]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id     = Number(btn.dataset.dtplId);
+        const action = btn.dataset.dtplAction;
+        if (action === 'edit') {
+          const t = await window.db.documentTemplates.get(id);
+          this._openDocumentTemplateModal(t);
+        } else if (action === 'delete') {
+          await window.db.documentTemplates.delete(id);
+          this._renderDocumentTemplates();
+        }
+      });
+    });
+  }
+
+  _openDocumentTemplateModal(template) {
+    document.querySelector('.st-overlay')?.remove();
+
+    const isEdit = !!template;
+    const overlay = document.createElement('div');
+    overlay.className = 'st-overlay';
+    overlay.innerHTML = `
+      <div class="st-modal" style="max-width:680px;width:95vw;">
+        <div class="st-modal__header">
+          <span class="st-modal__title">${isEdit ? 'Edit Document Template' : 'Add Document Template'}</span>
+          <button class="st-modal__close" id="stDtplClose">&times;</button>
+        </div>
+        <div class="st-modal__body">
+          <form id="stDtplForm" autocomplete="off">
+            <div class="st-form__row">
+              <label class="st-form__label">Group *</label>
+              <input class="st-form__input" id="stDtplGroup" type="text"
+                placeholder="e.g. Technical, Business, Planning…"
+                value="${escHtml(template?.group_name || '')}"/>
+            </div>
+            <div class="st-form__row">
+              <label class="st-form__label">Name *</label>
+              <input class="st-form__input" id="stDtplName" type="text"
+                placeholder="e.g. Product Requirements Document"
+                value="${escHtml(template?.name || '')}"/>
+            </div>
+            <div class="st-form__row">
+              <label class="st-form__label">Description</label>
+              <input class="st-form__input" id="stDtplDesc" type="text"
+                placeholder="Brief description of this template's purpose"
+                value="${escHtml(template?.description || '')}"/>
+            </div>
+            <div class="st-form__row">
+              <label class="st-form__label">Template Content <span style="font-weight:400;opacity:.6">(pre-filled document body)</span></label>
+              <textarea class="st-form__input" id="stDtplText" rows="14"
+                style="resize:vertical;min-height:200px;font-family:monospace;font-size:12px;"
+                placeholder="Enter the default document content (supports Markdown)…">${escHtml(template?.template_text || '')}</textarea>
+            </div>
+          </form>
+        </div>
+        <div class="st-modal__body" style="padding-top:0;padding-bottom:16px;">
+          <div class="st-form__footer">
+            <button type="button" class="st-form__cancel-btn" id="stDtplCancel">Cancel</button>
+            <button type="button" class="st-form__save-btn" id="stDtplSave">${isEdit ? 'Save changes' : 'Create'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('#stDtplName').focus();
+
+    const close = () => overlay.remove();
+    overlay.querySelector('#stDtplClose').addEventListener('click', close);
+    overlay.querySelector('#stDtplCancel').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('#stDtplSave').addEventListener('click', async () => {
+      const group_name   = overlay.querySelector('#stDtplGroup').value.trim() || 'General';
+      const name         = overlay.querySelector('#stDtplName').value.trim();
+      const description  = overlay.querySelector('#stDtplDesc').value.trim();
+      const template_text = overlay.querySelector('#stDtplText').value;
+
+      if (!name) { overlay.querySelector('#stDtplName').focus(); return; }
+
+      if (isEdit) {
+        await window.db.documentTemplates.update({ id: template.id, group_name, name, description, template_text });
+      } else {
+        await window.db.documentTemplates.create({ group_name, name, description, template_text });
+      }
+
+      close();
+      this._renderDocumentTemplates();
     });
   }
 

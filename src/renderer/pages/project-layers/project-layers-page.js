@@ -416,6 +416,12 @@ export class ProjectLayersPage {
           </div>
 
           <div class="is-form__field">
+            <label class="is-form__label" for="plFormSetup">Project Setup Instructions</label>
+            <textarea class="is-form__textarea" id="plFormSetup" rows="6"
+              placeholder="Steps to set up this layer locally — install dependencies, environment variables, run commands…">${escHtml(layer?.setup_instructions || '')}</textarea>
+          </div>
+
+          <div class="is-form__field">
             <label class="is-form__label">Project Folder Path</label>
             <div class="pl-folder-row">
               <div class="pl-folder-pill${hasPath ? ' pl-folder-pill--set' : ''}" id="plFolderPill">
@@ -447,6 +453,7 @@ export class ProjectLayersPage {
   _bindDetailFormEvents(el, layer) {
     const nameEl      = el.querySelector('#plFormName');
     const descEl      = el.querySelector('#plFormDesc');
+    const setupEl     = el.querySelector('#plFormSetup');
     const folderInput = el.querySelector('#plFolderValue');
     const folderPill  = el.querySelector('#plFolderPill');
     const folderText  = el.querySelector('#plFolderText');
@@ -477,10 +484,11 @@ export class ProjectLayersPage {
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = layer ? 'Saving…' : 'Adding…'; }
 
       const payload = {
-        project_id:  this._projectId,
+        project_id:         this._projectId,
         name,
-        description: descEl.value.trim() || null,
-        folder_path: folderInput.value.trim() || null,
+        description:        descEl.value.trim() || null,
+        setup_instructions: setupEl.value.trim() || null,
+        folder_path:        folderInput.value.trim() || null,
       };
 
       try {
@@ -646,8 +654,10 @@ export class ProjectLayersPage {
         'You are a software architect. Based on the following project documentation, identify the distinct architectural layers or sub-projects needed to build this system.',
         'Each layer is a separate codebase or deployment unit (e.g. "Frontend", "Backend API", "Database", "Mobile App", "Infrastructure").',
         '',
+        'For each layer also provide "setup_instructions": a concise, step-by-step guide that starts with the project creation/scaffolding command for that technology (e.g. "dotnet new webapi -n MyApi", "ng new my-app", "npx create-react-app my-app", "npm init"), then covers prerequisites, dependency installation commands, environment variable setup, and how to run the layer locally.',
+        '',
         'Return ONLY a valid JSON array — no markdown, no explanation, nothing else.',
-        'Format: [{"name":"Frontend","description":"React web app"},{"name":"Backend API","description":"Node.js REST API"}]',
+        'Format: [{"name":"Frontend","description":"Angular web app","setup_instructions":"1. Install Node 18+\\n2. Install Angular CLI: npm install -g @angular/cli\\n3. Scaffold: ng new my-app --routing --style=scss\\n4. cd my-app && npm install\\n5. Copy .env.example to .env and fill in values\\n6. Run: ng serve"},{"name":"Backend API","description":".NET 8 Web API","setup_instructions":"1. Install .NET 8 SDK\\n2. Scaffold: dotnet new webapi -n MyApi\\n3. cd MyApi && dotnet restore\\n4. Set connection string in appsettings.json\\n5. Run: dotnet run"}]',
         '',
         '--- PROJECT DOCUMENTS ---',
         docsText,
@@ -687,10 +697,11 @@ export class ProjectLayersPage {
           const nameLower = (item.name || '').toLowerCase().trim();
           if (!nameLower || existingNames.has(nameLower)) continue;
           const layer = await window.db.projectLayers.create({
-            project_id:  this._projectId,
-            name:        item.name.trim(),
-            description: (item.description || '').trim() || null,
-            sort_order:  this._layers.length + added,
+            project_id:         this._projectId,
+            name:               item.name.trim(),
+            description:        (item.description || '').trim() || null,
+            setup_instructions: (item.setup_instructions || '').trim() || null,
+            sort_order:         this._layers.length + added,
           });
           this._layers.push(layer);
           existingNames.add(nameLower);
