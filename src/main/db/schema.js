@@ -51,14 +51,15 @@ function applySchema(db) {
     );
 
     CREATE TABLE IF NOT EXISTS workflows (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      workflow_id TEXT    NOT NULL,
-      feature     TEXT    NOT NULL,
-      description TEXT,
-      is_active   INTEGER NOT NULL DEFAULT 1,
-      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id       INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      workflow_id      TEXT    NOT NULL,
+      feature          TEXT    NOT NULL,
+      description      TEXT,
+      screen_design_id INTEGER REFERENCES screen_designs(id) ON DELETE SET NULL,
+      is_active        INTEGER NOT NULL DEFAULT 1,
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
     -- ----------------------------------------------------------------
@@ -77,17 +78,18 @@ function applySchema(db) {
     -- LAYERS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS layers (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      workflow_id INTEGER NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
-      layer       TEXT    NOT NULL,
-      order_num   INTEGER NOT NULL DEFAULT 1,
-      purpose     TEXT,
-      inputs      TEXT,
-      outputs     TEXT,
-      prompt      TEXT,
-      is_active   INTEGER NOT NULL DEFAULT 1,
-      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      workflow_id      INTEGER NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+      project_layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL,
+      layer            TEXT    NOT NULL,
+      order_num        INTEGER NOT NULL DEFAULT 1,
+      purpose          TEXT,
+      inputs           TEXT,
+      outputs          TEXT,
+      prompt           TEXT,
+      is_active        INTEGER NOT NULL DEFAULT 1,
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
     -- ----------------------------------------------------------------

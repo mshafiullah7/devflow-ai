@@ -3,6 +3,7 @@
 const { ipcMain, dialog, BrowserWindow, screen } = require('electron');
 const { safeHandle } = require('../../ipc-safe-handle');
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const { spawn } = require('node:child_process');
 
 function registerDialogHandlers() {
@@ -98,18 +99,21 @@ function registerDialogHandlers() {
 
   safeHandle('shell:openVSCode', (_e, folderPath) => {
     if (!folderPath) return;
-    const proc = spawn('cmd.exe', ['/c', 'code', folderPath], { detached: true, stdio: 'ignore' });
+    // Use `code .` with cwd so the path is handled by the shell, not as a CLI arg.
+    // Fall back to process.cwd() if the folder doesn't exist on disk.
+    const cwd = (folderPath && fsSync.existsSync(folderPath)) ? folderPath : process.cwd();
+    const proc = spawn('cmd.exe', ['/c', 'code', '.'], { cwd, detached: true, stdio: 'ignore' });
     proc.unref();
   });
 
   safeHandle('shell:openPowerShell', (_e, folderPath) => {
     if (!folderPath) return;
-    // Use cmd /c start so PowerShell opens as a new detached window.
-    // Passing cwd makes it inherit the project folder as its working directory.
+    // Fall back to cwd if the layer path doesn't exist on disk.
+    const cwd = (folderPath && fsSync.existsSync(folderPath)) ? folderPath : process.cwd();
     const proc = spawn(
       'cmd.exe',
       ['/c', 'start', 'powershell.exe', '-NoExit', '-NoLogo'],
-      { cwd: folderPath, detached: true, stdio: 'ignore' }
+      { cwd, detached: true, stdio: 'ignore' }
     );
     proc.unref();
   });

@@ -82,6 +82,8 @@ export class TestRunnerPage {
     this.router         = router;
     this._projectId     = params.projectId;
     this._project       = null;
+    this._layers        = [];
+    this._activeLayerId = null; // 'root' or numeric layer id
     this._commands      = [];
     this._running       = false;
     this._outputText    = '';
@@ -99,7 +101,6 @@ export class TestRunnerPage {
     applyStoredTheme();
 
     this._project    = await window.db.projects.get(this._projectId);
-    this._layers    = [];
     this._activeCwd = this._project?.project_path || null;
     const _mapping = await window.db.modelMapping.get('test-runner');
     this.container.innerHTML = this._template();
@@ -134,16 +135,23 @@ export class TestRunnerPage {
     this._history = await window.db.testRunHistory.list(this._projectId);
     this._renderHistory();
 
-    // Load layers — only show the bar when at least one has a folder set
+    // Load layers and render the sidebar
     const allLayers = await window.db.projectLayers.list(this._projectId);
     this._layers = allLayers.filter(l => l.folder_path);
-    if (this._layers.length > 0) this._renderLayerBar();
+    this._renderLayerSidebar();
 
-    if (this._project?.project_path) {
-      this._setHeaderFolderPath(this._project.project_path);
+    // Auto-select: first layer with a folder, or project root
+    const firstLayer = this._layers[0];
+    if (firstLayer) {
+      this._activeLayerId = firstLayer.id;
+      this._activeCwd = firstLayer.folder_path;
+      this._renderLayerSidebar();
+    }
+
+    if (this._activeCwd) {
       this._git.refreshStatus();
       this._git.startPoll();
-      await this._detectFrameworks(this._project.project_path);
+      await this._detectFrameworks(this._activeCwd);
     } else {
       this._showNoFolder();
     }
@@ -180,15 +188,6 @@ export class TestRunnerPage {
             <h1 class="project-page__title">${name}</h1>
             <p class="project-page__desc">Test Runner</p>
           </div>
-          <div class="project-page__folder-display" id="headerFolderDisplay" title="Select folder">
-            <div class="project-page__folder-pill">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              </svg>
-              <span class="project-page__folder-text" id="headerFolderText">Select folder</span>
-            </div>
-          </div>
           <div class="project-page__model-group tr-header__model" style="-webkit-app-region:no-drag;">
             <div id="trModelPicker"></div>
             <button class="project-page__model-cfg-btn" id="trBtnModelConfigs" title="Configure AI models">
@@ -215,8 +214,10 @@ export class TestRunnerPage {
 
         <div class="tr-body">
 
-          <!-- Layer selector (hidden until layers are loaded) -->
-          <div id="trLayerBar" class="tr-layer-bar" hidden></div>
+          <!-- Layer sidebar -->
+          <aside class="tr-sidebar" id="trSidebar"></aside>
+
+          <div class="tr-main-content">
 
           <!-- Command bar -->
           <div class="tr-command-bar">
@@ -315,6 +316,8 @@ export class TestRunnerPage {
             </div>
 
           </div>
+
+          </div><!-- /.tr-main-content -->
         </div>
       </div>
     `;
@@ -325,18 +328,20 @@ export class TestRunnerPage {
   // ----------------------------------------------------------------
   _bindHeaderEvents() {
     this.container.querySelector('#trBtnBack')
-      .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
+      .addEventListener('click', () => {
+        if (this._running) {
+          this._confirmCancelAndNavigate();
+        } else {
+          this.router.navigate('project-home', { projectId: this._projectId });
+        }
+      });
 
-    this.container.querySelector('#headerFolderDisplay')
-      .addEventListener('click', async () => {
-        const folderPath = await window.db.dialog.openFolder();
-        if (!folderPath) return;
-        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
-        if (this._project) this._project.project_path = folderPath;
-        this._setHeaderFolderPath(folderPath);
-        this._git.refreshStatus();
-        this._git.startPoll();
-        await this._detectFrameworks(folderPath);
+    this.container.querySelector('#trSidebar')
+      ?.addEventListener('click', e => {
+        const item = e.target.closest('.tr-layer-item');
+        if (!item) return;
+        const layerId = item.dataset.layerId;
+        this._selectSidebarLayer(layerId);
       });
 
     this.container.querySelector('#trBtnGit')
@@ -363,54 +368,81 @@ export class TestRunnerPage {
     });
   }
 
-  _setHeaderFolderPath(folderPath) {
-    const text    = this.container.querySelector('#headerFolderText');
-    const display = this.container.querySelector('#headerFolderDisplay');
-    if (!text || !display) return;
-    text.textContent = folderPath;
-    display.classList.add('project-page__folder-display--active');
-  }
+  _confirmCancelAndNavigate() {
+    const overlay = document.createElement('div');
+    overlay.className = 'tr-modal-overlay';
+    overlay.innerHTML = `
+      <div class="tr-modal tr-modal--sm">
+        <div class="tr-modal__header">
+          <h2 class="tr-modal__title">Tests Running</h2>
+        </div>
+        <div class="tr-modal__body">
+          <p class="tr-fc-summary">Navigating back will cancel the current test run.</p>
+          <p class="tr-fc-hint">Any results collected so far will be lost.</p>
+        </div>
+        <div class="tr-modal__footer">
+          <button class="tr-modal__btn tr-modal__btn--cancel" id="trCancelNavStay">Stay</button>
+          <button class="tr-modal__btn tr-modal__btn--save tr-modal__btn--danger-solid" id="trCancelNavGo">Cancel &amp; Go Back</button>
+        </div>
+      </div>`;
 
-  // ----------------------------------------------------------------
-  // Layer selector
-  // ----------------------------------------------------------------
-  _renderLayerBar() {
-    const bar = this.container.querySelector('#trLayerBar');
-    if (!bar) return;
+    document.body.appendChild(overlay);
 
-    const pills = [
-      `<button class="tr-layer-pill tr-layer-pill--active" data-layer-id="">Project Root</button>`,
-      ...this._layers.map(l =>
-        `<button class="tr-layer-pill" data-layer-id="${l.id}">${escHtml(l.name)}</button>`
-      ),
-    ].join('');
-
-    bar.innerHTML = `
-      <span class="tr-layer-bar__label">Layer</span>
-      <div class="tr-layer-bar__pills">${pills}</div>`;
-    bar.hidden = false;
-
-    bar.querySelector('.tr-layer-bar__pills').addEventListener('click', e => {
-      const pill = e.target.closest('.tr-layer-pill');
-      if (!pill) return;
-      bar.querySelectorAll('.tr-layer-pill').forEach(p => p.classList.remove('tr-layer-pill--active'));
-      pill.classList.add('tr-layer-pill--active');
-      this._onLayerChange(pill.dataset.layerId);
+    overlay.querySelector('#trCancelNavStay').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#trCancelNavGo').addEventListener('click', () => {
+      overlay.remove();
+      this.router.navigate('project-home', { projectId: this._projectId });
     });
   }
 
-  async _onLayerChange(layerId) {
-    if (layerId) {
-      const layer      = this._layers.find(l => String(l.id) === String(layerId));
-      this._activeCwd  = layer?.folder_path || this._project?.project_path;
-    } else {
-      this._activeCwd = this._project?.project_path;
+  // ----------------------------------------------------------------
+  // Layer sidebar
+  // ----------------------------------------------------------------
+  _renderLayerSidebar() {
+    const sidebar = this.container.querySelector('#trSidebar');
+    if (!sidebar) return;
+
+    const hasProjectRoot = !!this._project?.project_path;
+    const items = [];
+
+    if (hasProjectRoot) {
+      const isActive = this._activeLayerId === 'root';
+      items.push(`
+        <div class="tr-layer-item ${isActive ? 'tr-layer-item--active' : ''}" data-layer-id="root">
+          <span class="tr-layer-item__name">${escHtml(this._project.name)}</span>
+          <span class="tr-layer-item__path">${escHtml(this._project.project_path)}</span>
+        </div>`);
     }
 
-    if (this._activeCwd) {
-      this._setHeaderFolderPath(this._activeCwd);
-      await this._detectFrameworks(this._activeCwd);
+    for (const l of this._layers) {
+      const isActive = this._activeLayerId === l.id;
+      items.push(`
+        <div class="tr-layer-item ${isActive ? 'tr-layer-item--active' : ''}" data-layer-id="${l.id}">
+          <span class="tr-layer-item__name">${escHtml(l.name)}</span>
+          <span class="tr-layer-item__path">${escHtml(l.folder_path)}</span>
+        </div>`);
     }
+
+    if (!items.length) {
+      sidebar.innerHTML = `<div class="tr-sidebar-empty">No layers configured.<br>Add layers in Project Layers.</div>`;
+    } else {
+      sidebar.innerHTML = items.join('');
+    }
+  }
+
+  async _selectSidebarLayer(layerId) {
+    if (layerId === 'root') {
+      this._activeLayerId = 'root';
+      this._activeCwd = this._project?.project_path || null;
+    } else {
+      const id    = parseInt(layerId, 10);
+      const layer = this._layers.find(l => l.id === id);
+      if (!layer) return;
+      this._activeLayerId = layer.id;
+      this._activeCwd = layer.folder_path;
+    }
+    this._renderLayerSidebar();
+    if (this._activeCwd) await this._detectFrameworks(this._activeCwd);
   }
 
   // ----------------------------------------------------------------

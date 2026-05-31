@@ -57,6 +57,8 @@ const _mainCtx     = createCtx();
 const _queueCtx    = createCtx();
 const _validateCtx = createCtx();
 const _workflowCtx = createCtx();
+const _genWfCtx    = createCtx();
+const _testGenCtx  = createCtx();
 
 function _logAiCall(type, modelName, exe, promptOrMessages) {
   const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -453,6 +455,96 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) 
 }
 
 // ----------------------------------------------------------------
+// OpenAI-compatible streaming proxy (OpenAI, Groq, Ollama /v1, etc.)
+// ----------------------------------------------------------------
+function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
+  _logAiCall('api', model.model_name || '(no model)', 'python openai_proxy.py', messages || prompt);
+  const ts = Date.now();
+
+  let msgs;
+  let isDiffMode = false;
+
+  if (editPayload) {
+    isDiffMode = true;
+    const content = buildDiffPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
+    msgs = [{ role: 'user', content }];
+  } else if (messages && messages.length > 0) {
+    msgs = messages;
+  } else {
+    msgs = [{ role: 'user', content: prompt }];
+  }
+
+  const tmpFile = path.join(os.tmpdir(), `ai-sdlc-api-${ts}.json`);
+  try {
+    fs.writeFileSync(tmpFile, JSON.stringify(msgs), 'utf8');
+  } catch (err) {
+    send(wc, doneCh, { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
+    return;
+  }
+
+  const agentPath = path.join(__dirname, '../../../../agent/openai_proxy.py');
+  const spawnArgs = [
+    agentPath,
+    '--messages-file', tmpFile,
+    '--model',         model.model_name || 'gpt-4o',
+    '--api-key',       model.api_key    || '',
+  ];
+  if (model.base_url)   spawnArgs.push('--base-url',   model.base_url);
+  if (model.max_tokens) spawnArgs.push('--max-tokens', String(model.max_tokens));
+
+  const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch (_) {} };
+  let accumulated = '';
+
+  ctx.proc = spawn('python', spawnArgs, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+    env: { ...process.env },
+  });
+
+  ctx.proc.stdout.on('data', (chunk) => {
+    const text = chunk.toString('utf8');
+    accumulated += text;
+    send(wc, tokenCh, { text });
+  });
+  ctx.proc.stderr.on('data', () => {});
+
+  ctx.proc.on('close', (code) => {
+    cleanup();
+    if (ctx.cancelled) return;
+
+    let html  = null;
+    let error = null;
+
+    if (isDiffMode) {
+      const patches = extractPatches(accumulated);
+      if (patches) {
+        try {
+          html = applyPatches(editPayload.htmlContent, patches);
+        } catch (err) {
+          html  = extractHtml(accumulated);
+          error = html ? null : `Patch failed (${err.message}) and no full HTML found`;
+        }
+      } else {
+        html  = extractHtml(accumulated);
+        error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'No patches or HTML found in response');
+      }
+    } else {
+      // Plain prompt (e.g. test generation) — no HTML extraction needed
+      error = code !== 0 ? `Process exited with code ${code}` : null;
+    }
+
+    send(wc, doneCh, { html, raw: accumulated, error });
+    ctx.proc = null;
+  });
+
+  ctx.proc.on('error', (err) => {
+    cleanup();
+    send(wc, doneCh, { html: null, raw: accumulated, error: err.message });
+    ctx.proc = null;
+  });
+}
+
+// ----------------------------------------------------------------
 // Dispatch helper — picks the right backend
 // ----------------------------------------------------------------
 function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
@@ -460,6 +552,8 @@ function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh
     runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
   } else if (model.type === 'ollama') {
     runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
+  } else if (model.type === 'api') {
+    runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
   } else {
     runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
   }
@@ -528,6 +622,26 @@ function registerChatHandlers() {
     if (_workflowCtx.proc || _workflowCtx.req) killCtx(_workflowCtx);
     _workflowCtx.cancelled = false;
     dispatch(event.sender, prompt, null, model, null, _workflowCtx, 'workflowChat:token', 'workflowChat:done');
+    return { started: true };
+  });
+
+  // --- Generate Workflows window chat (genWorkflowChat:*) — separate subprocess slot ---
+  safeHandle('genWorkflowChat:cancel', () => killCtx(_genWfCtx));
+
+  safeHandle('genWorkflowChat:generate', (event, { prompt, model }) => {
+    if (_genWfCtx.proc || _genWfCtx.req) killCtx(_genWfCtx);
+    _genWfCtx.cancelled = false;
+    dispatch(event.sender, prompt, null, model, null, _genWfCtx, 'genWorkflowChat:token', 'genWorkflowChat:done');
+    return { started: true };
+  });
+
+  // --- Test generation window chat (testGenChat:*) — separate subprocess slot ---
+  safeHandle('testGenChat:cancel', () => killCtx(_testGenCtx));
+
+  safeHandle('testGenChat:generate', (event, { prompt, model }) => {
+    if (_testGenCtx.proc || _testGenCtx.req) killCtx(_testGenCtx);
+    _testGenCtx.cancelled = false;
+    dispatch(event.sender, prompt, null, model, null, _testGenCtx, 'testGenChat:token', 'testGenChat:done');
     return { started: true };
   });
 }

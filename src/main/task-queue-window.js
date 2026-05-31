@@ -5,30 +5,29 @@ const path              = require('node:path');
 
 let _win = null;
 
-function openQueueWindow(projectId) {
-  // Re-focus and re-init if already open
+function openTaskQueueWindow(projectId) {
   if (_win && !_win.isDestroyed()) {
     _win.focus();
-    _win.webContents.send('queue:init', { projectId });
+    _win.webContents.send('taskQueue:init', { projectId });
     return;
   }
 
   _win = new BrowserWindow({
-    width:  520,
-    height: 700,
+    width:  900,
+    height: 680,
     title:  'Task Queue',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
 
-  _win.loadFile(path.join(__dirname, '../renderer/queue-runner.html'));
+  _win.loadFile(path.join(__dirname, '../renderer/task-queue.html'));
 
   _win.webContents.once('did-finish-load', () => {
-    _win.webContents.send('queue:init', { projectId });
+    _win.webContents.send('taskQueue:init', { projectId });
   });
 
   _win.on('closed', () => { _win = null; });
 }
 
-module.exports = { openQueueWindow };
+module.exports = { openTaskQueueWindow };

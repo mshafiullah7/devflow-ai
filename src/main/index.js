@@ -5,8 +5,11 @@ const path = require('node:path');
 const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
 const { closeDb } = require('./db/database');
-const { openQueueWindow }    = require('./queue-window');
-const { openWorkflowWindow } = require('./workflow-window');
+const { openQueueWindow }             = require('./queue-window');
+const { openTaskQueueWindow }         = require('./task-queue-window');
+const { openWorkflowWindow }          = require('./workflow-window');
+const { openGenerateWorkflowsWindow } = require('./generate-workflows-window');
+const { openTestGenerationWindow }    = require('./test-generation-window');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
 const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
 const { sendMessage: telegramSend } = require('./telegram');
@@ -53,8 +56,23 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
+  ipcMain.handle('app:openTaskQueueWindow', (_e, projectId) => {
+    openTaskQueueWindow(projectId);
+    return { ok: true };
+  });
+
   ipcMain.handle('app:openWorkflowWindow', (_e, data) => {
     openWorkflowWindow(data);
+    return { ok: true };
+  });
+
+  ipcMain.handle('app:openGenerateWorkflowsWindow', (_e, data) => {
+    openGenerateWorkflowsWindow(data);
+    return { ok: true };
+  });
+
+  ipcMain.handle('app:openTestGenerationWindow', (_e, data) => {
+    openTestGenerationWindow(data);
     return { ok: true };
   });
 

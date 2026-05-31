@@ -132,7 +132,73 @@
 .git-page__body {
   flex: 1;
   display: flex;
+  flex-direction: row;
   overflow: hidden;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Layer sidebar                                                         */
+/* ------------------------------------------------------------------ */
+.gc-layer-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.gc-layer-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 36px 8px 14px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+  min-width: 0;
+  position: relative;
+}
+.gc-layer-item:hover { background: var(--surface-hover); }
+.gc-layer-item--active {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-left-color: var(--accent);
+}
+
+.gc-layer-item__name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gc-layer-item--active .gc-layer-item__name { color: var(--accent); }
+
+.gc-layer-item__path {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gc-layer-item__count {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
 }
 
 /* ------------------------------------------------------------------ */

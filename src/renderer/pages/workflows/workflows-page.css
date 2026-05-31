@@ -221,6 +221,69 @@
 .wf-layer-row:hover { background: var(--surface-hover); }
 .wf-layer-row:hover .wf-layer-actions { opacity: 1; }
 .wf-layer-row--dragging { opacity: 0.4; }
+.wf-layer-row--clickable { cursor: pointer; }
+
+/* ── Layer inline view panel ─────────────────────────────────────── */
+.wf-layer-view {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+/* Header reuses .wf-layer-row layout so it lines up pixel-perfect */
+.wf-layer-view__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.wf-layer-view__header:hover { background: var(--surface-hover); }
+.wf-layer-actions--visible { opacity: 1 !important; }
+
+/* Body indented to align text under the layer name (skips order col) */
+.wf-layer-view__body {
+  padding: 0 12px 12px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wf-view-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wf-view-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.wf-view-value {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.wf-view-prompt {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+.wf-view-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
 
 .wf-drag-handle {
   color: var(--text-muted);
@@ -366,6 +429,7 @@
 }
 .wf-textarea:focus { outline: none; border-color: var(--accent); }
 .wf-textarea--tall { min-height: 80px; }
+.wf-textarea--sm   { min-height: 58px; resize: vertical; }
 
 .wf-form-actions {
   display: flex;
@@ -770,9 +834,67 @@
   border-top: 1px solid var(--border);
 }
 
-.wf-label-required { color: var(--accent); }
+/* ── Grouped list ──────────────────────────────────────────────── */
+.wf-group-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  margin-top: 4px;
+}
+.wf-group-header:first-child { margin-top: 0; }
+.wf-group-header svg { opacity: 0.6; flex-shrink: 0; }
+.wf-group-items .eus-src-item { padding-left: 18px; }
+
+.wf-label-required  { color: var(--accent); }
+.wf-label-optional  { color: var(--text-muted); font-size: 10px; font-weight: 400; }
+
+.wf-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5l3 3 3-3' stroke='%23888' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 26px;
+  cursor: pointer;
+}
+
+.wf-linked-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.wf-linked-page svg { flex-shrink: 0; opacity: 0.7; }
 
 .wf-input--error {
   border-color: #dc2626 !important;
   box-shadow: 0 0 0 2px rgba(220,38,38,.15);
 }
+
+/* ── Generate Workflows button in header ─────────────────────────── */
+.gw-open-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(99,102,241,0.5);
+  background: rgba(99,102,241,0.08);
+  color: #818cf8;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s, border-color 0.15s;
+}
+.gw-open-btn:hover { background: rgba(99,102,241,0.18); border-color: #818cf8; }

@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss, timeAgo, renderMarkdown } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
-import { GitController } from '../../components/git/git-controller.js';
 
 const TECH = 'Plain HTML / CSS';
 
@@ -1559,13 +1558,6 @@ export class MockupsPage {
 
 
 
-    this._git = new GitController({
-      getTermCwd: () => this._project?.project_path || '',
-      gitBtnId:   'mockupsBtnGit',
-      gitBadgeId: 'mockupsGitBadge',
-    });
-    this._git.mount();
-
     if (this._screenTitle) {
       const needle = this._screenTitle.toLowerCase();
       const match  = this._screens.find(s => s.title.toLowerCase() === needle)
@@ -1595,12 +1587,6 @@ export class MockupsPage {
     this._bindShellEvents();
     await this._picker.reload();
 
-    if (this._project?.project_path) {
-      this._setHeaderFolderPath(this._project.project_path);
-      this._git.refreshStatus();
-      this._git.startPoll();
-    }
-
     if (this._activeId) this._selectScreen(this._activeId);
     else                this._showEmptyState();
   }
@@ -1609,7 +1595,6 @@ export class MockupsPage {
     removeCss('pages/mockups/mockups-page.css');
     removeCss('styles/screens.css');
     this._picker?.unmount();
-    this._git?.stopPoll();
     window.app.chat.offAll();
     window.app.chat.cancel();
     window.app.validate.offAll();
@@ -1664,15 +1649,12 @@ export class MockupsPage {
             <div class="mockups-page__title">${escHtml(name)}</div>
             <div class="mockups-page__subtitle">Project Mockups</div>
           </div>
-          <div class="project-page__folder-display" id="headerFolderDisplay" title="Select folder">
-            <div class="project-page__folder-pill">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              </svg>
-              <span class="project-page__folder-text" id="headerFolderText">Select folder</span>
-            </div>
-          </div>
+          <button class="project-page__git-btn" id="mockupsQueueBtn" title="Generation queue" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="project-page__git-badge" id="mockupsQueueBadge" hidden></span>
+          </button>
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <div id="mockupsModelPicker"></div>
             <button class="project-page__model-cfg-btn" id="mockupsBtnModelConfigs" title="Configure AI models">
@@ -1683,16 +1665,6 @@ export class MockupsPage {
               </svg>
             </button>
           </div>
-          <button class="project-page__git-btn" id="mockupsBtnGit" title="Git changes" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <span class="project-page__git-badge" id="mockupsGitBadge" hidden></span>
-          </button>
           <button class="mockups-page__style-btn scr-btn scr-btn--sm${this._hasAnyTemplate() ? ' scr-btn--ds-active' : ''}" id="scrStyleGuideBtn" title="Open Project Style Guide page">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
@@ -1774,42 +1746,13 @@ export class MockupsPage {
         btn.title = queued ? 'Remove from queue' : 'Add to queue';
         btn.textContent = queued ? 'Queued' : 'Queue';
         btn.classList.toggle('scr-sidebar__queue-btn--active', !!queued);
-        // Refresh badges and re-render any open queue panel
-        const all = await window.db.screenDesigns.list(this._projectId);
-        const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
-
-        const viewerBadge = this.container.querySelector('#scrQueueCount');
-        if (viewerBadge) {
-          viewerBadge.textContent = remaining;
-          this.container.querySelector('#scrQueueBtn')
-            ?.classList.toggle('scr-queue-btn--has-items', remaining > 0);
-        }
-        const descBadge = this.container.querySelector('#scrDescQueueCount');
-        if (descBadge) {
-          descBadge.textContent = remaining;
-          this.container.querySelector('#scrDescQueueBtn')
-            ?.classList.toggle('scr-queue-btn--has-items', remaining > 0);
-        }
-
-        // Re-render whichever queue panel is currently open
-        const viewerPanel = this.container.querySelector('#scrQueuePanel');
-        if (viewerPanel && !viewerPanel.hidden) this._renderQueuePanel(viewerPanel);
-        const descPanel = this.container.querySelector('#scrDescQueuePanel');
-        if (descPanel && !descPanel.hidden) this._renderQueuePanel(descPanel);
+        this._refreshHeaderQueueBadge();
       });
     });
   }
 
   async _reloadModelDropdown() {
     if (this._picker) await this._picker.reload();
-  }
-
-  _setHeaderFolderPath(folderPath) {
-    const text    = this.container.querySelector('#headerFolderText');
-    const display = this.container.querySelector('#headerFolderDisplay');
-    if (!text || !display) return;
-    text.textContent = folderPath;
-    display.classList.add('project-page__folder-display--active');
   }
 
   _bindShellEvents() {
@@ -1828,22 +1771,25 @@ export class MockupsPage {
       .addEventListener('click', () => this.router.navigate('settings', { from: 'mockups', fromParams: { projectId: this._projectId } }));
 
 
-    this.container.querySelector('#headerFolderDisplay')
-      .addEventListener('click', async () => {
-        const folderPath = await window.db.dialog.openFolder();
-        if (!folderPath) return;
-        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
-        if (this._project) this._project.project_path = folderPath;
-        this._setHeaderFolderPath(folderPath);
-        this._git.refreshStatus();
-        this._git.startPoll();
-      });
 
-    this.container.querySelector('#mockupsBtnGit')
-      .addEventListener('click', () =>
-        this.router.navigate('git-changes', { projectId: this._projectId, from: 'mockups' }));
+    this.container.querySelector('#mockupsQueueBtn')
+      .addEventListener('click', () => window.app.openQueueWindow(this._projectId));
 
+    this._refreshHeaderQueueBadge();
     this._bindSidebarItems();
+  }
+
+  async _refreshHeaderQueueBadge() {
+    const badge = this.container.querySelector('#mockupsQueueBadge');
+    if (!badge) return;
+    const all = await window.db.screenDesigns.list(this._projectId);
+    const count = all.filter(s => s.queued && s.is_active !== 0).length;
+    if (count > 0) {
+      badge.textContent = count > 99 ? '99+' : count;
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
   }
 
   _updateMockupBtns() {
@@ -2109,12 +2055,12 @@ export class MockupsPage {
     const dlg = document.createElement('div');
     dlg.className = 'scr-overlay';
     dlg.innerHTML = `
-      <div class="scr-ns-dialog" style="width:520px;max-width:95vw;">
+      <div class="scr-ns-dialog" style="width:80vw;max-width:80vw;height:80vh;display:flex;flex-direction:column;">
         <div class="scr-ns-dialog__header">
           <span class="scr-ns-dialog__title">New Screen</span>
           <button class="scr-dialog__close" id="scrNsClose">&times;</button>
         </div>
-        <div class="scr-ns-dialog__body" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="scr-ns-dialog__body" style="display:flex;flex-direction:column;gap:14px;flex:1;overflow-y:auto;">
           <div class="scr-form__row">
             <label class="scr-form__label">Title *</label>
             <input class="scr-form__input" id="scrNsTitle" type="text"
@@ -2498,21 +2444,26 @@ export class MockupsPage {
     const dlg = document.createElement('div');
     dlg.className = 'scr-overlay';
     dlg.innerHTML = `
-      <div class="scr-ns-dialog scr-ns-dialog--compact">
+      <div class="scr-ns-dialog" style="width:80vw;max-width:80vw;height:80vh;display:flex;flex-direction:column;">
         <div class="scr-ns-dialog__header">
           <span class="scr-ns-dialog__title">Edit Screen</span>
           <button class="scr-dialog__close" id="scrEditClose">&times;</button>
         </div>
-        <div class="scr-ns-dialog__body">
+        <div class="scr-ns-dialog__body" style="display:flex;flex-direction:column;gap:14px;flex:1;overflow-y:auto;">
           <div class="scr-form__row">
             <label class="scr-form__label">Title *</label>
             <input class="scr-form__input" id="scrEditTitle" type="text"
               value="${escHtml(screen.title)}" autocomplete="off"/>
           </div>
+          <div class="scr-form__row scr-form__row--grow">
+            <label class="scr-form__label">Description <span style="font-weight:400;opacity:.6">(used as AI prompt)</span></label>
+            <textarea class="scr-form__textarea" id="scrEditDesc" rows="10"
+              placeholder="Describe the screen sections, layout, components, and style…" style="resize:vertical;min-height:160px;">${escHtml(screen.description || '')}</textarea>
+          </div>
         </div>
         <div class="scr-ns-dialog__footer">
           <button class="scr-btn scr-btn--secondary" id="scrEditCancel">Cancel</button>
-          <button class="scr-btn scr-btn--primary" id="scrEditSave" title="Save (Enter)">Save</button>
+          <button class="scr-btn scr-btn--primary" id="scrEditSave" title="Save (Ctrl+Enter)">Save</button>
         </div>
       </div>
     `;
@@ -2527,9 +2478,11 @@ export class MockupsPage {
     const doSave = async () => {
       const title = dlg.querySelector('#scrEditTitle').value.trim();
       if (!title) { dlg.querySelector('#scrEditTitle').focus(); return false; }
+      const description = dlg.querySelector('#scrEditDesc').value.trim();
 
-      await window.db.screenDesigns.update({ id: screen.id, title });
-      screen.title = title;
+      await window.db.screenDesigns.update({ id: screen.id, title, description });
+      screen.title       = title;
+      screen.description = description;
 
       const titleEl = this.container.querySelector('.scr-viewer__title');
       if (titleEl) titleEl.textContent = title;
@@ -2544,7 +2497,7 @@ export class MockupsPage {
     });
 
     dlg.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && e.ctrlKey) {
         e.preventDefault();
         if (await doSave()) close();
       }
@@ -2741,18 +2694,7 @@ export class MockupsPage {
     const stopBtn  = panel.querySelector('#scrQueueStopBtn');
     const clearBtn = panel.querySelector('#scrQueueClearBtn');
 
-    const refreshBadges = async () => {
-      const all = await window.db.screenDesigns.list(this._projectId);
-      const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
-      const badge = this.container.querySelector('#scrQueueCount');
-      if (badge) badge.textContent = remaining;
-      const qBtn = this.container.querySelector('#scrQueueBtn');
-      if (qBtn) qBtn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
-      const descBadge = this.container.querySelector('#scrDescQueueCount');
-      if (descBadge) descBadge.textContent = remaining;
-      const descQBtn = this.container.querySelector('#scrDescQueueBtn');
-      if (descQBtn) descQBtn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
-    };
+    const refreshBadges = () => this._refreshHeaderQueueBadge();
 
     runBtn.addEventListener('click', () => {
       runBtn.hidden  = true;
@@ -3021,11 +2963,8 @@ export class MockupsPage {
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               </svg>
+              Edit
             </button>
-          </div>
-          <div class="scr-preview-tabs">
-            <button class="scr-preview-tab" id="scrTabEdit">Edit</button>
-            <button class="scr-preview-tab scr-preview-tab--active" id="scrTabPreview">Preview</button>
           </div>
           <div class="scr-viewer__actions">
             ${screen.html_content && this._hasAnyTemplate() ? `
@@ -3037,13 +2976,6 @@ export class MockupsPage {
               Validate
             </button>
             ` : ''}
-            <button class="scr-btn scr-btn--sm scr-btn--secondary scr-queue-btn" id="scrQueueBtn" title="Generation queue">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              Queue
-              <span class="scr-queue-btn__badge" id="scrQueueCount">…</span>
-            </button>
             <div class="scr-actions-menu" id="scrActionsMenu">
               <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrActionsMenuTrigger" title="Actions">
                 Actions
@@ -3109,7 +3041,6 @@ export class MockupsPage {
             </button>
           </div>
         </div>
-        <div class="scr-viewer__queue-panel" id="scrQueuePanel" hidden></div>
         <div class="scr-validation-bar" id="scrValidationBar">${this._renderValidationBar(screen)}</div>
 
         <div class="scr-viewer__split" id="scrSplit">
@@ -3345,34 +3276,14 @@ export class MockupsPage {
     main.querySelector('#scrValidateBtn')?.addEventListener('click', () => this._runValidation(screen));
     this._bindValidationBarEvents(screen);
 
-    const tabEdit        = main.querySelector('#scrTabEdit');
-    const tabPreview     = main.querySelector('#scrTabPreview');
     const split          = main.querySelector('#scrSplit');
     const editPanel      = main.querySelector('#scrEditPanel');
-    const queuePanel     = main.querySelector('#scrQueuePanel');
-    const queueBtn       = main.querySelector('#scrQueueBtn');
-    const queueCountEl   = main.querySelector('#scrQueueCount');
 
-    // Load and display queue count
-    const refreshQueueCount = async () => {
-      const all = await window.db.screenDesigns.list(this._projectId);
-      const remaining = all.filter(s => s.queued && s.is_active !== 0).length;
-      if (queueCountEl) queueCountEl.textContent = remaining;
-      if (queueBtn) queueBtn.classList.toggle('scr-queue-btn--has-items', remaining > 0);
-    };
-    refreshQueueCount();
+    // Always show preview/chat split; hide legacy edit panel
+    split.hidden     = false;
+    editPanel.hidden = true;
 
-    const switchTab = (active) => {
-      [tabEdit, tabPreview].forEach(t => t.classList.toggle('scr-preview-tab--active', t === active));
-      split.hidden     = active !== tabPreview;
-      editPanel.hidden = active !== tabEdit;
-    };
-
-    tabEdit.addEventListener('click', () => switchTab(tabEdit));
-    tabPreview.addEventListener('click', () => switchTab(tabPreview));
-
-    // Default to Edit tab when no HTML yet, otherwise Preview
-    switchTab(screen.html_content ? tabPreview : tabEdit);
+    this._refreshHeaderQueueBadge();
 
     // Edit panel — description textarea + save
     const viewerDescTextarea = main.querySelector('#scrViewerDescTextarea');
@@ -3428,10 +3339,6 @@ export class MockupsPage {
       }
     };
     document.addEventListener('keydown', this._ctrlSHandler);
-
-    queueBtn.addEventListener('click', () => {
-      window.app.openQueueWindow(this._projectId);
-    });
 
     main.querySelector('#scrRefreshBtn').addEventListener('click', async () => {
       const title       = screen.title;

@@ -265,6 +265,10 @@ contextBridge.exposeInMainWorld('app', {
   queueWindow: {
     onInit: (cb) => ipcRenderer.on('queue:init', (_e, p) => cb(p)),
   },
+  openTaskQueueWindow: (projectId) => ipcRenderer.invoke('app:openTaskQueueWindow', projectId),
+  taskQueueWindow: {
+    onInit: (cb) => ipcRenderer.on('taskQueue:init', (_e, p) => cb(p)),
+  },
   // Separate AI channel for the detached workflow runner window.
   workflowChat: {
     generate: (data) => ipcRenderer.invoke('workflowChat:generate', data),
@@ -280,6 +284,36 @@ contextBridge.exposeInMainWorld('app', {
   workflowWindow: {
     onInit: (cb) => ipcRenderer.on('workflow:init', (_e, p) => cb(p)),
   },
+  // Separate AI channel for the generate-workflows window.
+  genWorkflowChat: {
+    generate: (data) => ipcRenderer.invoke('genWorkflowChat:generate', data),
+    cancel:   ()     => ipcRenderer.invoke('genWorkflowChat:cancel'),
+    onToken:  (cb)   => ipcRenderer.on('genWorkflowChat:token', (_e, p) => cb(p)),
+    onDone:   (cb)   => ipcRenderer.on('genWorkflowChat:done',  (_e, p) => cb(p)),
+    offAll:   ()     => {
+      ipcRenderer.removeAllListeners('genWorkflowChat:token');
+      ipcRenderer.removeAllListeners('genWorkflowChat:done');
+    },
+  },
+  openGenerateWorkflowsWindow: (data) => ipcRenderer.invoke('app:openGenerateWorkflowsWindow', data),
+  genWorkflowsWindow: {
+    onInit: (cb) => ipcRenderer.on('genWorkflows:init', (_e, p) => cb(p)),
+  },
+  // Separate AI channel for the test generation window.
+  testGenChat: {
+    generate: (data) => ipcRenderer.invoke('testGenChat:generate', data),
+    cancel:   ()     => ipcRenderer.invoke('testGenChat:cancel'),
+    onToken:  (cb)   => ipcRenderer.on('testGenChat:token', (_e, p) => cb(p)),
+    onDone:   (cb)   => ipcRenderer.on('testGenChat:done',  (_e, p) => cb(p)),
+    offAll:   ()     => {
+      ipcRenderer.removeAllListeners('testGenChat:token');
+      ipcRenderer.removeAllListeners('testGenChat:done');
+    },
+  },
+  openTestGenerationWindow: (data) => ipcRenderer.invoke('app:openTestGenerationWindow', data),
+  testGenerationWindow: {
+    onInit: (cb) => ipcRenderer.on('testGen:init', (_e, p) => cb(p)),
+  },
 });
 
 
@@ -294,4 +328,5 @@ contextBridge.exposeInMainWorld('shell', {
   statFile:   (filepath)          => invoke('shell:statFile', filepath),
   openVSCode:     (folderPath) => invoke('shell:openVSCode', folderPath),
   openPowerShell: (folderPath) => invoke('shell:openPowerShell', folderPath),
+  listFiles:      (dirPath, extensions) => invoke('shell:listFiles', { dirPath, extensions }),
 });

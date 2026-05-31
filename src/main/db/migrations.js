@@ -126,7 +126,8 @@ function runMigrations(db) {
     }
   }
 
-  // Add issues table for existing databases
+  // Add issues table for existing databases, or recreate it if it still has
+  // stale FK columns (feature_id / user_story_id) referencing dropped tables.
   const issuesCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='issues'").get();
   if (!issuesCheck) {
     db.exec(`
@@ -146,6 +147,34 @@ function runMigrations(db) {
         updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
       )
     `);
+  } else {
+    const issuesCols = db.prepare('PRAGMA table_info(issues)').all().map(c => c.name);
+    if (issuesCols.includes('feature_id') || issuesCols.includes('user_story_id')) {
+      db.exec(`
+        PRAGMA foreign_keys = OFF;
+        ALTER TABLE issues RENAME TO issues_old;
+        CREATE TABLE issues (
+          id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id          INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          layer_id            INTEGER REFERENCES project_layers(id) ON DELETE SET NULL,
+          title               TEXT    NOT NULL,
+          description         TEXT,
+          steps_to_reproduce  TEXT,
+          expected_behavior   TEXT,
+          actual_behavior     TEXT,
+          severity            TEXT    NOT NULL DEFAULT 'medium',
+          status              TEXT    NOT NULL DEFAULT 'open',
+          is_active           INTEGER NOT NULL DEFAULT 1,
+          created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+          updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO issues (id, project_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active, created_at, updated_at)
+          SELECT id, project_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active, created_at, updated_at
+          FROM issues_old;
+        DROP TABLE issues_old;
+        PRAGMA foreign_keys = ON;
+      `);
+    }
   }
 
   // Add test_run_history table for existing databases
@@ -265,7 +294,39 @@ function runMigrations(db) {
     db.exec('ALTER TABLE model_configs ADD COLUMN use_devflow_agent INTEGER NOT NULL DEFAULT 0');
   }
 
-  // Add commit_sha to prompt_queue for git commit linkage
+  // Recreate prompt_queue if it still has stale FKs to dropped tables (prompts, user_stories)
+  const pqSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='prompt_queue'").get()?.sql ?? '';
+  if (pqSql.includes('REFERENCES prompts') || pqSql.includes('REFERENCES user_stories')) {
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+      ALTER TABLE prompt_queue RENAME TO prompt_queue_old;
+      CREATE TABLE prompt_queue (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id    INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_story_id INTEGER,
+        story_title   TEXT,
+        prompt_id     INTEGER,
+        tag           TEXT,
+        prompt_text   TEXT    NOT NULL,
+        status        TEXT    NOT NULL DEFAULT 'pending',
+        output        TEXT,
+        exit_code     INTEGER,
+        model_label   TEXT,
+        commit_sha    TEXT,
+        sort_order    INTEGER NOT NULL DEFAULT 0,
+        layer_id      INTEGER REFERENCES project_layers(id) ON DELETE SET NULL,
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        ran_at        TEXT
+      );
+      INSERT INTO prompt_queue (id, project_id, user_story_id, story_title, prompt_id, tag, prompt_text, status, output, exit_code, model_label, sort_order, created_at, ran_at)
+        SELECT id, project_id, user_story_id, story_title, prompt_id, tag, prompt_text, status, output, exit_code, model_label, sort_order, created_at, ran_at
+        FROM prompt_queue_old;
+      DROP TABLE prompt_queue_old;
+      PRAGMA foreign_keys = ON;
+    `);
+  }
+
+  // Add commit_sha / layer_id to prompt_queue for existing databases
   const pqCols = db.prepare('PRAGMA table_info(prompt_queue)').all().map(c => c.name);
   if (!pqCols.includes('commit_sha')) {
     db.exec('ALTER TABLE prompt_queue ADD COLUMN commit_sha TEXT');
@@ -326,6 +387,18 @@ function runMigrations(db) {
         updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
       );
     `);
+  }
+
+  // Add project_layer_id to layers for existing databases
+  const layerCols = db.prepare("PRAGMA table_info(layers)").all().map(c => c.name);
+  if (!layerCols.includes('project_layer_id')) {
+    db.exec('ALTER TABLE layers ADD COLUMN project_layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL');
+  }
+
+  // Add screen_design_id to workflows for existing databases
+  const wfCols = db.prepare("PRAGMA table_info(workflows)").all().map(c => c.name);
+  if (!wfCols.includes('screen_design_id')) {
+    db.exec('ALTER TABLE workflows ADD COLUMN screen_design_id INTEGER REFERENCES screen_designs(id) ON DELETE SET NULL');
   }
 
   // Remove obsolete templates; 'Solution Architecture' is seeded separately via seedDocumentTemplates

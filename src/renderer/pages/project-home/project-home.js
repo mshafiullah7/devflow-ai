@@ -16,14 +16,13 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, workflows, documents, mockups, issueCount, testRunHistory, queuePending, layers] = await Promise.all([
+    const [project, workflows, documents, mockups, issueCount, testRunHistory, layers] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.workflows.list(this.projectId),
       window.db.documents.list(this.projectId),
       window.db.screenDesigns.list(this.projectId),
       window.db.issues.count(this.projectId),
       window.db.testRunHistory.list(this.projectId),
-      window.db.promptQueue.pendingCount(this.projectId),
       window.db.projectLayers.list(this.projectId),
     ]);
 
@@ -33,7 +32,6 @@ export class ProjectHomePage {
     this._mockups          = mockups;
     this._issueCount       = issueCount;
     this._testRunHistory   = testRunHistory;
-    this._queuePending     = queuePending ?? 0;
     this._layers           = layers ?? [];
 
     this.container.innerHTML = this._template();
@@ -214,19 +212,6 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count">${documents.length}</span>
             </button>
 
-            <button class="ph-nav-item" id="navWorkflows">
-              <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="7" height="7" rx="1"/>
-                  <rect x="14" y="3" width="7" height="7" rx="1"/>
-                  <rect x="3" y="14" width="7" height="7" rx="1"/>
-                  <rect x="14" y="14" width="7" height="7" rx="1"/>
-                </svg>
-              </span>
-              <span class="ph-nav-item__label">Workflows</span>
-              <span class="ph-nav-item__count">${this._workflows.length}</span>
-            </button>
-
             <button class="ph-nav-item" id="navLayers">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -250,41 +235,29 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count">${mockups.length}</span>
             </button>
 
-
-            <div class="ph-sidebar-section">Tools</div>
-            <button class="ph-nav-item" id="navPromptQueue">
+            <button class="ph-nav-item" id="navWorkflows">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M3 6h13M3 12h10M3 18h7M18 9v9M15 15l3 3 3-3"/>
+                  <rect x="3" y="3" width="7" height="7" rx="1"/>
+                  <rect x="14" y="3" width="7" height="7" rx="1"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1"/>
+                  <rect x="14" y="14" width="7" height="7" rx="1"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Tasks Queue</span>
-              ${this._queuePending > 0 ? `<span class="ph-nav-item__count">${this._queuePending}</span>` : ''}
+              <span class="ph-nav-item__label">Workflows</span>
+              <span class="ph-nav-item__count">${this._workflows.length}</span>
             </button>
 
-            <button class="ph-nav-item" id="navGitChanges">
-              <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                  <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <span class="ph-nav-item__label">Git Changes</span>
-            </button>
-
-            <button class="ph-nav-item" id="navAiConsole">
-              <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              </span>
-              <span class="ph-nav-item__label">AI Chat</span>
-            </button>
 
             <div class="ph-sidebar-section">Quality</div>
+            <button class="ph-nav-item" id="navTestGenerator">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 3h6M9 3v9l-4 6h14l-4-6V3"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Test Generator</span>
+            </button>
             <button class="ph-nav-item" id="navTestRunner">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -307,25 +280,27 @@ export class ProjectHomePage {
               <span class="ph-nav-item__count ${issueTotal > 0 ? 'ph-nav-item__count--danger' : ''}">${issueTotal}</span>
             </button>
 
-            <div class="ph-sidebar-section">Workspace</div>
-            <button class="ph-nav-item" id="navOpenVSCode" ${!this._project?.project_path ? 'disabled title="Select a folder first"' : `title="${escHtml(this._project.project_path)}"`}>
+            <div class="ph-sidebar-section">Tools</div>
+            <button class="ph-nav-item" id="navGitChanges">
               <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M16 3l5 5-11 11H5v-5L16 3z"/>
-                  <path d="M14 5l5 5"/>
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                  <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Open VS Code</span>
+              <span class="ph-nav-item__label">Git Changes</span>
             </button>
 
-            <button class="ph-nav-item" id="navOpenPowerShell" ${!this._project?.project_path ? 'disabled title="Select a folder first"' : `title="${escHtml(this._project.project_path)}"`}>
+            <button class="ph-nav-item" id="navAiConsole">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="4 17 10 11 4 5"/>
-                  <line x1="12" y1="19" x2="20" y2="19"/>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Open Terminal</span>
+              <span class="ph-nav-item__label">AI Chat</span>
             </button>
 
             <div class="ph-sidebar-section">System</div>
@@ -383,17 +358,6 @@ export class ProjectHomePage {
     text.textContent = folderPath;
     display.classList.add('project-page__folder-display--active');
 
-    const vsCodeBtn = this.container.querySelector('#navOpenVSCode');
-    if (vsCodeBtn) {
-      vsCodeBtn.disabled = false;
-      vsCodeBtn.title = folderPath;
-    }
-
-    const psBtn = this.container.querySelector('#navOpenPowerShell');
-    if (psBtn) {
-      psBtn.disabled = false;
-      psBtn.title = folderPath;
-    }
   }
 
   // ----------------------------------------------------------------
@@ -436,32 +400,20 @@ export class ProjectHomePage {
       .addEventListener('click', () => this.router.navigate('documents', { projectId: this.projectId }));
 
 
+    this.container.querySelector('#navTestGenerator')
+      .addEventListener('click', () => this.router.navigate('test-generator', { projectId: this.projectId }));
+
     this.container.querySelector('#navTestRunner')
       .addEventListener('click', () => this.router.navigate('test-runner', { projectId: this.projectId }));
 
     this.container.querySelector('#navIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
 
-    this.container.querySelector('#navPromptQueue')
-      .addEventListener('click', () => this.router.navigate('prompt-queue', { projectId: this.projectId, from: 'project-home' }));
-
     this.container.querySelector('#navAiConsole')
       .addEventListener('click', () => this.router.navigate('ai-console', { projectId: this.projectId }));
 
     this.container.querySelector('#navGitChanges')
       .addEventListener('click', () => this.router.navigate('git-changes', { projectId: this.projectId, from: 'project-home' }));
-
-    this.container.querySelector('#navOpenVSCode')
-      .addEventListener('click', () => {
-        const path = this._project?.project_path;
-        if (path) window.shell.openVSCode(path);
-      });
-
-    this.container.querySelector('#navOpenPowerShell')
-      .addEventListener('click', () => {
-        const path = this._project?.project_path;
-        if (path) window.shell.openPowerShell(path);
-      });
 
     this.container.querySelector('#navSettings')
       .addEventListener('click', () => this.router.navigate('settings', { from: 'project-home', fromParams: { projectId: this.projectId } }));

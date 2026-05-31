@@ -72,4 +72,8 @@ router.register('workflows', async () => {
   const { WorkflowsPage } = await import('./pages/workflows/workflows-page.js');
   return WorkflowsPage;
 });
+router.register('test-generator', async () => {
+  const { TestGeneratorPage } = await import('./pages/test-generator/test-generator-page.js');
+  return TestGeneratorPage;
+});
 router.navigate('launcher');

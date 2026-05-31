@@ -95,27 +95,33 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM workflows WHERE id = ?').get(id);
   });
 
-  safeHandle('db:workflows:create', (_e, { project_id, workflow_id, feature, description }) => {
+  safeHandle('db:workflows:create', (_e, { project_id, workflow_id, feature, description, screen_design_id }) => {
     const wfId = workflow_id || require('crypto').randomUUID();
     const result = db.prepare(
-      'INSERT INTO workflows (project_id, workflow_id, feature, description) VALUES (?, ?, ?, ?)'
-    ).run(project_id, wfId, feature, description ?? null);
+      'INSERT INTO workflows (project_id, workflow_id, feature, description, screen_design_id) VALUES (?, ?, ?, ?, ?)'
+    ).run(project_id, wfId, feature, description ?? null, screen_design_id ?? null);
     return db.prepare('SELECT * FROM workflows WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:workflows:update', (_e, { id, workflow_id, feature, description, is_active }) => {
+  safeHandle('db:workflows:update', (_e, args) => {
+    const { id, workflow_id, feature, description, is_active } = args;
+    // screen_design_id uses a flag so null can explicitly clear the link
+    const hasPage = Object.prototype.hasOwnProperty.call(args, 'screen_design_id');
+    const pageFlag = hasPage ? 1 : null;
     db.prepare(
       `UPDATE workflows
-          SET workflow_id = CASE WHEN ? IS NOT NULL THEN ? ELSE workflow_id END,
-              feature     = CASE WHEN ? IS NOT NULL THEN ? ELSE feature END,
-              description = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
-              is_active   = CASE WHEN ? IS NOT NULL THEN ? ELSE is_active END,
-              updated_at  = datetime('now')
+          SET workflow_id      = CASE WHEN ? IS NOT NULL THEN ? ELSE workflow_id END,
+              feature          = CASE WHEN ? IS NOT NULL THEN ? ELSE feature END,
+              description      = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
+              screen_design_id = CASE WHEN ? IS NOT NULL THEN ? ELSE screen_design_id END,
+              is_active        = CASE WHEN ? IS NOT NULL THEN ? ELSE is_active END,
+              updated_at       = datetime('now')
         WHERE id = ?`
     ).run(
       workflow_id ?? null, workflow_id ?? null,
       feature     ?? null, feature     ?? null,
       description ?? null, description ?? null,
+      pageFlag, args.screen_design_id ?? null,
       is_active   ?? null, is_active   ?? null,
       id
     );
@@ -168,23 +174,28 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
   });
 
-  safeHandle('db:layers:create', (_e, { workflow_id, layer, order_num, purpose, inputs, outputs, prompt }) => {
+  safeHandle('db:layers:create', (_e, { workflow_id, layer, order_num, purpose, inputs, outputs, prompt, project_layer_id }) => {
     const result = db.prepare(
-      'INSERT INTO layers (workflow_id, layer, order_num, purpose, inputs, outputs, prompt) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO layers (workflow_id, project_layer_id, layer, order_num, purpose, inputs, outputs, prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(
-      workflow_id, layer, order_num ?? 1,
+      workflow_id, project_layer_id ?? null,
+      layer, order_num ?? 1,
       purpose ?? null,
-      inputs  ? JSON.stringify(inputs)  : null,
-      outputs ? JSON.stringify(outputs) : null,
+      inputs  != null ? JSON.stringify(Array.isArray(inputs)  ? inputs  : [inputs])  : null,
+      outputs != null ? JSON.stringify(Array.isArray(outputs) ? outputs : [outputs]) : null,
       prompt  ?? null
     );
     return db.prepare('SELECT * FROM layers WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:layers:update', (_e, { id, layer, order_num, purpose, inputs, outputs, prompt, is_active }) => {
+  safeHandle('db:layers:update', (_e, args) => {
+    const { id, layer, order_num, purpose, inputs, outputs, prompt, is_active } = args;
+    const hasProjectLayer = Object.prototype.hasOwnProperty.call(args, 'project_layer_id');
+    const plFlag = hasProjectLayer ? 1 : null;
     db.prepare(
       `UPDATE layers
-          SET layer     = CASE WHEN ? IS NOT NULL THEN ? ELSE layer END,
+          SET project_layer_id = CASE WHEN ? IS NOT NULL THEN ? ELSE project_layer_id END,
+              layer     = CASE WHEN ? IS NOT NULL THEN ? ELSE layer END,
               order_num = CASE WHEN ? IS NOT NULL THEN ? ELSE order_num END,
               purpose   = CASE WHEN ? IS NOT NULL THEN ? ELSE purpose END,
               inputs    = CASE WHEN ? IS NOT NULL THEN ? ELSE inputs END,
@@ -194,11 +205,14 @@ function registerDbHandlers() {
               updated_at = datetime('now')
         WHERE id = ?`
     ).run(
+      plFlag, args.project_layer_id ?? null,
       layer     ?? null, layer     ?? null,
       order_num ?? null, order_num ?? null,
       purpose   ?? null, purpose   ?? null,
-      inputs  != null ? JSON.stringify(inputs)  : null, inputs  != null ? JSON.stringify(inputs)  : null,
-      outputs != null ? JSON.stringify(outputs) : null, outputs != null ? JSON.stringify(outputs) : null,
+      inputs  != null ? JSON.stringify(Array.isArray(inputs)  ? inputs  : [inputs])  : null,
+      inputs  != null ? JSON.stringify(Array.isArray(inputs)  ? inputs  : [inputs])  : null,
+      outputs != null ? JSON.stringify(Array.isArray(outputs) ? outputs : [outputs]) : null,
+      outputs != null ? JSON.stringify(Array.isArray(outputs) ? outputs : [outputs]) : null,
       prompt    ?? null, prompt    ?? null,
       is_active ?? null, is_active ?? null,
       id
@@ -733,6 +747,34 @@ function registerDbHandlers() {
       fs.writeFileSync(filepath, content, 'utf8');
       return true;
     } catch { return false; }
+  });
+
+  safeHandle('shell:listFiles', (_e, { dirPath, extensions }) => {
+    try {
+      const SKIP_DIRS = new Set([
+        'node_modules', '.git', 'dist', 'build', 'out', '.dart_tool',
+        '__pycache__', '.next', 'coverage', '.nuxt', '.angular', 'bin', 'obj',
+      ]);
+      const results = [];
+      const walk = (dir, depth) => {
+        if (depth > 6) return;
+        let entries;
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          if (e.isDirectory()) {
+            if (!SKIP_DIRS.has(e.name)) walk(path.join(dir, e.name), depth + 1);
+          } else if (e.isFile()) {
+            const ext = path.extname(e.name).toLowerCase();
+            if (extensions.includes(ext)) {
+              results.push(path.relative(dirPath, path.join(dir, e.name)).replace(/\\/g, '/'));
+            }
+          }
+        }
+      };
+      walk(dirPath, 0);
+      results.sort();
+      return results;
+    } catch { return null; }
   });
 
   // ----------------------------------------------------------------

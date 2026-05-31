@@ -19,6 +19,7 @@ export class WorkflowsPage {
     this._addingCrit    = false;
     this._editingCritId = null;
     this._editingWf     = false;  // workflow header edit mode
+    this._viewingId     = null;   // layer id being viewed (null = none)
     this._runMode       = null;   // null | 'drawer' | 'panel'
     this._runLayerId    = null;
     this._running       = false;
@@ -40,11 +41,15 @@ export class WorkflowsPage {
     injectCss('pages/workflows/workflows-page.css');
     applyStoredTheme();
 
-    const [project, _mapping] = await Promise.all([
+    const [project, _mapping, pages, projectLayers] = await Promise.all([
       window.db.projects.get(this._projectId),
       window.db.modelMapping.get('workflows'),
+      window.db.screenDesigns.list(this._projectId),
+      window.db.projectLayers.list(this._projectId),
     ]);
-    this._project = project;
+    this._project       = project;
+    this._pages         = pages || [];
+    this._projectLayers = projectLayers || [];
 
     this.container.innerHTML = this._template();
 
@@ -88,6 +93,7 @@ export class WorkflowsPage {
     this._activeTab  = 'layers';
     this._addingWorkflow = false;
     this._editingId  = null;
+    this._viewingId  = null;
     this._addingLayer = false;
     this._addingCrit  = false;
     this._editingCritId = null;
@@ -129,6 +135,13 @@ export class WorkflowsPage {
             <p class="project-page__desc">Workflows</p>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
+            <button class="gw-open-btn" id="wfBtnGenerate" title="Generate workflows with AI">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+              </svg>
+              Generate
+            </button>
             <div class="project-page__model-group">
               <div id="wfModelPicker"></div>
               <button class="project-page__model-cfg-btn" id="wfBtnModelConfigs" title="Configure AI models">
@@ -192,7 +205,7 @@ export class WorkflowsPage {
       return;
     }
 
-    el.innerHTML = this._workflows.map(w => `
+    const itemHtml = w => `
       <div class="eus-src-item${w.id === this._activeId ? ' eus-src-item--active' : ''}"
            data-wf="${w.id}">
         <div class="eus-src-item__info pl-list-info">
@@ -213,7 +226,38 @@ export class WorkflowsPage {
             </svg>
           </button>
         </div>
-      </div>`).join('');
+      </div>`;
+
+    // Split into paged (linked to a screen design) and ungrouped
+    const grouped = new Map(); // screen_design_id → [workflow, ...]
+    const ungrouped = [];
+    for (const w of this._workflows) {
+      if (w.screen_design_id) {
+        if (!grouped.has(w.screen_design_id)) grouped.set(w.screen_design_id, []);
+        grouped.get(w.screen_design_id).push(w);
+      } else {
+        ungrouped.push(w);
+      }
+    }
+
+    const parts = [];
+    for (const [pageId, workflows] of grouped) {
+      const page = (this._pages || []).find(p => p.id === pageId);
+      const pageTitle = page?.title || 'Page';
+      parts.push(`
+        <div class="wf-group-header">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+          </svg>
+          <span>${escHtml(pageTitle)}</span>
+        </div>
+        <div class="wf-group-items">${workflows.map(itemHtml).join('')}</div>`);
+    }
+    for (const w of ungrouped) {
+      parts.push(itemHtml(w));
+    }
+
+    el.innerHTML = parts.join('');
 
     el.querySelectorAll('[data-wf]').forEach(item => {
       item.addEventListener('click', () => this._selectWorkflow(+item.dataset.wf));
@@ -312,6 +356,9 @@ export class WorkflowsPage {
   }
 
   _wfEditFormHtml(wf) {
+    const pagesOptions = this._pages.map(p =>
+      `<option value="${p.id}" ${wf.screen_design_id === p.id ? 'selected' : ''}>${escHtml(p.title || 'Untitled')}</option>`
+    ).join('');
     return `
       <div class="wf-edit-form" id="wfEditForm">
         <div class="wf-field">
@@ -322,6 +369,14 @@ export class WorkflowsPage {
           <label class="wf-label">Description</label>
           <textarea class="wf-textarea" id="wfEDesc" rows="2">${escHtml(wf.description || '')}</textarea>
         </div>
+        ${this._pages.length ? `
+        <div class="wf-field">
+          <label class="wf-label">Page <span class="wf-label-optional">(optional)</span></label>
+          <select class="wf-input wf-select" id="wfEPage">
+            <option value="">— None —</option>
+            ${pagesOptions}
+          </select>
+        </div>` : ''}
         <div class="wf-form-actions">
           <button class="wf-btn-cancel" id="wfBtnCancelEditWf">Cancel</button>
           <button class="wf-btn-save" id="wfBtnSaveWf">Save</button>
@@ -359,23 +414,25 @@ export class WorkflowsPage {
     if (!this._layers.length && !this._addingLayer) {
       return '<div class="project-related__empty" style="padding:24px 0">No layers yet — click + to add one</div>';
     }
-    return this._layers.map(l => this._editingId === l.id
-      ? this._layerEditFormHtml(l)
-      : this._layerRowHtml(l)
-    ).join('');
+    return this._layers.map(l => {
+      if (this._editingId === l.id)  return this._layerEditFormHtml(l);
+      if (this._viewingId === l.id)  return this._layerViewHtml(l);
+      return this._layerRowHtml(l);
+    }).join('');
   }
 
   _layerRowHtml(l) {
+    const fmtArr = v => { try { const a = JSON.parse(v); return Array.isArray(a) ? a.join(' · ') : v; } catch { return v; } };
     return `
-      <div class="wf-layer-row" data-lid="${l.id}" draggable="true">
+      <div class="wf-layer-row wf-layer-row--clickable" data-lid="${l.id}" data-action="view-layer" draggable="true">
         <span class="wf-drag-handle" title="Drag to reorder">⠿</span>
         <span class="wf-layer-order">${l.order_num}</span>
         <div class="wf-layer-info">
           <span class="wf-layer-name">${escHtml(l.layer || 'Layer')}</span>
           <div class="wf-layer-meta">
-            ${l.purpose  ? `<span class="wf-meta-row"><b>Purpose:</b> ${escHtml(l.purpose)}</span>`  : ''}
-            ${l.inputs   ? `<span class="wf-meta-row"><b>Inputs:</b>  ${escHtml(l.inputs)}</span>`   : ''}
-            ${l.outputs  ? `<span class="wf-meta-row"><b>Outputs:</b> ${escHtml(l.outputs)}</span>`  : ''}
+            ${l.purpose ? `<span class="wf-meta-row"><b>Purpose:</b> ${escHtml(l.purpose)}</span>` : ''}
+            ${l.inputs  ? `<span class="wf-meta-row"><b>Inputs:</b>  ${escHtml(fmtArr(l.inputs))}</span>`  : ''}
+            ${l.outputs ? `<span class="wf-meta-row"><b>Outputs:</b> ${escHtml(fmtArr(l.outputs))}</span>` : ''}
           </div>
         </div>
         <div class="wf-layer-actions">
@@ -400,14 +457,84 @@ export class WorkflowsPage {
       </div>`;
   }
 
+  _layerViewHtml(l) {
+    const fmtArr = v => { try { const a = JSON.parse(v); return Array.isArray(a) ? a.join(', ') : v; } catch { return v; } };
+    return `
+      <div class="wf-layer-view" data-lid="${l.id}">
+        <div class="wf-layer-view__header" data-action="view-layer" data-lid="${l.id}">
+          <span class="wf-layer-order">${l.order_num}</span>
+          <div class="wf-layer-info">
+            <span class="wf-layer-name">${escHtml(l.layer || 'Layer')}</span>
+          </div>
+          <div class="wf-layer-actions wf-layer-actions--visible">
+            <button class="wf-icon-btn wf-run-btn" data-lid="${l.id}" title="Run this layer">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
+              </svg>
+            </button>
+            <button class="wf-icon-btn wf-edit-btn" data-lid="${l.id}" title="Edit layer">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="wf-icon-btn wf-del-btn" data-lid="${l.id}" title="Delete layer">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"
+                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="wf-icon-btn wf-collapse-btn" data-lid="${l.id}" title="Collapse">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M3 10l5-5 5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="wf-layer-view__body">
+          ${l.purpose ? `
+            <div class="wf-view-field">
+              <span class="wf-view-label">Purpose</span>
+              <span class="wf-view-value">${escHtml(l.purpose)}</span>
+            </div>` : ''}
+          ${l.inputs ? `
+            <div class="wf-view-field">
+              <span class="wf-view-label">Inputs</span>
+              <span class="wf-view-value">${escHtml(fmtArr(l.inputs))}</span>
+            </div>` : ''}
+          ${l.outputs ? `
+            <div class="wf-view-field">
+              <span class="wf-view-label">Outputs</span>
+              <span class="wf-view-value">${escHtml(fmtArr(l.outputs))}</span>
+            </div>` : ''}
+          ${l.prompt ? `
+            <div class="wf-view-field">
+              <span class="wf-view-label">Prompt</span>
+              <pre class="wf-view-prompt">${escHtml(l.prompt)}</pre>
+            </div>` : ''}
+          ${!l.purpose && !l.inputs && !l.outputs && !l.prompt
+            ? '<span class="wf-view-empty">No details added yet — click edit to fill in.</span>' : ''}
+        </div>
+      </div>`;
+  }
+
   _layerEditFormHtml(l) {
     const v = l || {};
+    const plOpts = this._projectLayers.map(pl =>
+      `<option value="${pl.id}" ${v.project_layer_id === pl.id ? 'selected' : ''}>${escHtml(pl.name)}</option>`
+    ).join('');
+    const layerField = this._projectLayers.length
+      ? `<select class="wf-input wf-select" data-f="project_layer_id">
+           <option value="">— Select layer —</option>
+           ${plOpts}
+         </select>`
+      : `<input class="wf-input" data-f="layer" value="${escHtml(v.layer || '')}" placeholder="e.g. Fetch PR Data">`;
     return `
       <div class="wf-layer-edit-form" data-lid="${v.id || ''}">
         <div class="wf-field-row">
           <div class="wf-field wf-field--grow">
-            <label class="wf-label">Name</label>
-            <input class="wf-input" data-f="layer" value="${escHtml(v.layer || '')}" placeholder="e.g. Fetch PR Data">
+            <label class="wf-label">Layer</label>
+            ${layerField}
           </div>
           <div class="wf-field wf-field--sm">
             <label class="wf-label">Order</label>
@@ -420,12 +547,12 @@ export class WorkflowsPage {
         </div>
         <div class="wf-field-row">
           <div class="wf-field wf-field--grow">
-            <label class="wf-label">Inputs</label>
-            <input class="wf-input" data-f="inputs" value="${escHtml(v.inputs || '')}" placeholder="What goes in?">
+            <label class="wf-label">Inputs <span class="wf-label-optional">one per line</span></label>
+            <textarea class="wf-textarea wf-textarea--sm" data-f="inputs" placeholder="What goes in?">${escHtml(this._displayArrayField(v.inputs))}</textarea>
           </div>
           <div class="wf-field wf-field--grow">
-            <label class="wf-label">Outputs</label>
-            <input class="wf-input" data-f="outputs" value="${escHtml(v.outputs || '')}" placeholder="What comes out?">
+            <label class="wf-label">Outputs <span class="wf-label-optional">one per line</span></label>
+            <textarea class="wf-textarea wf-textarea--sm" data-f="outputs" placeholder="What comes out?">${escHtml(this._displayArrayField(v.outputs))}</textarea>
           </div>
         </div>
         <div class="wf-field">
@@ -441,12 +568,21 @@ export class WorkflowsPage {
 
   _newLayerFormHtml() {
     const nextOrder = this._layers.length + 1;
+    const plOpts = this._projectLayers.map(pl =>
+      `<option value="${pl.id}">${escHtml(pl.name)}</option>`
+    ).join('');
+    const layerField = this._projectLayers.length
+      ? `<select class="wf-input wf-select" id="wfNLLayer">
+           <option value="">— Select layer —</option>
+           ${plOpts}
+         </select>`
+      : `<input class="wf-input" id="wfNLName" placeholder="e.g. Fetch PR Data">`;
     return `
       <div class="wf-layer-edit-form wf-layer-edit-form--new" id="wfNewLayerForm">
         <div class="wf-field-row">
           <div class="wf-field wf-field--grow">
-            <label class="wf-label">Name</label>
-            <input class="wf-input" id="wfNLName" placeholder="e.g. Fetch PR Data">
+            <label class="wf-label">Layer</label>
+            ${layerField}
           </div>
           <div class="wf-field wf-field--sm">
             <label class="wf-label">Order</label>
@@ -459,12 +595,12 @@ export class WorkflowsPage {
         </div>
         <div class="wf-field-row">
           <div class="wf-field wf-field--grow">
-            <label class="wf-label">Inputs</label>
-            <input class="wf-input" id="wfNLInputs" placeholder="What goes in?">
+            <label class="wf-label">Inputs <span class="wf-label-optional">one per line</span></label>
+            <textarea class="wf-textarea wf-textarea--sm" id="wfNLInputs" placeholder="What goes in?"></textarea>
           </div>
           <div class="wf-field wf-field--grow">
-            <label class="wf-label">Outputs</label>
-            <input class="wf-input" id="wfNLOutputs" placeholder="What comes out?">
+            <label class="wf-label">Outputs <span class="wf-label-optional">one per line</span></label>
+            <textarea class="wf-textarea wf-textarea--sm" id="wfNLOutputs" placeholder="What comes out?"></textarea>
           </div>
         </div>
         <div class="wf-field">
@@ -764,6 +900,10 @@ export class WorkflowsPage {
   _addWorkflow() {
     document.querySelector('.wf-add-modal-overlay')?.remove();
 
+    const pagesOptions = this._pages.map(p =>
+      `<option value="${p.id}">${escHtml(p.title || 'Untitled')}</option>`
+    ).join('');
+
     const overlay = document.createElement('div');
     overlay.className = 'wf-add-modal-overlay';
     overlay.innerHTML = `
@@ -782,6 +922,14 @@ export class WorkflowsPage {
             <textarea class="wf-textarea" id="wfModalDesc" rows="3"
               placeholder="What does this workflow accomplish?"></textarea>
           </div>
+          ${this._pages.length ? `
+          <div class="wf-field">
+            <label class="wf-label">Page <span class="wf-label-optional">(optional)</span></label>
+            <select class="wf-input wf-select" id="wfModalPage">
+              <option value="">— None —</option>
+              ${pagesOptions}
+            </select>
+          </div>` : ''}
         </div>
         <div class="wf-add-modal__footer">
           <button class="wf-btn-cancel" id="wfModalCancel">Cancel</button>
@@ -802,9 +950,11 @@ export class WorkflowsPage {
       const featureEl = overlay.querySelector('#wfModalFeature');
       const feature   = featureEl.value.trim();
       if (!feature) { featureEl.focus(); featureEl.classList.add('wf-input--error'); return; }
-      const description = overlay.querySelector('#wfModalDesc').value.trim() || null;
+      const description      = overlay.querySelector('#wfModalDesc')?.value.trim() || null;
+      const pageVal          = overlay.querySelector('#wfModalPage')?.value;
+      const screen_design_id = pageVal ? +pageVal : null;
       close();
-      const wf = await window.db.workflows.create({ project_id: this._projectId, feature, description });
+      const wf = await window.db.workflows.create({ project_id: this._projectId, feature, description, screen_design_id });
       this._workflows.push(wf);
       this._renderList();
       await this._selectWorkflow(wf.id);
@@ -821,12 +971,18 @@ export class WorkflowsPage {
   async _saveWorkflow() {
     const wf = this._activeWorkflow;
     if (!wf) return;
-    const feature = this.container.querySelector('#wfEFeature')?.value.trim();
-    const desc    = this.container.querySelector('#wfEDesc')?.value.trim();
+    const feature  = this.container.querySelector('#wfEFeature')?.value.trim();
+    const desc     = this.container.querySelector('#wfEDesc')?.value.trim();
     if (!feature) return;
-    await window.db.workflows.update({ id: wf.id, feature, description: desc });
+    const pageVal          = this.container.querySelector('#wfEPage')?.value;
+    const screen_design_id = pageVal ? +pageVal : null;
+    await window.db.workflows.update({ id: wf.id, feature, description: desc, screen_design_id });
     const idx = this._workflows.findIndex(w => w.id === wf.id);
-    if (idx >= 0) { this._workflows[idx].feature = feature; this._workflows[idx].description = desc; }
+    if (idx >= 0) {
+      this._workflows[idx].feature          = feature;
+      this._workflows[idx].description      = desc;
+      this._workflows[idx].screen_design_id = screen_design_id;
+    }
     this._editingWf = false;
     this._renderList();
     this._renderDetail();
@@ -848,21 +1004,48 @@ export class WorkflowsPage {
   }
 
   // ----------------------------------------------------------------
+  // Array field helpers (inputs / outputs stored as JSON arrays)
+  // ----------------------------------------------------------------
+  _parseArrayField(str) {
+    if (!str) return [];
+    return str.split('\n').map(s => s.trim()).filter(Boolean);
+  }
+
+  _displayArrayField(val) {
+    if (!val) return '';
+    try {
+      const arr = JSON.parse(val);
+      return Array.isArray(arr) ? arr.join('\n') : String(arr);
+    } catch {
+      return String(val);
+    }
+  }
+
+  // ----------------------------------------------------------------
   // CRUD — Layers
   // ----------------------------------------------------------------
   async _saveEditedLayer(form) {
     const id       = +form.dataset.lid;
     const existing = this._layers.find(l => l.id === id);
     if (!existing) return;
+
+    const plSelect = form.querySelector('[data-f="project_layer_id"]');
+    const project_layer_id = plSelect ? (+plSelect.value || null) : undefined;
+    const layerName = plSelect
+      ? (this._projectLayers.find(pl => pl.id === project_layer_id)?.name || existing.layer)
+      : (form.querySelector('[data-f="layer"]')?.value.trim() || existing.layer);
+
     const data = {
       id,
-      layer:     form.querySelector('[data-f="layer"]')?.value.trim()    || existing.layer,
-      order_num: +form.querySelector('[data-f="order_num"]')?.value      || existing.order_num,
+      layer:     layerName,
+      order_num: +form.querySelector('[data-f="order_num"]')?.value || existing.order_num,
       purpose:   form.querySelector('[data-f="purpose"]')?.value.trim()  ?? existing.purpose,
-      inputs:    form.querySelector('[data-f="inputs"]')?.value.trim()   ?? existing.inputs,
-      outputs:   form.querySelector('[data-f="outputs"]')?.value.trim()  ?? existing.outputs,
+      inputs:    this._parseArrayField(form.querySelector('[data-f="inputs"]')?.value),
+      outputs:   this._parseArrayField(form.querySelector('[data-f="outputs"]')?.value),
       prompt:    form.querySelector('[data-f="prompt"]')?.value.trim()   ?? existing.prompt,
     };
+    if (plSelect) data.project_layer_id = project_layer_id;
+
     await window.db.layers.update(data);
     Object.assign(existing, data);
     this._layers.sort((a, b) => a.order_num - b.order_num);
@@ -871,17 +1054,24 @@ export class WorkflowsPage {
   }
 
   async _saveNewLayer() {
-    const name   = this.container.querySelector('#wfNLName')?.value.trim();
-    const order  = +(this.container.querySelector('#wfNLOrder')?.value) || (this._layers.length + 1);
-    if (!name) return;
+    const isDropdown   = !!this._projectLayers.length;
+    const plSelect     = this.container.querySelector('#wfNLLayer');
+    const project_layer_id = isDropdown ? (+plSelect?.value || null) : null;
+    const layerName    = isDropdown
+      ? (this._projectLayers.find(pl => pl.id === project_layer_id)?.name || '')
+      : (this.container.querySelector('#wfNLName')?.value.trim() || '');
+    if (!layerName) return;
+
+    const order = +(this.container.querySelector('#wfNLOrder')?.value) || (this._layers.length + 1);
     const layer = await window.db.layers.create({
-      workflow_id: this._activeId,
-      layer:       name,
-      order_num:   order,
-      purpose:     this.container.querySelector('#wfNLPurpose')?.value.trim() || '',
-      inputs:      this.container.querySelector('#wfNLInputs')?.value.trim()  || '',
-      outputs:     this.container.querySelector('#wfNLOutputs')?.value.trim() || '',
-      prompt:      this.container.querySelector('#wfNLPrompt')?.value.trim()  || '',
+      workflow_id:      this._activeId,
+      project_layer_id,
+      layer:            layerName,
+      order_num:        order,
+      purpose:          this.container.querySelector('#wfNLPurpose')?.value.trim() || '',
+      inputs:           this._parseArrayField(this.container.querySelector('#wfNLInputs')?.value),
+      outputs:          this._parseArrayField(this.container.querySelector('#wfNLOutputs')?.value),
+      prompt:           this.container.querySelector('#wfNLPrompt')?.value.trim()  || '',
     });
     this._layers.push(layer);
     this._layers.sort((a, b) => a.order_num - b.order_num);
@@ -989,6 +1179,14 @@ export class WorkflowsPage {
     this.container.querySelector('#wfBtnAdd')
       ?.addEventListener('click', () => this._addWorkflow());
 
+    this.container.querySelector('#wfBtnGenerate')
+      ?.addEventListener('click', () => {
+        window.app.openGenerateWorkflowsWindow({
+          projectId:   this._projectId,
+          modelConfig: this._aiModelConfig,
+        });
+      });
+
     this.container.querySelector('#wfBtnModelConfigs')
       ?.addEventListener('click', () =>
         this.router.navigate('settings', { from: 'workflows', fromParams: { projectId: this._projectId } }));
@@ -1023,6 +1221,7 @@ export class WorkflowsPage {
       btn.addEventListener('click', () => {
         this._activeTab     = btn.dataset.tab;
         this._editingId     = null;
+        this._viewingId     = null;
         this._addingLayer   = false;
         this._editingCritId = null;
         this._addingCrit    = false;
@@ -1056,6 +1255,16 @@ export class WorkflowsPage {
 
     const list = body.querySelector('#wfLayersList');
     if (list) {
+      list.querySelectorAll('[data-action="view-layer"]').forEach(el => {
+        el.addEventListener('click', e => {
+          if (e.target.closest('button')) return;
+          const id = +el.dataset.lid;
+          this._viewingId   = this._viewingId === id ? null : id;
+          this._editingId   = null;
+          this._addingLayer = false;
+          this._refreshLayersTab();
+        });
+      });
       list.querySelectorAll('.wf-run-btn').forEach(btn => {
         btn.addEventListener('click', e => { e.stopPropagation(); this._openDrawer(+btn.dataset.lid); });
       });
@@ -1063,12 +1272,21 @@ export class WorkflowsPage {
         btn.addEventListener('click', e => {
           e.stopPropagation();
           this._editingId   = +btn.dataset.lid;
+          this._viewingId   = null;
           this._addingLayer = false;
           this._refreshLayersTab();
         });
       });
       list.querySelectorAll('.wf-del-btn').forEach(btn => {
         btn.addEventListener('click', e => { e.stopPropagation(); this._deleteLayer(+btn.dataset.lid); });
+      });
+      list.querySelectorAll('.wf-collapse-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          this._viewingId   = null;
+          this._editingId   = null;
+          this._refreshLayersTab();
+        });
       });
       list.querySelectorAll('[data-action="cancel-layer"]').forEach(btn => {
         btn.addEventListener('click', () => { this._editingId = null; this._refreshLayersTab(); });

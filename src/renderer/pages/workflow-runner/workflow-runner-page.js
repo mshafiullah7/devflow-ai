@@ -56,7 +56,6 @@ export class WorkflowRunnerPage {
     this._render();
     if (this._layers.length > 0) {
       this._selectLayer(this._layers[0].id);
-      this._runAll();
     }
   }
 
@@ -222,10 +221,15 @@ export class WorkflowRunnerPage {
   // Render helpers
   // ----------------------------------------------------------------
   _updateToolbar() {
-    const stop = this.container.querySelector('#wfrBtnStop');
-    const lbl  = this.container.querySelector('#wfrRunLabel');
-    if (stop) stop.hidden = !this._running;
-    if (lbl)  lbl.textContent = this._running ? 'Running…' : 'Run complete';
+    const runAll = this.container.querySelector('#wfrBtnRunAll');
+    const stop   = this.container.querySelector('#wfrBtnStop');
+    const lbl    = this.container.querySelector('#wfrRunLabel');
+    if (runAll) runAll.hidden = this._running;
+    if (stop)   stop.hidden   = !this._running;
+    if (lbl) {
+      lbl.hidden      = this._running;
+      lbl.textContent = 'Run complete';
+    }
   }
 
   _refreshLayerList() {
@@ -279,8 +283,16 @@ export class WorkflowRunnerPage {
       <div class="wfr-page">
         <header class="wfr-header">
           <span class="wfr-header__title">${name} — Run All Layers</span>
-          <span class="wfr-header__status" id="wfrRunLabel">Running…</span>
-          <button class="wfr-stop-btn" id="wfrBtnStop">■ Stop</button>
+          <div class="wfr-header__actions">
+            <span class="wfr-header__status" id="wfrRunLabel" hidden></span>
+            <button class="wfr-run-all-btn" id="wfrBtnRunAll">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
+              </svg>
+              Run All
+            </button>
+            <button class="wfr-stop-btn" id="wfrBtnStop" hidden>■ Stop</button>
+          </div>
         </header>
 
         <div class="wfr-body">
@@ -319,6 +331,18 @@ export class WorkflowRunnerPage {
   }
 
   _bindEvents() {
+    this.container.querySelector('#wfrBtnRunAll')
+      ?.addEventListener('click', () => {
+        if (this._running || !this._layers.length) return;
+        this._layers.forEach(l => { this._statuses[l.id] = 'pending'; this._outputs[l.id] = ''; });
+        this._startTimes = {};
+        this._elapsed    = {};
+        this.container.querySelector('#wfrRunLabel').hidden = true;
+        this._refreshLayerList();
+        this._selectLayer(this._layers[0].id);
+        this._runAll();
+      });
+
     this.container.querySelector('#wfrBtnStop')
       ?.addEventListener('click', () => this._stop());
 

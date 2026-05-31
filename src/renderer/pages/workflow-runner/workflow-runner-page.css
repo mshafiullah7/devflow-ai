@@ -35,8 +35,29 @@
   color: var(--text-muted);
   -webkit-app-region: no-drag;
 }
-.wfr-stop-btn {
+.wfr-header__actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+.wfr-run-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border-radius: var(--radius-sm, 5px);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.wfr-run-all-btn:hover { opacity: 0.88; }
+.wfr-stop-btn {
   padding: 5px 12px;
   border-radius: var(--radius-sm, 5px);
   border: 1px solid var(--border);
@@ -45,7 +66,6 @@
   font-size: 12px;
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
-  -webkit-app-region: no-drag;
 }
 .wfr-stop-btn:hover { background: rgba(239,68,68,.1); color: #dc2626; border-color: rgba(239,68,68,.4); }
 

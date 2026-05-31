@@ -70,6 +70,7 @@ export class IssuesPage {
     }
     this._initResizable();
     await this._loadIssues();
+    this._refreshQueueBadge();
   }
 
   unmount() {
@@ -122,6 +123,12 @@ export class IssuesPage {
                 </svg>
               </button>
             </div>
+            <button class="project-page__git-btn" id="isBtnQueue" title="Open Task Queue">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <path d="M3 5h14M3 10h10M3 15h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+              <span class="project-page__git-badge" id="isQueueBadge" hidden></span>
+            </button>
             <button class="project-page__git-btn" id="isBtnGit" title="Git (opens User Stories)">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
@@ -199,6 +206,18 @@ export class IssuesPage {
     display.classList.add('project-page__folder-display--active');
   }
 
+  async _refreshQueueBadge() {
+    const badge = this.container.querySelector('#isQueueBadge');
+    if (!badge) return;
+    const count = await window.db.promptQueue.pendingCount(this._projectId);
+    if (count > 0) {
+      badge.textContent = count;
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
   _bindHeaderEvents() {
     this.container.querySelector('#isBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
@@ -217,6 +236,9 @@ export class IssuesPage {
         this._git.refreshStatus();
         this._git.startPoll();
       });
+
+    this.container.querySelector('#isBtnQueue')
+      .addEventListener('click', () => window.app.openTaskQueueWindow(this._projectId));
 
     this.container.querySelector('#isBtnGit')
       .addEventListener('click', () =>
@@ -595,9 +617,12 @@ export class IssuesPage {
     });
 
     el.querySelector('#isDescQueueBtn')?.addEventListener('click', async () => {
-      const text    = descEl.value.trim();
-      const layerId = parseInt(layerEl.value) || null;
-      if (!text) return;
+      const desc     = descEl.value.trim();
+      const steps    = stepsEl.value.trim();
+      const expected = expectedEl.value.trim();
+      const actual   = actualEl.value.trim();
+      const layerId  = parseInt(layerEl.value) || null;
+      if (!desc) return;
       if (!layerId) {
         const existing = el.querySelector('#isQueueLayerMsg');
         if (!existing) {
@@ -611,16 +636,24 @@ export class IssuesPage {
         return;
       }
       el.querySelector('#isQueueLayerMsg')?.remove();
+
+      const parts = [`Issue: ${titleEl.value.trim() || 'Untitled Issue'}`, '', `Description:\n${desc}`];
+      if (steps)    parts.push('', `Steps to Reproduce:\n${steps}`);
+      if (expected) parts.push('', `Expected Behavior:\n${expected}`);
+      if (actual)   parts.push('', `Actual Behavior:\n${actual}`);
+      const promptText = parts.join('\n');
+
       const queueBtn = el.querySelector('#isDescQueueBtn');
       await window.db.promptQueue.add({
         project_id:    this._projectId,
-        user_story_id: parseInt(storyEl.value) || null,
+        user_story_id: null,
         story_title:   titleEl.value.trim() || 'Untitled Issue',
         prompt_id:     null,
         tag:           'Issue',
-        prompt_text:   text,
+        prompt_text:   promptText,
         layer_id:      layerId,
       });
+      this._refreshQueueBadge();
       const origHTML = queueBtn.innerHTML;
       queueBtn.disabled = true;
       queueBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Added`;
