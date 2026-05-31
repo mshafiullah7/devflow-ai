@@ -121,6 +121,7 @@ export class TestRunnerPage {
 
     this._git = new GitController({
       getTermCwd:           () => this._project?.project_path || '',
+      getLayers:            () => this._layers,
       gitBtnId:             'trBtnGit',
       gitBadgeId:           'trGitBadge',
       controlBtnVisibility: false,
@@ -198,7 +199,7 @@ export class TestRunnerPage {
                 <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
-              <span class="project-page__git-badge" id="trGitBadge" hidden></span>
+              <span class="project-page__git-badge project-page__git-badge--dot" id="trGitBadge" hidden></span>
             </button>
           </div>
         </header>

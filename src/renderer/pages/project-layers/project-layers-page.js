@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }      from '../../components/model-picker/model-picker.js';
+import { GitController }    from '../../components/git/git-controller.js';
 
 export class ProjectLayersPage {
   constructor(container, params, router) {
@@ -48,7 +49,18 @@ export class ProjectLayersPage {
       this._loadLayers(),
     ]);
 
-    this._refreshGitBadge();
+    this._git = new GitController({
+      getTermCwd:           () => this._project?.project_path || '',
+      getLayers:            () => this._layers,
+      gitBtnId:             'plBtnGit',
+      gitBadgeId:           'plGitBadge',
+      controlBtnVisibility: false,
+    });
+    this._git.mount();
+    if (this._project?.project_path) {
+      this._git.refreshStatus();
+      this._git.startPoll();
+    }
   }
 
   unmount() {
@@ -62,6 +74,7 @@ export class ProjectLayersPage {
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('pages/user-stories/user-stories.css');
     this._picker?.unmount();
+    this._git?.stopPoll();
   }
 
   // ----------------------------------------------------------------
@@ -95,7 +108,7 @@ export class ProjectLayersPage {
                 <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
-              <span class="project-page__git-badge" id="plGitBadge" hidden></span>
+              <span class="project-page__git-badge project-page__git-badge--dot" id="plGitBadge" hidden></span>
             </button>
           </div>
         </header>
@@ -178,22 +191,6 @@ export class ProjectLayersPage {
         this._showAddDetail();
       }
     });
-  }
-
-  // ----------------------------------------------------------------
-  // Git badge — red dot if any uncommitted files in project
-  // ----------------------------------------------------------------
-  async _refreshGitBadge() {
-    const badge = this.container.querySelector('#plGitBadge');
-    if (!badge) return;
-    const cwd = this._project?.project_path;
-    if (!cwd) return;
-    try {
-      const r = await window.db.terminal.exec({ command: 'git status --short 2>&1', cwd });
-      badge.hidden = !(r.stdout || '').trim().length;
-    } catch {
-      badge.hidden = true;
-    }
   }
 
   // ----------------------------------------------------------------

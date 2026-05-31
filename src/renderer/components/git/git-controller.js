@@ -1,8 +1,9 @@
 import { injectCss } from '../../shared/helpers.js';
 
 export class GitController {
-  constructor({ getTermCwd, gitBtnId = 'btnConsoleGit', gitBadgeId = 'gitBadge', controlBtnVisibility = true }) {
+  constructor({ getTermCwd, getLayers, gitBtnId = 'btnConsoleGit', gitBadgeId = 'gitBadge', controlBtnVisibility = true }) {
     this._getTermCwd           = getTermCwd;
+    this._getLayers            = getLayers || null;
     this._gitBtnId             = gitBtnId;
     this._gitBadgeId           = gitBadgeId;
     this._controlBtnVisibility = controlBtnVisibility;
@@ -36,24 +37,29 @@ export class GitController {
     const badge = document.getElementById(this._gitBadgeId);
     if (!btn || !badge) return;
     try {
-      const cwd = this._getTermCwd();
-      const [result, ignorePatterns] = await Promise.all([
-        window.db.terminal.exec({ command: 'git status --short 2>&1', cwd }),
-        this._fetchGitignorePatterns(cwd),
-      ]);
-      const lines = (result.stdout || '').trim().split('\n')
-        .filter(l => l.trim())
-        .filter(l => {
-          const file = l.substring(3).trim().replace(/^"(.*)"$/, '$1');
-          return !this._matchesGitignore(file, ignorePatterns);
-        });
-      if (this._controlBtnVisibility) btn.hidden = false;
-      if (lines.length > 0) {
-        badge.textContent = lines.length;
-        badge.hidden = false;
+      let hasChanges = false;
+
+      if (this._getLayers) {
+        const layers = this._getLayers().filter(l => l.folder_path);
+        const results = await Promise.all(layers.map(async l => {
+          try {
+            const r = await window.db.terminal.exec({
+              command: 'git status --short -uall -- . 2>&1',
+              cwd: l.folder_path,
+            });
+            return (r.stdout || '').split('\n').some(line => /^[ MADRCU?!]{2} .+/.test(line));
+          } catch { return false; }
+        }));
+        hasChanges = results.some(Boolean);
       } else {
-        badge.hidden = true;
+        const cwd = this._getTermCwd();
+        const r   = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd });
+        hasChanges = (r.stdout || '').split('\n').some(line => /^[ MADRCU?!]{2} .+/.test(line));
       }
+
+      if (this._controlBtnVisibility) btn.hidden = false;
+      badge.textContent = '';
+      badge.hidden = !hasChanges;
     } catch {
       if (this._controlBtnVisibility) btn.hidden = true;
       badge.hidden = true;

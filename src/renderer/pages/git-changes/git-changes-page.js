@@ -15,10 +15,11 @@ export class GitChangesPage {
     this._allFiles       = [];
     this._files          = [];
     this._layerCounts    = {};
-    this._activeGitRoot  = null;
-    this._consoleRunning = false;
-    this._qcmdModal      = null;
-    this._pendingCommits = 0;
+    this._activeGitRoot    = null;
+    this._activeLayerPrefix = null;
+    this._consoleRunning   = false;
+    this._qcmdModal        = null;
+    this._pendingCommits   = 0;
   }
 
   // ----------------------------------------------------------------
@@ -31,7 +32,6 @@ export class GitChangesPage {
 
     this._project = await window.db.projects.get(this._projectId);
     this._activeCwd     = this._project?.project_path || null;
-    // Resolve the real git root once — used by all git operations this session
     this._activeGitRoot = await this._getGitRoot(this._activeCwd);
 
     const allLayers = await window.db.projectLayers.list(this._projectId);
@@ -514,24 +514,23 @@ export class GitChangesPage {
   }
 
   async _loadLayerCounts() {
-    const gitRoot = this._activeGitRoot || this._project?.project_path || '';
-    if (!gitRoot) { this._layerCounts = {}; return; }
-    try {
-      const r         = await window.db.terminal.exec({ command: 'git status --short 2>&1', cwd: gitRoot });
-      const allFiles  = this._parseGitStatus(r.stdout || '');
-      const gitRootN  = gitRoot.replace(/\\/g, '/').replace(/\/$/, '');
-      this._layerCounts = {};
-      for (const l of this._layers) {
-        if (!l.folder_path) { this._layerCounts[l.id] = 0; continue; }
-        const layerN  = l.folder_path.replace(/\\/g, '/').replace(/\/$/, '');
-        const prefix  = layerN.startsWith(gitRootN + '/') ? layerN.slice(gitRootN.length + 1) : null;
+    this._layerCounts = {};
+    await Promise.all(this._layers.map(async l => {
+      if (!l.folder_path) { this._layerCounts[l.id] = 0; return; }
+      try {
+        const [gitRoot, prefix] = await Promise.all([
+          this._getGitRoot(l.folder_path),
+          this._getLayerPrefix(l.folder_path),
+        ]);
+        const r        = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd: gitRoot });
+        const allFiles = this._parseGitStatus(r.stdout || '');
         this._layerCounts[l.id] = prefix
           ? allFiles.filter(f => { const fn = f.file.replace(/\\/g, '/'); return fn === prefix || fn.startsWith(prefix + '/'); }).length
           : allFiles.length;
+      } catch {
+        this._layerCounts[l.id] = 0;
       }
-    } catch {
-      this._layerCounts = {};
-    }
+    }));
   }
 
   _filesForActiveLayer() {
@@ -540,17 +539,40 @@ export class GitChangesPage {
 
   async _selectLayer(layerId) {
     if (layerId === 'root') {
-      this._activeLayerId = 'root';
-      this._activeCwd     = this._project?.project_path || null;
+      this._activeLayerId     = 'root';
+      this._activeCwd         = this._project?.project_path || null;
+      this._activeGitRoot     = await this._getGitRoot(this._activeCwd);
+      this._activeLayerPrefix = null;
     } else {
       const id    = parseInt(layerId, 10);
       const layer = this._layers.find(l => l.id === id);
       if (!layer) return;
       this._activeLayerId = layer.id;
       this._activeCwd     = layer.folder_path;
+      // Each layer may live in its own git repo — resolve its root and prefix independently
+      [this._activeGitRoot, this._activeLayerPrefix] = await Promise.all([
+        this._getGitRoot(layer.folder_path),
+        this._getLayerPrefix(layer.folder_path),
+      ]);
     }
+    const consoleOut = this.container.querySelector('#gitConsoleOutput');
+    if (consoleOut) consoleOut.innerHTML = '';
+
     await this._loadStatus();
     if (this._activeCwd) this._consoleRun('git status');
+  }
+
+  async _getLayerPrefix(folderPath) {
+    if (!folderPath) return null;
+    try {
+      const r = await window.db.terminal.exec({
+        command: 'git rev-parse --show-prefix 2>&1',
+        cwd: folderPath,
+      });
+      return (r.stdout || '').trim().replace(/\/$/, '') || null;
+    } catch {
+      return null;
+    }
   }
 
   async _getGitRoot(cwd) {
@@ -637,27 +659,17 @@ export class GitChangesPage {
     if (wrap) wrap.innerHTML = '<div class="git-diff-loading">Loading changes…</div>';
 
     try {
-      const [result, ignorePatterns] = await Promise.all([
-        window.db.terminal.exec({ command: 'git status --short 2>&1', cwd: gitRoot }),
-        this._fetchGitignorePatterns(gitRoot),
-      ]);
+      const result = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd: gitRoot });
 
-      let files = this._parseGitStatus(result.stdout || '')
-        .filter(f => !this._matchesGitignore(f.file, ignorePatterns));
+      let files = this._parseGitStatus(result.stdout || '');
 
-      // Filter to the active layer's subdirectory (when layer ≠ git root)
-      const gitRootN = gitRoot.replace(/\\/g, '/').replace(/\/$/, '');
-      const layerN   = (this._activeCwd || '').replace(/\\/g, '/').replace(/\/$/, '');
-      if (layerN && layerN !== gitRootN) {
-        const prefix = layerN.startsWith(gitRootN + '/')
-          ? layerN.slice(gitRootN.length + 1)
-          : null;
-        if (prefix) {
-          files = files.filter(f => {
-            const fn = f.file.replace(/\\/g, '/');
-            return fn === prefix || fn.startsWith(prefix + '/');
-          });
-        }
+      // Filter to the active layer's subdirectory using the git-relative prefix
+      if (this._activeLayerPrefix) {
+        const prefix = this._activeLayerPrefix;
+        files = files.filter(f => {
+          const fn = f.file.replace(/\\/g, '/');
+          return fn === prefix || fn.startsWith(prefix + '/');
+        });
       }
 
       this._allFiles = files;
@@ -816,7 +828,7 @@ export class GitChangesPage {
   // ----------------------------------------------------------------
   _parseGitStatus(output) {
     return output.split('\n')
-      .filter(l => l.trim())
+      .filter(l => /^[ MADRCU?!]{2} .+/.test(l))
       .map(line => {
         const xy   = line.substring(0, 2);
         const file = line.substring(3).trim().replace(/^"(.*)"$/, '$1');
@@ -849,10 +861,11 @@ export class GitChangesPage {
         if (m) {
           oldLine = parseInt(m[1]);
           newLine = parseInt(m[2]);
+          const hunkHeader = raw.match(/@@ [^@]+ @@/)?.[0] || raw;
           const ctx = m[3] ? esc(m[3].trim()) : '';
           html += `<tr class="gd-row gd-row--hunk">
             <td class="gd-ln"></td><td class="gd-ln"></td>
-            <td class="gd-code">${esc(raw)}${ctx ? ` <span class="gd-hunk-ctx">${ctx}</span>` : ''}</td>
+            <td class="gd-code">${esc(hunkHeader)}${ctx ? ` <span class="gd-hunk-ctx">${ctx}</span>` : ''}</td>
           </tr>`;
         }
         continue;

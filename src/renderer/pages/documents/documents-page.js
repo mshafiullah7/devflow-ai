@@ -16,6 +16,7 @@ export class DocumentsPage {
     this._attachments   = [];
     this._drawioFiles   = new Map();
     this._aiModelConfig = null;
+    this._layers        = [];
   }
 
   async mount() {
@@ -23,10 +24,11 @@ export class DocumentsPage {
     applyStoredTheme();
 
     let _mapping;
-    [this._project, this._docs, _mapping] = await Promise.all([
+    [this._project, this._docs, _mapping, this._layers] = await Promise.all([
       window.db.projects.get(this._projectId),
       window.db.documents.list(this._projectId),
       window.db.modelMapping.get('documents'),
+      window.db.projectLayers.list(this._projectId),
     ]);
 
     if (this._docTitle) {
@@ -57,6 +59,7 @@ export class DocumentsPage {
 
     this._git = new GitController({
       getTermCwd: () => this._project?.project_path || '',
+      getLayers:  () => this._layers,
       gitBtnId:   'docBtnGit',
       gitBadgeId: 'docGitBadge',
     });
@@ -107,7 +110,7 @@ export class DocumentsPage {
               <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
-            <span class="project-page__git-badge" id="docGitBadge" hidden></span>
+            <span class="project-page__git-badge project-page__git-badge--dot" id="docGitBadge" hidden></span>
           </button>
         </header>
 

@@ -31,6 +31,7 @@ export class IssuesPage {
     this._deepItemId         = params.itemId ?? null;
     this._collapsedStatuses  = new Set(['resolved', 'closed', 'wont_fix']);
     this._pendingSave        = null;
+    this._layers             = [];
   }
 
   async mount() {
@@ -40,9 +41,10 @@ export class IssuesPage {
     applyStoredTheme();
 
     let _mapping;
-    [this._project, _mapping] = await Promise.all([
+    [this._project, _mapping, this._layers] = await Promise.all([
       window.db.projects.get(this._projectId),
       window.db.modelMapping.get('issues'),
+      window.db.projectLayers.list(this._projectId),
     ]);
     this.container.innerHTML = this._template();
 
@@ -56,6 +58,7 @@ export class IssuesPage {
 
     this._git = new GitController({
       getTermCwd:           () => this._project?.project_path || '',
+      getLayers:            () => this._layers,
       gitBtnId:             'isBtnGit',
       gitBadgeId:           'isGitBadge',
       controlBtnVisibility: false,
@@ -120,7 +123,7 @@ export class IssuesPage {
                 <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
-              <span class="project-page__git-badge" id="isGitBadge" hidden></span>
+              <span class="project-page__git-badge project-page__git-badge--dot" id="isGitBadge" hidden></span>
             </button>
           </div>
         </header>

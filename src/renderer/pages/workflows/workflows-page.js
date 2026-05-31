@@ -63,6 +63,7 @@ export class WorkflowsPage {
 
     this._git = new GitController({
       getTermCwd:           () => this._project?.project_path || '',
+      getLayers:            () => this._projectLayers,
       gitBtnId:             'wfBtnGit',
       gitBadgeId:           'wfGitBadge',
       controlBtnVisibility: false,
@@ -168,7 +169,7 @@ export class WorkflowsPage {
                 <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
-              <span class="project-page__git-badge" id="wfGitBadge" hidden></span>
+              <span class="project-page__git-badge project-page__git-badge--dot" id="wfGitBadge" hidden></span>
             </button>
           </div>
         </header>

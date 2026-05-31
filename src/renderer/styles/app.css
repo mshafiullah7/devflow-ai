@@ -552,6 +552,15 @@ html, body {
   box-sizing: border-box;
   pointer-events: none;
 }
+.project-page__git-badge--dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  padding: 0;
+  top: -3px;
+  right: -3px;
+  border-radius: 50%;
+}
 
 /* ------------------------------------------------------------------ */
 /* Shared: Quick Commands button in page header                        */
