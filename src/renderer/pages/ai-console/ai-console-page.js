@@ -1,127 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
-import { GitController }                 from '../../components/git/git-controller.js';
-
-// ----------------------------------------------------------------
-// Templates — pre-built prompt starters
-// ----------------------------------------------------------------
-const TEMPLATES = [
-  {
-    id:     'refine-stories',
-    label:  'Refine user stories',
-    prompt: 'Review the user stories in context. Tighten acceptance criteria, surface missing edge cases, and flag any ambiguities that could block development.',
-  },
-  {
-    id:     'triage-issues',
-    label:  'Triage open issues',
-    prompt: 'Given the open issues and user stories in context, suggest a priority order and recommend which stories each issue should be linked to.',
-  },
-  {
-    id:     'gen-test-cases',
-    label:  'Generate test cases',
-    prompt: 'Generate detailed test cases for the user stories in context. Include clear test steps and expected results for each scenario.',
-  },
-  {
-    id:     'review-prompts',
-    label:  'Review impl. prompts',
-    prompt: 'Review the implementation prompts attached to the user stories in context. Suggest improvements to make them clearer and more actionable for a developer.',
-  },
-  {
-    id:     'update-tech-spec',
-    label:  'Update tech spec',
-    prompt: 'Based on the documents and user stories in context, draft updated sections for the technical specification that reflect current progress.',
-  },
-  {
-    id:     'custom',
-    label:  'Custom prompt…',
-    prompt: '',
-  },
-];
-
-// ----------------------------------------------------------------
-// TemplatePicker — same visual pattern as ModelPicker
-// ----------------------------------------------------------------
-class TemplatePicker {
-  constructor({ anchor, templates, onSelect } = {}) {
-    this._anchor    = anchor;
-    this._templates = templates;
-    this._onSelect  = onSelect || null;
-    this._open      = false;
-    this._handleOutside = this._handleOutside.bind(this);
-  }
-
-  mount()   { this._render(); }
-  unmount() {
-    document.removeEventListener('click', this._handleOutside, true);
-    this._anchor.innerHTML = '';
-  }
-
-  _render() {
-    this._anchor.innerHTML = `
-      <div class="mp-wrap">
-        <button class="mp-trigger" type="button" aria-haspopup="listbox" aria-expanded="${this._open}">
-          <svg class="mp-trigger__icon" width="13" height="13" viewBox="0 0 24 24"
-               fill="none" stroke="currentColor" stroke-width="1.8"
-               stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="8" y1="13" x2="16" y2="13"/>
-            <line x1="8" y1="17" x2="12" y2="17"/>
-          </svg>
-          <span class="mp-trigger__label">Templates…</span>
-          <svg class="mp-trigger__caret${this._open ? ' mp-trigger__caret--open' : ''}"
-               width="10" height="10" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2.5"
-               stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </button>
-        ${this._open ? `
-          <div class="mp-menu" role="listbox">
-            ${this._templates.map(t => `
-              <button class="mp-menu__item" data-tpl-id="${t.id}" role="option" type="button">
-                <svg class="mp-menu__check" width="12" height="12" viewBox="0 0 24 24"
-                     fill="none" stroke="currentColor" stroke-width="2.5"
-                     stroke-linecap="round" stroke-linejoin="round"></svg>
-                <span class="mp-menu__label">${escHtml(t.label)}</span>
-              </button>`).join('')}
-          </div>` : ''}
-      </div>`;
-
-    this._anchor.querySelector('.mp-trigger')
-      .addEventListener('click', e => { e.stopPropagation(); this._toggleMenu(); });
-
-    if (this._open) {
-      this._anchor.querySelectorAll('.mp-menu__item[data-tpl-id]').forEach(btn => {
-        btn.addEventListener('click', e => {
-          e.stopPropagation();
-          const tpl = this._templates.find(t => t.id === btn.dataset.tplId);
-          if (!tpl) return;
-          this._open = false;
-          document.removeEventListener('click', this._handleOutside, true);
-          this._render();
-          if (this._onSelect) this._onSelect(tpl);
-        });
-      });
-    }
-  }
-
-  _toggleMenu() {
-    this._open = !this._open;
-    if (this._open) document.addEventListener('click', this._handleOutside, true);
-    else            document.removeEventListener('click', this._handleOutside, true);
-    this._render();
-  }
-
-  _handleOutside(e) {
-    if (!this._anchor.contains(e.target)) {
-      this._open = false;
-      document.removeEventListener('click', this._handleOutside, true);
-      this._render();
-    }
-  }
-}
 
 // ----------------------------------------------------------------
 // Helpers
@@ -198,35 +77,8 @@ export class AiConsolePage {
       initialId: _mapping?.model_config_id ?? null,
     });
 
-    this._tplPicker = new TemplatePicker({
-      anchor:    this.container.querySelector('#aicTplPicker'),
-      templates: TEMPLATES,
-      onSelect:  (tpl) => {
-        if (!tpl.prompt) return;
-        const ta = this.container.querySelector('#aicInput');
-        if (ta && !ta.value.trim()) {
-          ta.value = tpl.prompt;
-          ta.focus();
-        }
-      },
-    });
-    this._tplPicker.mount();
-
-    this._git = new GitController({
-      getTermCwd: () => this._project?.project_path || '',
-      gitBtnId:   'aicBtnGit',
-      gitBadgeId: 'aicGitBadge',
-    });
-    this._git.mount();
-
     this._bindEvents();
     await this._picker.reload();
-
-    if (this._project?.project_path) {
-      this._setHeaderFolderPath(this._project.project_path);
-      this._git.refreshStatus();
-      this._git.startPoll();
-    }
 
     await this._loadData();
   }
@@ -234,8 +86,6 @@ export class AiConsolePage {
   unmount() {
     window.app.chat.offAll();
     this._picker?.unmount();
-    this._tplPicker?.unmount();
-    this._git?.stopPoll();
     removeCss('pages/ai-console/ai-console-page.css');
   }
 
@@ -244,13 +94,17 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   async _loadData() {
     try {
-      const [allIssues, documents] = await Promise.all([
+      const [allIssues, documents, workflows, projectLayers] = await Promise.all([
         window.db.issues.list({ project_id: this.projectId }),
         window.db.documents.list(this.projectId),
+        window.db.workflows.list(this.projectId),
+        window.db.projectLayers.list(this.projectId),
       ]);
 
-      this._issues    = (allIssues || []).filter(i => i.status === 'open');
-      this._documents = documents || [];
+      this._issues        = (allIssues || []).filter(i => i.status === 'open');
+      this._documents     = documents || [];
+      this._workflows     = (workflows || []).filter(w => w.is_active !== 0);
+      this._projectLayers = projectLayers || [];
 
       this._updateContextCounts();
       this._enableUi();
@@ -264,7 +118,9 @@ export class AiConsolePage {
   _updateContextCounts() {
     const set = (id, text) => { const el = this.container.querySelector(id); if (el) el.textContent = text; };
 
-    set('#aicCtxIssues', `${this._issues.length} open`);
+    set('#aicCtxIssues',    `${this._issues.length} open`);
+    set('#aicCtxWorkflows', `${this._workflows.length} total`);
+    set('#aicCtxLayers',    `${this._projectLayers.length} total`);
 
     this._renderDocumentSlices();
   }
@@ -293,10 +149,6 @@ export class AiConsolePage {
   }
 
   _enableUi() {
-    // Template select
-    const tplSel = this.container.querySelector('#aicTemplateSelect');
-    if (tplSel) { tplSel.disabled = false; tplSel.removeAttribute('title'); }
-
     // Textarea
     const ta = this.container.querySelector('#aicInput');
     if (ta) {
@@ -311,7 +163,7 @@ export class AiConsolePage {
     });
 
     // Context checkboxes
-    this.container.querySelectorAll('.aic-slice__check, .aic-doc-check')
+    this.container.querySelectorAll('.aic-slice__check, .aic-doc-check, .aic-workflow-check, .aic-layer-check')
       .forEach(cb => { cb.disabled = false; });
   }
 
@@ -345,40 +197,10 @@ export class AiConsolePage {
             <div class="aic-header__subtitle">AI Chat</div>
           </div>
 
-          <div class="project-page__folder-display" id="aicHeaderFolderDisplay" title="Select folder" style="-webkit-app-region:no-drag;">
-            <div class="project-page__folder-pill">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              </svg>
-              <span class="project-page__folder-text" id="aicHeaderFolderText">Select folder</span>
-            </div>
-          </div>
-
-          <!-- Template picker -->
-          <div id="aicTplPicker" style="-webkit-app-region:no-drag;"></div>
-
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <div id="aicModelPicker"></div>
-            <button class="project-page__model-cfg-btn" id="aicBtnModelConfigs" title="Configure AI models">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
-                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
           </div>
 
-          <button class="project-page__git-btn" id="aicBtnGit" title="Git changes" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <span class="project-page__git-badge" id="aicGitBadge" hidden></span>
-          </button>
         </header>
 
         <!-- Body: context panel + chat -->
@@ -396,6 +218,22 @@ export class AiConsolePage {
                 <div class="aic-slice__info">
                   <span class="aic-slice__name">Open issues</span>
                   <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxIssues">– open</span>
+                </div>
+              </label>
+
+              <label class="aic-slice">
+                <input type="checkbox" class="aic-slice__check" data-slice="workflows" disabled>
+                <div class="aic-slice__info">
+                  <span class="aic-slice__name">Workflows</span>
+                  <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxWorkflows">– total</span>
+                </div>
+              </label>
+
+              <label class="aic-slice">
+                <input type="checkbox" class="aic-slice__check" data-slice="layers" disabled>
+                <div class="aic-slice__info">
+                  <span class="aic-slice__name">Project layers</span>
+                  <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxLayers">– total</span>
                 </div>
               </label>
 
@@ -615,24 +453,7 @@ export class AiConsolePage {
     q('#aicBtnBack').addEventListener('click', () =>
       this.router.navigate('project-home', { projectId: this.projectId }));
 
-    // Model config button
-    q('#aicBtnModelConfigs').addEventListener('click', () =>
-      this.router.navigate('settings', { from: 'ai-console', fromParams: { projectId: this.projectId } }));
 
-    // Git button
-    q('#aicBtnGit').addEventListener('click', () =>
-      this.router.navigate('git-changes', { projectId: this.projectId, from: 'ai-console' }));
-
-    // Folder display — open folder picker
-    q('#aicHeaderFolderDisplay').addEventListener('click', async () => {
-      const folderPath = await window.db.dialog.openFolder();
-      if (!folderPath) return;
-      await window.db.projects.setPath({ id: this.projectId, project_path: folderPath });
-      if (this._project) this._project.project_path = folderPath;
-      this._setHeaderFolderPath(folderPath);
-      this._git.refreshStatus();
-      this._git.startPoll();
-    });
 
     // Send / Stop (same button, toggled)
     q('#aicBtnSend').addEventListener('click', () => {
@@ -828,8 +649,6 @@ export class AiConsolePage {
     this._messages     = [];
     this._updateTokenEstimate();
     this._updateContextPreview();
-    const tplSel = this.container.querySelector('#aicTemplateSelect');
-    if (tplSel) tplSel.value = '';
     this._renderWelcome();
   }
 
@@ -910,6 +729,26 @@ export class AiConsolePage {
       parts.push(`OPEN ISSUES (${this._issues.length}):\n\n${list}`);
     }
 
+    // ── Workflows ────────────────────────────────────────────────────
+    if (slices.workflows && this._workflows.length > 0) {
+      const list = this._workflows.map(w => {
+        let block = `  [Workflow] ${w.feature}`;
+        if (w.description) block += `\n    Description: ${w.description}`;
+        return block;
+      }).join('\n\n');
+      parts.push(`WORKFLOWS (${this._workflows.length}):\n\n${list}`);
+    }
+
+    // ── Project layers ────────────────────────────────────────────────
+    if (slices.layers && this._projectLayers.length > 0) {
+      const list = this._projectLayers.map(l => {
+        let block = `  [Layer] ${l.name}`;
+        if (l.description) block += `\n    Description: ${l.description}`;
+        return block;
+      }).join('\n\n');
+      parts.push(`PROJECT LAYERS (${this._projectLayers.length}):\n\n${list}`);
+    }
+
     // ── Documents (individually selected) ───────────────────────────
     const selectedDocIds = new Set(
       [...this.container.querySelectorAll('.aic-doc-check:checked')]
@@ -984,14 +823,6 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   // UI helpers
   // ----------------------------------------------------------------
-  _setHeaderFolderPath(folderPath) {
-    const text    = this.container.querySelector('#aicHeaderFolderText');
-    const display = this.container.querySelector('#aicHeaderFolderDisplay');
-    if (!text || !display) return;
-    text.textContent = folderPath;
-    display.classList.add('project-page__folder-display--active');
-  }
-
   _setGenerating(on) {
     this._isGenerating = on;
 

@@ -118,8 +118,6 @@ export class TestRunnerPage {
       onConfigsChanged: () => this._picker?.reload(),
     });
     this._modelConfigsModal.mount();
-    this.container.querySelector('#trBtnModelConfigs')
-      ?.addEventListener('click', () => this._modelConfigsModal.show());
 
     this._git = new GitController({
       getTermCwd:           () => this._project?.project_path || '',
@@ -190,13 +188,6 @@ export class TestRunnerPage {
           </div>
           <div class="project-page__model-group tr-header__model" style="-webkit-app-region:no-drag;">
             <div id="trModelPicker"></div>
-            <button class="project-page__model-cfg-btn" id="trBtnModelConfigs" title="Configure AI models">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
-                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
             <button class="project-page__git-btn" id="trBtnGit" title="Git changes">

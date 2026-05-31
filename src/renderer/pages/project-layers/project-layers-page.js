@@ -43,14 +43,12 @@ export class ProjectLayersPage {
     this._bindHeaderEvents();
     this._initResizable();
 
-    if (this._project?.project_path) {
-      this._setHeaderFolderPath(this._project.project_path);
-    }
-
     await Promise.all([
       this._loadDocuments(),
       this._loadLayers(),
     ]);
+
+    this._refreshGitBadge();
   }
 
   unmount() {
@@ -85,26 +83,20 @@ export class ProjectLayersPage {
             <h1 class="project-page__title">${name}</h1>
             <p class="project-page__desc">Project Layers</p>
           </div>
-          <div class="project-page__folder-display" id="plHeaderFolderDisplay" title="Select project folder">
-            <div class="project-page__folder-pill">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              </svg>
-              <span class="project-page__folder-text" id="plHeaderFolderText">Select folder</span>
-            </div>
-          </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
             <div class="project-page__model-group">
               <div id="plModelPicker"></div>
-              <button class="project-page__model-cfg-btn" id="plBtnModelConfigs" title="Configure AI models">
-                <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                  <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
-                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              </button>
             </div>
+            <button class="project-page__git-btn" id="plBtnGit" title="Git Changes" style="-webkit-app-region:no-drag;">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              <span class="project-page__git-badge" id="plGitBadge" hidden></span>
+            </button>
           </div>
         </header>
 
@@ -160,16 +152,6 @@ export class ProjectLayersPage {
   }
 
   // ----------------------------------------------------------------
-  // Header
-  // ----------------------------------------------------------------
-  _setHeaderFolderPath(folderPath) {
-    const text    = this.container.querySelector('#plHeaderFolderText');
-    const display = this.container.querySelector('#plHeaderFolderDisplay');
-    if (!text || !display) return;
-    text.textContent = folderPath;
-    display.classList.add('project-page__folder-display--active');
-  }
-
   _bindHeaderEvents() {
     this.container.querySelector('#plBtnBack')
       .addEventListener('click', () => {
@@ -178,18 +160,10 @@ export class ProjectLayersPage {
         this.router.navigate('project-home', { projectId: this._projectId });
       });
 
-    this.container.querySelector('#plBtnModelConfigs')
+    this.container.querySelector('#plBtnGit')
       .addEventListener('click', () =>
-        this.router.navigate('settings', { from: 'project-layers', fromParams: { projectId: this._projectId } }));
+        this.router.navigate('git-changes', { projectId: this._projectId, from: 'project-layers' }));
 
-    this.container.querySelector('#plHeaderFolderDisplay')
-      .addEventListener('click', async () => {
-        const folderPath = await window.db.dialog.openFolder();
-        if (!folderPath) return;
-        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
-        if (this._project) this._project.project_path = folderPath;
-        this._setHeaderFolderPath(folderPath);
-      });
 
     this.container.querySelector('#plBtnGenerate')
       .addEventListener('click', () => this._openGenerateModal());
@@ -204,6 +178,22 @@ export class ProjectLayersPage {
         this._showAddDetail();
       }
     });
+  }
+
+  // ----------------------------------------------------------------
+  // Git badge — red dot if any uncommitted files in project
+  // ----------------------------------------------------------------
+  async _refreshGitBadge() {
+    const badge = this.container.querySelector('#plGitBadge');
+    if (!badge) return;
+    const cwd = this._project?.project_path;
+    if (!cwd) return;
+    try {
+      const r = await window.db.terminal.exec({ command: 'git status --short 2>&1', cwd });
+      badge.hidden = !(r.stdout || '').trim().length;
+    } catch {
+      badge.hidden = true;
+    }
   }
 
   // ----------------------------------------------------------------

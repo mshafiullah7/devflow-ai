@@ -65,7 +65,6 @@ export class DocumentsPage {
     this._bindShellEvents();
 
     if (this._project?.project_path) {
-      this._setHeaderFolderPath(this._project.project_path);
       this._git.refreshStatus();
       this._git.startPoll();
     }
@@ -97,24 +96,8 @@ export class DocumentsPage {
             <div class="documents-page__title">${escHtml(name)}</div>
             <div class="documents-page__subtitle">Project Documents</div>
           </div>
-          <div class="project-page__folder-display" id="headerFolderDisplay" title="Select folder">
-            <div class="project-page__folder-pill">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              </svg>
-              <span class="project-page__folder-text" id="headerFolderText">Select folder</span>
-            </div>
-          </div>
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <div id="docModelPicker"></div>
-            <button class="project-page__model-cfg-btn" id="docBtnModelConfigs" title="Configure AI models">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
-                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
           </div>
           <button class="project-page__git-btn" id="docBtnGit" title="Git (opens User Stories)" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
@@ -150,14 +133,6 @@ export class DocumentsPage {
     if (this._picker) await this._picker.reload();
   }
 
-  _setHeaderFolderPath(folderPath) {
-    const text    = this.container.querySelector('#headerFolderText');
-    const display = this.container.querySelector('#headerFolderDisplay');
-    if (!text || !display) return;
-    text.textContent = folderPath;
-    display.classList.add('project-page__folder-display--active');
-  }
-
   _bindShellEvents() {
     this.container.querySelector('#btnBack')
       .addEventListener('click', async () => {
@@ -165,20 +140,6 @@ export class DocumentsPage {
         this.router.navigate('project-home', { projectId: this._projectId });
       });
 
-    this.container.querySelector('#docBtnModelConfigs')
-      .addEventListener('click', () => this.router.navigate('settings', { from: 'documents', fromParams: { projectId: this._projectId } }));
-
-
-    this.container.querySelector('#headerFolderDisplay')
-      .addEventListener('click', async () => {
-        const folderPath = await window.db.dialog.openFolder();
-        if (!folderPath) return;
-        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
-        if (this._project) this._project.project_path = folderPath;
-        this._setHeaderFolderPath(folderPath);
-        this._git.refreshStatus();
-        this._git.startPoll();
-      });
 
     this.container.querySelector('#docBtnGit')
       .addEventListener('click', () =>

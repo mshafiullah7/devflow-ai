@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
+import { GitController }                 from '../../components/git/git-controller.js';
 
 export class WorkflowsPage {
   constructor(container, params, router) {
@@ -60,6 +61,19 @@ export class WorkflowsPage {
     });
     await this._picker.reload();
 
+    this._git = new GitController({
+      getTermCwd:           () => this._project?.project_path || '',
+      gitBtnId:             'wfBtnGit',
+      gitBadgeId:           'wfGitBadge',
+      controlBtnVisibility: false,
+    });
+    this._git.mount();
+
+    if (this._project?.project_path) {
+      this._git.refreshStatus();
+      this._git.startPoll();
+    }
+
     this._bindHeaderEvents();
     this._initResizable();
     await this._loadWorkflows();
@@ -68,6 +82,7 @@ export class WorkflowsPage {
   unmount() {
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     window.app.chat.offAll();
+    this._git?.stopPoll();
     removeCss('pages/workflows/workflows-page.css');
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
@@ -144,14 +159,17 @@ export class WorkflowsPage {
             </button>
             <div class="project-page__model-group">
               <div id="wfModelPicker"></div>
-              <button class="project-page__model-cfg-btn" id="wfBtnModelConfigs" title="Configure AI models">
-                <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                  <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
-                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              </button>
             </div>
+            <button class="project-page__git-btn" id="wfBtnGit" title="Git changes">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              <span class="project-page__git-badge" id="wfGitBadge" hidden></span>
+            </button>
           </div>
         </header>
 
@@ -1187,9 +1205,10 @@ export class WorkflowsPage {
         });
       });
 
-    this.container.querySelector('#wfBtnModelConfigs')
+
+    this.container.querySelector('#wfBtnGit')
       ?.addEventListener('click', () =>
-        this.router.navigate('settings', { from: 'workflows', fromParams: { projectId: this._projectId } }));
+        this.router.navigate('git-changes', { projectId: this._projectId, from: 'workflows' }));
 
     // Guard actions
     this.container.querySelector('#wfGuardKeep')

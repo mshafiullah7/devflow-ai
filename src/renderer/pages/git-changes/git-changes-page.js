@@ -14,6 +14,8 @@ export class GitChangesPage {
     this._activeCwd      = null;
     this._allFiles       = [];
     this._files          = [];
+    this._layerCounts    = {};
+    this._activeGitRoot  = null;
     this._consoleRunning = false;
     this._qcmdModal      = null;
     this._pendingCommits = 0;
@@ -28,7 +30,9 @@ export class GitChangesPage {
     applyStoredTheme();
 
     this._project = await window.db.projects.get(this._projectId);
-    this._activeCwd = this._project?.project_path || null;
+    this._activeCwd     = this._project?.project_path || null;
+    // Resolve the real git root once — used by all git operations this session
+    this._activeGitRoot = await this._getGitRoot(this._activeCwd);
 
     const allLayers = await window.db.projectLayers.list(this._projectId);
     this._layers = allLayers.filter(l => l.folder_path);
@@ -40,35 +44,13 @@ export class GitChangesPage {
 
     this._bindEvents();
 
-    if (this._project?.project_path) {
-      this._setHeaderFolderPath(this._project.project_path);
-    }
-    await this._loadStatus();
+    await this._loadLayerCounts();
 
-    // Auto-select first layer
     const first = this._layers[0];
     if (first) {
-      this._activeLayerId = first.id;
-      this._activeCwd     = first.folder_path;
-      this._files = this._filesForActiveLayer();
-      this._renderLayerSidebar();
-      this._updateCommitBadge();
-      const label = this.container.querySelector('#gitStatusLabel');
-      if (label) {
-        label.textContent = this._files.length === 0
-          ? ''
-          : `${this._files.length} changed file${this._files.length !== 1 ? 's' : ''}`;
-      }
-      const wrap = this.container.querySelector('#gitAccordionWrap');
-      if (this._files.length === 0) {
-        if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
-      } else {
-        await this._renderAccordion();
-      }
-    }
-
-    if (this._activeCwd) {
-      this._consoleRun('git status');
+      await this._selectLayer(first.id);
+    } else {
+      await this._loadStatus();
     }
   }
 
@@ -98,15 +80,6 @@ export class GitChangesPage {
           </div>
           <div class="git-page__center">
             <div class="git-page__status-label" id="gitStatusLabel">Loading…</div>
-          </div>
-          <div class="git-page__folder-display" id="gitHeaderFolderDisplay" title="Select folder">
-            <div class="git-page__folder-pill">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-              </svg>
-              <span class="git-page__folder-text" id="gitHeaderFolderText">Select folder</span>
-            </div>
           </div>
           <button class="git-page__refresh" id="gitPageVSCode" title="Open layer in VS Code"
             ${this._project?.project_path ? '' : 'disabled'}>
@@ -234,17 +207,17 @@ export class GitChangesPage {
 
     this.container.querySelector('#gitPageVSCode')
       .addEventListener('click', () => {
-        const path = this._activeCwd || this._project?.project_path;
+        const layer = this._layers.find(l => l.id === this._activeLayerId);
+        const path  = layer?.folder_path || this._project?.project_path;
         if (!path) return;
-        // Run via PowerShell so `code` is resolved from the user's PATH
         window.db.terminal.exec({ command: 'code .', cwd: path });
       });
 
     this.container.querySelector('#gitPageTerminal')
       .addEventListener('click', () => {
-        const path = this._activeCwd || this._project?.project_path;
+        const layer = this._layers.find(l => l.id === this._activeLayerId);
+        const path  = layer?.folder_path || this._project?.project_path;
         if (!path) return;
-        // Open a new PowerShell window in the selected layer's folder
         window.db.terminal.exec({
           command: `Start-Process powershell.exe -ArgumentList '-NoExit','-NoLogo' -WorkingDirectory '.'`,
           cwd: path,
@@ -252,23 +225,13 @@ export class GitChangesPage {
       });
 
     this.container.querySelector('#gitPageRefresh')
-      .addEventListener('click', () => this._loadStatus());
+      .addEventListener('click', async () => {
+        await this._loadLayerCounts();
+        await this._loadStatus();
+      });
 
     this.container.querySelector('#gitPageQcmd')
       .addEventListener('click', () => this._qcmdModal.show());
-
-    this.container.querySelector('#gitHeaderFolderDisplay')
-      .addEventListener('click', async () => {
-        const folderPath = await window.db.dialog.openFolder();
-        if (!folderPath) return;
-        await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
-        if (this._project) this._project.project_path = folderPath;
-        this._activeCwd = folderPath;
-        this._activeLayerId = 'root';
-        this._setHeaderFolderPath(folderPath);
-        await this._loadStatus();
-        this._consoleRun('git status');
-      });
 
     this.container.querySelector('#gcLayerSidebar')
       ?.addEventListener('click', e => {
@@ -531,64 +494,48 @@ export class GitChangesPage {
   }
 
   // ----------------------------------------------------------------
-  // Folder display
-  // ----------------------------------------------------------------
-  _setHeaderFolderPath(folderPath) {
-    const text     = this.container.querySelector('#gitHeaderFolderText');
-    const display  = this.container.querySelector('#gitHeaderFolderDisplay');
-    const vsCode   = this.container.querySelector('#gitPageVSCode');
-    const terminal = this.container.querySelector('#gitPageTerminal');
-    if (text)     text.textContent = folderPath;
-    if (display)  display.classList.add('git-page__folder-display--active');
-    if (vsCode)   vsCode.disabled = false;
-    if (terminal) terminal.disabled = false;
-  }
-
-  // ----------------------------------------------------------------
   // Layer sidebar
   // ----------------------------------------------------------------
   _renderLayerSidebar() {
     const el = this.container.querySelector('#gcLayerSidebar');
     if (!el) return;
 
-    const base = (this._project?.project_path || '').replace(/\\/g, '/').replace(/\/$/, '');
-
-    const countForPath = (layerPath) => {
-      if (!layerPath) return this._allFiles.length;
-      const full   = layerPath.replace(/\\/g, '/').replace(/\/$/, '');
-      const prefix = full.startsWith(base + '/') ? full.slice(base.length + 1) : full;
-      return this._allFiles.filter(f => {
-        const n = f.file.replace(/\\/g, '/');
-        return n === prefix || n.startsWith(prefix + '/');
-      }).length;
-    };
-
-    const items = [
-      ...this._layers.map(l => {
-        const n      = countForPath(l.folder_path);
-        const active = this._activeLayerId === l.id;
-        return `<div class="gc-layer-item ${active ? 'gc-layer-item--active' : ''}" data-layer-id="${l.id}">
-          <span class="gc-layer-item__name">${escHtml(l.name)}</span>
-          <span class="gc-layer-item__path">${escHtml(l.folder_path || '')}</span>
-          ${n > 0 ? `<span class="gc-layer-item__count">${n}</span>` : ''}
-        </div>`;
-      }),
-    ];
+    const items = this._layers.map(l => {
+      const n      = this._layerCounts[l.id] ?? 0;
+      const active = this._activeLayerId === l.id;
+      return `<div class="gc-layer-item ${active ? 'gc-layer-item--active' : ''}" data-layer-id="${l.id}">
+        <span class="gc-layer-item__name">${escHtml(l.name)}</span>
+        <span class="gc-layer-item__path">${escHtml(l.folder_path || '')}</span>
+        ${n > 0 ? `<span class="gc-layer-item__count">${n}</span>` : ''}
+      </div>`;
+    });
 
     el.innerHTML = items.join('');
   }
 
+  async _loadLayerCounts() {
+    const gitRoot = this._activeGitRoot || this._project?.project_path || '';
+    if (!gitRoot) { this._layerCounts = {}; return; }
+    try {
+      const r         = await window.db.terminal.exec({ command: 'git status --short 2>&1', cwd: gitRoot });
+      const allFiles  = this._parseGitStatus(r.stdout || '');
+      const gitRootN  = gitRoot.replace(/\\/g, '/').replace(/\/$/, '');
+      this._layerCounts = {};
+      for (const l of this._layers) {
+        if (!l.folder_path) { this._layerCounts[l.id] = 0; continue; }
+        const layerN  = l.folder_path.replace(/\\/g, '/').replace(/\/$/, '');
+        const prefix  = layerN.startsWith(gitRootN + '/') ? layerN.slice(gitRootN.length + 1) : null;
+        this._layerCounts[l.id] = prefix
+          ? allFiles.filter(f => { const fn = f.file.replace(/\\/g, '/'); return fn === prefix || fn.startsWith(prefix + '/'); }).length
+          : allFiles.length;
+      }
+    } catch {
+      this._layerCounts = {};
+    }
+  }
+
   _filesForActiveLayer() {
-    if (this._activeLayerId === 'root') return this._allFiles;
-    const layer = this._layers.find(l => l.id === this._activeLayerId);
-    if (!layer?.folder_path || !this._project?.project_path) return this._allFiles;
-    const base   = this._project.project_path.replace(/\\/g, '/').replace(/\/$/, '');
-    const lpath  = layer.folder_path.replace(/\\/g, '/').replace(/\/$/, '');
-    const prefix = lpath.startsWith(base + '/') ? lpath.slice(base.length + 1) : lpath;
-    return this._allFiles.filter(f => {
-      const norm = f.file.replace(/\\/g, '/');
-      return norm === prefix || norm.startsWith(prefix + '/');
-    });
+    return this._allFiles;
   }
 
   async _selectLayer(layerId) {
@@ -602,25 +549,21 @@ export class GitChangesPage {
       this._activeLayerId = layer.id;
       this._activeCwd     = layer.folder_path;
     }
-    this._files = this._filesForActiveLayer();
-    this._renderLayerSidebar();
-    this._updateCommitBadge();
-
-    const label = this.container.querySelector('#gitStatusLabel');
-    if (label) {
-      label.textContent = this._files.length === 0
-        ? ''
-        : `${this._files.length} changed file${this._files.length !== 1 ? 's' : ''}`;
-    }
-
-    const wrap = this.container.querySelector('#gitAccordionWrap');
-    if (this._files.length === 0) {
-      if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
-    } else {
-      await this._renderAccordion();
-    }
-
+    await this._loadStatus();
     if (this._activeCwd) this._consoleRun('git status');
+  }
+
+  async _getGitRoot(cwd) {
+    if (!cwd) return cwd;
+    try {
+      const r = await window.db.terminal.exec({
+        command: 'git rev-parse --show-toplevel 2>&1',
+        cwd,
+      });
+      return (r.stdout || '').trim() || cwd;
+    } catch {
+      return cwd;
+    }
   }
 
   // ----------------------------------------------------------------
@@ -676,11 +619,12 @@ export class GitChangesPage {
   // Git status
   // ----------------------------------------------------------------
   async _loadStatus() {
-    const cwd = this._project?.project_path || '';
-    const label = this.container.querySelector('#gitStatusLabel');
-    const wrap  = this.container.querySelector('#gitAccordionWrap');
+    // Always run from the git root so file paths are correct for git diff
+    const gitRoot = this._activeGitRoot || this._activeCwd || this._project?.project_path || '';
+    const label   = this.container.querySelector('#gitStatusLabel');
+    const wrap    = this.container.querySelector('#gitAccordionWrap');
 
-    if (!cwd) {
+    if (!gitRoot) {
       if (label) label.textContent = 'No folder selected';
       if (wrap) wrap.innerHTML = `
         <div class="git-page__empty">
@@ -694,12 +638,30 @@ export class GitChangesPage {
 
     try {
       const [result, ignorePatterns] = await Promise.all([
-        window.db.terminal.exec({ command: 'git status --short 2>&1', cwd }),
-        this._fetchGitignorePatterns(cwd),
+        window.db.terminal.exec({ command: 'git status --short 2>&1', cwd: gitRoot }),
+        this._fetchGitignorePatterns(gitRoot),
       ]);
-      this._allFiles = this._parseGitStatus(result.stdout || '')
+
+      let files = this._parseGitStatus(result.stdout || '')
         .filter(f => !this._matchesGitignore(f.file, ignorePatterns));
-      this._files = this._filesForActiveLayer();
+
+      // Filter to the active layer's subdirectory (when layer ≠ git root)
+      const gitRootN = gitRoot.replace(/\\/g, '/').replace(/\/$/, '');
+      const layerN   = (this._activeCwd || '').replace(/\\/g, '/').replace(/\/$/, '');
+      if (layerN && layerN !== gitRootN) {
+        const prefix = layerN.startsWith(gitRootN + '/')
+          ? layerN.slice(gitRootN.length + 1)
+          : null;
+        if (prefix) {
+          files = files.filter(f => {
+            const fn = f.file.replace(/\\/g, '/');
+            return fn === prefix || fn.startsWith(prefix + '/');
+          });
+        }
+      }
+
+      this._allFiles = files;
+      this._files    = files;
 
       if (label) {
         label.textContent = this._files.length === 0
@@ -774,7 +736,7 @@ export class GitChangesPage {
     const body = this.container.querySelector(`#gitAccBody${idx}`);
     if (!body) return;
 
-    const cwd = this._project?.project_path || '';
+    const cwd = this._activeGitRoot || this._activeCwd || this._project?.project_path || '';
     try {
       let diffText = '';
       if (fileInfo.statusType === 'U') {

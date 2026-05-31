@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker } from '../../components/model-picker/model-picker.js';
+import { GitController } from '../../components/git/git-controller.js';
 
 const FILE_EXTENSIONS = {
   flutter: ['.dart'],
@@ -148,6 +149,19 @@ export class TestGeneratorPage {
     });
     await this._picker.reload();
 
+    this._git = new GitController({
+      getTermCwd:           () => this._project?.project_path || '',
+      gitBtnId:             'tgBtnGit',
+      gitBadgeId:           'tgGitBadge',
+      controlBtnVisibility: false,
+    });
+    this._git.mount();
+
+    if (this._project?.project_path) {
+      this._git.refreshStatus();
+      this._git.startPoll();
+    }
+
     this._bindEvents();
 
     const firstLayer = this._layers.find(l => l.folder_path);
@@ -155,6 +169,7 @@ export class TestGeneratorPage {
   }
 
   unmount() {
+    this._git?.stopPoll();
     removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
     if (this._e2eStreaming) window.app.chat.offAll();
@@ -177,6 +192,16 @@ export class TestGeneratorPage {
             <p class="tg-subtitle">Test Generator</p>
           </div>
           <div id="tgModelPicker" style="-webkit-app-region:no-drag;"></div>
+          <button class="project-page__git-btn" id="tgBtnGit" title="Git changes" style="-webkit-app-region:no-drag;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="project-page__git-badge" id="tgGitBadge" hidden></span>
+          </button>
         </header>
 
         <div class="tg-body">
@@ -471,6 +496,10 @@ export class TestGeneratorPage {
   _bindEvents() {
     this.container.querySelector('#tgBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
+
+    this.container.querySelector('#tgBtnGit')
+      ?.addEventListener('click', () =>
+        this.router.navigate('git-changes', { projectId: this._projectId, from: 'test-generator' }));
 
     this.container.querySelector('#tgSidebar')
       ?.addEventListener('click', e => {

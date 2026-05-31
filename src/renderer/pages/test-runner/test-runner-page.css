@@ -14,8 +14,8 @@
 /* Layer sidebar                                                        */
 /* ------------------------------------------------------------------ */
 .tr-sidebar {
-  width: 220px;
-  flex-shrink: 0;
+  flex: 0 0 30%;
+  min-width: 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
   display: flex;

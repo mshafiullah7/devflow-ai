@@ -1657,13 +1657,6 @@ export class MockupsPage {
           </button>
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <div id="mockupsModelPicker"></div>
-            <button class="project-page__model-cfg-btn" id="mockupsBtnModelConfigs" title="Configure AI models">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
-                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
           </div>
           <button class="mockups-page__style-btn scr-btn scr-btn--sm${this._hasAnyTemplate() ? ' scr-btn--ds-active' : ''}" id="scrStyleGuideBtn" title="Open Project Style Guide page">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -1766,9 +1759,6 @@ export class MockupsPage {
       .addEventListener('click', () => {
         this.router.navigate('style-guide', { projectId: this._projectId, from: 'mockups' });
       });
-
-    this.container.querySelector('#mockupsBtnModelConfigs')
-      .addEventListener('click', () => this.router.navigate('settings', { from: 'mockups', fromParams: { projectId: this._projectId } }));
 
 
 
