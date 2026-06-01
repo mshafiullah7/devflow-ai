@@ -652,6 +652,124 @@
   border-radius: 0 0 7px 7px;
 }
 
+/* ----------------------------------------------------------------
+   Auto-context status panel
+---------------------------------------------------------------- */
+.aic-auto-ctx-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  margin-bottom: 6px;
+}
+
+.aic-auto-ctx-idle {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aic-auto-ctx-idle--fetching {
+  color: var(--accent);
+}
+
+/* Spinner for fetching state */
+@keyframes aic-spin {
+  to { transform: rotate(360deg); }
+}
+
+.aic-auto-ctx-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: aic-spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+.aic-auto-ctx-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+
+.aic-auto-ctx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.aic-auto-ctx-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.aic-auto-ctx-tag--issues {
+  background: color-mix(in srgb, #f87171 12%, transparent);
+  color: #f87171;
+  border: 1px solid color-mix(in srgb, #f87171 25%, transparent);
+}
+[data-theme="light"] .aic-auto-ctx-tag--issues {
+  color: #dc2626;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.aic-auto-ctx-tag--workflows {
+  background: color-mix(in srgb, #60a5fa 12%, transparent);
+  color: #60a5fa;
+  border: 1px solid color-mix(in srgb, #60a5fa 25%, transparent);
+}
+[data-theme="light"] .aic-auto-ctx-tag--workflows {
+  color: #2563eb;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.aic-auto-ctx-tag--layers {
+  background: color-mix(in srgb, #a78bfa 12%, transparent);
+  color: #a78bfa;
+  border: 1px solid color-mix(in srgb, #a78bfa 25%, transparent);
+}
+[data-theme="light"] .aic-auto-ctx-tag--layers {
+  color: #7c3aed;
+  background: #ede9fe;
+  border-color: #c4b5fd;
+}
+
+.aic-auto-ctx-tag--docs {
+  background: color-mix(in srgb, #34d399 12%, transparent);
+  color: #34d399;
+  border: 1px solid color-mix(in srgb, #34d399 25%, transparent);
+}
+[data-theme="light"] .aic-auto-ctx-tag--docs {
+  color: #059669;
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.aic-auto-ctx-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Apply actions legend */
 .aic-actions-legend {
   display: flex;

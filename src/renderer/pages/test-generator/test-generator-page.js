@@ -134,9 +134,10 @@ export class TestGeneratorPage {
     injectCss('pages/test-generator/test-generator-page.css');
     applyStoredTheme();
 
-    const [project, layers] = await Promise.all([
+    const [project, layers, _mapping] = await Promise.all([
       window.db.projects.get(this._projectId),
       window.db.projectLayers.list(this._projectId),
+      window.db.modelMapping.get('test-generator'),
     ]);
     this._project = project;
     this._layers  = layers ?? [];
@@ -144,8 +145,9 @@ export class TestGeneratorPage {
     this.container.innerHTML = this._template();
 
     this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#tgModelPicker'),
-      onSelect: model => { this._modelCfg = model; this._syncGenerateBtns(); },
+      anchor:    this.container.querySelector('#tgModelPicker'),
+      onSelect:  model => { this._modelCfg = model; this._syncGenerateBtns(); },
+      initialId: _mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
 

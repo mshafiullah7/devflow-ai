@@ -898,3 +898,61 @@
   transition: background 0.15s, border-color 0.15s;
 }
 .gw-open-btn:hover { background: rgba(99,102,241,0.18); border-color: #818cf8; }
+
+/* ── Status badges — layer ────────────────────────────────────────── */
+.wf-layer-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.wf-layer-name-row .wf-layer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.wf-layer-status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wf-layer-status--open   { background: var(--surface-hover); color: var(--text-muted); }
+.wf-layer-status--done   { background: rgba(34,197,94,.12);  color: #16a34a; }
+.wf-layer-status--error  { background: rgba(239,68,68,.12);  color: #dc2626; }
+.wf-layer-status--review { background: rgba(234,179,8,.12);  color: #b45309; }
+
+/* ── Status badges — workflow ─────────────────────────────────────── */
+.wf-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.wf-detail-title-row .project-panel__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.wf-workflow-status {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wf-wfstatus--open     { background: var(--surface-hover); color: var(--text-muted); }
+.wf-wfstatus--progress { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.wf-wfstatus--done     { background: rgba(34,197,94,.12); color: #16a34a; }
+
+/* Keep the workflow list title row aligned with badge */
+.pl-list-title-row {
+  align-items: center;
+}

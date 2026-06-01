@@ -1,8 +1,8 @@
 {
   "name": "devflow-ai-sdlc",
-  "productName": "devflow-ai-sdlc",
-  "version": "1.0.0",
-  "description": "My Electron application description",
+  "productName": "DevFlow AI",
+  "version": "0.1.0",
+  "description": "AI-powered SDLC companion — plan, design, build and test software projects with local or cloud AI models.",
   "main": "src/main/index.js",
   "private": true,
   "scripts": {

@@ -206,7 +206,7 @@
 /* ------------------------------------------------------------------ */
 .ph-stats-strip {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   margin-bottom: 28px;
 }
@@ -232,6 +232,98 @@
 .ph-stat-box__total { font-size: 10px; color: var(--text-muted); margin-top: 4px; opacity: 0.7; }
 .ph-stat-box--accent .ph-stat-box__value { color: var(--accent); }
 .ph-stat-box--danger .ph-stat-box__value { color: var(--danger); }
+
+/* ------------------------------------------------------------------ */
+/* Layer Progress table (below Quick Links)                            */
+/* ------------------------------------------------------------------ */
+.ph-ls-table {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  margin-bottom: 28px;
+}
+
+.ph-ls-header {
+  display: grid;
+  grid-template-columns: 160px 1fr 110px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-hover);
+}
+.ph-ls-header span {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ph-ls-header__counts { text-align: right; }
+
+.ph-ls-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 110px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+}
+.ph-ls-row:last-child { border-bottom: none; }
+.ph-ls-row:hover { background: var(--surface-hover); }
+
+.ph-ls-row__name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ph-ls-row__track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ph-ls-row__bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+.ph-ls-bar--active { background: var(--accent); }
+.ph-ls-bar--done   { background: #16a34a; }
+
+.ph-ls-row__counts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ph-ls-row__fraction {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ph-ls-row__total-sep {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.ph-ls-fraction--done { color: #16a34a; }
+.ph-ls-fraction--prog { color: var(--accent); }
+
+.ph-ls-row__pct {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 30px;
+  text-align: right;
+}
 
 /* ------------------------------------------------------------------ */
 /* Status breakdown                                                     */

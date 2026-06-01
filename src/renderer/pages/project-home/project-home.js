@@ -16,7 +16,7 @@ export class ProjectHomePage {
     injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, workflows, documents, mockups, issueCount, testRunHistory, layers] = await Promise.all([
+    const [project, workflows, documents, mockups, issueCount, testRunHistory, layers, layerStats] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.workflows.list(this.projectId),
       window.db.documents.list(this.projectId),
@@ -24,6 +24,7 @@ export class ProjectHomePage {
       window.db.issues.count(this.projectId),
       window.db.testRunHistory.list(this.projectId),
       window.db.projectLayers.list(this.projectId),
+      window.db.layers.statsByProjectLayer(this.projectId),
     ]);
 
     this._project          = project;
@@ -33,6 +34,7 @@ export class ProjectHomePage {
     this._issueCount       = issueCount;
     this._testRunHistory   = testRunHistory;
     this._layers           = layers ?? [];
+    this._layerStats       = layerStats ?? [];
 
     this.container.innerHTML = this._template();
 
@@ -312,12 +314,56 @@ export class ProjectHomePage {
               ${this._quickLinksHtml()}
             </div>
 
+            ${this._layerStatsHtml()}
+
             ${this._chartsHtml()}
           </main>
 
         </div>
       </div>
     `;
+  }
+
+  // ----------------------------------------------------------------
+  // Layer-by-layer progress section
+  // ----------------------------------------------------------------
+  _layerStatsHtml() {
+    const rows = this._layerStats || [];
+    if (!rows.length) return '';
+
+    const rowsHtml = rows.map(r => {
+      const total     = r.total     ?? 0;
+      const completed = r.completed ?? 0;
+      const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const allDone   = total > 0 && completed === total;
+      const inProg    = completed > 0 && !allDone;
+
+      return `
+        <div class="ph-ls-row">
+          <div class="ph-ls-row__name">${escHtml(r.name)}</div>
+          <div class="ph-ls-row__track">
+            <div class="ph-ls-row__bar ${allDone ? 'ph-ls-bar--done' : 'ph-ls-bar--active'}"
+                 style="width:${pct}%"></div>
+          </div>
+          <div class="ph-ls-row__counts">
+            <span class="ph-ls-row__fraction ${allDone ? 'ph-ls-fraction--done' : inProg ? 'ph-ls-fraction--prog' : ''}">
+              ${completed}<span class="ph-ls-row__total-sep">/${total}</span>
+            </span>
+            <span class="ph-ls-row__pct">${total > 0 ? pct + '%' : '—'}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="ph-section-label">Layer Progress</div>
+      <div class="ph-ls-table">
+        <div class="ph-ls-header">
+          <span class="ph-ls-header__name">Layer</span>
+          <span class="ph-ls-header__bar"></span>
+          <span class="ph-ls-header__counts">Completed / Total</span>
+        </div>
+        ${rowsHtml}
+      </div>`;
   }
 
   // ----------------------------------------------------------------

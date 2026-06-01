@@ -133,6 +133,12 @@ function registerDbHandlers() {
     return { success: true };
   });
 
+  // open | in_progress | completed
+  safeHandle('db:workflows:updateStatus', (_e, { id, status }) => {
+    db.prepare(`UPDATE workflows SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
+    return db.prepare('SELECT * FROM workflows WHERE id = ?').get(id);
+  });
+
   // ----------------------------------------------------------------
   // success_criteria
   // ----------------------------------------------------------------
@@ -223,6 +229,48 @@ function registerDbHandlers() {
   safeHandle('db:layers:delete', (_e, id) => {
     db.prepare(`UPDATE layers SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
     return { success: true };
+  });
+
+  // open | executed | failed | needs_review
+  safeHandle('db:layers:updateStatus', (_e, { id, status }) => {
+    db.prepare(`UPDATE layers SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
+    return db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
+  });
+
+  // Returns { total, completed } across all workflow layers for a project
+  safeHandle('db:layers:countByProject', (_e, project_id) => {
+    const row = db.prepare(`
+      SELECT
+        COUNT(*)                                                AS total,
+        SUM(CASE WHEN l.status = 'executed' THEN 1 ELSE 0 END) AS completed
+      FROM layers l
+      INNER JOIN workflows w ON l.workflow_id = w.id
+      WHERE w.project_id = ? AND l.is_active = 1 AND w.is_active = 1
+    `).get(project_id);
+    return { total: row?.total ?? 0, completed: row?.completed ?? 0 };
+  });
+
+  // Returns [{ id, name, sort_order, total, completed }] — one row per project layer
+  safeHandle('db:layers:statsByProjectLayer', (_e, project_id) => {
+    return db.prepare(`
+      SELECT
+        pl.id,
+        pl.name,
+        pl.sort_order,
+        COUNT(l.id)                                                AS total,
+        SUM(CASE WHEN l.status = 'executed' THEN 1 ELSE 0 END)    AS completed
+      FROM project_layers pl
+      LEFT JOIN layers l
+        ON  l.project_layer_id = pl.id
+        AND l.is_active = 1
+        AND l.workflow_id IN (
+              SELECT id FROM workflows
+               WHERE project_id = ? AND is_active = 1
+            )
+      WHERE pl.project_id = ? AND pl.is_active = 1
+      GROUP BY pl.id, pl.name, pl.sort_order
+      ORDER BY pl.sort_order ASC, pl.name ASC
+    `).all(project_id, project_id);
   });
 
   // ----------------------------------------------------------------

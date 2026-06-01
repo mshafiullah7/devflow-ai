@@ -1,239 +1,370 @@
-# devflow-ai-sdlc
+# DevFlow AI
 
-**AI-First** Software Development Lifecycle (SDLC) platform. AI agents are the primary execution layer — they read your codebase, plan changes, write code, run builds, and retry on failure. You define the work and approve the plan; the agent drives implementation. Everything stored locally in SQLite with no cloud dependency.
+**An AI-powered Software Development Life Cycle (SDLC) companion — desktop app for solo developers and small teams.**
+
+DevFlow AI is a local-first Electron desktop application that covers the full development lifecycle from requirements through testing. It is **tech-stack agnostic** and works alongside your existing IDE and terminal — not as a replacement.
 
 ---
 
 ## Table of Contents
 
-1. [What It Does](#what-it-does)
-2. [Features](#features)
-3. [AI Configuration](#ai-configuration)
-4. [Markdown Reference](#markdown-reference)
+1. [What It Is](#what-it-is)
+2. [SDLC Coverage](#sdlc-coverage)
+3. [Feature Breakdown by Page](#feature-breakdown-by-page)
+4. [AI Model Support](#ai-model-support)
 5. [Developer Setup](#developer-setup)
 6. [Building Executables](#building-executables)
 7. [Tech Stack & Architecture](#tech-stack--architecture)
 
 ---
 
-## What It Does
+## What It Is
 
-DevFlow is an AI-First SDLC platform where AI agents are the core execution engine, not a supplementary tool. The human role is project definition, story writing, and plan approval — the agent handles implementation.
+DevFlow AI helps you structure, document, and execute software projects with AI assistance at every step.
 
-- Organise work into **Projects → Features → User Stories**.
-- Write AI **Prompts** per user story; the DevFlow Agent plans and executes them autonomously.
-- **Two-phase agentic execution**: AI proposes a step-by-step plan → you approve → agent executes with full codebase awareness, runs build verification, and auto-retries on failure.
-- **RAG-powered context**: the agent indexes your project with ChromaDB + sentence-transformers so every task has full, semantically-relevant code context.
-- Generate **UI Mockups** from natural language and extract User Stories directly from designs.
-- Use the **AI Console** for project-wide chat: refine stories, triage issues, generate test cases, and update specs.
-- Create rich **Documents** per project using Markdown with templates, SVG diagrams, and draw.io attachments.
-- Supports **multiple AI backends**: local Ollama models, Anthropic Claude, Google Gemini, OpenAI-compatible APIs, and local CLI tools — switchable per workflow.
-- Everything stored **locally in SQLite** — no cloud account required.
+- Structure projects into architectural **layers** (Frontend, Backend API, Mobile, etc.)
+- Write and AI-edit **Markdown documents** (PRD, specs, architecture notes) with diagram attachments
+- Generate **UI mockups** from natural-language templates
+- Define and run multi-step **AI workflows** for recurring development tasks
+- Track **bugs and issues** with severity, status, and AI-assisted analysis
+- **Generate and run tests** across Flutter, Python, .NET, Java, Go, Ruby, and JS/TS
+- View **git changes** across all layers from a single screen
+- Chat with AI in the context of your project's documents and issues
+- Queue and batch-run **AI prompts** with plan-and-approve execution
 
----
-
-## Features
-
-### Projects
-
-- Create, rename, and delete projects from the home screen.
-- Recent projects listed on the dashboard (last 5 opened).
-- Each project has a name and optional description.
+Everything runs locally. Data is stored in a SQLite database on your machine. No account or internet connection is required unless using a cloud AI API.
 
 ---
 
-### Features & User Stories
+## SDLC Coverage
 
-- Each project contains **Features**; each feature contains **User Stories**.
-- User stories have: Title, Description, Acceptance Criteria, Prompt, and Status.
-- Status values: Backlog · In Progress · Implemented · In Review · Tested · Done.
+DevFlow AI covers **6 of the 7 standard SDLC phases**. CI/CD (automated pipelines, deployments) is outside its scope — it is a pre-deployment companion tool.
 
----
-
-### User Story Detail
-
-- Click a user story to open the detail panel.
-- Fields: **Description**, **Acceptance Criteria**, **Prompt**.
-- Each field opens in a popup with **Edit** and **Preview** tabs.
-- Preview renders the content as Markdown.
-- Popup closes only via the **×** button — clicking outside does nothing.
+| SDLC Phase | Coverage | Features in DevFlow AI |
+|---|---|---|
+| **Planning** | Full | Projects, layers, documents, AI architecture generation |
+| **Requirements** | Full | Documents (PRD, specs), issues, templates |
+| **System Design** | Full | Architecture docs, mockups, style guide, draw.io diagrams |
+| **Implementation** | Full | Prompt queue, AI workflows, AI console, git integration |
+| **Testing** | Full | Test generator (multi-language), test runner (multi-framework) |
+| **Maintenance** | Full | Issue tracker (severity/status), AI-assisted bug analysis |
+| **CI/CD / Deployment** | Not covered | Use GitHub Actions, GitLab CI, or similar external tools |
 
 ---
 
-### Documents
+## Feature Breakdown by Page
 
-- Click **Documents** (top-right of project page, next to AI Model selector) to open the Documents modal.
-- Documents belong to a project and are stored in SQLite.
+### Launcher — Project Manager
 
-#### Creating a Document
-- Click **New** in the sidebar → choose a template:
+The home screen for the app.
 
-| Template | Contents |
-|----------|----------|
-| Empty Document | Blank page |
-| Project Overview | Purpose, goals, stakeholders, timeline |
-| Technical Specification | Architecture, components, API design, data model |
-| Meeting Notes | Agenda, discussion, decisions, action items |
-| Release Notes | New features, bug fixes, breaking changes |
-
-- Edit the title inline. Press `Ctrl+S` or click **Save** to persist.
-
-#### Edit / Preview Tabs
-- **Edit** — write content in Markdown.
-- **Preview** — rendered view with styled headings, code blocks, lists, blockquotes, and attachment links.
-
-#### Deleting a Document
-- Hover a document in the sidebar → click the trash icon.
+- Create and manage multiple projects
+- Recent projects list with last-opened timestamps
+- Theme switcher: **Light / Dark / Midnight**
+- Delete projects (with confirmation)
 
 ---
 
-### Document Attachments (SVG & draw.io)
+### Project Home — Dashboard
 
-Attachments are stored in SQLite and linked inside Markdown content.
+The per-project overview screen.
 
-#### Adding an Attachment
-1. Open the **Attachments** bar at the bottom of the editor (click to expand).
-2. Click **Add SVG** or **Add draw.io**.
-3. Enter a name and paste the SVG/XML code → click **Add**.
-
-#### Referencing in Markdown
-- Each attachment shows its ID as `attach:ID`.
-- Use in Markdown: `[My Diagram](attach:12)`
-- In Preview this renders as a clickable badge → opens the diagram lightbox.
-
-#### SVG Attachments
-
-| Button | Action |
-|--------|--------|
-| View | Opens SVG in a lightbox (isolated from app CSS) |
-| Delete | Removes the attachment |
-
-#### draw.io Attachments
-
-| Button | Action |
-|--------|--------|
-| View | Shows info card — draw.io XML cannot be previewed inline. Includes an **Open in draw.io** button. |
-| Open in draw.io | Writes file to a temp folder and opens in draw.io desktop app |
-| Sync | Reads the saved temp file back and updates the database |
-| Delete | Removes the attachment |
-
-#### draw.io Edit & Sync Workflow
-1. Click **Open in draw.io** → diagram opens in draw.io desktop.
-2. Edit and save in draw.io (`Ctrl+S`).
-3. Return to the app → click **Sync** → changes saved to database.
-- If draw.io has not been opened in the current session, Sync shows a reminder toast.
+- Stats strip: workflow count, open issues, last test run failures
+- Quick links: Project Overview document and Style Guide
+- Live **git status badge** with background polling
+- AI model picker (active model shown in header)
+- Sidebar navigation to all project sections
 
 ---
 
-### Quick Commands
+### Project Layers — Architecture Definition
 
-- Reusable prompt snippets accessible from the user story panel.
-- Create, edit, and delete quick commands from the settings/commands panel.
+Define the sub-projects or deployment units that make up your system (e.g. Frontend, Backend API, Mobile App, Database, Infrastructure).
 
----
-
-### Terminal
-
-- Built-in terminal panel for running shell commands.
-- Supports long-running processes.
-- Kill Active / `Ctrl+C` stops the running process.
+- Each layer stores: name, description, setup instructions, folder path
+- **AI generation**: select project documents → AI analyses them and suggests architectural layers with full setup instructions per technology (scaffold commands, install steps, env vars, run commands)
+- Per-layer folder path picker used by the Git Changes and Test Generator pages
+- Layers feed into: Workflows, Test Generator, Git Changes, Issues, Prompt Queue
 
 ---
 
-## AI Configuration
+### Documents — Project Documentation
 
-AI models are configured in **Settings → AI Models**. Each model config has a **type** that controls how the app calls the model.
+Full-featured Markdown document editor with AI editing built in.
 
----
+| Feature | Detail |
+|---|---|
+| Edit / Preview tabs | Ctrl+S to save in Edit mode |
+| AI Edit panel | Right-hand panel: instruct the AI to update the document; reads attached diagrams for context |
+| SVG attachments | Paste or browse SVG code; renders inline in Preview |
+| draw.io attachments | Open in draw.io desktop, edit, sync changes back |
+| PDF export | Exports styled HTML as PDF |
+| Templates | Template picker on new document; manage templates in Settings |
+| Revert AI edits | One-click revert to previous content per AI message |
+| Model support | Ollama, Claude CLI, Gemini CLI, any OpenAI-compatible API |
 
-### Model Types
+**Typical documents:** Project Overview, PRD, API Specification, Architecture Decision Records, Database Schema, Meeting Notes, Release Notes.
 
-| Type | How it works | Used by |
-|------|-------------|---------|
-| `ollama` | Direct HTTP call to a local Ollama server | Documents, Chat, User Stories, Prompt Queue |
-| `ollama` + DevFlow Agent | Spawns `devflow_agent.py` subprocess | Prompt Queue only |
-| `anthropic` | Anthropic SDK call (Claude) | Prompt Queue, Chat |
-| `api` | Generic HTTP POST to any OpenAI-compatible endpoint | Prompt Queue |
-| `cli` | Runs a local CLI binary (e.g. `claude`, `gemini`) | Prompt Queue, Mockups, Extract Stories |
-
----
-
-### Configuring an Ollama Model
-
-1. Open **Settings → AI Models → Add model**
-2. Select type **Local (Ollama)**
-3. Fill in the fields:
-
-| Field | Maps to agent flag | Default | Notes |
-|-------|-------------------|---------|-------|
-| **Base URL** | `--base-url` | `http://localhost:11434` | Your Ollama server URL. Use the detect button to auto-populate the model list. |
-| **Model** | `--model` | `qwen2.5-coder:7b` | Pick from the detected dropdown or type manually. Larger models (32b+) give better results for complex tasks. |
-| **Max Tokens** | `--max-turns` | `15` | Controls how many agentic loop iterations the agent is allowed. Higher = more autonomous but slower. |
-| **Use Devflow Agent loop** | enables agent mode | off | Checkbox. When ticked, the Prompt Queue runs `devflow_agent.py` instead of a direct Ollama call. |
-
-4. Optionally tick **Set as default model** so it pre-selects in all pages.
-5. Click **Save**.
+#### draw.io Workflow
+1. Add a draw.io attachment → click **Open in draw.io**
+2. Edit and save in draw.io (`Ctrl+S`)
+3. Return to the app → click **Sync** → saved to database
+4. Reference in Markdown: `[Diagram Name](attach:ID)` — renders as inline badge
 
 ---
 
-### DevFlow Agent Mode
+### Mockups — Screen Design Generator
 
-When **Use Devflow Agent loop** is enabled, the Prompt Queue runs in two phases:
+AI-generated HTML/CSS screen mockups from natural-language descriptions.
 
-#### Phase 1 — Plan
+- **30+ built-in screen templates** grouped by category:
+  - Authentication (Login, OTP, Register, Forgot Password)
+  - Dashboards, Analytics, Admin panels
+  - E-Commerce (Product listing, Cart, Checkout, Order tracking)
+  - Social Media (Feed, Profile, Stories, DMs)
+  - Finance (Wallet, Transaction history, Send money)
+  - Healthcare, Education, Real Estate, Travel, Food Delivery
+  - Settings, Onboarding, Notifications, Search
+- Live HTML preview in-app
+- Queue screens for bulk AI generation
+- Style guide enforcement per project
+- Mockups can be linked to Workflows (scope a workflow to a specific screen)
 
-The agent (`devflow_agent.py`) is called with `--plan-only`. It:
-- Reads the repo map and RAG context for the project
-- Generates a structured JSON plan (2–5 steps) using the configured model
-- Streams the plan back to the Electron UI for review
+---
 
-The plan is displayed in the Prompt Queue panel. Each step shows a title and description of what will be changed and which files are involved.
+### Workflows — AI Task Orchestration
 
-#### Phase 2 — Execute (after approval)
+Define reusable multi-step AI workflows for recurring development tasks (e.g. code review, feature implementation, documentation generation).
 
-Once you approve the plan, the agent is called with `--approved-plan <json>`. It:
-- Executes each step in sequence using the agentic tool loop
-- Streams step progress markers (`[STEP:1/3]`, `[STEP_DONE:1/3]`, `[STEP_FAILED:1/3]`) to the UI
-- Runs build verification after all steps complete and auto-retries on build errors
+- Each workflow: name, description, optional linked screen design
+- Workflow **layers** (steps): name, purpose, inputs, outputs, AI prompt
+- Drag-and-drop reorder of steps
+- Run one layer at a time (with preview drawer showing purpose/prompt)
+- **Run All** opens a dedicated runner window with live streaming output and "Run Next" chaining
+- Navigation guard prevents leaving while a run is in progress
+- **Success criteria** tab per workflow
+- **AI generation**: click Generate → describe the feature → AI creates a full workflow with steps
 
-#### Run Summary
+---
 
-At the end of every run the agent prints a summary. In the Prompt Queue output panel you will see the raw line; in a terminal (CLI use) it is formatted:
+### Issues — Bug & Issue Tracker
+
+Lightweight per-project issue tracker with AI assistance.
+
+| Field | Values |
+|---|---|
+| Severity | Critical / High / Medium / Low |
+| Status | Open → In Progress → Resolved / Closed / Won't Fix |
+| Detail | Title, description, steps to reproduce, expected vs actual behavior |
+| Layer | Associate issue with a specific project layer |
+
+- Grouped list view with collapsible status sections (Resolved/Closed collapse by default)
+- AI-assisted analysis and next-step suggestions
+- Queue issues for batch AI processing
+- Live git badge in header
+
+---
+
+### Git Changes — Multi-Repo Git View
+
+View and manage git changes across all project layers from a single screen.
+
+- Per-layer tab showing changed files (each layer = a separate git repo)
+- Pending commit count badge per layer
+- Inline diff viewer per file
+- Stage, unstage, and commit with message
+- Terminal console for custom git commands
+- **Quick Commands** modal for saved shell commands
+- Overall project-root git view as fallback
+
+---
+
+### AI Console — Project-Aware Chat
+
+Full conversation AI chat with your project loaded as context.
+
+- Automatically loads project documents and open issues as context
+- Multi-turn conversation history with token count estimate
+- Streaming response display
+- Clear conversation button
+- Works with all configured AI models (Ollama, Claude CLI, Gemini, API)
+
+---
+
+### Test Generator — AI Test Generation
+
+Generate tests for any project layer using AI, with automatic language/framework detection.
+
+| Setup Instructions contain | Generated test type |
+|---|---|
+| flutter / dart | Dart widget & unit tests (`flutter test`) |
+| python / pytest / pip | Python pytest `.py` |
+| .net / c# / dotnet | C# xUnit `.cs` |
+| java / kotlin | JUnit `.java` / `.kt` |
+| golang / go | Go `_test.go` |
+| ruby / rspec / rails | Ruby RSpec `_spec.rb` |
+| Default | Jest / TypeScript `.ts` / `.js` |
+
+- Detects UI layers (React, Angular, Flutter, SwiftUI, Jetpack Compose, etc.) and generates appropriate UI/widget tests
+- Git integration shows generated test files
+
+---
+
+### Test Runner — Multi-Framework Test Execution
+
+Run and track test suites per project layer.
+
+- Configurable test command per layer
+- Live output streaming in-app
+- **Auto-parses results from:** Cypress, Jest, Flutter, Playwright, pytest, Go test, RSpec, MSTest, Vitest, PHPUnit
+- Shows pass / fail / skip counts and duration
+- Test run history per project — last run's fail count shown as sidebar badge
+- Model configs manager accessible inline
+
+---
+
+### Prompt Queue — Batch AI Task Runner
+
+Queue up AI prompts for sequential execution with full conversation history per item.
+
+- Each item: title, prompt, per-layer association, status (pending / running / done / failed / skipped)
+- **Planning mode**: AI first generates a step-by-step plan → user approves → AI executes
+  - Plan step progress bar shown during execution
+- Run all pending items sequentially in one click
+- Per-item conversation history preserved across runs
+- Separate **Queue Runner window** for distraction-free execution
+- Timer and elapsed time shown while running
+
+---
+
+### Settings — App Configuration
+
+| Section | What it configures |
+|---|---|
+| **AI Config** | Add, edit, and delete AI model configurations |
+| **Model Mapping** | Assign specific models to specific pages (Documents, Workflows, Issues, etc.) |
+| **Document Templates** | Create, edit, group, and reorder templates used in Documents |
+| **Cloud Sync** | Configure remote backup destination |
+| **Telegram** | Configure a Telegram bot for run notifications |
+| **Backup** | Export, restore, or backup the SQLite database |
+| **Quick Commands** | Manage saved shell commands used in Git Changes |
+
+#### AI Config — Supported Model Types
+
+| Type | Executable / Endpoint | Notes |
+|---|---|---|
+| Claude CLI | `claude` | Pipe or heredoc input modes; choose model (Haiku, Sonnet, Opus) |
+| Gemini CLI | `gemini` | 2.5 Flash, 2.5 Pro, 2.0 Flash, 1.5 Pro |
+| Aider | `aider` | GPT-4o, Claude, DeepSeek Coder |
+| Ollama | `http://localhost:11434` | Any locally pulled model |
+| OpenAI-compatible API | Any base URL | OpenRouter, LM Studio, Anthropic API, llama.cpp server |
+
+---
+
+## AI Model Support
+
+DevFlow AI is fully model-agnostic. You can configure multiple models and assign different models to different pages.
 
 ```
-── Run summary ───────────────────────────
-  Turns: 8  |  Tool calls: 22
-  Tokens: 14820 in / 890 out  |  Elapsed: 47.3s
-  Files written:
-    • src/components/App.tsx
-    • src/utils/db.ts
-──────────────────────────────────────────
+Settings → AI Config → Add model
 ```
 
-The Electron app also fires a `promptQueue:runSummary` event with structured data so future UI panels can display metrics.
+Different pages can be mapped to different models via **Settings → Model Mapping** — e.g. use a fast model for chat and a powerful model for code generation.
 
 ---
 
-### Agent Flag Reference
+## Python Agent (`agent/`)
 
-These are all flags `devflow_agent.py` accepts. Most are set via the model config UI; advanced flags are CLI-only.
+The `agent/` folder is a Python layer that the Electron app spawns as subprocesses. It is **actively used** at runtime — not optional infrastructure.
 
-| Flag | UI field | Default | Description |
-|------|----------|---------|-------------|
-| `--model` | Model | `qwen2.5-coder:32b` | Ollama model for task execution |
-| `--base-url` | Base URL | `http://localhost:11434` | Ollama server endpoint |
-| `--max-turns` | Max Tokens | `15` | Max agentic loop iterations per step |
-| `--max-retries` | — | `2` | Max build-fix attempts after the loop ends |
-| `--max-tool-errors` | — | `3` | Consecutive tool failures before the agent aborts |
-| `--plan-only` | auto | — | Generate plan and exit; set automatically by Electron in Phase 1 |
-| `--approved-plan` | auto | — | JSON plan string; set automatically by Electron in Phase 2 |
-| `--plan-model` | — | same as `--model` | Use a separate (larger) model for plan generation only |
-| `--verbose` | auto | — | Always passed by Electron; enables per-turn timing and token logs |
+### What's in `agent/`
 
-**CLI usage example:**
+| File | Role | Called from |
+|---|---|---|
+| `ollama_proxy.py` | Thin streaming proxy for Ollama models | `chat-handlers.js` — used by every page that calls an Ollama model (Documents AI Edit, Workflows runner, AI Console, etc.) |
+| `openai_proxy.py` | Thin streaming proxy for OpenAI-compatible API models | `chat-handlers.js` — used by every page calling an API model |
+| `devflow_agent.py` | Full agentic coding agent (plan + execute loop) | `queue-handlers.js` — Prompt Queue when DevFlow Agent is enabled |
+| `agent.py` | Provider-agnostic agent (Ollama, OpenAI, Anthropic, Groq) | Standalone CLI — not yet wired to Electron |
+| `context_builder.py` | Builds repo map (file tree + signatures) for agent context | `devflow_agent.py` at startup |
+| `tools.py` | Tool schemas and executors the agent uses | `devflow_agent.py` agentic loop |
+| `rag.py` | Optional RAG via ChromaDB + sentence-transformers | `devflow_agent.py` (gracefully skipped if not installed) |
+| `providers/` | Provider abstractions (Ollama, Anthropic, OpenAI) | `agent.py` |
+
+### How `ollama_proxy.py` and `openai_proxy.py` work
+
+Every time the app streams a response from an Ollama or OpenAI-compatible model, it:
+
+1. Writes the message array to a temp JSON file
+2. Spawns `python ollama_proxy.py --messages-file <tmp> --model <name>` (or `openai_proxy.py`)
+3. Streams stdout tokens back to the renderer in real time
+4. Deletes the temp file on close
+
+This affects: Documents AI Edit, Workflow layer runs, AI Console, Test Generator, Project Layers generate, and anywhere else a model response is streamed.
+
+### How `devflow_agent.py` works (DevFlow Agent mode)
+
+Enabled in Settings → AI Config by ticking **"Use DevFlow Agent"** on an Ollama model config, or by adding a model with type `devflow-agent`.
+
+**Phase 1 — Planning** (`--plan-only`):
+- Agent reads the project repo map (file tree + class/function signatures via `context_builder.py`)
+- Optionally uses RAG (ChromaDB semantic search) if installed
+- Produces a JSON plan: task summary + 2–5 steps with files, tools, descriptions
+- Electron detects `[PLAN_START]…[PLAN_END]` markers in stdout and shows the plan for approval
+
+**Phase 2 — Execution** (`--approved-plan <json>`):
+- Agent executes each step using the tool loop
+- Streams step progress markers: `[STEP:1/3]`, `[STEP_DONE:1/3]`, `[STEP_FAILED:1/3]`
+- Runs shell commands (build, test, lint) to verify changes
+- Auto-retries on build errors
+
+**Agent tools available to the model:**
+
+| Tool | What it does |
+|---|---|
+| `read_file` | Read file content from project |
+| `write_file` | Write or overwrite a file |
+| `list_directory` | List files and folders |
+| `search_code` | Regex search across source files |
+| `get_file_tree` | Full project directory tree |
+| `run_command` | Run shell command (tests, lint, git, build) |
+| `delete_file` | Delete a file |
+| `create_directory` | Create a directory |
+
+**Context injection:** The agent auto-detects language signatures (classes, functions, methods) for Dart, Python, TypeScript, Go, Rust, C#, C/C++ and injects a repo map into every prompt.
+
+**Text-based tool call fallback:** Small models (7b, 14b) that ignore native tool-calling API emit tool calls as JSON or XML in text — the agent parses both formats automatically.
+
+### Agent Prerequisites
 
 ```bash
-# Run without planning (direct agentic loop)
+cd agent
+pip install -r requirements.txt
+```
+
+Requirements: `ollama`, `openai`, `pathspec`, `chromadb`, `sentence-transformers`, `gitpython`, `google-genai`, `anthropic`
+
+> `chromadb` and `sentence-transformers` are only needed for RAG. If they fail to install, the agent still works — RAG is skipped gracefully.
+
+Ollama must be running for Ollama model types:
+
+```bash
+ollama serve
+ollama pull qwen2.5-coder:7b   # fast tasks
+ollama pull qwen2.5-coder:32b  # multi-file, complex changes
+```
+
+### Recommended models for DevFlow Agent
+
+| Model | VRAM | Use case |
+|---|---|---|
+| `qwen2.5-coder:7b` | ~4 GB | Quick single-file tasks |
+| `qwen2.5-coder:32b` | ~20 GB | Multi-file, Clean Architecture, Flutter |
+| `deepseek-coder-v2:16b` | ~10 GB | Strong alternative |
+
+### Standalone CLI usage
+
+```bash
+# Run the agent directly (without Electron)
 python agent/devflow_agent.py \
   --project /path/to/project \
   --message "Add input validation to the login form" \
@@ -241,59 +372,13 @@ python agent/devflow_agent.py \
   --max-turns 20 \
   --verbose
 
-# Generate a plan only (inspect before running)
+# Plan only — inspect before running
 python agent/devflow_agent.py \
   --project /path/to/project \
   --message "Refactor auth module to use JWT" \
   --model qwen2.5-coder:32b \
   --plan-only
-
-# Use a larger model for planning, smaller for execution
-python agent/devflow_agent.py \
-  --project /path/to/project \
-  --message "Add dark mode toggle" \
-  --model qwen2.5-coder:7b \
-  --plan-model qwen2.5-coder:32b
 ```
-
----
-
-### Agent Prerequisites
-
-The DevFlow Agent requires Python dependencies. Install once before first use:
-
-```bash
-cd agent
-pip install -r requirements.txt
-```
-
-Ollama must be running locally:
-
-```bash
-ollama serve
-ollama pull qwen2.5-coder:32b   # or whichever model you configured
-```
-
----
-
-## Markdown Reference
-
-Supported in both Prompt preview and Document preview:
-
-| Syntax | Output |
-|--------|--------|
-| `# H1` through `###### H6` | Headings |
-| `**bold**` | **Bold** |
-| `*italic*` | *Italic* |
-| `~~text~~` | ~~Strikethrough~~ |
-| `` `code` `` | Inline code |
-| ` ``` ` fenced block | Code block |
-| `- item` or `* item` | Unordered list |
-| `1. item` | Ordered list |
-| `> text` | Blockquote |
-| `---` | Horizontal rule |
-| `[label](url)` | Hyperlink |
-| `[label](attach:ID)` | Attachment link (opens lightbox) |
 
 ---
 
@@ -302,16 +387,14 @@ Supported in both Prompt preview and Document preview:
 ### Prerequisites
 
 | Tool | Version | Notes |
-|------|---------|-------|
+|---|---|---|
 | **Node.js** | 18+ LTS | https://nodejs.org |
 | **npm** | comes with Node.js | — |
-| **Python** | 3.x | https://python.org — required to compile `better-sqlite3` |
-| **Visual Studio Build Tools** *(Windows only)* | 2019 or 2022 | https://visualstudio.microsoft.com/visual-cpp-build-tools/ — select "Desktop development with C++" workload |
-| **draw.io Desktop** *(optional)* | latest | https://github.com/jgraph/drawio-desktop/releases — only needed for editing draw.io attachments |
+| **Python** | 3.x | Required to compile `better-sqlite3` native module |
+| **Visual Studio Build Tools** *(Windows)* | 2019 or 2022 | Select "Desktop development with C++" workload |
+| **draw.io Desktop** *(optional)* | latest | Only needed for editing draw.io attachments |
 
-> **macOS / Linux:** Python and a C++ compiler (Xcode CLT / gcc) are usually pre-installed. Visual Studio is not needed.
-
----
+> macOS / Linux: Python and a C++ compiler (Xcode CLT / gcc) are usually pre-installed.
 
 ### Install & Run
 
@@ -327,174 +410,189 @@ npm install
 npm start
 ```
 
-> **If `npm install` fails on `better-sqlite3`** — ensure Python and Visual Studio Build Tools are installed, then:
+> **If `npm install` fails on `better-sqlite3`:** ensure Python and Visual Studio Build Tools are installed, then:
 > ```bash
 > npm install --build-from-source
 > ```
 
----
+### First Run
+
+- SQLite database is created automatically on first launch (OS app-data folder)
+- All schema migrations run on startup — no manual DB setup needed
+- Go to **Settings → AI Config** and add at least one AI model before using AI features
+- Set a project folder path for git tracking and test running
 
 ### Scripts
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `npm start` | Start the app in development mode |
 | `npm run package` | Bundle app + Electron binary into `out/` |
-| `npm run make` | Build a platform installer from the package |
-
----
-
-### First Run Notes
-
-- SQLite database is created automatically on first launch (stored in the OS app-data folder).
-- All table migrations run on startup — no manual DB setup needed.
-- Default seed data is inserted once: status values and document templates.
+| `npm run make` | Build platform installer from the package |
+| `npm test` | Run Playwright e2e tests (headless) |
+| `npm run test:watch` | Run tests with visible window |
+| `npm run test:report` | Show HTML test report |
 
 ---
 
 ## Building Executables
 
-> You must build on the **target platform**. Cross-platform builds are not supported (e.g. cannot build a macOS `.dmg` from Windows).
-
----
-
-### Step 1 — Package
-
-Bundles source + Electron binary into a folder.
-
-```bash
-npm run package
-```
-
-Output: `out/devflow-ai-sdlc-<platform>-<arch>/`
-
----
-
-### Step 2 — Make Installer
-
-Creates the platform installer from the packaged output.
+> Build on the **target platform** — cross-platform builds are not supported.
 
 ```bash
 npm run make
 ```
 
-Output: `out/make/`
+| Platform | Output |
+|---|---|
+| Windows | `out/make/squirrel.windows/x64/devflow-ai-sdlc Setup.exe` |
+| macOS | `out/make/zip/darwin/x64/devflow-ai-sdlc-darwin-x64-1.0.0.zip` |
+| Linux DEB | `out/make/deb/x64/devflow-ai-sdlc_1.0.0_amd64.deb` |
+| Linux RPM | `out/make/rpm/x64/devflow-ai-sdlc-1.0.0.x86_64.rpm` |
 
----
-
-### Platform Outputs
-
-#### Windows
-```bash
-npm run make
-```
-- Output: `out/make/squirrel.windows/x64/devflow-ai-sdlc Setup.exe`
-- Requires Visual Studio Build Tools for native module compilation.
-
-#### macOS
-```bash
-npm run make
-```
-- Output: `out/make/zip/darwin/x64/devflow-ai-sdlc-darwin-x64-1.0.0.zip`
-- For a signed `.dmg`, configure `packagerConfig.osxSign` and `osxNotarize` in `forge.config.js`.
-
-#### Linux
-```bash
-npm run make
-```
-- DEB: `out/make/deb/x64/devflow-ai-sdlc_1.0.0_amd64.deb`
-- RPM: `out/make/rpm/x64/devflow-ai-sdlc-1.0.0.x86_64.rpm`
-
-```bash
-# Install DEB
-sudo dpkg -i devflow-ai-sdlc_1.0.0_amd64.deb
-
-# Install RPM
-sudo rpm -i devflow-ai-sdlc-1.0.0.x86_64.rpm
-```
-
----
-
-### Maker Reference (`forge.config.js`)
-
-| Maker | Platform | Output |
-|-------|----------|--------|
-| `maker-squirrel` | Windows | `.exe` installer |
-| `maker-zip` | macOS | `.zip` archive |
-| `maker-deb` | Linux | `.deb` package |
-| `maker-rpm` | Linux | `.rpm` package |
-
-- `asar: true` — bundles all source into an `.asar` archive inside the installer.
-- `plugin-auto-unpack-natives` — automatically rebuilds `better-sqlite3` for the correct Electron version. No manual rebuild needed.
+Packaged installers are self-contained — end users do not need Node.js installed.
 
 ---
 
 ## Tech Stack & Architecture
 
 | Layer | Technology |
-|-------|-----------|
+|---|---|
 | Desktop shell | Electron v41 |
-| Database | SQLite via `better-sqlite3` (runs in main process) |
-| IPC | `contextBridge` + `ipcMain.handle` + `ipcRenderer.invoke` |
-| Renderer | Plain ES modules (`file://`) — no bundler, no framework |
-| Styling | Vanilla CSS with CSS variables (dark/light theme) |
+| Database | SQLite via `better-sqlite3` (main process) |
+| IPC | `contextBridge` + `ipcMain.handle` / `ipcRenderer.invoke` |
+| Renderer | Vanilla ES modules — no bundler, no framework |
+| Styling | Vanilla CSS with CSS variables (Light / Dark / Midnight themes) |
 | Build tooling | Electron Forge v7 |
-| AI agent | Python subprocess (`devflow_agent.py`) — agentic loop with tool use |
-| Vector search | ChromaDB + `sentence-transformers` (RAG for codebase context) |
-| AI backends | Anthropic SDK, Ollama HTTP, Google Gemini, OpenAI-compatible API, CLI |
+| AI backends | Ollama HTTP, Claude CLI, Gemini CLI, Aider, OpenAI-compatible API |
+| Python agent | `agent/devflow_agent.py` — agentic coding agent with plan+approve+execute loop |
+| Streaming proxies | `agent/ollama_proxy.py`, `agent/openai_proxy.py` — subprocess streaming bridges |
+| RAG (optional) | ChromaDB + sentence-transformers — semantic code search for agent context |
+| Node.js agent | `agent-cli/index.js` — lightweight Ollama agent (alternative to Python agent) |
+| E2E tests | Playwright |
 
-### AI-First Architecture
+### Project Structure
 
 ```
-User → Prompt Queue / AI Console / Mockups
-          ↓
-    IPC → Node.js Main Process
-          ↓
-    DevFlow Agent (Python subprocess)
-      ├── Agentic loop (LLM → tool calls → execution)
-      ├── RAG (ChromaDB semantic code search)
-      ├── Full repo map + context injection
-      ├── Tool use: file I/O, git, build, test
-      └── Auto-retry on build failure
-```
+src/
+  main/                    # Electron main process
+    index.js               # App entry, BrowserWindow, IPC registration
+    preload.js             # contextBridge — renderer ↔ main API surface
+    app-config.js          # Encrypted config (API keys, cloud sync, Telegram)
+    telegram.js            # Telegram notification integration
+    logger.js              # Uncaught error logging
+    db/
+      database.js          # SQLite connection (singleton)
+      schema.js            # CREATE TABLE + idempotent migrations
+      migrations.js        # Named migration runner
+      backup.js            # DB backup, export, restore
+      ipc/                 # IPC handler modules (one per domain)
+        db-handlers.js     # Projects, documents, workflows, issues, layers …
+        chat-handlers.js   # AI streaming (Ollama / API / CLI)
+        queue-handlers.js  # Prompt queue execution
+        terminal-handlers.js  # Shell command execution + streaming
+        dialog-handlers.js    # Native file/folder pickers
+        ollama-handlers.js    # Ollama model detection
 
-The agent is autonomous: it reads your codebase, understands the context via RAG, makes multi-step tool calls, and retries on failure. You approve the plan; the agent drives execution.
+  renderer/                # Renderer process (SPA)
+    index.html             # SPA shell
+    app.js                 # Router setup + page registration
+    pages/
+      launcher/            # Project list / home screen
+      project-home/        # Per-project dashboard + sidebar nav
+      project-layers/      # Architectural layer management
+      documents/           # Markdown editor + AI editing + diagrams
+      mockups/             # HTML screen design generator
+      workflows/           # AI workflow orchestration + runner
+      issues/              # Bug & issue tracker
+      git-changes/         # Multi-repo git viewer + commit UI
+      ai-console/          # Project-aware AI chat
+      test-generator/      # AI test generation (multi-language)
+      test-runner/         # Multi-framework test runner + history
+      prompt-queue/        # Batch AI prompt runner (plan + execute)
+      settings/            # AI config, model mapping, templates, backup
+      style-guide/         # Project design system / style token editor
+    components/
+      model-picker/        # AI model selector (used in page headers)
+      git/                 # Git controller + diff viewer component
+      quick-commands/      # Saved shell command launcher modal
+      model-configs/       # Inline model config manager modal
+    shared/
+      router.js            # Minimal SPA page router
+      helpers.js           # escHtml, timeAgo, Markdown renderer, etc.
+      theme-manager.js     # Light / Dark / Midnight theme management
+
+  # Standalone BrowserWindow pages
+  workflow-runner.html     # Full-screen workflow layer execution
+  queue-runner.html        # Prompt queue runner window
+  task-queue.html          # Task queue window
+  generate-workflows.html  # AI workflow generation window
+  test-generation.html     # Test generation window
+
+agent/                       # Python agent layer (spawned as subprocesses by Electron)
+  devflow_agent.py         # Full agentic coding agent (plan + execute loop)
+  agent.py                 # Provider-agnostic agent (Ollama, Anthropic, OpenAI, Groq)
+  ollama_proxy.py          # Streaming proxy for Ollama models → used by all pages
+  openai_proxy.py          # Streaming proxy for OpenAI-compatible API → used by all pages
+  context_builder.py       # Repo map builder (file tree + class/function signatures)
+  tools.py                 # Tool definitions and executors for the agentic loop
+  rag.py                   # Optional RAG via ChromaDB + sentence-transformers
+  providers/               # Provider abstractions (Ollama, Anthropic, OpenAI)
+  requirements.txt         # Python dependencies
+
+agent-cli/
+  index.js                 # Lightweight Node.js Ollama coding agent (alternative)
+```
 
 ### Database Tables
 
 | Table | Purpose |
-|-------|---------|
-| `projects` | Top-level projects |
-| `features` | Features per project |
-| `user_stories` | User stories per feature |
-| `prompts` | Implementation prompts per user story |
-| `prompt_history` | Execution history for every agent run |
-| `model_configs` | AI model configurations and credentials |
-| `screen_designs` | AI-generated mockups with prompt history |
-| `screen_prompt_history` | History of mockup generation prompts |
-| `status_master` | Shared status values (Backlog, Done, etc.) |
-| `quick_commands` | Reusable prompt snippets |
-| `document_templates` | Built-in Markdown templates |
-| `project_documents` | Documents per project |
-| `document_attachments` | SVG / draw.io files attached to documents |
+|---|---|
+| `projects` | Top-level projects (name, path, description) |
+| `project_layers` | Architectural sub-projects per project |
+| `workflows` | AI workflows (feature-level task sequences) |
+| `layers` | Workflow steps (purpose, inputs, outputs, prompt) |
+| `success_criteria` | Acceptance criteria per workflow |
+| `issues` | Bug and issue tracker entries |
+| `prompt_queue` | Queued AI prompts for batch execution |
+| `screen_designs` | AI-generated HTML mockups |
+| `screen_prompt_history` | Mockup generation history |
+| `project_documents` | Markdown documents per project |
+| `document_attachments` | SVG and draw.io diagram files |
+| `document_templates` | Reusable document templates |
+| `model_configs` | AI model configurations and encrypted credentials |
+| `model_mapping` | Page-to-model assignments |
+| `test_run_history` | Test run results and output per project |
+| `quick_commands` | Saved shell commands |
+| `status_master` | Shared status lookup values |
 
-### IPC Channels
+### IPC Channel Groups
 
-- `db:*` — all database read/write operations
-- `chat:*` — streaming AI responses (Anthropic, Ollama, CLI)
-- `queue:*` — prompt queue execution, plan/approve/execute workflow, agent lifecycle
-- `ollama:*` — Ollama model detection and inference
-- `shell:openDrawio` — write temp `.drawio` file and open in desktop app
-- `shell:readFile` — read a file path (used for draw.io Sync)
-- `terminal:*` — terminal execution and streaming output
-- `dialog:*` — native OS file/folder pickers
-- `window:expand` — resize the app window
-- `promptQueue:runSummary` — structured run metrics emitted after each agent run (turns, tokens, elapsed, files written)
+| Prefix | Handles |
+|---|---|
+| `db:*` | All database CRUD operations |
+| `chat:*` | AI streaming responses (Ollama, API, CLI pipe/heredoc) |
+| `queue:*` | Prompt queue run / plan / approve / cancel |
+| `ollama:*` | Model detection + direct Ollama inference |
+| `terminal:*` | Shell command execution and streaming output |
+| `dialog:*` | Native OS file/folder pickers |
+| `shell:*` | draw.io temp file open/sync, read file |
+| `app:*` | Open child windows (workflow runner, queue runner, etc.) |
 
+### Markdown Support
 
-### E2E running
+The Documents page and AI console support a rich subset of Markdown:
 
-npm test                # headless
-npm run test:watch      # with visible window
-npm run test:debug      # open HTML report
-npm run test:report     #testing report
+| Syntax | Output |
+|---|---|
+| `# H1` … `###### H6` | Headings |
+| `**bold**`, `*italic*`, `~~strike~~` | Inline formatting |
+| `` `code` ``, fenced ` ``` ` blocks | Code (inline and block) |
+| `- item`, `1. item` | Lists (unordered and ordered) |
+| `- [ ] task`, `- [x] done` | Task lists |
+| `> text` | Blockquote |
+| `---` | Horizontal rule |
+| `\| col \| col \|` tables | Tables with header row |
+| `[label](url)` | External link |
+| `[label](attach:ID)` | Attachment link (renders inline SVG or draw.io badge) |
+| Raw `<svg>…</svg>` blocks | Inline SVG rendering |

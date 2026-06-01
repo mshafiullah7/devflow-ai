@@ -17,6 +17,9 @@ function applySchema(db) {
     `ALTER TABLE prompt_queue ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE issues       ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE document_templates ADD COLUMN group_name TEXT NOT NULL DEFAULT 'General'`,
+    // Status tracking for workflow layers and workflows
+    `ALTER TABLE layers    ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
+    `ALTER TABLE workflows ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}

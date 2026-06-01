@@ -231,6 +231,7 @@ export class WorkflowsPage {
           <div class="pl-list-title-row">
             <span class="eus-src-item__id">#${w.id}</span>
             <span class="eus-src-item__title">${escHtml(w.feature || 'Untitled')}</span>
+            ${this._wfStatusBadgeHtml(w.status || 'open')}
           </div>
           ${w.description
             ? `<span class="pl-list-path" title="${escHtml(w.description)}">${escHtml(w.description.slice(0, 60))}</span>`
@@ -354,7 +355,10 @@ export class WorkflowsPage {
     return `
       <div class="wf-detail-header">
         <div class="wf-detail-title-block">
-          <span class="project-panel__title">${escHtml(wf.feature || 'Untitled')}</span>
+          <div class="wf-detail-title-row">
+            <span class="project-panel__title">${escHtml(wf.feature || 'Untitled')}</span>
+            ${this._wfStatusBadgeHtml(wf.status || 'open')}
+          </div>
           <span class="wf-detail-desc">${escHtml(wf.description || '')}</span>
         </div>
         <div class="project-panel__header-actions">
@@ -440,6 +444,30 @@ export class WorkflowsPage {
     }).join('');
   }
 
+  // ----------------------------------------------------------------
+  // Status badge helpers
+  // ----------------------------------------------------------------
+  _layerStatusBadgeHtml(status) {
+    const cfg = {
+      open:         { label: 'Open',         cls: 'wf-layer-status--open'    },
+      executed:     { label: 'Executed',     cls: 'wf-layer-status--done'    },
+      failed:       { label: 'Failed',       cls: 'wf-layer-status--error'   },
+      needs_review: { label: 'Needs Review', cls: 'wf-layer-status--review'  },
+    };
+    const s = cfg[status] || cfg.open;
+    return `<span class="wf-layer-status-badge ${s.cls}">${s.label}</span>`;
+  }
+
+  _wfStatusBadgeHtml(status) {
+    const cfg = {
+      open:        { label: 'Open',        cls: 'wf-wfstatus--open'     },
+      in_progress: { label: 'In Progress', cls: 'wf-wfstatus--progress' },
+      completed:   { label: 'Completed',   cls: 'wf-wfstatus--done'     },
+    };
+    const s = cfg[status] || cfg.open;
+    return `<span class="wf-workflow-status ${s.cls}">${s.label}</span>`;
+  }
+
   _layerRowHtml(l) {
     const fmtArr = v => { try { const a = JSON.parse(v); return Array.isArray(a) ? a.join(' · ') : v; } catch { return v; } };
     return `
@@ -447,7 +475,10 @@ export class WorkflowsPage {
         <span class="wf-drag-handle" title="Drag to reorder">⠿</span>
         <span class="wf-layer-order">${l.order_num}</span>
         <div class="wf-layer-info">
-          <span class="wf-layer-name">${escHtml(l.layer || 'Layer')}</span>
+          <div class="wf-layer-name-row">
+            <span class="wf-layer-name">${escHtml(l.layer || 'Layer')}</span>
+            ${this._layerStatusBadgeHtml(l.status || 'open')}
+          </div>
           <div class="wf-layer-meta">
             ${l.purpose ? `<span class="wf-meta-row"><b>Purpose:</b> ${escHtml(l.purpose)}</span>` : ''}
             ${l.inputs  ? `<span class="wf-meta-row"><b>Inputs:</b>  ${escHtml(fmtArr(l.inputs))}</span>`  : ''}
@@ -483,7 +514,10 @@ export class WorkflowsPage {
         <div class="wf-layer-view__header" data-action="view-layer" data-lid="${l.id}">
           <span class="wf-layer-order">${l.order_num}</span>
           <div class="wf-layer-info">
-            <span class="wf-layer-name">${escHtml(l.layer || 'Layer')}</span>
+            <div class="wf-layer-name-row">
+              <span class="wf-layer-name">${escHtml(l.layer || 'Layer')}</span>
+              ${this._layerStatusBadgeHtml(l.status || 'open')}
+            </div>
           </div>
           <div class="wf-layer-actions wf-layer-actions--visible">
             <button class="wf-icon-btn wf-run-btn" data-lid="${l.id}" title="Run this layer">
@@ -781,7 +815,7 @@ export class WorkflowsPage {
           <div class="wf-run-panel__title">
             ${this._running
               ? `<span class="wf-run-status wf-run-status--running">Running</span>`
-              : `<span class="wf-run-status wf-run-status--done">Done</span>`}
+              : `<span class="wf-run-status wf-run-status--done">Executed</span>`}
             ${name}
           </div>
           <span class="wf-run-elapsed" id="wfRunElapsed"></span>
@@ -817,7 +851,16 @@ export class WorkflowsPage {
     this._running    = true;
     this._outputBuf  = '';
     this._startTime  = Date.now();
+
+    // Persist workflow as in_progress (fire-and-forget)
+    const wf = this._activeWorkflow;
+    if (wf && wf.status !== 'in_progress') {
+      wf.status = 'in_progress';
+      window.db.workflows.updateStatus({ id: this._activeId, status: 'in_progress' });
+    }
+
     this._renderDetail();
+    this._renderList();
 
     const layer = this._layers.find(l => l.id === layerId);
     if (!layer) { this._finishRun('No layer found'); return; }
@@ -847,7 +890,7 @@ export class WorkflowsPage {
     });
   }
 
-  _finishRun(error) {
+  async _finishRun(error) {
     this._running = false;
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     const elapsed = this._startTime ? Math.floor((Date.now() - this._startTime) / 1000) : 0;
@@ -859,14 +902,14 @@ export class WorkflowsPage {
     const statusEl = this.container.querySelector('.wf-run-status');
     if (statusEl) {
       statusEl.className = `wf-run-status ${error ? 'wf-run-status--error' : 'wf-run-status--done'}`;
-      statusEl.textContent = error ? 'Error' : 'Done';
+      statusEl.textContent = error ? 'Failed' : 'Executed';
     }
 
     const footer = this.container.querySelector('#wfRunFooter');
     if (footer) {
       footer.innerHTML = error
         ? `<span class="wf-footer-error">✗ ${escHtml(error)}</span>`
-        : `<span class="wf-footer-done">✔ Completed in ${elapsedStr}</span>`;
+        : `<span class="wf-footer-done">✔ Executed in ${elapsedStr}</span>`;
       footer.hidden = false;
     }
 
@@ -882,6 +925,29 @@ export class WorkflowsPage {
         btn2.textContent = `Run ${next.layer || 'Next Layer'} →`;
         btn2.addEventListener('click', () => this._openDrawer(next.id));
         backRow.appendChild(btn2);
+      }
+    }
+
+    // Persist layer status
+    if (this._runLayerId) {
+      const newStatus = error ? 'failed' : 'executed';
+      const layer = this._layers.find(l => l.id === this._runLayerId);
+      if (layer) {
+        layer.status = newStatus;
+        await window.db.layers.updateStatus({ id: layer.id, status: newStatus });
+      }
+
+      // Promote workflow to completed when all layers are executed
+      if (!error) {
+        const allExecuted = this._layers.every(l => (l.status || 'open') === 'executed');
+        if (allExecuted) {
+          const wf = this._activeWorkflow;
+          if (wf) {
+            wf.status = 'completed';
+            await window.db.workflows.updateStatus({ id: this._activeId, status: 'completed' });
+            this._renderList();
+          }
+        }
       }
     }
   }

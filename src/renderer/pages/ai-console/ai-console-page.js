@@ -15,16 +15,6 @@ function stripAnsi(str) {
     .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '');
 }
 
-function formatText(raw) {
-  return (raw || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>');
-}
-
 function escapeHtml(raw) {
   return (raw || '')
     .replace(/&/g, '&amp;')
@@ -41,17 +31,12 @@ export class AiConsolePage {
     this.router    = router;
     this.projectId = params.projectId;
 
-    // Runtime state
-    this._isGenerating   = false;
-    this._streamingEl    = null;   // current AI bubble DOM node
-    this._streamingText  = '';     // accumulated text during streaming
-    this._builtContext   = '';     // assembled context string
-    this._messages       = [];     // conversation history [{role, content}]
-
-    // Project data (loaded once on mount)
-    this._project   = null;
-    this._issues    = [];
-    this._documents = [];
+    this._isGenerating  = false;
+    this._streamingEl   = null;
+    this._streamingText = '';
+    this._builtContext  = '';
+    this._messages      = [];
+    this._project       = null;
   }
 
   get _selectedModel() { return this._picker?.selectedModel ?? null; }
@@ -79,8 +64,8 @@ export class AiConsolePage {
 
     this._bindEvents();
     await this._picker.reload();
-
-    await this._loadData();
+    this._enableUi();
+    this._renderWelcome();
   }
 
   unmount() {
@@ -90,95 +75,190 @@ export class AiConsolePage {
   }
 
   // ----------------------------------------------------------------
-  // Data loading
+  // UI ready state
   // ----------------------------------------------------------------
-  async _loadData() {
-    try {
-      const [allIssues, documents, workflows, projectLayers] = await Promise.all([
-        window.db.issues.list({ project_id: this.projectId }),
-        window.db.documents.list(this.projectId),
-        window.db.workflows.list(this.projectId),
-        window.db.projectLayers.list(this.projectId),
-      ]);
-
-      this._issues        = (allIssues || []).filter(i => i.status === 'open');
-      this._documents     = documents || [];
-      this._workflows     = (workflows || []).filter(w => w.is_active !== 0);
-      this._projectLayers = projectLayers || [];
-
-      this._updateContextCounts();
-      this._enableUi();
-      this._renderWelcome();
-    } catch (err) {
-      console.error('[AI Console] load error:', err);
-      this._showThreadError('Failed to load project data. Please go back and reopen this page.');
-    }
-  }
-
-  _updateContextCounts() {
-    const set = (id, text) => { const el = this.container.querySelector(id); if (el) el.textContent = text; };
-
-    set('#aicCtxIssues',    `${this._issues.length} open`);
-    set('#aicCtxWorkflows', `${this._workflows.length} total`);
-    set('#aicCtxLayers',    `${this._projectLayers.length} total`);
-
-    this._renderDocumentSlices();
-  }
-
-  _renderDocumentSlices() {
-    const container = this.container.querySelector('#aicDocsSlices');
-    if (!container) return;
-
-    if (this._documents.length === 0) {
-      container.innerHTML = '<span class="aic-slice__meta" style="padding:4px 8px;display:block;">No documents</span>';
-      return;
-    }
-
-    container.innerHTML = this._documents.map(d => `
-      <label class="aic-slice aic-slice--doc">
-        <input type="checkbox" class="aic-doc-check" data-doc-id="${d.id}" disabled>
-        <div class="aic-slice__info">
-          <span class="aic-slice__name">${escHtml(d.title)}</span>
-        </div>
-      </label>
-    `).join('');
-
-    container.querySelectorAll('.aic-doc-check').forEach(cb =>
-      cb.addEventListener('change', () => this._updateTokenEstimate())
-    );
-  }
-
   _enableUi() {
-    // Textarea
     const ta = this.container.querySelector('#aicInput');
     if (ta) {
-      ta.disabled     = false;
-      ta.placeholder  = 'Type a message… (Enter to send, Shift+Enter for new line)';
+      ta.disabled    = false;
+      ta.placeholder = 'Type a message… (Enter to send, Shift+Enter for new line)';
     }
-
-    // Buttons
-    ['#aicBtnSend', '#aicBtnClear', '#aicBtnBuildCtx'].forEach(id => {
+    ['#aicBtnSend', '#aicBtnClear'].forEach(id => {
       const el = this.container.querySelector(id);
       if (el) el.disabled = false;
     });
-
-    // Context checkboxes
-    this.container.querySelectorAll('.aic-slice__check, .aic-doc-check, .aic-workflow-check, .aic-layer-check')
-      .forEach(cb => { cb.disabled = false; });
   }
 
   _renderWelcome() {
     const thread = this.container.querySelector('#aicThread');
     if (!thread) return;
-
     const name = this._project?.name || 'your project';
     thread.innerHTML = `<p class="aic-thread__loading">
-      Ready to help with <strong>${escHtml(name)}</strong>. ${this._issues.length} open issues. Select context slices on the right, then send a message.
+      Ready to help with <strong>${escHtml(name)}</strong>.
+      Ask anything — context is fetched automatically from your project data.
     </p>`;
   }
 
   // ----------------------------------------------------------------
-  // HTML template (static scaffold — data filled in after load)
+  // Smart context router — maps question text to DB tables
+  // ----------------------------------------------------------------
+  _routeQuestion(question) {
+    const q = question.toLowerCase();
+    const tables = new Set();
+
+    if (/\b(issue|bug|error|problem|fix|broken|fail|crash|defect|ticket|resolve|resolution|status|open|closed|severity|critical|blocker|regression|exception|stacktrace|log|report)\b/.test(q)) {
+      tables.add('issues');
+    }
+    if (/\b(workflow|feature|flow|process|step|user.?stor|story|requirement|functionality|use.?case|scenario|screen|mockup|page|view|navigation|button|form|ui|ux|interface|frontend|front.?end)\b/.test(q)) {
+      tables.add('workflows');
+    }
+    if (/\b(layer|architect|backend|service|api|database|module|tech|stack|infrastructure|setup|structure|folder|directory|repo|repository|codebase|code|project.?layer|sub.?project)\b/.test(q)) {
+      tables.add('layers');
+    }
+    if (/\b(document|doc|spec|requirement|readme|guide|note|content|description|overview|summary|plan|roadmap|design.?doc|technical)\b/.test(q)) {
+      tables.add('documents');
+    }
+
+    // Generic / unclear question → include all tables
+    return tables.size > 0 ? [...tables] : ['issues', 'workflows', 'layers', 'documents'];
+  }
+
+  // ----------------------------------------------------------------
+  // Fetch context from DB — always scoped to this project
+  // ----------------------------------------------------------------
+  async _fetchContextForTables(tables) {
+    const pid  = this.projectId;
+    const data = {};
+
+    await Promise.all([
+      tables.includes('issues')    && window.db.issues.list({ project_id: pid }).then(r => { data.issues    = (r || []).filter(i => i.status === 'open'); }),
+      tables.includes('workflows') && window.db.workflows.list(pid).then(r              => { data.workflows = (r || []).filter(w => w.is_active !== 0); }),
+      tables.includes('layers')    && window.db.projectLayers.list(pid).then(r          => { data.layers    = r || []; }),
+      tables.includes('documents') && window.db.documents.list(pid).then(r              => { data.documents = r || []; }),
+    ].filter(Boolean));
+
+    return data;
+  }
+
+  // ----------------------------------------------------------------
+  // Build context string from fetched data
+  // ----------------------------------------------------------------
+  _buildAutoContext(data) {
+    const { issues = [], workflows = [], layers = [], documents = [] } = data;
+    const parts = [];
+
+    if (issues.length) {
+      const list = issues.map(i => {
+        let block = `  [Issue] ${i.title}`;
+        block += `\n    Severity: ${i.severity || 'medium'} | Status: ${i.status || 'open'}`;
+        if (i.layer_name)         block += `\n    Layer: ${i.layer_name}`;
+        if (i.description)        block += `\n    Description: ${i.description}`;
+        if (i.steps_to_reproduce) block += `\n    Steps: ${i.steps_to_reproduce}`;
+        return block;
+      }).join('\n\n');
+      parts.push(`OPEN ISSUES (${issues.length}):\n\n${list}`);
+    }
+
+    if (workflows.length) {
+      const list = workflows.map(w => {
+        let block = `  [Workflow] ${w.feature}`;
+        if (w.description) block += `\n    Description: ${w.description}`;
+        return block;
+      }).join('\n\n');
+      parts.push(`WORKFLOWS (${workflows.length}):\n\n${list}`);
+    }
+
+    if (layers.length) {
+      const list = layers.map(l => {
+        let block = `  [Layer] ${l.name}`;
+        if (l.description) block += `\n    Description: ${l.description}`;
+        return block;
+      }).join('\n\n');
+      parts.push(`PROJECT LAYERS (${layers.length}):\n\n${list}`);
+    }
+
+    if (documents.length) {
+      const list = documents.map(d => {
+        let block = `  [Document] ${d.title}`;
+        if (d.content) block += `\n${d.content.split('\n').map(l => `    ${l}`).join('\n')}`;
+        return block;
+      }).join('\n\n---\n\n');
+      parts.push(`DOCUMENTS (${documents.length}):\n\n${list}`);
+    }
+
+    const projectName = this._project?.name || '';
+    const projectLine = projectName ? `PROJECT: ${projectName}\n\n` : '';
+
+    return parts.length > 0
+      ? `${projectLine}You are an AI assistant for the following software project.\nUse this context accurately when answering. Do not invent details not present below.\n\n${parts.join('\n\n══════════════════════════════════════\n\n')}`
+      : '';
+  }
+
+  // ----------------------------------------------------------------
+  // Context panel status — shows which tables were fetched
+  // ----------------------------------------------------------------
+  _showContextFetching() {
+    const el = this.container.querySelector('#aicAutoCtxStatus');
+    if (!el) return;
+    el.innerHTML = `<p class="aic-auto-ctx-idle aic-auto-ctx-idle--fetching">
+      <span class="aic-auto-ctx-spinner"></span>Fetching context…
+    </p>`;
+  }
+
+  _updateAutoCtxStatus(tables, data) {
+    const el = this.container.querySelector('#aicAutoCtxStatus');
+    if (!el) return;
+
+    const items = [];
+    if (data.issues?.length)    items.push({ label: 'Issues',    count: `${data.issues.length} open`, cls: 'issues' });
+    if (data.workflows?.length) items.push({ label: 'Workflows', count: data.workflows.length,         cls: 'workflows' });
+    if (data.layers?.length)    items.push({ label: 'Layers',    count: data.layers.length,            cls: 'layers' });
+    if (data.documents?.length) items.push({ label: 'Documents', count: data.documents.length,         cls: 'docs' });
+
+    if (items.length === 0) {
+      el.innerHTML = `<p class="aic-auto-ctx-idle">No matching project data found — question sent without context.</p>`;
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="aic-auto-ctx-label">Context fetched:</div>
+      ${items.map(i => `
+        <div class="aic-auto-ctx-row">
+          <span class="aic-auto-ctx-tag aic-auto-ctx-tag--${i.cls}">${i.label}</span>
+          <span class="aic-auto-ctx-count">${i.count}</span>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  _updateTokenEstimate() {
+    const el = this.container.querySelector('#aicTokenCount');
+    if (!el) return;
+    const tokens = estimateTokens(this._builtContext);
+    el.textContent = tokens > 0
+      ? `~${tokens.toLocaleString()} tokens in context`
+      : '~0 tokens estimated';
+  }
+
+  _updateContextPreview() {
+    const preview     = this.container.querySelector('#aicCtxPreview');
+    const previewWrap = this.container.querySelector('#aicCtxPreviewWrap');
+    if (!preview || !previewWrap) return;
+
+    if (this._builtContext) {
+      preview.textContent = this._builtContext;
+      previewWrap.style.display = 'block';
+      preview.style.display     = 'none';
+      previewWrap.classList.remove('aic-ctx-preview-wrap--expanded');
+      const chevron = this.container.querySelector('.aic-ctx-preview__chevron');
+      if (chevron) chevron.style.transform = '';
+    } else {
+      previewWrap.style.display = 'none';
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // HTML template
   // ----------------------------------------------------------------
   _template() {
     return `
@@ -200,7 +280,6 @@ export class AiConsolePage {
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <div id="aicModelPicker"></div>
           </div>
-
         </header>
 
         <!-- Body: context panel + chat -->
@@ -208,52 +287,14 @@ export class AiConsolePage {
 
           <!-- Context panel (left) -->
           <aside class="aic-context" id="aicContext">
-            <div class="aic-context__heading">Context</div>
-            <p class="aic-context__desc">Choose what project data is injected into the AI prompt.</p>
+            <div class="aic-context__heading">Smart Context</div>
+            <p class="aic-context__desc">Context is fetched automatically from your project data based on each question. All data is scoped to this project.</p>
 
-            <div class="aic-context__slices">
-
-              <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="issues" disabled>
-                <div class="aic-slice__info">
-                  <span class="aic-slice__name">Open issues</span>
-                  <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxIssues">– open</span>
-                </div>
-              </label>
-
-              <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="workflows" disabled>
-                <div class="aic-slice__info">
-                  <span class="aic-slice__name">Workflows</span>
-                  <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxWorkflows">– total</span>
-                </div>
-              </label>
-
-              <label class="aic-slice">
-                <input type="checkbox" class="aic-slice__check" data-slice="layers" disabled>
-                <div class="aic-slice__info">
-                  <span class="aic-slice__name">Project layers</span>
-                  <span class="aic-slice__meta aic-slice__meta--count" id="aicCtxLayers">– total</span>
-                </div>
-              </label>
-
+            <div id="aicAutoCtxStatus" class="aic-auto-ctx-status">
+              <p class="aic-auto-ctx-idle">Send a message — context will be fetched automatically.</p>
             </div>
 
-            <!-- Documents — per-document selection -->
-            <div class="aic-context__heading" style="margin-top:10px;">Documents</div>
-            <div class="aic-docs-slices" id="aicDocsSlices">
-              <span class="aic-slice__meta" style="padding:4px 8px;display:block;">Loading…</span>
-            </div>
-
-            <button class="aic-btn-build-ctx" id="aicBtnBuildCtx" disabled title="Build Context (Ctrl+B)">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="16 18 22 12 16 6"/>
-                <polyline points="8 6 2 12 8 18"/>
-              </svg>
-              Build Context
-            </button>
-
-            <div class="aic-context__tokens">
+            <div class="aic-context__tokens" style="margin-top:10px;">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="12" y1="8" x2="12" y2="12"/>
@@ -262,7 +303,7 @@ export class AiConsolePage {
               <span id="aicTokenCount">~0 tokens estimated</span>
             </div>
 
-            <!-- Context preview — shows full generated prompt text -->
+            <!-- Context preview — shows full generated context -->
             <div id="aicCtxPreviewWrap" class="aic-ctx-preview-wrap" style="display:none">
               <div class="aic-ctx-preview__header" id="aicCtxPreviewToggle" title="Toggle context preview">
                 <svg class="aic-ctx-preview__chevron" width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -299,7 +340,7 @@ export class AiConsolePage {
 
             <!-- Thread -->
             <div class="aic-thread" id="aicThread">
-              <div class="aic-thread__loading">Loading project data…</div>
+              <div class="aic-thread__loading">Loading…</div>
             </div>
 
             <!-- Input bar -->
@@ -353,7 +394,7 @@ export class AiConsolePage {
   }
 
   // ----------------------------------------------------------------
-  // Markdown renderer (mirrors Prompt Queue implementation)
+  // Markdown renderer
   // ----------------------------------------------------------------
   _renderMarkdown(text) {
     const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -449,19 +490,14 @@ export class AiConsolePage {
   _bindEvents() {
     const q = (id) => this.container.querySelector(id);
 
-    // Back
     q('#aicBtnBack').addEventListener('click', () =>
       this.router.navigate('project-home', { projectId: this.projectId }));
 
-
-
-    // Send / Stop (same button, toggled)
     q('#aicBtnSend').addEventListener('click', () => {
       if (this._isGenerating) this._handleStop();
       else this._handleSend();
     });
 
-    // Enter to send, Shift+Enter for newline
     q('#aicInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -469,11 +505,7 @@ export class AiConsolePage {
       }
     });
 
-    // Clear
     q('#aicBtnClear').addEventListener('click', () => this._handleClear());
-
-    // Build Context
-    q('#aicBtnBuildCtx').addEventListener('click', () => this._buildContext());
 
     // Toggle context preview expand/collapse
     q('#aicCtxPreviewToggle').addEventListener('click', (e) => {
@@ -501,46 +533,31 @@ export class AiConsolePage {
       });
     });
 
-    // Context checkboxes → update token estimate live
-    this.container.querySelectorAll('.aic-slice__check')
-      .forEach(cb => cb.addEventListener('change', () => this._updateTokenEstimate()));
-
     // Prompt disclosure toggle — event delegation on thread
-    this.container.querySelector('#aicThread')
-      .addEventListener('click', (e) => {
-        const toggle = e.target.closest('.aic-prompt-disc__toggle');
-        if (!toggle) return;
-        const disc = toggle.closest('.aic-prompt-disc');
-        if (!disc) return;
-        const isOpen = disc.dataset.open === 'true';
-        disc.dataset.open = isOpen ? 'false' : 'true';
-        const body = disc.querySelector('.aic-prompt-disc__body');
-        if (body) body.style.display = isOpen ? 'none' : 'block';
-        const chevron = disc.querySelector('.aic-prompt-disc__chevron');
-        if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
-      });
+    this.container.querySelector('#aicThread').addEventListener('click', (e) => {
+      const toggle = e.target.closest('.aic-prompt-disc__toggle');
+      if (!toggle) return;
+      const disc = toggle.closest('.aic-prompt-disc');
+      if (!disc) return;
+      const isOpen = disc.dataset.open === 'true';
+      disc.dataset.open = isOpen ? 'false' : 'true';
+      const body = disc.querySelector('.aic-prompt-disc__body');
+      if (body) body.style.display = isOpen ? 'none' : 'block';
+      const chevron = disc.querySelector('.aic-prompt-disc__chevron');
+      if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+    });
 
-    // Draggable divider between chat and context panel
+    // Draggable divider
     this._initDividerDrag();
 
     // Auto-resize textarea
     const ta = q('#aicInput');
     if (ta) {
-      const resize = () => {
+      ta.addEventListener('input', () => {
         ta.style.height = 'auto';
         ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
-      };
-      ta.addEventListener('input', resize);
+      });
     }
-
-    // Ctrl+B → Build Context
-    document.addEventListener('keydown', (e) => {
-      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
-        e.preventDefault();
-        q('#aicBtnBuildCtx')?.click();
-      }
-    });
   }
 
   _initDividerDrag() {
@@ -551,11 +568,10 @@ export class AiConsolePage {
 
     divider.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      const startX      = e.clientX;
-      const startWidth  = contextPane.getBoundingClientRect().width;
-      const totalWidth  = bodyEl.getBoundingClientRect().width;
-      const minW        = 200;
-      const maxW        = totalWidth - 400;
+      const startX     = e.clientX;
+      const startWidth = contextPane.getBoundingClientRect().width;
+      const totalWidth = bodyEl.getBoundingClientRect().width;
+      const minW = 200, maxW = totalWidth - 400;
 
       document.body.style.cursor     = 'col-resize';
       document.body.style.userSelect = 'none';
@@ -565,7 +581,6 @@ export class AiConsolePage {
         const newWidth = Math.min(Math.max(startWidth + (mv.clientX - startX), minW), maxW);
         contextPane.style.flex = `0 0 ${newWidth}px`;
       };
-
       const onUp = () => {
         document.body.style.cursor     = '';
         document.body.style.userSelect = '';
@@ -573,19 +588,17 @@ export class AiConsolePage {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup',   onUp);
       };
-
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup',   onUp);
     });
   }
 
   // ----------------------------------------------------------------
-  // Send
+  // Send — routes question, fetches context, streams response
   // ----------------------------------------------------------------
-  _handleSend() {
+  async _handleSend() {
     const ta       = this.container.querySelector('#aicInput');
     const userText = (ta?.value || '').trim();
-
     if (!userText) return;
 
     if (!this._selectedModel) {
@@ -593,13 +606,25 @@ export class AiConsolePage {
       return;
     }
 
-    const isFirst = this._messages.length === 0;
+    // Disable input immediately
+    this._setGenerating(true);
+    if (ta) { ta.value = ''; ta.style.height = ''; }
 
-    // Rebuild context on every send so newly checked items are always included
-    this._buildContext();
-    const anyChecked = [...this.container.querySelectorAll('.aic-slice__check, .aic-doc-check')]
-      .some(cb => cb.checked);
-    const autoBuilt = anyChecked && !!this._builtContext;
+    // Route question → fetch data → build context
+    this._showContextFetching();
+    try {
+      const tables      = this._routeQuestion(userText);
+      const fetchedData = await this._fetchContextForTables(tables);
+      this._builtContext = this._buildAutoContext(fetchedData);
+      this._updateAutoCtxStatus(tables, fetchedData);
+      this._updateTokenEstimate();
+      this._updateContextPreview();
+    } catch (err) {
+      console.error('[AI Console] context fetch error:', err);
+      this._builtContext = '';
+      const el = this.container.querySelector('#aicAutoCtxStatus');
+      if (el) el.innerHTML = `<p class="aic-auto-ctx-idle">Context fetch failed — sending without context.</p>`;
+    }
 
     const content = this._builtContext
       ? `${this._builtContext}\n\n---\n\n${userText}`
@@ -607,28 +632,14 @@ export class AiConsolePage {
 
     this._messages.push({ role: 'user', content });
 
-    // Clear textarea
-    if (ta) ta.value = '';
-    ta.style.height = '';
-
-    // 1. User bubble — what they typed
     this._appendBubble({ role: 'user', text: userText });
-
-    // 2. Prompt disclosure — full prompt sent to model
-    this._appendPromptDisclosure(content, this._selectedModel, autoBuilt);
-
-    // 3. Start streaming AI bubble
+    this._appendPromptDisclosure(content, this._selectedModel);
     this._startStreaming();
 
-    // Wire up streaming callbacks
     window.app.chat.offAll();
     window.app.chat.onToken((p) => this._onToken(p));
     window.app.chat.onDone((p)  => this._onDone(p));
-
-    // Fire with full conversation history
     window.app.chat.generate({ messages: this._messages, model: this._selectedModel });
-
-    this._setGenerating(true);
   }
 
   // ----------------------------------------------------------------
@@ -649,6 +660,8 @@ export class AiConsolePage {
     this._messages     = [];
     this._updateTokenEstimate();
     this._updateContextPreview();
+    const el = this.container.querySelector('#aicAutoCtxStatus');
+    if (el) el.innerHTML = `<p class="aic-auto-ctx-idle">Send a message — context will be fetched automatically.</p>`;
     this._renderWelcome();
   }
 
@@ -657,9 +670,8 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   _startStreaming() {
     this._streamingText = '';
-    const thread        = this.container.querySelector('#aicThread');
+    const thread = this.container.querySelector('#aicThread');
     if (!thread) return;
-
     const div = document.createElement('div');
     div.innerHTML = this._bubbleHtml({ role: 'assistant', text: '' }, true);
     this._streamingEl = div.firstElementChild;
@@ -671,7 +683,6 @@ export class AiConsolePage {
     if (!this._streamingEl) return;
     const token = stripAnsi(payload.text || '');
     this._streamingText += token;
-
     const bubble = this._streamingEl.querySelector('.aic-msg__bubble');
     if (bubble) {
       bubble.innerHTML = this._renderMarkdown(this._streamingText) + '<span class="aic-cursor">▋</span>';
@@ -682,142 +693,20 @@ export class AiConsolePage {
   _onDone(payload) {
     const raw   = stripAnsi(payload.raw || this._streamingText || '').trim();
     const final = raw || '[No response received]';
-
     this._finalizeStream(final);
     this._setGenerating(false);
-
-    // Append assistant reply to history so follow-up questions have full context
     if (raw) this._messages.push({ role: 'assistant', content: raw });
-
-    if (payload.error && !raw) {
-      this._showThreadError(`AI error: ${payload.error}`);
-    }
+    if (payload.error && !raw) this._showThreadError(`AI error: ${payload.error}`);
   }
 
   _finalizeStream(text) {
     if (!this._streamingEl) return;
-
     this._streamingEl.classList.remove('aic-msg--streaming');
     const bubble = this._streamingEl.querySelector('.aic-msg__bubble');
     if (bubble) bubble.innerHTML = this._renderMarkdown(text);
-
     this._streamingEl  = null;
     this._streamingText = '';
     this._scrollThread();
-  }
-
-  // ----------------------------------------------------------------
-  // Context builder
-  // ----------------------------------------------------------------
-  _buildContext() {
-    const slices = {};
-    this.container.querySelectorAll('.aic-slice__check')
-      .forEach(cb => { slices[cb.dataset.slice] = cb.checked; });
-
-    const parts = [];
-
-    // ── Open issues ──────────────────────────────────────────────────
-    if (slices.issues && this._issues.length > 0) {
-      const list = this._issues.map(i => {
-        let block = `  [Issue] ${i.title}`;
-        block += `\n    Severity: ${i.severity || 'medium'} | Status: ${i.status || 'open'}`;
-        if (i.layer_name)         block += `\n    Layer: ${i.layer_name}`;
-        if (i.description)        block += `\n    Description: ${i.description}`;
-        if (i.steps_to_reproduce) block += `\n    Steps: ${i.steps_to_reproduce}`;
-        return block;
-      }).join('\n\n');
-      parts.push(`OPEN ISSUES (${this._issues.length}):\n\n${list}`);
-    }
-
-    // ── Workflows ────────────────────────────────────────────────────
-    if (slices.workflows && this._workflows.length > 0) {
-      const list = this._workflows.map(w => {
-        let block = `  [Workflow] ${w.feature}`;
-        if (w.description) block += `\n    Description: ${w.description}`;
-        return block;
-      }).join('\n\n');
-      parts.push(`WORKFLOWS (${this._workflows.length}):\n\n${list}`);
-    }
-
-    // ── Project layers ────────────────────────────────────────────────
-    if (slices.layers && this._projectLayers.length > 0) {
-      const list = this._projectLayers.map(l => {
-        let block = `  [Layer] ${l.name}`;
-        if (l.description) block += `\n    Description: ${l.description}`;
-        return block;
-      }).join('\n\n');
-      parts.push(`PROJECT LAYERS (${this._projectLayers.length}):\n\n${list}`);
-    }
-
-    // ── Documents (individually selected) ───────────────────────────
-    const selectedDocIds = new Set(
-      [...this.container.querySelectorAll('.aic-doc-check:checked')]
-        .map(cb => parseInt(cb.dataset.docId, 10))
-    );
-    const selectedDocs = this._documents.filter(d => selectedDocIds.has(d.id));
-    if (selectedDocs.length > 0) {
-      const list = selectedDocs.map(d => {
-        let block = `  [Document] ${d.title}`;
-        if (d.content) block += `\n${d.content.split('\n').map(l => `    ${l}`).join('\n')}`;
-        return block;
-      }).join('\n\n---\n\n');
-      parts.push(`DOCUMENTS (${selectedDocs.length}):\n\n${list}`);
-    }
-
-    const projectName = this._project?.name || '';
-    const projectLine = projectName ? `PROJECT: ${projectName}\n\n` : '';
-
-    this._builtContext = parts.length > 0
-      ? `${projectLine}You are an AI assistant for the following software project.\nUse this context accurately when answering. Do not invent details not present below.\n\n${parts.join('\n\n══════════════════════════════════════\n\n')}`
-      : '';
-
-    this._updateTokenEstimate();
-    this._updateContextPreview();
-    this._flashBuildButton();
-  }
-
-  _updateContextPreview() {
-    const preview = this.container.querySelector('#aicCtxPreview');
-    const previewWrap = this.container.querySelector('#aicCtxPreviewWrap');
-    if (!preview || !previewWrap) return;
-
-    if (this._builtContext) {
-      preview.textContent = this._builtContext;
-      previewWrap.style.display = 'block';
-      // Keep pre collapsed — user expands by clicking the header
-      preview.style.display = 'none';
-      previewWrap.classList.remove('aic-ctx-preview-wrap--expanded');
-      const chevron = this.container.querySelector('.aic-ctx-preview__chevron');
-      if (chevron) chevron.style.transform = '';
-    } else {
-      previewWrap.style.display = 'none';
-    }
-  }
-
-  _flashBuildButton() {
-    const btn = this.container.querySelector('#aicBtnBuildCtx');
-    if (!btn) return;
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = `
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="20 6 9 17 4 12"/>
-      </svg>
-      Context ready`;
-    btn.classList.add('aic-btn-build-ctx--done');
-    setTimeout(() => {
-      btn.innerHTML = originalHtml;
-      btn.classList.remove('aic-btn-build-ctx--done');
-    }, 2000);
-  }
-
-  _updateTokenEstimate() {
-    const tokens = estimateTokens(this._builtContext);
-    const el = this.container.querySelector('#aicTokenCount');
-    if (el) {
-      el.textContent = tokens > 0
-        ? `~${tokens.toLocaleString()} tokens in context`
-        : '~0 tokens estimated';
-    }
   }
 
   // ----------------------------------------------------------------
@@ -825,7 +714,6 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   _setGenerating(on) {
     this._isGenerating = on;
-
     const btnSend  = this.container.querySelector('#aicBtnSend');
     const iconSend = this.container.querySelector('#aicIconSend');
     const iconStop = this.container.querySelector('#aicIconStop');
@@ -836,8 +724,8 @@ export class AiConsolePage {
       if (iconSend) iconSend.style.display = 'none';
       if (iconStop) iconStop.style.display = '';
       if (btnSend)  { btnSend.classList.add('aic-btn-send--stop'); btnSend.title = 'Stop'; }
-      if (ta)       ta.disabled            = true;
-      if (btnClear) btnClear.disabled      = true;
+      if (ta)       ta.disabled       = true;
+      if (btnClear) btnClear.disabled = true;
     } else {
       if (iconSend) iconSend.style.display = '';
       if (iconStop) iconStop.style.display = 'none';
@@ -850,34 +738,32 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   // Prompt disclosure — shows the full prompt sent to the model
   // ----------------------------------------------------------------
-  _appendPromptDisclosure(fullPrompt, model, autoBuilt = false) {
+  _appendPromptDisclosure(fullPrompt, model) {
     const thread = this.container.querySelector('#aicThread');
     if (!thread) return;
     const div = document.createElement('div');
-    div.innerHTML = this._promptDisclosureHtml(fullPrompt, model, autoBuilt);
+    div.innerHTML = this._promptDisclosureHtml(fullPrompt, model);
     thread.appendChild(div.firstElementChild);
     this._scrollThread();
   }
 
-  _promptDisclosureHtml(fullPrompt, model, autoBuilt = false) {
+  _promptDisclosureHtml(fullPrompt, model) {
     const tokens     = estimateTokens(fullPrompt);
     const modelLabel = model ? `${model.label} · ${model.type.toUpperCase()}` : 'model';
     const hasCtx     = this._builtContext && fullPrompt.startsWith(this._builtContext);
 
-    // Split prompt into context block and user message for display
     const contextBlock = hasCtx ? this._builtContext : '';
     const userBlock    = hasCtx
       ? fullPrompt.slice(this._builtContext.length).replace(/^\n+---\n+/, '').trim()
       : fullPrompt;
 
-    const autoBadge = autoBuilt
+    const autoBadge = contextBlock
       ? `<span class="aic-prompt-disc__auto-badge">auto-context</span>`
       : '';
 
     const noContextNote = !contextBlock ? `
       <div class="aic-prompt-disc__no-ctx">
-        No context slices selected — only the message was sent.
-        Check slices on the right to include project data.
+        No matching project data found — only the message was sent.
       </div>` : '';
 
     const contextSection = contextBlock ? `

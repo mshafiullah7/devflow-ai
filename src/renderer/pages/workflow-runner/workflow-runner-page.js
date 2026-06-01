@@ -2,11 +2,11 @@ import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
 const STATUS = {
-  pending:  { label: 'Pending',  cls: 'wfr-status--pending'  },
-  running:  { label: 'Running',  cls: 'wfr-status--running'  },
-  done:     { label: 'Done',     cls: 'wfr-status--done'     },
-  error:    { label: 'Error',    cls: 'wfr-status--error'    },
-  skipped:  { label: 'Skipped', cls: 'wfr-status--skipped'  },
+  open:         { label: 'Open',         cls: 'wfr-status--open'    },
+  running:      { label: 'Running',      cls: 'wfr-status--running' },
+  executed:     { label: 'Executed',     cls: 'wfr-status--done'    },
+  failed:       { label: 'Failed',       cls: 'wfr-status--error'   },
+  needs_review: { label: 'Needs Review', cls: 'wfr-status--review'  },
 };
 
 export class WorkflowRunnerPage {
@@ -49,7 +49,7 @@ export class WorkflowRunnerPage {
     this._criteria = criteria || [];
 
     this._layers.forEach(l => {
-      this._statuses[l.id] = 'pending';
+      this._statuses[l.id] = l.status || 'open';
       this._outputs[l.id]  = '';
     });
 
@@ -66,6 +66,11 @@ export class WorkflowRunnerPage {
     this._running = true;
     this._updateToolbar();
 
+    // Persist workflow as in_progress for the duration of the run
+    if (this._workflow) {
+      await window.db.workflows.updateStatus({ id: this._workflow.id, status: 'in_progress' });
+    }
+
     for (const layer of this._layers) {
       if (!this._running) break;
       await this._runLayer(layer);
@@ -74,11 +79,11 @@ export class WorkflowRunnerPage {
     this._running = false;
     this._updateToolbar();
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
-    this._evaluateCriteria();
+    await this._evaluateCriteria();
   }
 
   _runLayer(layer) {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       this._statuses[layer.id] = 'running';
       this._outputs[layer.id]  = '';
       this._startTimes[layer.id] = Date.now();
@@ -91,11 +96,13 @@ export class WorkflowRunnerPage {
         if (this._selectedId === layer.id) this._appendOutput(text);
       };
 
-      const onDone = ({ raw, error }) => {
+      const onDone = async ({ raw, error }) => {
         window.app.workflowChat.offAll();
         if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
-        this._statuses[layer.id] = error ? 'error' : 'done';
+        const newStatus = error ? 'failed' : 'executed';
+        this._statuses[layer.id] = newStatus;
         if (error) this._outputs[layer.id] += `\n\n⚠ ${error}`;
+        await window.db.layers.updateStatus({ id: layer.id, status: newStatus });
         this._refreshLayerList();
         this._updateOutputFooter(layer.id);
         resolve();
@@ -105,9 +112,10 @@ export class WorkflowRunnerPage {
       window.app.workflowChat.onDone(onDone);
 
       if (!this._modelConfig) {
-        this._statuses[layer.id] = 'error';
+        this._statuses[layer.id] = 'failed';
         this._outputs[layer.id]  = '⚠ No AI model configured. Set a model in the Workflows page before running.';
         window.app.workflowChat.offAll();
+        await window.db.layers.updateStatus({ id: layer.id, status: 'failed' });
         this._refreshLayerList();
         resolve();
         return;
@@ -135,15 +143,40 @@ export class WorkflowRunnerPage {
     return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
   }
 
-  _evaluateCriteria() {
+  async _evaluateCriteria() {
     const allOutput = this._layers.map(l => this._outputs[l.id] || '').join('\n');
+    let allPassed = true;
     this._criteria.forEach(c => {
       const el = this.container.querySelector(`[data-crit="${c.id}"]`);
       if (!el) return;
       const passed = allOutput.toLowerCase().includes(c.description.toLowerCase().slice(0, 30));
+      if (!passed) allPassed = false;
       el.className = `wfr-crit-row ${passed ? 'wfr-crit-row--pass' : 'wfr-crit-row--fail'}`;
       el.querySelector('.wfr-crit-icon').textContent = passed ? '✔' : '✗';
     });
+
+    // Persist final workflow / layer statuses
+    if (this._workflow) {
+      const anyFailed = this._layers.some(l => this._statuses[l.id] === 'failed');
+      const allDone   = this._layers.every(l =>
+        ['executed', 'needs_review', 'failed'].includes(this._statuses[l.id])
+      );
+
+      if (!anyFailed && allDone && (!this._criteria.length || allPassed)) {
+        // All executed and criteria passed (or no criteria) → mark workflow completed
+        await window.db.workflows.updateStatus({ id: this._workflow.id, status: 'completed' });
+      } else if (this._criteria.length && !allPassed) {
+        // Criteria check failed → mark all executed layers as needs_review
+        for (const layer of this._layers) {
+          if (this._statuses[layer.id] === 'executed') {
+            this._statuses[layer.id] = 'needs_review';
+            await window.db.layers.updateStatus({ id: layer.id, status: 'needs_review' });
+          }
+        }
+        this._refreshLayerList();
+      }
+    }
+
     this._showSummary();
   }
 
@@ -151,8 +184,8 @@ export class WorkflowRunnerPage {
     const el = this.container.querySelector('#wfrSummary');
     if (!el) return;
     const total   = this._layers.length;
-    const done    = this._layers.filter(l => this._statuses[l.id] === 'done').length;
-    const errors  = this._layers.filter(l => this._statuses[l.id] === 'error').length;
+    const done    = this._layers.filter(l => this._statuses[l.id] === 'executed').length;
+    const errors  = this._layers.filter(l => this._statuses[l.id] === 'failed').length;
     const elapsed = this._layers.reduce((sum, l) => {
       return sum + (this._startTimes[l.id] ? Math.floor((Date.now() - this._startTimes[l.id]) / 1000) : 0);
     }, 0);
@@ -187,7 +220,7 @@ export class WorkflowRunnerPage {
     if (!pre) return;
     const layer = this._layers.find(l => l.id === this._selectedId);
     if (!layer) { pre.textContent = ''; return; }
-    pre.textContent = this._outputs[layer.id] || (this._statuses[layer.id] === 'pending' ? 'Waiting to run…' : '');
+    pre.textContent = this._outputs[layer.id] || (this._statuses[layer.id] === 'open' ? 'Waiting to run…' : '');
     pre.scrollTop = pre.scrollHeight;
   }
 
@@ -195,9 +228,9 @@ export class WorkflowRunnerPage {
     const footer = this.container.querySelector('#wfrOutputFooter');
     if (!footer || this._selectedId !== layerId) return;
     const st = this._statuses[layerId];
-    footer.innerHTML = st === 'done'
-      ? `<span class="wfr-footer-done">✔ Completed in ${this._fmt(Date.now() - this._startTimes[layerId])}</span>`
-      : `<span class="wfr-footer-error">✗ Error — see output above</span>`;
+    footer.innerHTML = st === 'executed'
+      ? `<span class="wfr-footer-done">✔ Executed in ${this._fmt(Date.now() - this._startTimes[layerId])}</span>`
+      : `<span class="wfr-footer-error">✗ Failed — see output above</span>`;
     footer.hidden = false;
   }
 
@@ -210,8 +243,8 @@ export class WorkflowRunnerPage {
     window.app.workflowChat.offAll();
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     this._layers.forEach(l => {
-      if (this._statuses[l.id] === 'running') this._statuses[l.id] = 'skipped';
-      if (this._statuses[l.id] === 'pending') this._statuses[l.id] = 'skipped';
+      // Running layer was interrupted — revert to open (not yet completed)
+      if (this._statuses[l.id] === 'running') this._statuses[l.id] = 'open';
     });
     this._refreshLayerList();
     this._updateToolbar();
@@ -334,7 +367,7 @@ export class WorkflowRunnerPage {
     this.container.querySelector('#wfrBtnRunAll')
       ?.addEventListener('click', () => {
         if (this._running || !this._layers.length) return;
-        this._layers.forEach(l => { this._statuses[l.id] = 'pending'; this._outputs[l.id] = ''; });
+        this._layers.forEach(l => { this._statuses[l.id] = 'open'; this._outputs[l.id] = ''; });
         this._startTimes = {};
         this._elapsed    = {};
         this.container.querySelector('#wfrRunLabel').hidden = true;
