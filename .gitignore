@@ -115,3 +115,8 @@ __pycache__/
 .Python
 agent/.venv/
 agent/venv/
+dist/builder-debug.yml
+dist/builder-effective-config.yaml
+dist/DevFlow AI Setup 0.1.0.exe
+dist/DevFlow AI Setup 0.1.0.exe.blockmap
+dist/latest.yml

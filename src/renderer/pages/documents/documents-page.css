@@ -939,6 +939,26 @@
 .doc-attach-item__btn:hover { color: var(--accent); background: rgba(99,102,241,0.08); border-color: var(--accent); }
 .doc-attach-item__btn--del:hover { color: #ef4444; background: rgba(239,68,68,0.08); border-color: #ef4444; }
 
+.doc-attach-confirm__label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+.doc-attach-confirm__btn {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background 0.12s, color 0.12s;
+}
+.doc-attach-confirm__btn--yes { color: #ef4444; border-color: #ef4444; margin-right: 4px; }
+.doc-attach-confirm__btn--yes:hover { background: rgba(239,68,68,0.1); }
+.doc-attach-confirm__btn--no:hover { background: var(--surface-hover); }
+
 /* ------------------------------------------------------------------ */
 /* Add attachment buttons                                               */
 /* ------------------------------------------------------------------ */
@@ -968,14 +988,13 @@
 /* Add attachment form overlay                                           */
 /* ------------------------------------------------------------------ */
 .doc-attach-form-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(0,0,0,0.45);
-  z-index: 10;
-  border-radius: var(--radius);
+  z-index: 1000;
 }
 
 .doc-attach-form {
@@ -1327,6 +1346,37 @@
   letter-spacing: 0.02em;
 }
 
+.doc-ai-card__mode-toggle {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.doc-ai-card__mode-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  line-height: 1.4;
+}
+.doc-ai-card__mode-btn:hover { color: var(--text-primary); }
+.doc-ai-card__mode-btn--active {
+  background: var(--accent);
+  color: #fff;
+}
+.doc-ai-card__mode-btn--active:hover { color: #fff; }
+
 .doc-ai-card__header-actions {
   display: flex;
   align-items: center;
@@ -1462,6 +1512,34 @@
 .doc-ai-msg__bubble--error {
   color: #f87171;
   border-color: rgba(248, 113, 113, 0.25);
+}
+
+.doc-ai-msg--prompt-preview { justify-content: flex-start; margin: 2px 0; }
+.doc-ai-prompt-details {
+  width: 100%;
+  font-size: 11px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  color: var(--text-muted);
+}
+.doc-ai-prompt-details__summary {
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+  opacity: 0.7;
+}
+.doc-ai-prompt-details__summary:hover { opacity: 1; }
+.doc-ai-prompt-details__pre {
+  margin: 6px 0 2px;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
 }
 
 /* Compose area */

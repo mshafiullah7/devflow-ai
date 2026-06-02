@@ -17,6 +17,7 @@ export class DocumentsPage {
     this._drawioFiles   = new Map();
     this._aiModelConfig = null;
     this._layers        = [];
+    this._chatHistory   = [];
   }
 
   async mount() {
@@ -80,6 +81,7 @@ export class DocumentsPage {
     removeCss('pages/documents/documents-page.css');
     this._picker?.unmount();
     this._git?.stopPoll();
+    document.querySelector('.doc-attach-form-overlay')?.remove();
   }
 
   // ----------------------------------------------------------------
@@ -221,7 +223,7 @@ export class DocumentsPage {
   // Editor
   // ----------------------------------------------------------------
   async _selectDoc(id, switchToEdit = false) {
-    if (id !== this._activeId) await this._saveActive();
+    if (id !== this._activeId) { await this._saveActive(); this._chatHistory = []; }
     this._activeId = id;
     const doc = this._docs.find(d => d.id === id);
     if (!doc) return;
@@ -309,8 +311,12 @@ export class DocumentsPage {
               <path d="M8 1v3M8 12v3M1 8h3M12 8h3M3.05 3.05l2.12 2.12M10.83 10.83l2.12 2.12M3.05 12.95l2.12-2.12M10.83 5.17l2.12-2.12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               <circle cx="8" cy="8" r="2" fill="currentColor"/>
             </svg>
-            AI Edit
+            AI Assist
           </span>
+          <div class="doc-ai-card__mode-toggle" id="docAiModeToggle">
+            <button class="doc-ai-card__mode-btn doc-ai-card__mode-btn--active" data-mode="ask">Ask</button>
+            <button class="doc-ai-card__mode-btn" data-mode="edit">Edit</button>
+          </div>
           <div class="doc-ai-card__header-actions">
             <button class="doc-ai-card__icon-btn" id="docAiClear" title="Clear conversation">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -320,11 +326,11 @@ export class DocumentsPage {
           </div>
         </div>
         <div class="doc-ai-card__messages" id="docAiMessages">
-          <p class="doc-ai-card__welcome">Describe what changes to make. The AI has full context of the document and any attached diagrams.</p>
+          <p class="doc-ai-card__welcome">Ask a question about the document, or switch to Edit mode to make AI-driven changes.</p>
         </div>
         <div class="doc-ai-card__compose">
           <textarea class="doc-ai-card__input" id="docAiInput" rows="2" maxlength="4000"
-            placeholder="e.g. Add a deployment section based on the architecture diagram"></textarea>
+            placeholder="Ask a question about the document…"></textarea>
           <button class="doc-ai-card__send" id="docAiSend" title="Send (Enter) — Alt+Enter for new line">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M14 2L2 8l4 2 2 4 6-12z" fill="currentColor"/>
@@ -541,11 +547,27 @@ export class DocumentsPage {
       }
       const delBtn = e.target.closest('[data-del-attach]');
       if (delBtn) {
-        const id = Number(delBtn.dataset.delAttach);
-        if (!confirm('Delete this attachment?')) return;
-        await window.db.attachments.delete(id);
-        this._attachments = this._attachments.filter(a => a.id !== id);
-        this._refreshAttachList(panel);
+        const id         = Number(delBtn.dataset.delAttach);
+        const attachItem = delBtn.closest('.doc-attach-item');
+        const actionsEl  = attachItem?.querySelector('.doc-attach-item__actions');
+        if (!actionsEl) return;
+
+        // Inline confirm — avoids window.confirm() which breaks Electron keyboard focus
+        const origHtml = actionsEl.innerHTML;
+        actionsEl.innerHTML = `
+          <span class="doc-attach-confirm__label">Delete?</span>
+          <button class="doc-attach-confirm__btn doc-attach-confirm__btn--yes" data-confirm-yes>Yes</button>
+          <button class="doc-attach-confirm__btn doc-attach-confirm__btn--no"  data-confirm-no>No</button>
+        `;
+        actionsEl.querySelector('[data-confirm-no]').addEventListener('click', () => {
+          actionsEl.innerHTML = origHtml;
+          this._bindAttachListEvents(panel, docId);
+        });
+        actionsEl.querySelector('[data-confirm-yes]').addEventListener('click', async () => {
+          await window.db.attachments.delete(id);
+          this._attachments = this._attachments.filter(a => a.id !== id);
+          this._refreshAttachList(panel);
+        });
       }
     };
     list.addEventListener('click', this._attachListHandler);
@@ -565,7 +587,7 @@ export class DocumentsPage {
   // Add attachment form
   // ----------------------------------------------------------------
   _showAttachForm(docId, type) {
-    this.container.querySelector('.doc-attach-form-overlay')?.remove();
+    document.querySelector('.doc-attach-form-overlay')?.remove();
 
     const label = type === 'svg' ? 'SVG' : 'draw.io';
     const ph    = type === 'svg'
@@ -607,7 +629,7 @@ export class DocumentsPage {
       </div>
     `;
 
-    this.container.querySelector('.documents-page__body').appendChild(formEl);
+    document.body.appendChild(formEl);
 
     const nameInput    = formEl.querySelector('#attachName');
     const contentInput = formEl.querySelector('#attachContent');
@@ -832,11 +854,31 @@ export class DocumentsPage {
   }
 
   // ----------------------------------------------------------------
-  // AI Edit pane (right panel)
+  // AI Assist pane (right panel)
   // ----------------------------------------------------------------
   _bindAiPane(doc) {
     const card    = this.container.querySelector('#docAiCard');
     const inputEl = card.querySelector('#docAiInput');
+    const msgsEl  = card.querySelector('#docAiMessages');
+
+    // Mode toggle
+    const modeBtns = card.querySelectorAll('.doc-ai-card__mode-btn');
+    const getMode  = () => card.querySelector('.doc-ai-card__mode-btn--active')?.dataset.mode ?? 'ask';
+    const modeHints = {
+      ask:  { placeholder: 'Ask a question about the document…', welcome: 'Ask a question about the document, or switch to Edit mode to make AI-driven changes.' },
+      edit: { placeholder: 'e.g. Add a deployment section based on the architecture diagram', welcome: 'Describe what changes to make. The AI has full context of the document and any attached diagrams.' },
+    };
+    modeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        modeBtns.forEach(b => b.classList.remove('doc-ai-card__mode-btn--active'));
+        btn.classList.add('doc-ai-card__mode-btn--active');
+        const hint = modeHints[btn.dataset.mode];
+        inputEl.placeholder = hint.placeholder;
+        if (msgsEl.querySelector('.doc-ai-card__welcome')) {
+          msgsEl.querySelector('.doc-ai-card__welcome').textContent = hint.welcome;
+        }
+      });
+    });
 
     inputEl.addEventListener('input', () => {
       inputEl.style.height = 'auto';
@@ -846,14 +888,19 @@ export class DocumentsPage {
     });
 
     card.querySelector('#docAiClear').addEventListener('click', () => {
-      card.querySelector('#docAiMessages').innerHTML =
-        '<p class="doc-ai-card__welcome">Conversation cleared.</p>';
+      this._chatHistory = [];
+      const hint = modeHints[getMode()];
+      msgsEl.innerHTML = `<p class="doc-ai-card__welcome">${hint.welcome}</p>`;
     });
 
     const submit = () => {
       const instruction = inputEl.value.trim();
       if (!instruction) { inputEl.focus(); return; }
-      this._runAiEdit(doc, instruction, card);
+      if (getMode() === 'edit') {
+        this._runAiEdit(doc, instruction, card);
+      } else {
+        this._runAiAsk(doc, instruction, card);
+      }
       inputEl.value = '';
       inputEl.style.height = '';
       inputEl.style.overflowY = '';
@@ -861,7 +908,17 @@ export class DocumentsPage {
 
     card.querySelector('#docAiSend').addEventListener('click', submit);
     inputEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); submit(); }
+      if (e.key === 'Enter' && e.altKey) {
+        e.preventDefault();
+        const start = inputEl.selectionStart;
+        const end = inputEl.selectionEnd;
+        inputEl.value = inputEl.value.slice(0, start) + '\n' + inputEl.value.slice(end);
+        inputEl.selectionStart = inputEl.selectionEnd = start + 1;
+        inputEl.dispatchEvent(new Event('input'));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        submit();
+      }
     });
   }
 
@@ -942,6 +999,221 @@ export class DocumentsPage {
     msgEl.closest('.doc-ai-card__messages')?.scrollTo({ top: 99999, behavior: 'smooth' });
   }
 
+  async _runAiAsk(doc, instruction, card) {
+    const cfg     = this._aiModelConfig;
+    const msgsEl  = card.querySelector('#docAiMessages');
+    const sendBtn = card.querySelector('#docAiSend');
+    const inputEl = card.querySelector('#docAiInput');
+
+    this._appendChatMsg(msgsEl, 'user', instruction);
+
+    if (!cfg) {
+      this._appendChatMsg(msgsEl, 'ai', 'No model selected — choose one in the header.', true);
+      return;
+    }
+
+    sendBtn.disabled = true;
+    inputEl.disabled = true;
+
+    const contentTA      = this.container.querySelector('#docContentTA');
+    const currentContent = contentTA?.value ?? doc.content ?? '';
+
+    const aiMsgEl = this._appendChatMsg(msgsEl, 'ai', 'Thinking…');
+
+    const attachContextParts = [];
+    if (this._attachments.length > 0) {
+      for (const att of this._attachments) {
+        try {
+          const full = await window.db.attachments.getContent(att.id);
+          if (full?.content) {
+            const typeLabel = att.type === 'drawio' ? 'draw.io XML' : 'SVG';
+            attachContextParts.push(`### ${att.name} (${typeLabel})\n${full.content}`);
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    const contextParts = [
+      'You are a helpful assistant answering questions about a technical document.',
+      'Answer concisely and accurately based on the document content and any attached diagrams.',
+      'Do NOT rewrite or modify the document.',
+      '',
+      '## Document title',
+      doc.title,
+      '',
+      '## Document content',
+      currentContent || '(empty)',
+    ];
+
+    if (attachContextParts.length > 0) {
+      contextParts.push('', '## Diagram attachments (read for context only)', ...attachContextParts);
+    }
+
+    const tailParts  = ['', '## Question', instruction];
+    const fullPrompt = [...contextParts, ...tailParts].join('\n');
+
+    // First turn sends full context; follow-ups send only the new question (history carries context)
+    const isFirstTurn = this._chatHistory.length === 0;
+    const userMessage = isFirstTurn ? fullPrompt : instruction;
+    const messages    = [...this._chatHistory, { role: 'user', content: userMessage }];
+
+    try {
+      if (cfg.type === 'ollama') {
+        const reply = await this._runAiAskOllama(cfg, messages, aiMsgEl);
+        if (reply) this._chatHistory.push({ role: 'user', content: userMessage }, { role: 'assistant', content: reply });
+      } else if (cfg.type === 'api') {
+        const reply = await this._runAiAskApi(cfg, messages, aiMsgEl);
+        if (reply) this._chatHistory.push({ role: 'user', content: userMessage }, { role: 'assistant', content: reply });
+      } else {
+        await this._runAiAskCli(cfg, contextParts.join('\n'), tailParts.join('\n'), aiMsgEl);
+      }
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  async _runAiAskOllama(cfg, messages, aiMsgEl) {
+    const baseUrl = (cfg.base_url || 'http://localhost:11434').replace(/\/$/, '');
+    const body    = JSON.stringify({ model: cfg.model_name || '', messages, stream: true });
+
+    let res;
+    try {
+      res = await fetch(`${baseUrl}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    } catch (err) {
+      this._updateChatMsg(aiMsgEl, `Ollama request failed: ${err.message}`, 'error');
+      return null;
+    }
+    if (!res.ok) {
+      this._updateChatMsg(aiMsgEl, `Ollama HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`, 'error');
+      return null;
+    }
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', fullText = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const data  = JSON.parse(line);
+          const delta = data.message?.content || '';
+          if (delta) { fullText += delta; this._updateChatMsg(aiMsgEl, fullText); }
+        } catch { /* skip */ }
+      }
+    }
+    if (!fullText.trim()) { this._updateChatMsg(aiMsgEl, 'No response from Ollama.', 'error'); return null; }
+    return fullText;
+  }
+
+  async _runAiAskApi(cfg, messages, aiMsgEl) {
+    const baseUrl = (cfg.base_url || '').replace(/\/$/, '');
+    if (!baseUrl) { this._updateChatMsg(aiMsgEl, 'base_url not configured.', 'error'); return null; }
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (cfg.api_key) headers['Authorization'] = `Bearer ${cfg.api_key}`;
+    const body = { model: cfg.model_name || 'default', messages, stream: true };
+    if (cfg.max_tokens) body.max_tokens = cfg.max_tokens;
+
+    let res;
+    try {
+      res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
+    } catch (err) {
+      this._updateChatMsg(aiMsgEl, `Request failed: ${err.message}`, 'error');
+      return null;
+    }
+    if (!res.ok) {
+      this._updateChatMsg(aiMsgEl, `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`, 'error');
+      return null;
+    }
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', fullText = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+          if (delta) { fullText += delta; this._updateChatMsg(aiMsgEl, fullText); }
+        } catch { /* skip */ }
+      }
+    }
+    if (!fullText.trim()) { this._updateChatMsg(aiMsgEl, 'No response from model.', 'error'); return null; }
+    return fullText;
+  }
+
+  _appendCliPromptPreview(shortPrompt) {
+    const msgsEl = this.container.querySelector('#docAiMessages');
+    if (!msgsEl) return;
+    const el = document.createElement('div');
+    el.className = 'doc-ai-msg doc-ai-msg--prompt-preview';
+    el.innerHTML = `
+      <details class="doc-ai-prompt-details">
+        <summary class="doc-ai-prompt-details__summary">Prompt sent to CLI</summary>
+        <pre class="doc-ai-prompt-details__pre">${escHtml(shortPrompt)}</pre>
+      </details>`;
+    msgsEl.appendChild(el);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  async _runAiAskCli(cfg, contextContent, instructionContent, aiMsgEl) {
+    const exe       = cfg.executable || 'claude';
+    const flags     = cfg.flags ? ` ${cfg.flags}` : '';
+    const modelFlag = cfg.model_name ? ` --model ${cfg.model_name}` : '';
+    const cwd       = this._project?.project_path || '';
+
+    let contextFilePath;
+    try {
+      const paths    = await window.app.writeTempFiles([{ name: 'doc-context.txt', content: contextContent }]);
+      contextFilePath = paths[0];
+    } catch (err) {
+      this._updateChatMsg(aiMsgEl, `Failed to write context file: ${err.message}`, 'error');
+      return;
+    }
+
+    const shortPrompt = `The document context (title, content, and any diagram attachments) is saved in the file below. Read it for context, then answer the question.\n\nContext file: ${contextFilePath}\n\n${instructionContent}`;
+    this._appendCliPromptPreview(shortPrompt);
+    const safePrompt  = shortPrompt.replace(/'/g, "''");
+    const command     = cfg.input_mode === 'heredoc'
+      ? `$p = @'\n${safePrompt}\n'@\n${exe}${flags}${modelFlag} $p`
+      : `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}${modelFlag}`;
+
+    return new Promise(resolve => {
+      let fullOutput = '';
+      window.db.terminal.removeListeners();
+      window.db.terminal.onData(({ text }) => {
+        fullOutput += text;
+        this._updateChatMsg(aiMsgEl, fullOutput);
+      });
+      window.db.terminal.onDone(({ exitCode }) => {
+        window.db.terminal.removeListeners();
+        if (exitCode !== 0 || !fullOutput.trim()) {
+          this._updateChatMsg(aiMsgEl, `Failed — exit code ${exitCode}`, 'error');
+        }
+        resolve();
+      });
+      window.db.terminal.execStart({ command, cwd }).catch(err => {
+        window.db.terminal.removeListeners();
+        this._updateChatMsg(aiMsgEl, `CLI error: ${err.message}`, 'error');
+        resolve();
+      });
+    });
+  }
+
   async _runAiEdit(doc, instruction, card) {
     const cfg     = this._aiModelConfig;
     const msgsEl  = card.querySelector('#docAiMessages');
@@ -979,7 +1251,7 @@ export class DocumentsPage {
 
     this._updateChatMsg(aiMsgEl, 'Generating…', 'thinking');
 
-    const promptParts = [
+    const contextParts = [
       'You are a technical document writer. Update the document based on the user\'s instruction.',
       'Diagram attachments (SVG or draw.io XML) are provided below as read-only context.',
       'Extract technical information from them — component names, relationships, data flows, entities, architecture patterns — and use that information to write accurate document content.',
@@ -993,19 +1265,18 @@ export class DocumentsPage {
     ];
 
     if (attachContextParts.length > 0) {
-      promptParts.push('', '## Diagram attachments (read for context only)', ...attachContextParts);
+      contextParts.push('', '## Diagram attachments (read for context only)', ...attachContextParts);
     }
 
-    promptParts.push(
+    const tailParts = [
       '',
       '## User instruction',
       instruction,
       '',
       'Return ONLY the updated document content in Markdown. No explanations, no preamble, no code fences wrapping the entire output.',
-    );
+    ];
 
-    const prompt = promptParts.join('\n');
-
+    const prompt      = [...contextParts, ...tailParts].join('\n');
     const prevContent = contentTA?.value ?? '';
 
     try {
@@ -1014,7 +1285,7 @@ export class DocumentsPage {
       } else if (cfg.type === 'api') {
         await this._runAiEditApi(cfg, prompt, aiMsgEl, contentTA, prevContent);
       } else {
-        await this._runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent);
+        await this._runAiEditCli(cfg, contextParts.join('\n'), tailParts.join('\n'), aiMsgEl, contentTA, prevContent);
       }
       if (this._dirty) {
         const panel      = this.container.querySelector('#docPanel');
@@ -1167,13 +1438,25 @@ export class DocumentsPage {
     }
   }
 
-  async _runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent) {
-    const exe        = cfg.executable || 'claude';
-    const flags      = cfg.flags ? ` ${cfg.flags}` : '';
-    const modelFlag  = cfg.model_name ? ` --model ${cfg.model_name}` : '';
-    const cwd        = this._project?.project_path || '';
-    const safePrompt = prompt.replace(/'/g, "''");
-    const command    = cfg.input_mode === 'heredoc'
+  async _runAiEditCli(cfg, contextContent, instructionContent, aiMsgEl, contentTA, prevContent) {
+    const exe       = cfg.executable || 'claude';
+    const flags     = cfg.flags ? ` ${cfg.flags}` : '';
+    const modelFlag = cfg.model_name ? ` --model ${cfg.model_name}` : '';
+    const cwd       = this._project?.project_path || '';
+
+    let contextFilePath;
+    try {
+      const paths    = await window.app.writeTempFiles([{ name: 'doc-context.txt', content: contextContent }]);
+      contextFilePath = paths[0];
+    } catch (err) {
+      this._updateChatMsg(aiMsgEl, `Failed to write context file: ${err.message}`, 'error');
+      return;
+    }
+
+    const shortPrompt = `The document context (title, current content, and any diagram attachments) is saved in the file below. Read it for context, then complete the editing task.\n\nContext file: ${contextFilePath}\n\n${instructionContent}`;
+    this._appendCliPromptPreview(shortPrompt);
+    const safePrompt  = shortPrompt.replace(/'/g, "''");
+    const command     = cfg.input_mode === 'heredoc'
       ? `$p = @'\n${safePrompt}\n'@\n${exe}${flags}${modelFlag} $p`
       : `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}${modelFlag}`;
 

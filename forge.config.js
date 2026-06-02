@@ -10,15 +10,24 @@ module.exports = {
   rebuildConfig: {},
   makers: [
     {
-      name: 'electron-forge-maker-nsis',
+      name: './makers/maker-nsis',
+      platforms: ['win32'],
       config: {
+        appId: 'com.devflow.ai',  // top-level electron-builder field, not nsis
         oneClick: false,
-        allowToChangeInstallationDirectory: true,
         allowElevation: true,
+        allowToChangeInstallationDirectory: true,
         createDesktopShortcut: true,
         createStartMenuShortcut: true,
         shortcutName: 'DevFlow AI SDLC',
         deleteAppDataOnUninstall: false,
+        menuCategory: 'DevFlow',
+        publish: {
+          provider: 'github',
+          owner: 'YOUR_GITHUB_USERNAME',
+          repo: 'devflow-ai-sdlc',
+          private: false,
+        },
       },
     },
     {

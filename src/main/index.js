@@ -14,6 +14,7 @@ const { runBackup, exportDb, restoreDb } = require('./db/backup');
 const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
 const { sendMessage: telegramSend } = require('./telegram');
 const { logError } = require('./logger');
+const { setupAutoUpdater } = require('./updater');
 
 process.on('uncaughtException',   (err)    => logError('uncaughtException', err));
 process.on('unhandledRejection',  (reason) => {
@@ -149,6 +150,7 @@ app.whenReady().then(async () => {
   });
   createWindow();
   setImmediate(() => runBackup());
+  if (app.isPackaged) setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
