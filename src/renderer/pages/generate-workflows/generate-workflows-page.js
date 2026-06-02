@@ -70,27 +70,42 @@ function stripAnsi(str) {
 
 function parseWorkflowJson(text) {
   const clean = stripAnsi(text);
-  let candidate = null;
 
-  // Try fenced code block first
+  const tryParse = (str) => {
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0].feature === 'string') {
+        return parsed;
+      }
+    } catch (_) {}
+    return null;
+  };
+
+  // Try fenced code block first — but only accept if parse succeeds.
+  // When prompts contain nested ```lang blocks inside JSON strings the non-greedy
+  // regex stops at the first inner fence and produces truncated, invalid JSON.
   const fenced = clean.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fenced) candidate = fenced[1].trim();
-
-  // Fallback: find outermost [ ... ]
-  if (!candidate) {
-    const start = clean.indexOf('[');
-    const end   = clean.lastIndexOf(']');
-    if (start >= 0 && end > start) candidate = clean.slice(start, end + 1);
+  if (fenced) {
+    const result = tryParse(fenced[1].trim());
+    if (result) return result;
   }
 
-  if (!candidate) return null;
-  try {
-    const parsed = JSON.parse(candidate);
-    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0].feature === 'string') {
-      return parsed;
-    }
-  } catch (_) { /* ignore */ }
+  // Fallback: outermost [ ... ] — unaffected by nested backtick fences
+  const start = clean.indexOf('[');
+  const end   = clean.lastIndexOf(']');
+  if (start >= 0 && end > start) {
+    return tryParse(clean.slice(start, end + 1));
+  }
+
   return null;
+}
+
+function extractJsonCandidate(text) {
+  const clean = stripAnsi(text);
+  const start = clean.indexOf('[');
+  const end   = clean.lastIndexOf(']');
+  if (start >= 0 && end > start) return clean.slice(start, end + 1);
+  return clean;
 }
 
 export class GenerateWorkflowsPage {
@@ -251,6 +266,21 @@ export class GenerateWorkflowsPage {
               </div>
               <div class="gw-preview-body" id="gwPreviewBody"></div>
             </div>
+
+            <!-- Fix area (shown when JSON parse fails, lets user correct output manually) -->
+            <div id="gwFixArea" hidden>
+              <div class="gw-panel-hd">
+                <span class="gw-panel-hd__label">Fix JSON</span>
+                <span class="gw-panel-hd__hint">Edit the extracted JSON below, then click Parse</span>
+              </div>
+              <div class="gw-fix-error" id="gwFixError" hidden></div>
+              <textarea class="gw-fix-textarea" id="gwFixTextarea" spellcheck="false"
+                placeholder="Paste or edit the workflow JSON array here…"></textarea>
+              <div class="gw-fix-footer">
+                <button class="gw-retry-btn" id="gwBtnFixBack">← Back to output</button>
+                <button class="gw-fix-parse-btn" id="gwBtnFixParse">Parse &amp; Continue →</button>
+              </div>
+            </div>
           </main>
         </div>
       </div>`;
@@ -317,6 +347,12 @@ export class GenerateWorkflowsPage {
     // Approve button
     this.container.querySelector('#gwBtnApprove')
       ?.addEventListener('click', () => this._approve());
+
+    // Fix panel buttons
+    this.container.querySelector('#gwBtnFixBack')
+      ?.addEventListener('click', () => this._showPanel('output'));
+    this.container.querySelector('#gwBtnFixParse')
+      ?.addEventListener('click', () => this._tryManualParse());
   }
 
   // ----------------------------------------------------------------
@@ -463,7 +499,9 @@ export class GenerateWorkflowsPage {
     this.container.querySelector('#gwBtnStop')?.remove();
     this._refreshGenerateBtn();
 
-    if (error) {
+    // 'Could not extract HTML from response' is expected here — this page returns JSON, not HTML.
+    // Treat it as non-fatal and fall through to JSON parsing.
+    if (error && error !== 'Could not extract HTML from response') {
       this._setStatus('error', 'Error');
       this._showOutputFooter(`✗ ${error}`, false);
       this._addRetryBtn();
@@ -473,10 +511,12 @@ export class GenerateWorkflowsPage {
     this._setStatus('done', 'Done');
     this._showOutputFooter(`✔ Completed in ${elapsedStr}`, true);
 
-    const parsed = parseWorkflowJson(raw || this._outputBuf);
+    const rawContent = raw || this._outputBuf;
+    const parsed = parseWorkflowJson(rawContent);
     if (!parsed) {
-      this._showOutputFooter(`✔ Done — but could not parse JSON from output. Check the output above.`, false);
+      this._showOutputFooter('✔ Done — but could not parse JSON from output.', false);
       this._addRetryBtn();
+      this._addFixBtn(rawContent);
       return;
     }
 
@@ -619,7 +659,7 @@ export class GenerateWorkflowsPage {
   // Panel switching helpers
   // ----------------------------------------------------------------
   _showPanel(which) {
-    const panels = { prompt: '#gwPromptArea', output: '#gwOutputArea', preview: '#gwPreviewArea' };
+    const panels = { prompt: '#gwPromptArea', output: '#gwOutputArea', preview: '#gwPreviewArea', fix: '#gwFixArea' };
     for (const [key, sel] of Object.entries(panels)) {
       const el = this.container.querySelector(sel);
       if (el) el.hidden = key !== which;
@@ -653,6 +693,53 @@ export class GenerateWorkflowsPage {
       this._refreshGenerateBtn();
     });
     footer.appendChild(btn);
+  }
+
+  _addFixBtn(rawContent) {
+    const footer = this.container.querySelector('#gwOutputFooter');
+    if (!footer) return;
+    const btn = document.createElement('button');
+    btn.className   = 'gw-fix-parse-btn';
+    btn.textContent = 'Fix JSON manually';
+    btn.addEventListener('click', () => this._showFixPanel(rawContent));
+    footer.appendChild(btn);
+  }
+
+  _showFixPanel(rawContent) {
+    const ta = this.container.querySelector('#gwFixTextarea');
+    if (ta) ta.value = extractJsonCandidate(rawContent);
+    const err = this.container.querySelector('#gwFixError');
+    if (err) { err.textContent = ''; err.hidden = true; }
+    this._showPanel('fix');
+  }
+
+  _tryManualParse() {
+    const ta  = this.container.querySelector('#gwFixTextarea');
+    const err = this.container.querySelector('#gwFixError');
+    const text = ta?.value?.trim() || '';
+
+    let parsed = null;
+    let parseError = null;
+    try {
+      const candidate = JSON.parse(text);
+      if (Array.isArray(candidate) && candidate.length > 0 && typeof candidate[0].feature === 'string') {
+        parsed = candidate;
+      } else {
+        parseError = 'Parsed OK but result is not a workflow array — must be [{feature: "...", layers: [...]}]';
+      }
+    } catch (e) {
+      parseError = e.message;
+    }
+
+    if (!parsed) {
+      if (err) { err.textContent = parseError || 'Invalid JSON'; err.hidden = false; }
+      return;
+    }
+
+    if (err) err.hidden = true;
+    this._parsedWorkflows = parsed;
+    this._renderPreview(parsed);
+    this._showPanel('preview');
   }
 
   _showError(msg) {

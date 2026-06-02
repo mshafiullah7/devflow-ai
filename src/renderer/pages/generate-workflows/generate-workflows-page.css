@@ -506,6 +506,68 @@
   line-height: 1.5;
 }
 
+/* ── Fix / manual-edit area ─────────────────────────────────────── */
+#gwFixArea {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gw-fix-error {
+  padding: 7px 14px;
+  background: rgba(239,68,68,.08);
+  border-bottom: 1px solid rgba(239,68,68,.25);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  color: #dc2626;
+  white-space: pre-wrap;
+  word-break: break-all;
+  flex-shrink: 0;
+}
+
+.gw-fix-textarea {
+  flex: 1;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.65;
+  resize: none;
+  outline: none;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.gw-fix-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.gw-fix-parse-btn {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  -webkit-app-region: no-drag;
+}
+.gw-fix-parse-btn:hover { opacity: 0.88; }
+
 .gw-criterion svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
 
 /* ── Success state ──────────────────────────────────────────────── */
