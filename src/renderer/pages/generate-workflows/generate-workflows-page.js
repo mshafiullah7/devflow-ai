@@ -115,6 +115,7 @@ export class GenerateWorkflowsPage {
     this._modelConfig      = null;
     this._screens          = [];
     this._documents        = [];
+    this._projectLayers    = [];
     this._selectedScreenId = null;
     this._selectedDocIds   = new Set();
     this._generating       = false;
@@ -156,12 +157,14 @@ export class GenerateWorkflowsPage {
     this._parsedWorkflows  = null;
     this._lastPrompt       = '';
 
-    const [screens, documents] = await Promise.all([
+    const [screens, documents, projectLayers] = await Promise.all([
       window.db.screenDesigns.list(projectId),
       window.db.documents.list(projectId),
+      window.db.projectLayers.list(projectId),
     ]);
-    this._screens   = screens   || [];
-    this._documents = documents || [];
+    this._screens        = screens        || [];
+    this._documents      = documents      || [];
+    this._projectLayers  = projectLayers  || [];
 
     this._render();
 
@@ -417,6 +420,7 @@ export class GenerateWorkflowsPage {
         ...selectedDocs.map(d => ({ name: `doc-${d.id}-${d.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)}.txt`, content: d.content || '' })),
       ];
       const paths = await window.app.writeTempFiles(files);
+      this._tempDir = paths[0].replace(/[\\/][^\\/]+$/, '');
       screenSection = `## UI/UX Mockup (Screen: "${screen.title}"):\nSee file: ${paths[0]}`;
       if (selectedDocs.length > 0) {
         const docLines = selectedDocs.map((d, i) => `### ${d.title}\nSee file: ${paths[i + 1]}`).join('\n\n');
@@ -490,6 +494,7 @@ export class GenerateWorkflowsPage {
     window.app.genWorkflowChat.offAll();
     this._generating = false;
     this._stopTimer();
+    if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
 
     const elapsed = this._startTime
       ? Math.floor((Date.now() - this._startTime) / 1000)
@@ -530,6 +535,7 @@ export class GenerateWorkflowsPage {
     window.app.genWorkflowChat.offAll();
     this._generating = false;
     this._stopTimer();
+    if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
     this.container.querySelector('#gwBtnStop')?.remove();
     this._setStatus('error', 'Stopped');
     this._showOutputFooter('Stopped by user.', false);
@@ -542,50 +548,12 @@ export class GenerateWorkflowsPage {
   // ----------------------------------------------------------------
   _renderPreview(workflows) {
     const title = this.container.querySelector('#gwPreviewTitle');
-    if (title) title.textContent = `${workflows.length} workflow${workflows.length !== 1 ? 's' : ''} generated`;
+    if (title) title.textContent = `${workflows.length} workflow${workflows.length !== 1 ? 's' : ''} generated — review JSON below`;
 
     const body = this.container.querySelector('#gwPreviewBody');
     if (!body) return;
 
-    body.innerHTML = workflows.map(w => {
-      const layers = Array.isArray(w.layers) ? [...w.layers].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) : [];
-      const criteria = Array.isArray(w.success_criteria) ? w.success_criteria : [];
-
-      const layerPills = layers.map(l => `
-        <span class="gw-layer-pill">
-          <span class="gw-layer-pill__order">${l.order ?? '?'}.</span>${escHtml(l.layer || 'Layer')}
-        </span>`).join('');
-
-      const criteriaRows = criteria.map(c => `
-        <div class="gw-criterion">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.4"/>
-            <path d="M4 8l3 3 5-5" stroke="currentColor" stroke-width="1.4"
-              stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          ${escHtml(c)}
-        </div>`).join('');
-
-      return `
-        <div class="gw-wf-card">
-          <div class="gw-wf-card__header">
-            <div class="gw-wf-card__feature">${escHtml(w.feature || 'Untitled')}</div>
-            ${w.description ? `<div class="gw-wf-card__desc">${escHtml(w.description)}</div>` : ''}
-          </div>
-          <div class="gw-wf-card__body">
-            ${layers.length ? `
-              <div>
-                <div class="gw-wf-card__section-label">Layers (${layers.length})</div>
-                <div class="gw-layer-pills">${layerPills}</div>
-              </div>` : ''}
-            ${criteria.length ? `
-              <div>
-                <div class="gw-wf-card__section-label">Success Criteria (${criteria.length})</div>
-                <div class="gw-criteria-list">${criteriaRows}</div>
-              </div>` : ''}
-          </div>
-        </div>`;
-    }).join('');
+    body.innerHTML = `<pre class="gw-json-pre">${escHtml(JSON.stringify(workflows, null, 2))}</pre>`;
   }
 
   // ----------------------------------------------------------------
@@ -616,14 +584,19 @@ export class GenerateWorkflowsPage {
 
         const layers = Array.isArray(w.layers) ? [...w.layers].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) : [];
         for (const l of layers) {
+          const layerName = l.layer || 'Layer';
+          const matched   = this._projectLayers.find(
+            pl => pl.name.toLowerCase() === layerName.toLowerCase()
+          );
           await window.db.layers.create({
-            workflow_id: wf.id,
-            layer:       l.layer || 'Layer',
-            order_num:   l.order ?? 1,
-            purpose:     l.purpose || '',
-            inputs:      Array.isArray(l.inputs)  ? l.inputs  : [],
-            outputs:     Array.isArray(l.outputs) ? l.outputs : [],
-            prompt:      l.prompt || '',
+            workflow_id:      wf.id,
+            layer:            layerName,
+            project_layer_id: matched?.id ?? null,
+            order_num:        l.order ?? 1,
+            purpose:          l.purpose || '',
+            inputs:           Array.isArray(l.inputs)  ? l.inputs  : [],
+            outputs:          Array.isArray(l.outputs) ? l.outputs : [],
+            prompt:           l.prompt || '',
           });
         }
         added++;

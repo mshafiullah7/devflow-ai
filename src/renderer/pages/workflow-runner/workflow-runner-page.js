@@ -23,6 +23,9 @@ export class WorkflowRunnerPage {
     this._startTimes  = {};
     this._timerInt    = null;
     this._elapsed     = {};
+    this._screenDesign   = null;
+    this._screenFilePath = null;
+    this._tempDir        = null;
   }
 
   mount() {
@@ -35,6 +38,7 @@ export class WorkflowRunnerPage {
   unmount() {
     window.app.workflowChat.offAll();
     if (this._timerInt) clearInterval(this._timerInt);
+    if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
   }
 
   async _init({ projectId, workflowId, modelConfig }) {
@@ -47,6 +51,21 @@ export class WorkflowRunnerPage {
     this._workflow = workflow;
     this._layers   = (layers || []).slice().sort((a, b) => a.order_num - b.order_num);
     this._criteria = criteria || [];
+
+    // Load linked screen design (used to augment every layer prompt)
+    if (workflow?.screen_design_id) {
+      const sd = await window.db.screenDesigns.get(workflow.screen_design_id);
+      if (sd?.html_content) {
+        this._screenDesign = sd;
+        if (modelConfig?.type === 'cli') {
+          const paths = await window.app.writeTempFiles([
+            { name: `screen-${sd.id}.html`, content: sd.html_content },
+          ]);
+          this._screenFilePath = paths[0];
+          this._tempDir = paths[0].replace(/[\\/][^\\/]+$/, '');
+        }
+      }
+    }
 
     this._layers.forEach(l => {
       this._statuses[l.id] = l.status || 'open';
@@ -79,7 +98,32 @@ export class WorkflowRunnerPage {
     this._running = false;
     this._updateToolbar();
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
+    if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; this._screenFilePath = null; }
     await this._evaluateCriteria();
+  }
+
+  // ----------------------------------------------------------------
+  // Build prompt — injects linked screen design for all layers
+  // ----------------------------------------------------------------
+  _buildLayerPrompt(layer) {
+    const base = layer.prompt ||
+      `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`;
+
+    if (!this._screenDesign) return base;
+
+    const screenRef = this._screenFilePath
+      ? `See file: ${this._screenFilePath}`
+      : this._screenDesign.html_content;
+
+    return `## Linked Screen Design: "${this._screenDesign.title || 'Screen'}"
+${screenRef}
+
+---
+Rule: This screen is the UI reference for this workflow. Use it to understand the feature's data requirements, user interactions, and visual expectations. For UI layers, match the layout, components, and styles shown. For other layers, derive the data contracts and API shapes from what the screen displays and the interactions it supports.
+
+---
+
+${base}`;
   }
 
   _runLayer(layer) {
@@ -122,7 +166,7 @@ export class WorkflowRunnerPage {
       }
 
       window.app.workflowChat.generate({
-        prompt: layer.prompt || `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`,
+        prompt: this._buildLayerPrompt(layer),
         model:  this._modelConfig,
       });
     });

@@ -1042,14 +1042,32 @@ function registerDbHandlers() {
   });
 
   safeHandle('app:writeTempFiles', (_e, files) => {
-    const dir = path.join(os.tmpdir(), 'devflow-ai-sdlc');
+    const base  = path.join(os.tmpdir(), 'devflow-ai-sdlc');
+    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+    try {
+      for (const entry of fs.readdirSync(base)) {
+        const ts = Number(entry);
+        if (ts && ts < cutoff) {
+          fs.rmSync(path.join(base, entry), { recursive: true, force: true });
+        }
+      }
+    } catch {}
+
+    const dir = path.join(base, String(Date.now()));
     fs.mkdirSync(dir, { recursive: true });
-    const ts = Date.now();
     return files.map(({ name, content }) => {
-      const filepath = path.join(dir, `${name}-${ts}`);
+      const filepath = path.join(dir, name);
       fs.writeFileSync(filepath, content, 'utf8');
       return filepath;
     });
+  });
+
+  safeHandle('app:deleteTempDir', (_e, dirPath) => {
+    try {
+      if (dirPath && dirPath.includes('devflow-ai-sdlc')) {
+        fs.rmSync(dirPath, { recursive: true, force: true });
+      }
+    } catch {}
   });
 }
 

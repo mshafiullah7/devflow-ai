@@ -4237,7 +4237,7 @@ Spacing:
     dlg.querySelector('#extCancelBtn').addEventListener('click',            () => dlg.remove());
 
     dlg.querySelector('#extRunBtn').addEventListener('click', async () => {
-      await window.db.terminal.openExternal({ command: cmd, cwd: project?.project_path || undefined });
+      await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
     });
   }
 }

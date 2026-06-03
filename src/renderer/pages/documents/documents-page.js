@@ -1174,7 +1174,6 @@ export class DocumentsPage {
     const exe       = cfg.executable || 'claude';
     const flags     = cfg.flags ? ` ${cfg.flags}` : '';
     const modelFlag = cfg.model_name ? ` --model ${cfg.model_name}` : '';
-    const cwd       = this._project?.project_path || '';
 
     let contextFilePath;
     try {
@@ -1184,6 +1183,8 @@ export class DocumentsPage {
       this._updateChatMsg(aiMsgEl, `Failed to write context file: ${err.message}`, 'error');
       return;
     }
+
+    const cwd = contextFilePath.replace(/[\\/][^\\/]+$/, '');
 
     const shortPrompt = `The document context (title, content, and any diagram attachments) is saved in the file below. Read it for context, then answer the question.\n\nContext file: ${contextFilePath}\n\n${instructionContent}`;
     this._appendCliPromptPreview(shortPrompt);
@@ -1201,6 +1202,7 @@ export class DocumentsPage {
       });
       window.db.terminal.onDone(({ exitCode }) => {
         window.db.terminal.removeListeners();
+        window.app.deleteTempDir(cwd);
         if (exitCode !== 0 || !fullOutput.trim()) {
           this._updateChatMsg(aiMsgEl, `Failed — exit code ${exitCode}`, 'error');
         }
@@ -1208,6 +1210,7 @@ export class DocumentsPage {
       });
       window.db.terminal.execStart({ command, cwd }).catch(err => {
         window.db.terminal.removeListeners();
+        window.app.deleteTempDir(cwd);
         this._updateChatMsg(aiMsgEl, `CLI error: ${err.message}`, 'error');
         resolve();
       });
@@ -1442,7 +1445,6 @@ export class DocumentsPage {
     const exe       = cfg.executable || 'claude';
     const flags     = cfg.flags ? ` ${cfg.flags}` : '';
     const modelFlag = cfg.model_name ? ` --model ${cfg.model_name}` : '';
-    const cwd       = this._project?.project_path || '';
 
     let contextFilePath;
     try {
@@ -1452,6 +1454,8 @@ export class DocumentsPage {
       this._updateChatMsg(aiMsgEl, `Failed to write context file: ${err.message}`, 'error');
       return;
     }
+
+    const cwd = contextFilePath.replace(/[\\/][^\\/]+$/, '');
 
     const shortPrompt = `The document context (title, current content, and any diagram attachments) is saved in the file below. Read it for context, then complete the editing task.\n\nContext file: ${contextFilePath}\n\n${instructionContent}`;
     this._appendCliPromptPreview(shortPrompt);
@@ -1470,6 +1474,7 @@ export class DocumentsPage {
       });
       window.db.terminal.onDone(({ exitCode }) => {
         window.db.terminal.removeListeners();
+        window.app.deleteTempDir(cwd);
         if (exitCode === 0 && fullOutput.trim()) {
           if (contentTA) { contentTA.value = fullOutput.trim(); this._dirty = true; }
           const activeDoc = this._docs.find(d => d.id === this._activeId);
@@ -1484,6 +1489,7 @@ export class DocumentsPage {
 
       window.db.terminal.execStart({ command, cwd }).catch(err => {
         window.db.terminal.removeListeners();
+        window.app.deleteTempDir(cwd);
         this._updateChatMsg(aiMsgEl, `CLI error: ${err.message}`, 'error');
         resolve();
       });

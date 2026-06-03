@@ -30,6 +30,9 @@ export class WorkflowsPage {
     this._timerInt      = null;
     this._pendingSave   = null;
     this._dragSrcId     = null;
+    this._screenDesign  = null;
+    this._screenFilePath = null;
+    this._tempDir       = null;
   }
 
   // ----------------------------------------------------------------
@@ -83,6 +86,7 @@ export class WorkflowsPage {
   unmount() {
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     window.app.chat.offAll();
+    if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
     this._git?.stopPoll();
     removeCss('pages/workflows/workflows-page.css');
     removeCss('pages/issues/issues-page.css');
@@ -117,12 +121,32 @@ export class WorkflowsPage {
     this._runMode    = null;
     if (this._running) this._cancelRun();
 
-    const [layers, criteria] = await Promise.all([
+    // Clean up any previous screen temp file
+    if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
+    this._screenDesign   = null;
+    this._screenFilePath = null;
+
+    const wf = this._workflows.find(w => w.id === id);
+
+    const [layers, criteria, screenDesign] = await Promise.all([
       window.db.layers.list(id),
       window.db.successCriteria.list(id),
+      wf?.screen_design_id ? window.db.screenDesigns.get(wf.screen_design_id) : Promise.resolve(null),
     ]);
     this._layers   = (layers   || []).slice().sort((a, b) => a.order_num - b.order_num);
     this._criteria = criteria  || [];
+
+    if (screenDesign?.html_content) {
+      this._screenDesign = screenDesign;
+      // For CLI mode write once now; API mode embeds inline at run time
+      if (this._aiModelConfig?.type === 'cli') {
+        const paths = await window.app.writeTempFiles([
+          { name: `screen-${screenDesign.id}.html`, content: screenDesign.html_content },
+        ]);
+        this._screenFilePath = paths[0];
+        this._tempDir = paths[0].replace(/[\\/][^\\/]+$/, '');
+      }
+    }
 
     this._renderList();
     this._renderDetail();
@@ -560,10 +584,10 @@ export class WorkflowsPage {
               <span class="wf-view-label">Outputs</span>
               <span class="wf-view-value">${escHtml(fmtArr(l.outputs))}</span>
             </div>` : ''}
-          ${l.prompt ? `
+          ${l.prompt || this._screenDesign ? `
             <div class="wf-view-field">
               <span class="wf-view-label">Prompt</span>
-              <pre class="wf-view-prompt">${escHtml(l.prompt)}</pre>
+              <pre class="wf-view-prompt">${escHtml(this._getDisplayPrompt(l))}</pre>
             </div>` : ''}
           ${!l.purpose && !l.inputs && !l.outputs && !l.prompt
             ? '<span class="wf-view-empty">No details added yet — click edit to fill in.</span>' : ''}
@@ -776,9 +800,11 @@ export class WorkflowsPage {
           <div class="wf-drawer__section-hd">Expected Outputs</div>
           <div class="wf-drawer__text">${escHtml(layer.outputs)}</div>` : ''}
 
-        ${layer.prompt ? `
-          <div class="wf-drawer__section-hd">Prompt preview</div>
-          <pre class="wf-drawer__prompt-preview">${escHtml(layer.prompt.slice(0, 300))}${layer.prompt.length > 300 ? '…' : ''}</pre>` : ''}
+        ${layer.prompt || this._screenDesign ? (() => {
+          const dp = this._getDisplayPrompt(layer);
+          return `<div class="wf-drawer__section-hd">Prompt preview</div>
+          <pre class="wf-drawer__prompt-preview">${escHtml(dp.slice(0, 400))}${dp.length > 400 ? '…' : ''}</pre>`;
+        })() : ''}
       </div>
       <div class="wf-drawer__footer">
         <button class="wf-btn-cancel" id="wfDrawerCancelRun">Cancel</button>
@@ -842,6 +868,56 @@ export class WorkflowsPage {
   }
 
   // ----------------------------------------------------------------
+  // Prompt builders — screen design injected for all layers
+  // ----------------------------------------------------------------
+  _screenRule() {
+    return `Rule: This screen is the UI reference for this workflow. Use it to understand the feature's data requirements, user interactions, and visual expectations. For UI layers, match the layout, components, and styles shown. For other layers, derive the data contracts and API shapes from what the screen displays and the interactions it supports.`;
+  }
+
+  // Full prompt sent to the AI (actual HTML or file path)
+  _buildLayerPrompt(layer) {
+    const base = layer.prompt ||
+      `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`;
+
+    if (!this._screenDesign) return base;
+
+    const screenRef = this._screenFilePath
+      ? `See file: ${this._screenFilePath}`
+      : this._screenDesign.html_content;
+
+    return `## Linked Screen Design: "${this._screenDesign.title || 'Screen'}"
+${screenRef}
+
+---
+${this._screenRule()}
+
+---
+
+${base}`;
+  }
+
+  // Display prompt shown in the UI (abbreviates inline HTML to a char count)
+  _getDisplayPrompt(layer) {
+    const base = layer.prompt || `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`;
+
+    if (!this._screenDesign) return base;
+
+    const screenRef = this._screenFilePath
+      ? `See file: ${this._screenFilePath}`
+      : `[HTML content — ${(this._screenDesign.html_content || '').length.toLocaleString()} chars, sent inline]`;
+
+    return `## Linked Screen Design: "${this._screenDesign.title || 'Screen'}"
+${screenRef}
+
+---
+${this._screenRule()}
+
+---
+
+${base}`;
+  }
+
+  // ----------------------------------------------------------------
   // Run a single layer
   // ----------------------------------------------------------------
   _startLayerRun(layerId) {
@@ -884,9 +960,8 @@ export class WorkflowsPage {
     });
 
     window.app.chat.generate({
-      prompt: layer.prompt ||
-        `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`,
-      model: this._aiModelConfig,
+      prompt: this._buildLayerPrompt(layer),
+      model:  this._aiModelConfig,
     });
   }
 
