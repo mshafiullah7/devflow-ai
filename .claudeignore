@@ -11,3 +11,25 @@ out/
 # Electron Forge / webpack cache
 .webpack/
 .vite/
+
+# Dependencies
+node_modules/
+
+# Compiled installer output
+dist/
+
+# Database files (binary)
+*.db
+
+# Backup snapshots
+backup/
+
+# Empty / design asset folders
+designs/
+draw.io/
+
+# Python bytecode
+agent/__pycache__/
+
+# Throwaway mockup
+mockup-login.html
