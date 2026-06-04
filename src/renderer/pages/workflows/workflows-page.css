@@ -388,8 +388,9 @@
   flex-direction: column;
   gap: 4px;
 }
-.wf-field--grow { flex: 1; min-width: 0; }
-.wf-field--sm   { width: 70px; flex-shrink: 0; }
+.wf-field--grow   { flex: 1; min-width: 0; }
+.wf-field--sm     { width: 70px; flex-shrink: 0; }
+.wf-field--status { width: 130px; flex-shrink: 0; }
 .wf-field-row   { display: flex; gap: 8px; }
 
 .wf-label {

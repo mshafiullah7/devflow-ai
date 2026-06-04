@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
 import { GitController }                 from '../../components/git/git-controller.js';
+import { Dialog }                        from '../../components/dialog/dialog.js';
 
 export class WorkflowsPage {
   constructor(container, params, router) {
@@ -21,13 +22,7 @@ export class WorkflowsPage {
     this._editingCritId = null;
     this._editingWf     = false;  // workflow header edit mode
     this._viewingId     = null;   // layer id being viewed (null = none)
-    this._runMode       = null;   // null | 'drawer' | 'panel'
-    this._runLayerId    = null;
-    this._running       = false;
-    this._outputBuf     = '';
     this._aiModelConfig = null;
-    this._startTime     = null;
-    this._timerInt      = null;
     this._pendingSave   = null;
     this._dragSrcId     = null;
     this._screenDesign  = null;
@@ -84,8 +79,6 @@ export class WorkflowsPage {
   }
 
   unmount() {
-    if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
-    window.app.chat.offAll();
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
     this._git?.stopPoll();
     removeCss('pages/workflows/workflows-page.css');
@@ -118,8 +111,6 @@ export class WorkflowsPage {
     this._addingCrit  = false;
     this._editingCritId = null;
     this._editingWf  = false;
-    this._runMode    = null;
-    if (this._running) this._cancelRun();
 
     // Clean up any previous screen temp file
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
@@ -222,16 +213,7 @@ export class WorkflowsPage {
         </div>
       </div>
 
-      <!-- Navigation guard overlay -->
-      <div class="wf-guard-overlay" id="wfGuard" hidden>
-        <div class="wf-guard-card">
-          <p class="wf-guard-msg">⚠ A layer is still running. Navigating away will cancel it.</p>
-          <div class="wf-guard-actions">
-            <button class="wf-guard-btn wf-guard-btn--keep" id="wfGuardKeep">Keep Running</button>
-            <button class="wf-guard-btn wf-guard-btn--cancel" id="wfGuardCancel">Cancel Run &amp; Go Back</button>
-          </div>
-        </div>
-      </div>`;
+      `;
   }
 
   // ----------------------------------------------------------------
@@ -336,18 +318,8 @@ export class WorkflowsPage {
       return;
     }
 
-    if (this._runMode === 'panel') {
-      root.innerHTML = this._runPanelHtml();
-      this._bindRunPanelEvents();
-      return;
-    }
-
     root.innerHTML = this._detailHtml();
     this._bindDetailEvents();
-
-    if (this._runMode === 'drawer') {
-      this._showDrawer(this._runLayerId);
-    }
   }
 
   // ----------------------------------------------------------------
@@ -606,6 +578,15 @@ export class WorkflowsPage {
            ${plOpts}
          </select>`
       : `<input class="wf-input" data-f="layer" value="${escHtml(v.layer || '')}" placeholder="e.g. Fetch PR Data">`;
+    const currentStatus = v.status || 'open';
+    const statusOpts = [
+      ['open',         'Open'],
+      ['executed',     'Executed'],
+      ['failed',       'Failed'],
+      ['needs_review', 'Needs Review'],
+    ].map(([val, lbl]) =>
+      `<option value="${val}" ${currentStatus === val ? 'selected' : ''}>${lbl}</option>`
+    ).join('');
     return `
       <div class="wf-layer-edit-form" data-lid="${v.id || ''}">
         <div class="wf-field-row">
@@ -616,6 +597,10 @@ export class WorkflowsPage {
           <div class="wf-field wf-field--sm">
             <label class="wf-label">Order</label>
             <input class="wf-input" type="number" data-f="order_num" value="${v.order_num ?? (this._layers.length + 1)}" min="1">
+          </div>
+          <div class="wf-field wf-field--status">
+            <label class="wf-label">Status</label>
+            <select class="wf-input wf-select" data-f="status">${statusOpts}</select>
           </div>
         </div>
         <div class="wf-field">
@@ -766,108 +751,6 @@ export class WorkflowsPage {
   }
 
   // ----------------------------------------------------------------
-  // Run drawer (slides over the detail panel)
-  // ----------------------------------------------------------------
-  _showDrawer(layerId) {
-    const layer = this._layers.find(l => l.id === layerId);
-    if (!layer) return;
-
-    const existing = this.container.querySelector('#wfRunDrawer');
-    if (existing) existing.remove();
-
-    const panel = this.container.querySelector('#wfPanelDetail');
-    const drawer = document.createElement('div');
-    drawer.id = 'wfRunDrawer';
-    drawer.className = 'wf-drawer';
-    drawer.innerHTML = `
-      <div class="wf-drawer__header">
-        <span class="wf-drawer__title">Run Layer</span>
-        <button class="wf-drawer__close" id="wfDrawerClose">×</button>
-      </div>
-      <div class="wf-drawer__body">
-        <div class="wf-drawer__section-hd">Layer</div>
-        <div class="wf-drawer__layer-name">${escHtml(layer.layer || 'Layer')}</div>
-
-        ${layer.purpose ? `
-          <div class="wf-drawer__section-hd">Purpose</div>
-          <div class="wf-drawer__text">${escHtml(layer.purpose)}</div>` : ''}
-
-        ${layer.inputs ? `
-          <div class="wf-drawer__section-hd">Expected Inputs</div>
-          <div class="wf-drawer__text">${escHtml(layer.inputs)}</div>` : ''}
-
-        ${layer.outputs ? `
-          <div class="wf-drawer__section-hd">Expected Outputs</div>
-          <div class="wf-drawer__text">${escHtml(layer.outputs)}</div>` : ''}
-
-        ${layer.prompt || this._screenDesign ? (() => {
-          const dp = this._getDisplayPrompt(layer);
-          return `<div class="wf-drawer__section-hd">Prompt preview</div>
-          <pre class="wf-drawer__prompt-preview">${escHtml(dp.slice(0, 400))}${dp.length > 400 ? '…' : ''}</pre>`;
-        })() : ''}
-      </div>
-      <div class="wf-drawer__footer">
-        <button class="wf-btn-cancel" id="wfDrawerCancelRun">Cancel</button>
-        <button class="wf-btn-run" id="wfDrawerConfirmRun">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-            <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
-          </svg>
-          Run Layer
-        </button>
-      </div>`;
-
-    panel.appendChild(drawer);
-
-    drawer.querySelector('#wfDrawerClose').addEventListener('click', () => this._closeDrawer());
-    drawer.querySelector('#wfDrawerCancelRun').addEventListener('click', () => this._closeDrawer());
-    drawer.querySelector('#wfDrawerConfirmRun').addEventListener('click', () => this._startLayerRun(layerId));
-  }
-
-  _closeDrawer() {
-    this._runMode    = null;
-    this._runLayerId = null;
-    this.container.querySelector('#wfRunDrawer')?.remove();
-  }
-
-  // ----------------------------------------------------------------
-  // Run panel (replaces detail content while a layer is running)
-  // ----------------------------------------------------------------
-  _runPanelHtml() {
-    const layer = this._layers.find(l => l.id === this._runLayerId);
-    const name  = layer ? escHtml(layer.layer || 'Layer') : 'Layer';
-    return `
-      <div class="wf-run-panel">
-        <div class="wf-run-panel__header">
-          <div class="wf-run-panel__title">
-            ${this._running
-              ? `<span class="wf-run-status wf-run-status--running">Running</span>`
-              : `<span class="wf-run-status wf-run-status--done">Executed</span>`}
-            ${name}
-          </div>
-          <span class="wf-run-elapsed" id="wfRunElapsed"></span>
-          ${this._running
-            ? `<button class="wf-stop-btn" id="wfBtnStop">■ Stop</button>`
-            : ''}
-        </div>
-        <pre class="wf-run-output" id="wfRunOutput"></pre>
-        <div class="wf-run-footer" id="wfRunFooter" hidden></div>
-        <div class="wf-run-panel__back-row">
-          <button class="wf-back-detail-btn" id="wfBtnBackDetail">← Back to Detail</button>
-          ${!this._running && this._nextLayer() ? `
-            <button class="wf-btn-run" id="wfBtnRunNext">
-              Run ${escHtml(this._nextLayer().layer || 'Next Layer')} →
-            </button>` : ''}
-        </div>
-      </div>`;
-  }
-
-  _nextLayer() {
-    if (!this._runLayerId) return null;
-    const idx = this._layers.findIndex(l => l.id === this._runLayerId);
-    return idx >= 0 && idx < this._layers.length - 1 ? this._layers[idx + 1] : null;
-  }
-
-  // ----------------------------------------------------------------
   // Prompt builders — screen design injected for all layers
   // ----------------------------------------------------------------
   _screenRule() {
@@ -920,138 +803,49 @@ ${base}`;
   // ----------------------------------------------------------------
   // Run a single layer
   // ----------------------------------------------------------------
-  _startLayerRun(layerId) {
-    this._closeDrawer();
-    this._runLayerId = layerId;
-    this._runMode    = 'panel';
-    this._running    = true;
-    this._outputBuf  = '';
-    this._startTime  = Date.now();
-
-    // Persist workflow as in_progress (fire-and-forget)
-    const wf = this._activeWorkflow;
-    if (wf && wf.status !== 'in_progress') {
-      wf.status = 'in_progress';
-      window.db.workflows.updateStatus({ id: this._activeId, status: 'in_progress' });
-    }
-
-    this._renderDetail();
-    this._renderList();
-
+  async _startLayerRun(layerId) {
     const layer = this._layers.find(l => l.id === layerId);
-    if (!layer) { this._finishRun('No layer found'); return; }
+    if (!layer) return;
 
     if (!this._aiModelConfig) {
-      this._finishRun('No AI model configured. Select a model in the header before running.');
+      await Dialog.alert('No AI model configured. Select a model in the header before running.');
       return;
     }
 
-    this._startTimer();
+    const projectLayer = layer.project_layer_id
+      ? this._projectLayers.find(pl => pl.id === layer.project_layer_id)
+      : null;
 
-    window.app.chat.onToken(({ text }) => {
-      this._outputBuf += text;
-      const pre = this.container.querySelector('#wfRunOutput');
-      if (pre) { pre.textContent += text; pre.scrollTop = pre.scrollHeight; }
+    // CLI runs inside a folder — block if no folder path is configured.
+    const isCli = !['anthropic', 'ollama', 'api'].includes(this._aiModelConfig?.type);
+    if (isCli) {
+      if (!projectLayer) {
+        await Dialog.alert(
+          `"${layer.layer}" is not linked to a Project Layer.\n\n` +
+          `Go to Project Home → Layers, link this workflow layer to a Project Layer, ` +
+          `and set its Folder Path so the CLI knows which directory to run in.`
+        );
+        return;
+      }
+      if (!projectLayer.folder_path) {
+        await Dialog.alert(
+          `No folder path is set for the "${projectLayer.name}" Project Layer.\n\n` +
+          `Go to Project Home → Layers, select "${projectLayer.name}", ` +
+          `and set the Folder Path so the CLI knows which directory to run in.`
+        );
+        return;
+      }
+    }
+
+    const cwd = projectLayer?.folder_path || this._project?.project_path || null;
+
+    window.app.openWorkflowWindow({
+      projectId:    this._projectId,
+      workflowId:   this._activeId,
+      modelConfig:  this._aiModelConfig,
+      startLayerId: layerId,
+      cwd,
     });
-
-    window.app.chat.onDone(({ raw, error }) => {
-      window.app.chat.offAll();
-      this._finishRun(error || null);
-    });
-
-    window.app.chat.generate({
-      prompt: this._buildLayerPrompt(layer),
-      model:  this._aiModelConfig,
-    });
-  }
-
-  async _finishRun(error) {
-    this._running = false;
-    if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
-    const elapsed = this._startTime ? Math.floor((Date.now() - this._startTime) / 1000) : 0;
-    const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed/60)}m ${elapsed%60}s`;
-
-    const btn = this.container.querySelector('#wfBtnStop');
-    if (btn) btn.remove();
-
-    const statusEl = this.container.querySelector('.wf-run-status');
-    if (statusEl) {
-      statusEl.className = `wf-run-status ${error ? 'wf-run-status--error' : 'wf-run-status--done'}`;
-      statusEl.textContent = error ? 'Failed' : 'Executed';
-    }
-
-    const footer = this.container.querySelector('#wfRunFooter');
-    if (footer) {
-      footer.innerHTML = error
-        ? `<span class="wf-footer-error">✗ ${escHtml(error)}</span>`
-        : `<span class="wf-footer-done">✔ Executed in ${elapsedStr}</span>`;
-      footer.hidden = false;
-    }
-
-    // Add "Run Next" button if available
-    const backRow = this.container.querySelector('.wf-run-panel__back-row');
-    if (backRow && !error && this._nextLayer()) {
-      const next = this._nextLayer();
-      const existing = backRow.querySelector('#wfBtnRunNext');
-      if (!existing) {
-        const btn2 = document.createElement('button');
-        btn2.className = 'wf-btn-run';
-        btn2.id = 'wfBtnRunNext';
-        btn2.textContent = `Run ${next.layer || 'Next Layer'} →`;
-        btn2.addEventListener('click', () => this._openDrawer(next.id));
-        backRow.appendChild(btn2);
-      }
-    }
-
-    // Persist layer status
-    if (this._runLayerId) {
-      const newStatus = error ? 'failed' : 'executed';
-      const layer = this._layers.find(l => l.id === this._runLayerId);
-      if (layer) {
-        layer.status = newStatus;
-        await window.db.layers.updateStatus({ id: layer.id, status: newStatus });
-      }
-
-      // Promote workflow to completed when all layers are executed
-      if (!error) {
-        const allExecuted = this._layers.every(l => (l.status || 'open') === 'executed');
-        if (allExecuted) {
-          const wf = this._activeWorkflow;
-          if (wf) {
-            wf.status = 'completed';
-            await window.db.workflows.updateStatus({ id: this._activeId, status: 'completed' });
-            this._renderList();
-          }
-        }
-      }
-    }
-  }
-
-  _cancelRun() {
-    window.app.chat.cancel();
-    window.app.chat.offAll();
-    this._running = false;
-    if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
-  }
-
-  _startTimer() {
-    if (this._timerInt) clearInterval(this._timerInt);
-    this._timerInt = setInterval(() => {
-      const el = this.container.querySelector('#wfRunElapsed');
-      if (el && this._startTime) {
-        const s = Math.floor((Date.now() - this._startTime) / 1000);
-        el.textContent = s < 60 ? `${s}s` : `${Math.floor(s/60)}m ${s%60}s`;
-      }
-    }, 500);
-  }
-
-  // ----------------------------------------------------------------
-  // Open drawer for a layer (before running)
-  // ----------------------------------------------------------------
-  _openDrawer(layerId) {
-    this._runMode    = 'drawer';
-    this._runLayerId = layerId;
-    this._renderDetail();
   }
 
   // ----------------------------------------------------------------
@@ -1151,7 +945,7 @@ ${base}`;
   async _deleteWorkflow(id = this._activeId) {
     const wf = this._workflows.find(w => w.id === id);
     if (!wf) return;
-    if (!confirm(`Delete workflow "${wf.feature}"? This also deletes all its layers and criteria.`)) return;
+    if (!await Dialog.confirm(`Delete workflow "${wf.feature}"? This also deletes all its layers and criteria.`, { confirmText: 'Delete', danger: true })) return;
     await window.db.workflows.delete(wf.id);
     this._workflows = this._workflows.filter(w => w.id !== wf.id);
     if (this._activeId === wf.id) {
@@ -1203,6 +997,7 @@ ${base}`;
       inputs:    this._parseArrayField(form.querySelector('[data-f="inputs"]')?.value),
       outputs:   this._parseArrayField(form.querySelector('[data-f="outputs"]')?.value),
       prompt:    form.querySelector('[data-f="prompt"]')?.value.trim()   ?? existing.prompt,
+      status:    form.querySelector('[data-f="status"]')?.value          ?? existing.status,
     };
     if (plSelect) data.project_layer_id = project_layer_id;
 
@@ -1241,7 +1036,7 @@ ${base}`;
 
   async _deleteLayer(id) {
     const l = this._layers.find(x => x.id === id);
-    if (!l || !confirm(`Delete layer "${l.layer}"?`)) return;
+    if (!l || !await Dialog.confirm(`Delete layer "${l.layer}"?`, { confirmText: 'Delete', danger: true })) return;
     await window.db.layers.delete(id);
     this._layers = this._layers.filter(x => x.id !== id);
     if (this._editingId === id) this._editingId = null;
@@ -1274,7 +1069,7 @@ ${base}`;
 
   async _deleteCrit(id) {
     const c = this._criteria.find(x => x.id === id);
-    if (!c || !confirm(`Delete this criterion?`)) return;
+    if (!c || !await Dialog.confirm(`Delete this criterion?`, { confirmText: 'Delete', danger: true })) return;
     await window.db.successCriteria.delete(id);
     this._criteria = this._criteria.filter(x => x.id !== id);
     if (this._editingCritId === id) this._editingCritId = null;
@@ -1332,7 +1127,6 @@ ${base}`;
   _bindHeaderEvents() {
     this.container.querySelector('#wfBtnBack')
       ?.addEventListener('click', () => {
-        if (this._running) { this._showGuard('back'); return; }
         this.router.navigate('project-home', { projectId: this._projectId });
       });
 
@@ -1352,15 +1146,6 @@ ${base}`;
       ?.addEventListener('click', () =>
         this.router.navigate('git-changes', { projectId: this._projectId, from: 'workflows' }));
 
-    // Guard actions
-    this.container.querySelector('#wfGuardKeep')
-      ?.addEventListener('click', () => this._hideGuard());
-    this.container.querySelector('#wfGuardCancel')
-      ?.addEventListener('click', () => {
-        this._hideGuard();
-        this._cancelRun();
-        this.router.navigate('project-home', { projectId: this._projectId });
-      });
   }
 
   _bindDetailEvents() {
@@ -1427,7 +1212,7 @@ ${base}`;
         });
       });
       list.querySelectorAll('.wf-run-btn').forEach(btn => {
-        btn.addEventListener('click', e => { e.stopPropagation(); this._openDrawer(+btn.dataset.lid); });
+        btn.addEventListener('click', e => { e.stopPropagation(); this._startLayerRun(+btn.dataset.lid); });
       });
       list.querySelectorAll('.wf-edit-btn').forEach(btn => {
         btn.addEventListener('click', e => {
@@ -1501,40 +1286,6 @@ ${base}`;
         });
       });
     }
-  }
-
-  _bindRunPanelEvents() {
-    this.container.querySelector('#wfBtnStop')
-      ?.addEventListener('click', () => {
-        this._cancelRun();
-        this._finishRun('Stopped by user');
-      });
-
-    this.container.querySelector('#wfBtnBackDetail')
-      ?.addEventListener('click', () => {
-        if (this._running) { this._showGuard('detail'); return; }
-        this._runMode = null;
-        this._renderDetail();
-      });
-
-    this.container.querySelector('#wfBtnRunNext')
-      ?.addEventListener('click', () => {
-        const next = this._nextLayer();
-        if (next) this._openDrawer(next.id);
-      });
-  }
-
-  // ----------------------------------------------------------------
-  // Navigation guard
-  // ----------------------------------------------------------------
-  _showGuard(target) {
-    this._guardTarget = target;
-    const el = this.container.querySelector('#wfGuard');
-    if (el) el.hidden = false;
-  }
-  _hideGuard() {
-    const el = this.container.querySelector('#wfGuard');
-    if (el) el.hidden = true;
   }
 
   // ----------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss, timeAgo, renderMarkdown } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
+import { Dialog }            from '../../components/dialog/dialog.js';
 
 const TECH = 'Plain HTML / CSS';
 
@@ -2121,12 +2122,12 @@ export class MockupsPage {
     });
   }
 
-  _runChatGeneration(screen, chatInput, main) {
+  async _runChatGeneration(screen, chatInput, main) {
     const desc = chatInput.value.trim();
     if (!desc) { chatInput.focus(); return; }
 
     const model = this._getSelectedModel();
-    if (!model) { alert('No model selected.'); return; }
+    if (!model) { await Dialog.alert('No model selected.'); return; }
 
     chatInput.value = '';
     chatInput.style.height = 'auto';
@@ -2575,7 +2576,7 @@ export class MockupsPage {
 
     const model = this._getSelectedModel();
     if (!model || model.type === 'anthropic' || !model.executable) {
-      alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
+      await Dialog.alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
       return;
     }
 
@@ -2748,7 +2749,7 @@ export class MockupsPage {
   async _runQueue(screens, panel, onFinish) {
     this._queueStopped = false;
     const model = this._getSelectedModel();
-    if (!model) { alert('No model selected.'); onFinish(); return; }
+    if (!model) { await Dialog.alert('No model selected.'); onFinish(); return; }
 
     const projectName = this._project?.name || 'project';
     let doneCount  = 0;
@@ -2869,12 +2870,12 @@ export class MockupsPage {
     </div>`;
   }
 
-  _runValidation(screen) {
+  async _runValidation(screen) {
     const model = this._getSelectedModel();
-    if (!model) { alert('No model selected.'); return; }
-    if (!screen.html_content) { alert('Generate the screen first before validating.'); return; }
+    if (!model) { await Dialog.alert('No model selected.'); return; }
+    if (!screen.html_content) { await Dialog.alert('Generate the screen first before validating.'); return; }
     const designTemplate = this._getDesignTemplateForPrompt();
-    if (!designTemplate) { alert('No design system defined. Open Styles to create one.'); return; }
+    if (!designTemplate) { await Dialog.alert('No design system defined. Open Styles to create one.'); return; }
 
     const bar = this.container.querySelector('#scrValidationBar');
     const btn = this.container.querySelector('#scrValidateBtn');
@@ -3391,7 +3392,7 @@ export class MockupsPage {
       const fresh = await window.db.screenDesigns.get(screen.id);
       const html  = fresh?.html_content || screen.html_content || '';
       if (!html) {
-        alert('No HTML content to export. Generate a mockup first.');
+        await Dialog.alert('No HTML content to export. Generate a mockup first.');
         return;
       }
 
@@ -3415,13 +3416,13 @@ export class MockupsPage {
     main.querySelector('#scrRunBtn').addEventListener('click', async () => {
       const model = this._getSelectedModel();
       if (!model || model.type === 'anthropic' || !model.executable) {
-        alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
+        await Dialog.alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
         return;
       }
 
       const desc = screen.description || '';
       if (!desc) {
-        alert('No description saved for this screen. Edit the screen details and add a description first.');
+        await Dialog.alert('No description saved for this screen. Edit the screen details and add a description first.');
         return;
       }
 
@@ -4108,13 +4109,13 @@ Spacing:
     const title = titleOverride || main?.querySelector('#scrTitle')?.value.trim() || '';
 
     if (!title) {
-      alert('Save the screen first so a file exists to edit.');
+      await Dialog.alert('Save the screen first so a file exists to edit.');
       return;
     }
 
     const model = this._getSelectedModel();
     if (!model || model.type === 'anthropic' || !model.executable) {
-      alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
+      await Dialog.alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
       return;
     }
 
@@ -4184,7 +4185,7 @@ Spacing:
       m = (this._picker?.models || this._modelConfigs || []).find(c => c.type !== 'anthropic' && c.executable);
     }
     if (!m) {
-      alert('No CLI model configured. Add a CLI model in Model Settings first.');
+      await Dialog.alert('No CLI model configured. Add a CLI model in Model Settings first.');
       return;
     }
 

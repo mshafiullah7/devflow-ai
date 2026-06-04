@@ -76,12 +76,24 @@ export class ProjectHomePage {
     const openIssues  = this._issueCount?.open  ?? 0;
     const totalIssues = this._issueCount?.total ?? 0;
 
+    const wfOpen      = workflows.filter(w => !w.status || w.status === 'open').length;
+    const wfInProg    = workflows.filter(w => w.status === 'in_progress').length;
+    const wfCompleted = workflows.filter(w => w.status === 'completed').length;
+
+    const wfPills = `
+      <div class="ph-stat-box__status-pills">
+        ${wfOpen      > 0 ? `<span class="ph-wf-pill ph-wf-pill--open">Open <b>${wfOpen}</b></span>`           : ''}
+        ${wfInProg    > 0 ? `<span class="ph-wf-pill ph-wf-pill--inprog">In Progress <b>${wfInProg}</b></span>` : ''}
+        ${wfCompleted > 0 ? `<span class="ph-wf-pill ph-wf-pill--done">Completed <b>${wfCompleted}</b></span>` : ''}
+        ${!workflows.length ? `<span class="ph-wf-pill ph-wf-pill--open">No workflows yet</span>` : ''}
+      </div>`;
+
     return `
       <div class="ph-stats-strip">
         <div class="ph-stat-box ph-stat-box--accent">
           <div class="ph-stat-box__value">${workflows.length}</div>
           <div class="ph-stat-box__label">Workflows</div>
-          <div class="ph-stat-box__total">&nbsp;</div>
+          ${wfPills}
         </div>
         <div class="ph-stat-box ${openIssues > 0 ? 'ph-stat-box--danger' : ''}">
           <div class="ph-stat-box__value">${openIssues}</div>
@@ -331,39 +343,51 @@ export class ProjectHomePage {
     const rows = this._layerStats || [];
     if (!rows.length) return '';
 
+    const seg = (count, total, cls) => {
+      if (!count || !total) return '';
+      const w = ((count / total) * 100).toFixed(1);
+      return `<div class="ph-lr-seg ph-lr-seg--${cls}" style="width:${w}%"></div>`;
+    };
+
     const rowsHtml = rows.map(r => {
-      const total     = r.total     ?? 0;
-      const completed = r.completed ?? 0;
-      const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const allDone   = total > 0 && completed === total;
-      const inProg    = completed > 0 && !allDone;
+      const total       = r.total        ?? 0;
+      const executed    = r.executed     ?? 0;
+      const failed      = r.failed       ?? 0;
+      const needsReview = r.needs_review ?? 0;
+      const running     = r.running      ?? 0;
+      const open        = r.open         ?? 0;
+      const pct         = total > 0 ? Math.round((executed / total) * 100) : 0;
+      const allDone     = total > 0 && executed === total;
+
+      const bar = total === 0
+        ? `<div class="ph-lr-seg ph-lr-seg--empty" style="width:100%"></div>`
+        : `${seg(executed, total, 'done')}${seg(running, total, 'running')}${seg(needsReview, total, 'review')}${seg(failed, total, 'failed')}${seg(open, total, 'open')}`;
+
+      const statusSlot = allDone
+        ? `<div class="ph-lr-status ph-lr-status--done">
+             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+           </div>`
+        : `<div class="ph-lr-status">${total > 0 ? pct + '%' : '—'}</div>`;
+
+      const badges = [
+        failed      > 0 ? `<span class="ph-lr-badge ph-lr-badge--failed">${failed} failed</span>`    : '',
+        needsReview > 0 ? `<span class="ph-lr-badge ph-lr-badge--review">${needsReview} review</span>` : '',
+        running     > 0 ? `<span class="ph-lr-badge ph-lr-badge--running">${running} running</span>`  : '',
+      ].join('');
 
       return `
-        <div class="ph-ls-row">
-          <div class="ph-ls-row__name">${escHtml(r.name)}</div>
-          <div class="ph-ls-row__track">
-            <div class="ph-ls-row__bar ${allDone ? 'ph-ls-bar--done' : 'ph-ls-bar--active'}"
-                 style="width:${pct}%"></div>
-          </div>
-          <div class="ph-ls-row__counts">
-            <span class="ph-ls-row__fraction ${allDone ? 'ph-ls-fraction--done' : inProg ? 'ph-ls-fraction--prog' : ''}">
-              ${completed}<span class="ph-ls-row__total-sep">/${total}</span>
-            </span>
-            <span class="ph-ls-row__pct">${total > 0 ? pct + '%' : '—'}</span>
-          </div>
+        <div class="ph-lr-row ${allDone ? 'ph-lr-row--done' : ''}">
+          <div class="ph-lr-name">${escHtml(r.name)}</div>
+          <div class="ph-lr-bar-wrap">${bar}</div>
+          <div class="ph-lr-count">${executed}<span class="ph-lr-count-sep">/${total}</span></div>
+          ${statusSlot}
+          <div class="ph-lr-badges">${badges}</div>
         </div>`;
     }).join('');
 
     return `
       <div class="ph-section-label">Layer Progress</div>
-      <div class="ph-ls-table">
-        <div class="ph-ls-header">
-          <span class="ph-ls-header__name">Layer</span>
-          <span class="ph-ls-header__bar"></span>
-          <span class="ph-ls-header__counts">Completed / Total</span>
-        </div>
-        ${rowsHtml}
-      </div>`;
+      <div class="ph-lr-list">${rowsHtml}</div>`;
   }
 
   // ----------------------------------------------------------------

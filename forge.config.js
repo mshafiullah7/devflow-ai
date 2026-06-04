@@ -6,6 +6,7 @@ module.exports = {
     asar: true,
     name: 'DevFlow AI',
     executableName: 'devflow-ai',
+    icon: './assets/icon',
   },
   rebuildConfig: {},
   makers: [

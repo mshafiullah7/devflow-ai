@@ -1,0 +1,88 @@
+.dlg-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dlg-modal {
+  background: var(--surface, #1e2130);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  outline: none;
+}
+
+.dlg-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dlg-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dlg-body {
+  padding: 14px 16px;
+}
+
+.dlg-message {
+  font-size: 13px;
+  color: var(--text-muted, var(--text));
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.dlg-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.dlg-btn {
+  border: none;
+  border-radius: 5px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.1s;
+}
+
+.dlg-btn--primary {
+  background: var(--accent, #4f8ef7);
+  color: #fff;
+}
+
+.dlg-btn--primary:hover {
+  filter: brightness(1.1);
+}
+
+.dlg-btn--danger {
+  background: var(--red, #e05c5c);
+  color: #fff;
+}
+
+.dlg-btn--danger:hover {
+  filter: brightness(1.1);
+}
+
+.dlg-btn--ghost {
+  background: transparent;
+  color: var(--text-muted, var(--text));
+  border: 1px solid var(--border);
+}
+
+.dlg-btn--ghost:hover {
+  background: var(--hover, rgba(255, 255, 255, 0.05));
+}

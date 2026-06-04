@@ -1,5 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+import { Dialog }            from '../../components/dialog/dialog.js';
 
 const TECH = 'Plain HTML / CSS';
 
@@ -271,7 +272,7 @@ export class QueueRunnerPage {
   async _runQueue(screens, panel, onFinish) {
     this._queueStopped = false;
     const model = this._getSelectedModel();
-    if (!model) { alert('No model selected.'); onFinish(); return; }
+    if (!model) { await Dialog.alert('No model selected.'); onFinish(); return; }
 
     const projectName    = this._project?.name || 'project';
     const designTemplate = getDesignTemplateForPrompt(this._project?.design_template || '');

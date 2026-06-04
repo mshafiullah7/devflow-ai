@@ -16,6 +16,7 @@ export class WorkflowRunnerPage {
     this._layers      = [];
     this._criteria    = [];
     this._modelConfig = null;
+    this._cwd         = null;
     this._statuses    = {};   // layerId → 'pending'|'running'|'done'|'error'
     this._outputs     = {};   // layerId → string
     this._selectedId  = null;
@@ -41,8 +42,9 @@ export class WorkflowRunnerPage {
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
   }
 
-  async _init({ projectId, workflowId, modelConfig }) {
+  async _init({ projectId, workflowId, modelConfig, startLayerId, cwd }) {
     this._modelConfig = modelConfig;
+    this._cwd         = cwd || null;
     const [workflow, layers, criteria] = await Promise.all([
       window.db.workflows.get(workflowId),
       window.db.layers.list(workflowId),
@@ -73,7 +75,20 @@ export class WorkflowRunnerPage {
     });
 
     this._render();
-    if (this._layers.length > 0) {
+    if (startLayerId) {
+      const target = this._layers.find(l => l.id === startLayerId);
+      if (target) {
+        this._selectLayer(target.id);
+        this._running = true;
+        this._updateToolbar();
+        this._runLayer(target).then(() => {
+          this._running = false;
+          this._updateToolbar();
+        });
+      } else if (this._layers.length > 0) {
+        this._selectLayer(this._layers[0].id);
+      }
+    } else if (this._layers.length > 0) {
       this._selectLayer(this._layers[0].id);
     }
   }
@@ -168,6 +183,7 @@ ${base}`;
       window.app.workflowChat.generate({
         prompt: this._buildLayerPrompt(layer),
         model:  this._modelConfig,
+        cwd:    this._cwd,
       });
     });
   }
@@ -319,15 +335,18 @@ ${base}`;
   }
 
   _layerListHtml() {
-    return this._layers.map(l => {
+    return this._layers.map((l, idx) => {
       const st  = this._statuses[l.id] || 'pending';
       const sel = this._selectedId === l.id;
       const elapsed = this._startTimes[l.id] ? this._fmt(Date.now() - this._startTimes[l.id]) : '';
       return `
         <div class="wfr-layer-row ${sel ? 'wfr-layer-row--active' : ''}" data-id="${l.id}">
           <span class="wfr-status-chip ${STATUS[st].cls}">${STATUS[st].label}</span>
-          <span class="wfr-layer-name">${escHtml(l.layer || 'Layer')}</span>
-          ${elapsed ? `<span class="wfr-layer-time">${elapsed}</span>` : ''}
+          <span class="wfr-layer-name">${escHtml(l.layer || 'Layer')}<span class="wfr-layer-id">#${l.id}</span></span>
+          <span class="wfr-layer-right">
+            ${elapsed ? `<span class="wfr-layer-time">${elapsed}</span>` : ''}
+            <span class="wfr-layer-seq">${idx + 1}</span>
+          </span>
         </div>`;
     }).join('');
   }
@@ -379,13 +398,6 @@ ${base}`;
             <div class="wfr-layer-list" id="wfrLayerList">
               ${this._layerListHtml()}
             </div>
-
-            ${this._criteria.length ? `
-              <div class="wfr-sidebar__section-hd" style="margin-top:12px">Success Criteria</div>
-              <div class="wfr-criteria-list" id="wfrCriteriaList">
-                ${this._criteriaHtml()}
-              </div>
-            ` : ''}
 
             <div id="wfrSummary" hidden></div>
           </aside>

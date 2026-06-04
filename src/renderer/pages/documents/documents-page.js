@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { GitController } from '../../components/git/git-controller.js';
+import { Dialog }            from '../../components/dialog/dialog.js';
 
 export class DocumentsPage {
   constructor(container, params, router) {
@@ -844,7 +845,7 @@ export class DocumentsPage {
   }
 
   async _deleteDoc(id) {
-    if (!confirm('Delete this document?')) return;
+    if (!await Dialog.confirm('Delete this document?', { confirmText: 'Delete', danger: true })) return;
     await window.db.documents.delete(id);
     this._docs = this._docs.filter(d => d.id !== id);
     if (this._activeId === id) this._activeId = this._docs[0]?.id ?? null;

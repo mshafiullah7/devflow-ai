@@ -182,7 +182,7 @@ function applyPatches(html, patches) {
 // Anthropic SSE streaming
 // ctx controls subprocess lifetime; tokenCh/doneCh are the IPC channels.
 // ----------------------------------------------------------------
-function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
+function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode) {
   _logAiCall('anthropic', model.model_name || 'claude-sonnet-4-6', null, messages || prompt);
   let msgs;
   if (editPayload) {
@@ -233,8 +233,12 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
             send(wc, tokenCh, { text: data.delta.text });
           }
           if (data.type === 'message_stop') {
-            const html = extractHtml(accumulated);
-            finish({ html, raw: accumulated, error: html ? null : 'Could not extract HTML from response' });
+            if (rawMode) {
+              finish({ html: null, raw: accumulated, error: null });
+            } else {
+              const html = extractHtml(accumulated);
+              finish({ html, raw: accumulated, error: html ? null : 'Could not extract HTML from response' });
+            }
           }
         } catch (_) {}
       }
@@ -264,7 +268,7 @@ const OLLAMA_SYSTEM_DIFF = {
   content: 'You are an expert UI/UX developer. You MUST output ONLY a raw JSON array of search-replace patches. Never explain, never output HTML, never use markdown. The output must start with [ and end with ].',
 };
 
-function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
+function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode) {
   _logAiCall('ollama', model.model_name || '(no model)', null, messages || prompt);
   let msgs;
   let isDiffMode = false;
@@ -331,6 +335,8 @@ function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneC
         html  = extractHtml(accumulated);
         error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'No patches or HTML found in response');
       }
+    } else if (rawMode) {
+      error = code !== 0 ? `Process exited with code ${code}` : null;
     } else {
       html  = extractHtml(accumulated);
       error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
@@ -350,7 +356,7 @@ function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneC
 // ----------------------------------------------------------------
 // CLI — hidden PowerShell spawn, prompt via temp file
 // ----------------------------------------------------------------
-function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
+function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode) {
   const exe       = model.executable || 'claude';
   const modelName = model.model_name || DEFAULT_CLI_MODEL;
   _logAiCall('cli', modelName, exe, messages || prompt);
@@ -408,7 +414,7 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) 
   ctx.proc = spawn(
     'powershell.exe',
     ['-NoLogo', '-NonInteractive', '-Command', psCmd],
-    { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' } }
+    { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' }, ...(cwd ? { cwd } : {}) }
   );
 
   ctx.proc.stdout.on('data', (chunk) => {
@@ -438,6 +444,8 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) 
         html  = extractHtml(accumulated);
         error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'No patches or HTML found in response');
       }
+    } else if (rawMode) {
+      error = code !== 0 ? `Process exited with code ${code}` : null;
     } else {
       html  = extractHtml(accumulated);
       error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
@@ -457,7 +465,7 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) 
 // ----------------------------------------------------------------
 // OpenAI-compatible streaming proxy (OpenAI, Groq, Ollama /v1, etc.)
 // ----------------------------------------------------------------
-function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
+function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode) {
   _logAiCall('api', model.model_name || '(no model)', 'python openai_proxy.py', messages || prompt);
   const ts = Date.now();
 
@@ -547,15 +555,15 @@ function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) 
 // ----------------------------------------------------------------
 // Dispatch helper — picks the right backend
 // ----------------------------------------------------------------
-function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh) {
+function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode) {
   if (model.type === 'anthropic') {
-    runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
+    runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
   } else if (model.type === 'ollama') {
-    runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
+    runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
   } else if (model.type === 'api') {
-    runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
+    runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
   } else {
-    runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh);
+    runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
   }
 }
 
@@ -587,10 +595,10 @@ function registerChatHandlers() {
   // --- Main window chat (chat:*) ---
   safeHandle('chat:cancel', () => killCtx(_mainCtx));
 
-  safeHandle('chat:generate', (event, { prompt, messages, editPayload, model }) => {
+  safeHandle('chat:generate', (event, { prompt, messages, editPayload, model, cwd }) => {
     if (_mainCtx.proc || _mainCtx.req) killCtx(_mainCtx);
     _mainCtx.cancelled = false;
-    dispatch(event.sender, prompt, editPayload, model, messages, _mainCtx, 'chat:token', 'chat:done');
+    dispatch(event.sender, prompt, editPayload, model, messages, _mainCtx, 'chat:token', 'chat:done', cwd);
     return { started: true };
   });
 
@@ -618,10 +626,10 @@ function registerChatHandlers() {
   // --- Workflow runner window chat (workflowChat:*) — separate subprocess slot ---
   safeHandle('workflowChat:cancel', () => killCtx(_workflowCtx));
 
-  safeHandle('workflowChat:generate', (event, { prompt, model }) => {
+  safeHandle('workflowChat:generate', (event, { prompt, model, cwd }) => {
     if (_workflowCtx.proc || _workflowCtx.req) killCtx(_workflowCtx);
     _workflowCtx.cancelled = false;
-    dispatch(event.sender, prompt, null, model, null, _workflowCtx, 'workflowChat:token', 'workflowChat:done');
+    dispatch(event.sender, prompt, null, model, null, _workflowCtx, 'workflowChat:token', 'workflowChat:done', cwd, true);
     return { started: true };
   });
 
@@ -641,7 +649,7 @@ function registerChatHandlers() {
   safeHandle('testGenChat:generate', (event, { prompt, model }) => {
     if (_testGenCtx.proc || _testGenCtx.req) killCtx(_testGenCtx);
     _testGenCtx.cancelled = false;
-    dispatch(event.sender, prompt, null, model, null, _testGenCtx, 'testGenChat:token', 'testGenChat:done');
+    dispatch(event.sender, prompt, null, model, null, _testGenCtx, 'testGenChat:token', 'testGenChat:done', null, true);
     return { started: true };
   });
 }

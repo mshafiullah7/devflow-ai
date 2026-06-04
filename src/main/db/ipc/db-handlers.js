@@ -195,7 +195,7 @@ function registerDbHandlers() {
   });
 
   safeHandle('db:layers:update', (_e, args) => {
-    const { id, layer, order_num, purpose, inputs, outputs, prompt, is_active } = args;
+    const { id, layer, order_num, purpose, inputs, outputs, prompt, is_active, status } = args;
     const hasProjectLayer = Object.prototype.hasOwnProperty.call(args, 'project_layer_id');
     const plFlag = hasProjectLayer ? 1 : null;
     db.prepare(
@@ -208,6 +208,7 @@ function registerDbHandlers() {
               outputs   = CASE WHEN ? IS NOT NULL THEN ? ELSE outputs END,
               prompt    = CASE WHEN ? IS NOT NULL THEN ? ELSE prompt END,
               is_active = CASE WHEN ? IS NOT NULL THEN ? ELSE is_active END,
+              status    = CASE WHEN ? IS NOT NULL THEN ? ELSE status END,
               updated_at = datetime('now')
         WHERE id = ?`
     ).run(
@@ -221,6 +222,7 @@ function registerDbHandlers() {
       outputs != null ? JSON.stringify(Array.isArray(outputs) ? outputs : [outputs]) : null,
       prompt    ?? null, prompt    ?? null,
       is_active ?? null, is_active ?? null,
+      status    ?? null, status    ?? null,
       id
     );
     return db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
@@ -250,15 +252,19 @@ function registerDbHandlers() {
     return { total: row?.total ?? 0, completed: row?.completed ?? 0 };
   });
 
-  // Returns [{ id, name, sort_order, total, completed }] — one row per project layer
+  // Returns [{ id, name, sort_order, total, open, running, executed, failed, needs_review }] — one row per project layer
   safeHandle('db:layers:statsByProjectLayer', (_e, project_id) => {
     return db.prepare(`
       SELECT
         pl.id,
         pl.name,
         pl.sort_order,
-        COUNT(l.id)                                                AS total,
-        SUM(CASE WHEN l.status = 'executed' THEN 1 ELSE 0 END)    AS completed
+        COUNT(l.id)                                                              AS total,
+        SUM(CASE WHEN l.id IS NOT NULL AND (l.status IS NULL OR l.status = 'open') THEN 1 ELSE 0 END) AS open,
+        SUM(CASE WHEN l.status = 'running'      THEN 1 ELSE 0 END)              AS running,
+        SUM(CASE WHEN l.status = 'executed'     THEN 1 ELSE 0 END)              AS executed,
+        SUM(CASE WHEN l.status = 'failed'       THEN 1 ELSE 0 END)              AS failed,
+        SUM(CASE WHEN l.status = 'needs_review' THEN 1 ELSE 0 END)              AS needs_review
       FROM project_layers pl
       LEFT JOIN layers l
         ON  l.project_layer_id = pl.id
