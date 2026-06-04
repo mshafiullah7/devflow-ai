@@ -343,11 +343,9 @@ export class ProjectHomePage {
     const rows = this._layerStats || [];
     if (!rows.length) return '';
 
-    const seg = (count, total, cls) => {
-      if (!count || !total) return '';
-      const w = ((count / total) * 100).toFixed(1);
-      return `<div class="ph-lr-seg ph-lr-seg--${cls}" style="width:${w}%"></div>`;
-    };
+    const cnt = (count, cls, label) => count > 0
+      ? `<span class="ph-lr-cnt ph-lr-cnt--${cls}" style="flex:${count}" title="${count} ${label}">${count} ${label}</span>`
+      : '';
 
     const rowsHtml = rows.map(r => {
       const total       = r.total        ?? 0;
@@ -356,32 +354,24 @@ export class ProjectHomePage {
       const needsReview = r.needs_review ?? 0;
       const running     = r.running      ?? 0;
       const open        = r.open         ?? 0;
-      const pct         = total > 0 ? Math.round((executed / total) * 100) : 0;
       const allDone     = total > 0 && executed === total;
 
-      const bar = total === 0
-        ? `<div class="ph-lr-seg ph-lr-seg--empty" style="width:100%"></div>`
-        : `${seg(executed, total, 'done')}${seg(running, total, 'running')}${seg(needsReview, total, 'review')}${seg(failed, total, 'failed')}${seg(open, total, 'open')}`;
-
-      const statusSlot = allDone
-        ? `<div class="ph-lr-status ph-lr-status--done">
-             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-           </div>`
-        : `<div class="ph-lr-status">${total > 0 ? pct + '%' : '—'}</div>`;
-
-      const badges = [
-        failed      > 0 ? `<span class="ph-lr-badge ph-lr-badge--failed">${failed} failed</span>`    : '',
-        needsReview > 0 ? `<span class="ph-lr-badge ph-lr-badge--review">${needsReview} review</span>` : '',
-        running     > 0 ? `<span class="ph-lr-badge ph-lr-badge--running">${running} running</span>`  : '',
-      ].join('');
+      const doneIcon = allDone
+        ? `<svg class="ph-lr-done-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> `
+        : '';
 
       return `
         <div class="ph-lr-row ${allDone ? 'ph-lr-row--done' : ''}">
-          <div class="ph-lr-name">${escHtml(r.name)}</div>
-          <div class="ph-lr-bar-wrap">${bar}</div>
-          <div class="ph-lr-count">${executed}<span class="ph-lr-count-sep">/${total}</span></div>
-          ${statusSlot}
-          <div class="ph-lr-badges">${badges}</div>
+          <div class="ph-lr-name">${doneIcon}${escHtml(r.name)}</div>
+          <div class="ph-lr-counts">
+            ${cnt(executed,    'done',    'Executed')}
+            ${cnt(open,        'open',    'Open')}
+            ${cnt(running,     'running', 'Running')}
+            ${cnt(needsReview, 'review',  'Review')}
+            ${cnt(failed,      'failed',  'Failed')}
+            ${total === 0 ? '<span class="ph-lr-cnt ph-lr-cnt--empty">No items</span>' : ''}
+          </div>
+          <div class="ph-lr-total">${total} total</div>
         </div>`;
     }).join('');
 
