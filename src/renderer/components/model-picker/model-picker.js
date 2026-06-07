@@ -1,6 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 
-const TYPE_LABEL = { cli: 'CLI', api: 'API', ollama: 'LOCAL' };
+const TYPE_LABEL = { cli: 'CLI', api: 'API', ollama: 'LOCAL', anthropic: 'ANTHROPIC' };
 
 export class ModelPicker {
   constructor({ anchor, onSelect, initialId } = {}) {

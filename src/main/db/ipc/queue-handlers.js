@@ -1,6 +1,6 @@
 'use strict';
 
-const { ipcMain }         = require('electron');
+const { ipcMain, BrowserWindow, app } = require('electron');
 const { safeHandle }      = require('../../ipc-safe-handle');
 const { spawn, execSync } = require('child_process');
 const http  = require('node:http');
@@ -12,6 +12,13 @@ const { getTelegramConfig }    = require('../../app-config');
 const { sendMessage: tgSend }  = require('../../telegram');
 
 let _activeQueueProc = null;
+
+function _flashWin(wc) {
+  const win = BrowserWindow.fromWebContents(wc);
+  if (!win || win.isFocused()) return;
+  win.flashFrame(true);
+  if (process.platform === 'darwin') app.dock.bounce('informational');
+}
 
 // ----------------------------------------------------------------
 // AI call logger — prints every outgoing model invocation so you
@@ -111,7 +118,10 @@ function registerQueueHandlers() {
       if (ch === 'promptQueue:done') {
         _notifyTelegram(proj, label, 'done', payload.exitCode, Date.now() - startTime);
       }
-      if (!wc.isDestroyed()) wc.send(ch, payload);
+      if (!wc.isDestroyed()) {
+        wc.send(ch, payload);
+        if (ch === 'promptQueue:done') _flashWin(wc);
+      }
     };
     const type = modelConfig?.type || 'cli';
 
@@ -142,7 +152,10 @@ function registerQueueHandlers() {
       if (ch === 'promptQueue:done') {
         _notifyTelegram(proj, label, 'done', payload.exitCode, Date.now() - startTime);
       }
-      if (!wc.isDestroyed()) wc.send(ch, payload);
+      if (!wc.isDestroyed()) {
+        wc.send(ch, payload);
+        if (ch === 'promptQueue:done') _flashWin(wc);
+      }
     };
 
     const trimmed = trimMessages(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }]);

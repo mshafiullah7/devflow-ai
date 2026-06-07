@@ -102,12 +102,19 @@ contextBridge.exposeInMainWorld('db', {
     delete:    (id)   => invoke('db:screen_prompt_history:delete', id),
     deleteAll: (data) => invoke('db:screen_prompt_history:deleteAll', data),
   },
+  workflowLayerPromptHistory: {
+    list:      (data) => invoke('db:workflow_layer_prompt_history:list', data),
+    create:    (data) => invoke('db:workflow_layer_prompt_history:create', data),
+    delete:    (id)   => invoke('db:workflow_layer_prompt_history:delete', id),
+    deleteAll: (data) => invoke('db:workflow_layer_prompt_history:deleteAll', data),
+  },
   screenDesigns: {
-    list:   (project_id) => invoke('db:screen_designs:list', project_id),
-    get:    (id)         => invoke('db:screen_designs:get', id),
-    create: (data)       => invoke('db:screen_designs:create', data),
-    update: (data)       => invoke('db:screen_designs:update', data),
-    delete: (id)         => invoke('db:screen_designs:delete', id),
+    list:             (project_id) => invoke('db:screen_designs:list', project_id),
+    get:              (id)         => invoke('db:screen_designs:get', id),
+    create:           (data)       => invoke('db:screen_designs:create', data),
+    update:           (data)       => invoke('db:screen_designs:update', data),
+    delete:           (id)         => invoke('db:screen_designs:delete', id),
+    setDartFilePath:  (data)       => invoke('db:screen_designs:setDartFilePath', data),
   },
   promptQueueMessages: {
     list:  (queue_item_id) => invoke('db:pq_messages:list', queue_item_id),
@@ -289,6 +296,19 @@ contextBridge.exposeInMainWorld('app', {
   workflowWindow: {
     onInit: (cb) => ipcRenderer.on('workflow:init', (_e, p) => cb(p)),
   },
+  // PTY-backed terminal for the workflow runner window
+  wfrPty: {
+    write:       (data)   => ipcRenderer.invoke('wfrPty:write', data),
+    resize:      (data)   => ipcRenderer.invoke('wfrPty:resize', data),
+    kill:        ()       => ipcRenderer.invoke('wfrPty:kill'),
+    runLayer:    (data)   => ipcRenderer.invoke('wfrPty:runLayer', data),
+    onData:      (cb)     => ipcRenderer.on('wfrPty:data',      (_e, p) => cb(p)),
+    onLayerDone: (cb)     => ipcRenderer.on('wfrPty:layerDone', (_e, p) => cb(p)),
+    offAll:      ()       => {
+      ipcRenderer.removeAllListeners('wfrPty:data');
+      ipcRenderer.removeAllListeners('wfrPty:layerDone');
+    },
+  },
   // Separate AI channel for the generate-workflows window.
   genWorkflowChat: {
     generate: (data) => ipcRenderer.invoke('genWorkflowChat:generate', data),
@@ -318,6 +338,21 @@ contextBridge.exposeInMainWorld('app', {
   openTestGenerationWindow: (data) => ipcRenderer.invoke('app:openTestGenerationWindow', data),
   testGenerationWindow: {
     onInit: (cb) => ipcRenderer.on('testGen:init', (_e, p) => cb(p)),
+  },
+  // Separate AI channel for the workflow AI edit window.
+  wfAiEditChat: {
+    generate: (data) => ipcRenderer.invoke('wfAiEditChat:generate', data),
+    cancel:   ()     => ipcRenderer.invoke('wfAiEditChat:cancel'),
+    onToken:  (cb)   => ipcRenderer.on('wfAiEditChat:token', (_e, p) => cb(p)),
+    onDone:   (cb)   => ipcRenderer.on('wfAiEditChat:done',  (_e, p) => cb(p)),
+    offAll:   ()     => {
+      ipcRenderer.removeAllListeners('wfAiEditChat:token');
+      ipcRenderer.removeAllListeners('wfAiEditChat:done');
+    },
+  },
+  openWorkflowAiEditWindow: (data) => ipcRenderer.invoke('app:openWorkflowAiEditWindow', data),
+  workflowAiEditWindow: {
+    onInit: (cb) => ipcRenderer.on('workflowAiEdit:init', (_e, p) => cb(p)),
   },
 });
 

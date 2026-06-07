@@ -1,6 +1,14 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 
+const ANTHROPIC_MODELS = [
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5',
+  'claude-haiku-4-5-20251001',
+  'claude-opus-4-5',
+  'claude-opus-4-8',
+];
+
 const KNOWN_CLI_MODELS = {
   claude: [
     'claude-haiku-4-5',
@@ -202,7 +210,7 @@ export class SettingsPage {
               <div class="st-model-item__info">
                 <div class="st-model-item__top">
                   <span class="st-model-item__label">${escHtml(c.label)}</span>
-                  <span class="st-model-item__badge st-model-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : c.type === 'ollama' ? 'Ollama' : 'API'}</span>
+                  <span class="st-model-item__badge st-model-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : c.type === 'ollama' ? 'Ollama' : c.type === 'anthropic' ? 'Anthropic' : 'API'}</span>
                   ${c.is_default ? `<span class="st-model-item__badge st-model-item__badge--default">default</span>` : ''}
                 </div>
                 <div class="st-model-item__sub">
@@ -1144,11 +1152,12 @@ export class SettingsPage {
             <div class="st-form__row">
               <label class="st-form__label">Type</label>
               ${isEdit
-                ? `<div class="st-type-readonly">${config.type === 'cli' ? 'CLI' : config.type === 'ollama' ? 'Ollama' : 'API'}</div>`
+                ? `<div class="st-type-readonly">${config.type === 'cli' ? 'CLI' : config.type === 'ollama' ? 'Ollama' : config.type === 'anthropic' ? 'Anthropic' : 'API'}</div>`
                 : `<div class="st-form__type-toggle">
                     <button type="button" class="st-type-btn active" data-type="cli">CLI</button>
                     <button type="button" class="st-type-btn" data-type="ollama">Ollama</button>
                     <button type="button" class="st-type-btn" data-type="api">API</button>
+                    <button type="button" class="st-type-btn" data-type="anthropic">Anthropic</button>
                   </div>`
               }
               <input type="hidden" id="stFType" value="${config?.type || 'cli'}"/>
@@ -1254,6 +1263,34 @@ export class SettingsPage {
               </div>
             </div>
 
+            <div id="stFFieldsAnthropic" style="display:none">
+              <div class="st-form__row">
+                <label class="st-form__label">API Key *</label>
+                <input class="st-form__input" id="stFAnthropicKey" type="password"
+                  placeholder="${config?.type === 'anthropic' && config?.api_key ? '••••••••  (saved)' : 'sk-ant-…'}"
+                  autocomplete="new-password"/>
+                <span class="st-form__hint">Your Anthropic API key. Stored locally in the database.</span>
+              </div>
+              <div class="st-form__row">
+                <label class="st-form__label">Model *</label>
+                <input class="st-form__input" id="stFAnthropicModel" type="text" list="stFAnthropicModelList"
+                  placeholder="e.g. claude-sonnet-4-6, claude-haiku-4-5"
+                  value="${escHtml(config?.type === 'anthropic' ? (config?.model_name || '') : '')}"
+                  autocomplete="off"/>
+                <datalist id="stFAnthropicModelList">
+                  ${ANTHROPIC_MODELS.map(m => `<option value="${escHtml(m)}">`).join('')}
+                </datalist>
+                <span class="st-form__error" id="stFAnthropicModelError" style="display:none">Model name is required</span>
+              </div>
+              <div class="st-form__row">
+                <label class="st-form__label">Max Tokens</label>
+                <input class="st-form__input" id="stFAnthropicMaxTokens" type="number"
+                  placeholder="8096"
+                  value="${escHtml(config?.type === 'anthropic' ? String(config?.max_tokens || '') : '')}"/>
+                <span class="st-form__hint">Optional — defaults to 8096 if blank</span>
+              </div>
+            </div>
+
             <div class="st-form__row">
               <label class="st-form__check-label">
                 <input type="checkbox" id="stFIsDefault" ${config?.is_default ? 'checked' : ''}/>
@@ -1326,15 +1363,17 @@ export class SettingsPage {
     };
 
     const TYPE_HINTS = {
-      cli:    'Make sure to provide the Model and effort level correctly — wrong values will fall back to default models and burn tokens unexpectedly.',
-      ollama: 'For effective responses use 70B+ models (e.g. llama3.3:70b, qwen2.5-coder:72b). Smaller models may produce incomplete or low-quality output.',
-      api:    'Only OpenAI-compatible providers are supported: OpenAI, Groq, Mistral AI, Together AI, DeepSeek, Fireworks AI, OpenRouter, LM Studio, and others that expose a /chat/completions endpoint.',
+      cli:        'Make sure to provide the Model and effort level correctly — wrong values will fall back to default models and burn tokens unexpectedly.',
+      ollama:     'For effective responses use 70B+ models (e.g. llama3.3:70b, qwen2.5-coder:72b). Smaller models may produce incomplete or low-quality output.',
+      api:        'Only OpenAI-compatible providers are supported: OpenAI, Groq, Mistral AI, Together AI, DeepSeek, Fireworks AI, OpenRouter, LM Studio, and others that expose a /chat/completions endpoint.',
+      anthropic:  'Direct Anthropic API — no CLI overhead, supports prompt caching. Best for AI Edit confirm step, Generate Workflows, and other lightweight tasks.',
     };
 
     const applyType = type => {
-      overlay.querySelector('#stFFieldsCli').style.display    = type === 'cli'    ? '' : 'none';
-      overlay.querySelector('#stFFieldsOllama').style.display = type === 'ollama' ? '' : 'none';
-      overlay.querySelector('#stFFieldsApi').style.display    = type === 'api'    ? '' : 'none';
+      overlay.querySelector('#stFFieldsCli').style.display        = type === 'cli'        ? '' : 'none';
+      overlay.querySelector('#stFFieldsOllama').style.display     = type === 'ollama'     ? '' : 'none';
+      overlay.querySelector('#stFFieldsApi').style.display        = type === 'api'        ? '' : 'none';
+      overlay.querySelector('#stFFieldsAnthropic').style.display  = type === 'anthropic'  ? '' : 'none';
       const hintEl = overlay.querySelector('#stFTypeHint');
       if (hintEl) {
         hintEl.textContent = TYPE_HINTS[type] || '';
@@ -1406,6 +1445,11 @@ export class SettingsPage {
       cliModelInput.addEventListener('input', () => { if (cliModelError) cliModelError.style.display = 'none'; });
     }
 
+    overlay.querySelector('#stFAnthropicModel')
+      ?.addEventListener('input', () => {
+        overlay.querySelector('#stFAnthropicModelError').style.display = 'none';
+      });
+
     overlay.querySelectorAll('.st-type-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         overlay.querySelectorAll('.st-type-btn').forEach(b => b.classList.remove('active'));
@@ -1454,6 +1498,19 @@ export class SettingsPage {
         const rawKey    = overlay.querySelector('#stFApiKey')?.value.trim();
         if (rawKey) data.api_key = rawKey;
         const maxTok    = overlay.querySelector('#stFApiMaxTokens')?.value.trim();
+        if (maxTok) data.max_tokens = Number(maxTok);
+      } else if (type === 'anthropic') {
+        const anthModel = overlay.querySelector('#stFAnthropicModel')?.value.trim() || '';
+        if (!anthModel) {
+          const err = overlay.querySelector('#stFAnthropicModelError');
+          if (err) err.style.display = '';
+          overlay.querySelector('#stFAnthropicModel')?.focus();
+          return;
+        }
+        data.model_name = anthModel;
+        const rawKey    = overlay.querySelector('#stFAnthropicKey')?.value.trim();
+        if (rawKey) data.api_key = rawKey;
+        const maxTok    = overlay.querySelector('#stFAnthropicMaxTokens')?.value.trim();
         if (maxTok) data.max_tokens = Number(maxTok);
       }
 

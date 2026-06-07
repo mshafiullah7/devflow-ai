@@ -8,29 +8,32 @@ module.exports = {
     executableName: 'devflow-ai',
     icon: './assets/icon',
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    onlyModules: ['better-sqlite3'],
+  },
   makers: [
-    {
-      name: './makers/maker-nsis',
-      platforms: ['win32'],
-      config: {
-        appId: 'com.devflow.ai',  // top-level electron-builder field, not nsis
-        oneClick: false,
-        allowElevation: true,
-        allowToChangeInstallationDirectory: true,
-        createDesktopShortcut: true,
-        createStartMenuShortcut: true,
-        shortcutName: 'DevFlow AI SDLC',
-        deleteAppDataOnUninstall: false,
-        menuCategory: 'DevFlow',
-        publish: {
-          provider: 'github',
-          owner: 'YOUR_GITHUB_USERNAME',
-          repo: 'devflow-ai-sdlc',
-          private: false,
-        },
-      },
-    },
+    // NSIS installer disabled during testing phase
+    // {
+    //   name: './makers/maker-nsis',
+    //   platforms: ['win32'],
+    //   config: {
+    //     appId: 'com.devflow.ai',
+    //     oneClick: false,
+    //     allowElevation: true,
+    //     allowToChangeInstallationDirectory: true,
+    //     createDesktopShortcut: true,
+    //     createStartMenuShortcut: true,
+    //     shortcutName: 'DevFlow AI SDLC',
+    //     deleteAppDataOnUninstall: false,
+    //     menuCategory: 'DevFlow',
+    //     publish: {
+    //       provider: 'github',
+    //       owner: 'YOUR_GITHUB_USERNAME',
+    //       repo: 'devflow-ai-sdlc',
+    //       private: false,
+    //     },
+    //   },
+    // },
     {
       name: '@electron-forge/maker-zip',
       platforms: ['darwin'],

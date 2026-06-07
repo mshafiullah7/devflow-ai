@@ -14,6 +14,8 @@ export class ProjectLayersPage {
     this._activeId      = null;
     this._aiModelConfig = null;
     this._pendingSave   = null;
+    this._executing     = false;
+    this._execTimer     = null;
   }
 
   // ----------------------------------------------------------------
@@ -36,7 +38,14 @@ export class ProjectLayersPage {
 
     this._picker = new ModelPicker({
       anchor:    this.container.querySelector('#plModelPicker'),
-      onSelect:  model => { this._aiModelConfig = model; },
+      onSelect:  model => {
+        this._aiModelConfig = model;
+        // Keep the Execute button in sync — requires CLI model + folder path both set
+        const execBtn     = this.container.querySelector('#plExecBtn');
+        const folderInput = this.container.querySelector('#plFolderValue');
+        if (execBtn && !this._executing)
+          execBtn.disabled = !(model?.type === 'cli' && !!folderInput?.value?.trim());
+      },
       initialId: _mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
@@ -67,6 +76,8 @@ export class ProjectLayersPage {
     const fn = this._pendingSave;
     this._pendingSave = null;
     if (fn) fn();
+    if (this._execTimer) { clearInterval(this._execTimer); this._execTimer = null; }
+    this._executing = false;
     window.app.chat.offAll();
     if (this._onKeyDown) document.removeEventListener('keydown', this._onKeyDown);
     removeCss('pages/project-layers/project-layers-page.css');
@@ -404,7 +415,7 @@ export class ProjectLayersPage {
 
           <div class="is-form__field">
             <label class="is-form__label" for="plFormSetup">Project Setup Instructions</label>
-            <textarea class="is-form__textarea" id="plFormSetup" rows="6"
+            <textarea class="is-form__textarea" id="plFormSetup" rows="12"
               placeholder="Steps to set up this layer locally — install dependencies, environment variables, run commands…">${escHtml(layer?.setup_instructions || '')}</textarea>
           </div>
 
@@ -428,6 +439,24 @@ export class ProjectLayersPage {
               </button>
             </div>
             <input type="hidden" id="plFolderValue" value="${escHtml(folderPath)}"/>
+            <div class="pl-exec-bar" id="plExecBar">
+              <button class="pl-exec-btn" id="plExecBtn" type="button" disabled>
+                <svg class="pl-exec-icon" width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <svg class="pl-spinner" width="11" height="11" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="display:none;">
+                  <path d="M12 2a10 10 0 0 1 10 10" opacity="0.3"/>
+                  <path d="M12 2a10 10 0 0 1 10 10"/>
+                </svg>
+                Execute
+              </button>
+              <button class="pl-exec-cancel-btn" id="plExecCancelBtn" type="button" style="display:none;">
+                Cancel
+              </button>
+              <span class="pl-exec-timer" id="plExecTimer" style="display:none;">0s</span>
+            </div>
+            <div class="pl-exec-output" id="plExecOutput" style="display:none;"></div>
           </div>
 
         </div>
@@ -447,6 +476,122 @@ export class ProjectLayersPage {
     const browseBtn   = el.querySelector('#plBrowseBtn');
     const saveBtn     = this.container.querySelector('#plFormSave');
 
+    // ── Execute button ──────────────────────────────────────────────
+    const execBtn    = el.querySelector('#plExecBtn');
+    const cancelBtn  = el.querySelector('#plExecCancelBtn');
+    const timerEl    = el.querySelector('#plExecTimer');
+    const outputEl   = el.querySelector('#plExecOutput');
+
+    // Execute is enabled only when: CLI model selected AND folder path set
+    const _execEnabled = () =>
+      this._aiModelConfig?.type === 'cli' && !!folderInput?.value?.trim();
+
+    // Reflect initial state when panel renders
+    if (execBtn) execBtn.disabled = !_execEnabled();
+
+    const _fmtElapsed = (s) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+
+    const _resetExecUi = () => {
+      this._executing = false;
+      if (this._execTimer) { clearInterval(this._execTimer); this._execTimer = null; }
+      if (execBtn) {
+        execBtn.disabled = !_execEnabled();
+        execBtn.querySelector('.pl-exec-icon').style.display  = '';
+        execBtn.querySelector('.pl-spinner').style.display    = 'none';
+      }
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      if (timerEl)   timerEl.style.display   = 'none';
+    };
+
+    execBtn?.addEventListener('click', () => {
+      if (this._executing) return;
+
+      const cwd    = folderInput?.value?.trim();
+      const prompt = setupEl?.value?.trim();
+
+      if (!cwd) {
+        outputEl.style.display = 'block';
+        outputEl.className     = 'pl-exec-output pl-exec-output--warn';
+        outputEl.textContent   = '⚠ Set a Project Folder Path before executing.';
+        return;
+      }
+      if (!prompt) {
+        outputEl.style.display  = 'block';
+        outputEl.className      = 'pl-exec-output pl-exec-output--warn';
+        outputEl.textContent    = '⚠ Setup instructions are empty — nothing to execute.';
+        return;
+      }
+
+      this._executing = true;
+      execBtn.disabled = true;
+      execBtn.querySelector('.pl-exec-icon').style.display = 'none';
+      execBtn.querySelector('.pl-spinner').style.display   = '';
+
+      cancelBtn.style.display = 'inline-flex';
+      timerEl.style.display   = 'inline';
+      timerEl.textContent     = '0s';
+
+      outputEl.className   = 'pl-exec-output pl-exec-output--running';
+      outputEl.style.display = 'block';
+      outputEl.textContent = '';
+
+      let elapsed = 0;
+      this._execTimer = setInterval(() => {
+        elapsed++;
+        if (timerEl) timerEl.textContent = _fmtElapsed(elapsed);
+      }, 1000);
+
+      let accumulated = '';
+      window.app.chat.offAll();
+
+      window.app.chat.onToken(({ text }) => {
+        accumulated += text;
+        // Stream tokens into output area, auto-scroll
+        outputEl.textContent = accumulated;
+        outputEl.scrollTop   = outputEl.scrollHeight;
+      });
+
+      window.app.chat.onDone(({ raw, error }) => {
+        window.app.chat.offAll();
+        _resetExecUi();
+
+        const finalText = raw || accumulated;
+        outputEl.textContent = finalText;
+        outputEl.scrollTop   = outputEl.scrollHeight;
+
+        // 'Could not extract HTML from response' is expected here — Execute
+        // returns plain CLI output, not HTML. Treat it as a clean success.
+        const realError = (error && error !== 'Could not extract HTML from response')
+          ? error : null;
+
+        // Append status banner
+        const banner = document.createElement('div');
+        if (realError) {
+          banner.className   = 'pl-exec-banner pl-exec-banner--error';
+          banner.textContent = `✕ Error: ${realError}`;
+        } else {
+          banner.className   = 'pl-exec-banner pl-exec-banner--success';
+          banner.textContent = '✓ Execution complete';
+        }
+        outputEl.appendChild(banner);
+        outputEl.scrollTop = outputEl.scrollHeight;
+      });
+
+      window.app.chat.generate({ prompt, model: this._aiModelConfig, cwd });
+    });
+
+    cancelBtn?.addEventListener('click', () => {
+      window.app.chat.cancel();
+      window.app.chat.offAll();
+      _resetExecUi();
+
+      const banner = document.createElement('div');
+      banner.className   = 'pl-exec-banner pl-exec-banner--warn';
+      banner.textContent = '⊘ Cancelled';
+      outputEl.appendChild(banner);
+      outputEl.scrollTop = outputEl.scrollHeight;
+    });
+
     // Browse for folder
     const pickFolder = async () => {
       const folderPath = await window.db.dialog.openFolder();
@@ -455,6 +600,8 @@ export class ProjectLayersPage {
       folderText.textContent = folderPath;
       folderText.classList.remove('pl-folder-text--empty');
       folderPill.classList.add('pl-folder-pill--set');
+      // Re-evaluate Execute button now that folder is set
+      if (execBtn && !this._executing) execBtn.disabled = !_execEnabled();
     };
     browseBtn?.addEventListener('click', pickFolder);
     folderPill?.addEventListener('click', pickFolder);
@@ -510,7 +657,48 @@ export class ProjectLayersPage {
   }
 
   // ----------------------------------------------------------------
-  // Generate Layers — modal with document list
+  // Generate Layers — build prompt from selected documents
+  // ----------------------------------------------------------------
+  _buildGenerateLayersPrompt(docs) {
+    const docsText = docs
+      .map(d => `### ${d.title}\n\n${(d.content || '').trim() || '(no content)'}`)
+      .join('\n\n---\n\n');
+
+    return [
+      'You are a software architect. Based on the following project documentation, produce the architectural layer entries for this system.',
+      '',
+      '🔒 STRICT RULE — you MUST follow this exactly:',
+      '1. The project documentation contains a System Structure YAML block with a "layers:" section. Each item under "layers:" has a "name:" field.',
+      'Step 1 — Read the YAML and count how many "- name:" entries exist under the "layers:" key.',
+      'Step 2 — Use ONLY those names, in the order they appear, as the "name" field in your JSON output.',
+      'Step 3 — Do NOT invent additional layers, merge layers, rename layers, or omit any layer. The number of JSON objects you return must equal the number of "- name:" entries in the YAML.',
+      '',
+      '2. Do not add any steps containing code or creation of files in the Scaffolds. It is pure project folder structure.',
+      '',
+      '---',
+      '',
+      'Use each name EXACTLY as written in the YAML (same casing, same underscores/spaces).',
+      'Example: if the YAML has 3 entries named "layer_a", "layer_b", "layer_c" — your JSON must have exactly 3 objects with those exact names.',
+      '',
+      'For each layer provide "setup_instructions": a numbered, step-by-step guide that:',
+      '  1. Creates the project with the appropriate scaffold command for the technology stack (e.g. "dotnet new webapi -n MyApi", "ng new my-app", "npx create-react-app my-app", "npm init -y").',
+      '  2. Scaffolds the clean architecture folder structure using explicit mkdir commands — include folders like src/domain, src/application, src/infrastructure, src/presentation (or the equivalent for the tech stack). Use folder names that a junior developer can immediately understand without prior architecture knowledge. Just Scaffolds no code blocks or file changes.',
+      '  3. Installs all required dependencies with the package manager install command (include the exact version for every package, e.g. npm install express@4.18.2). Also provide the full dependency block as a ready-to-paste snippet in the format native to the tech stack — every entry must include its pinned version number: for Node.js write the "dependencies" and "devDependencies" JSON blocks (e.g. "express": "4.18.2") to copy into package.json; for Flutter/Dart write the "dependencies" and "dev_dependencies" YAML block (e.g. http: ^1.2.0) to copy into pubspec.yaml; for .NET write the <PackageReference> XML lines with Version attribute to copy into the .csproj file; for Python write the requirements.txt lines (e.g. flask==3.0.2) or the [tool.poetry.dependencies] TOML block. For each snippet clearly state the exact file name and the section/line where it must be pasted.',
+      '  4. Sets up environment variables — provide the path where to create the env file. And values need to included in it. And guide where to include the env variables in the file.',
+      '  5. Runs the layer locally with the start/serve command.',
+      '  6. Sets up any external dependent services or libraries the layer relies on (e.g. Firebase, Supabase, Auth0, Stripe)',
+      'Keep the language plain and explicit — assume the reader has never set up this type of project before.',
+      '',
+      'Return ONLY a valid JSON array — no markdown, no explanation, nothing else.',
+      'Format: [{"name":"layer_a","description":"Description of layer_a","setup_instructions":"1. Step one\\n2. Step two\\n3. Step three"},{"name":"layer_b","description":"Description of layer_b","setup_instructions":"1. Step one\\n2. Step two"}]',
+      '',
+      '--- PROJECT DOCUMENTS ---',
+      docsText,
+    ].join('\n');
+  }
+
+  // ----------------------------------------------------------------
+  // Generate Layers — modal with document list + editable prompt
   // ----------------------------------------------------------------
   _openGenerateModal() {
     const overlay = document.createElement('div');
@@ -547,8 +735,20 @@ export class ProjectLayersPage {
           <button class="pl-modal__close" id="plModalClose">✕</button>
         </div>
         <div class="pl-modal__body">
-          <p class="pl-modal__hint">Select one or more documents. AI will analyse them and suggest the architectural layers (sub-projects) needed.</p>
-          <div class="pl-modal-docs-list">${docsHtml}</div>
+          <div class="pl-modal-section">
+            <div class="pl-modal-section-label">Documents</div>
+            <p class="pl-modal__hint">Select one or more documents. AI will analyse them and suggest the architectural layers (sub-projects) needed.</p>
+            <div class="pl-modal-docs-list">${docsHtml}</div>
+          </div>
+          <div class="pl-modal-section">
+            <div class="pl-modal-section-label">
+              Prompt
+              <span class="pl-modal-section-hint">Editable — select documents to populate</span>
+            </div>
+            <textarea class="pl-modal-prompt-textarea" id="plModalPrompt"
+              placeholder="Select documents above to build the prompt…"
+              spellcheck="false"></textarea>
+          </div>
           <div class="pl-modal__status" id="plModalStatus" style="display:none;"></div>
         </div>
         <div class="pl-modal__footer">
@@ -569,6 +769,12 @@ export class ProjectLayersPage {
     const selectedIds = new Set();
     let generating    = false;
 
+    const updatePrompt = () => {
+      const selectedDocs = this._documents.filter(d => selectedIds.has(d.id));
+      const ta = overlay.querySelector('#plModalPrompt');
+      if (ta) ta.value = selectedDocs.length > 0 ? this._buildGenerateLayersPrompt(selectedDocs) : '';
+    };
+
     // Document toggles
     overlay.querySelectorAll('.pl-modal-doc-item').forEach(item => {
       item.addEventListener('click', () => {
@@ -585,6 +791,7 @@ export class ProjectLayersPage {
           item.querySelector('.pl-check-off').style.display = 'none';
           item.querySelector('.pl-check-on').style.display  = '';
         }
+        updatePrompt();
       });
     });
 
@@ -614,6 +821,12 @@ export class ProjectLayersPage {
         return;
       }
 
+      const prompt = overlay.querySelector('#plModalPrompt')?.value?.trim();
+      if (!prompt) {
+        this._setModalStatus(overlay, 'warning', 'Prompt is empty — select a document first.');
+        return;
+      }
+
       generating = true;
       const generateBtn = overlay.querySelector('#plModalGenerateBtn');
       const cancelBtn   = overlay.querySelector('#plModalCancel');
@@ -629,33 +842,7 @@ export class ProjectLayersPage {
       cancelBtn.textContent = 'Cancel';
       this._setModalStatus(overlay, 'running', 'Analysing documents…');
 
-      // Fetch document content
-      const docs     = await Promise.all([...selectedIds].map(id => window.db.documents.get(id)));
-      const docsText = docs.filter(Boolean)
-        .map(d => `### ${d.title}\n\n${(d.content || '').trim() || '(no content)'}`)
-        .join('\n\n---\n\n');
-
       const existingNames = new Set(this._layers.map(l => l.name.toLowerCase().trim()));
-
-      const prompt = [
-        'You are a software architect. Based on the following project documentation, produce the architectural layer entries for this system.',
-        '',
-        '🔒 STRICT RULE — you MUST follow this exactly:',
-        'The project documentation contains a System Structure YAML block with a "layers:" section. Each item under "layers:" has a "name:" field.',
-        'Step 1 — Read the YAML and count how many "- name:" entries exist under the "layers:" key.',
-        'Step 2 — Use ONLY those names, in the order they appear, as the "name" field in your JSON output.',
-        'Step 3 — Do NOT invent additional layers, merge layers, rename layers, or omit any layer. The number of JSON objects you return must equal the number of "- name:" entries in the YAML.',
-        'Use each name EXACTLY as written in the YAML (same casing, same underscores/spaces).',
-        'Example: if the YAML has 3 entries named "layer_a", "layer_b", "layer_c" — your JSON must have exactly 3 objects with those exact names.',
-        '',
-        'For each layer provide "setup_instructions": a concise, step-by-step guide that starts with the project creation/scaffolding command for that technology (e.g. "dotnet new webapi -n MyApi", "ng new my-app", "npx create-react-app my-app", "npm init"), then covers prerequisites, dependency installation commands, environment variable setup, and how to run the layer locally.',
-        '',
-        'Return ONLY a valid JSON array — no markdown, no explanation, nothing else.',
-        'Format: [{"name":"layer_a","description":"Description of layer_a","setup_instructions":"1. Step one\\n2. Step two\\n3. Step three"},{"name":"layer_b","description":"Description of layer_b","setup_instructions":"1. Step one\\n2. Step two"}]',
-        '',
-        '--- PROJECT DOCUMENTS ---',
-        docsText,
-      ].join('\n');
 
       let accumulated = '';
       window.app.chat.offAll();
@@ -669,7 +856,6 @@ export class ProjectLayersPage {
       window.app.chat.onDone(async ({ raw }) => {
         window.app.chat.offAll();
 
-        // `error` is always set for non-HTML responses — use `raw` directly
         const responseText = raw || accumulated;
 
         if (!responseText?.trim()) {

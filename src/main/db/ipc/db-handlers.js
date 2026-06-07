@@ -95,11 +95,11 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM workflows WHERE id = ?').get(id);
   });
 
-  safeHandle('db:workflows:create', (_e, { project_id, workflow_id, feature, description, screen_design_id }) => {
+  safeHandle('db:workflows:create', (_e, { project_id, workflow_id, feature, description, screen_design_id, workflow_type }) => {
     const wfId = workflow_id || require('crypto').randomUUID();
     const result = db.prepare(
-      'INSERT INTO workflows (project_id, workflow_id, feature, description, screen_design_id) VALUES (?, ?, ?, ?, ?)'
-    ).run(project_id, wfId, feature, description ?? null, screen_design_id ?? null);
+      'INSERT INTO workflows (project_id, workflow_id, feature, description, screen_design_id, workflow_type) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(project_id, wfId, feature, description ?? null, screen_design_id ?? null, workflow_type ?? 'feature');
     return db.prepare('SELECT * FROM workflows WHERE id = ?').get(result.lastInsertRowid);
   });
 
@@ -302,6 +302,32 @@ function registerDbHandlers() {
 
   safeHandle('db:screen_prompt_history:deleteAll', (_e, { project_id, screen_design_id }) => {
     db.prepare('UPDATE screen_prompt_history SET is_active = 0 WHERE project_id = ? AND screen_design_id = ?').run(project_id, screen_design_id);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
+  // workflow_layer_prompt_history
+  // ----------------------------------------------------------------
+  safeHandle('db:workflow_layer_prompt_history:list', (_e, { project_id, layer_id }) => {
+    return db
+      .prepare('SELECT * FROM workflow_layer_prompt_history WHERE project_id = ? AND layer_id = ? AND is_active = 1 ORDER BY executed_at DESC LIMIT 20')
+      .all(project_id, layer_id);
+  });
+
+  safeHandle('db:workflow_layer_prompt_history:create', (_e, { project_id, layer_id, prompt }) => {
+    const result = db
+      .prepare('INSERT INTO workflow_layer_prompt_history (project_id, layer_id, prompt) VALUES (?, ?, ?)')
+      .run(project_id, layer_id, prompt);
+    return db.prepare('SELECT * FROM workflow_layer_prompt_history WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  safeHandle('db:workflow_layer_prompt_history:delete', (_e, id) => {
+    db.prepare('UPDATE workflow_layer_prompt_history SET is_active = 0 WHERE id = ?').run(id);
+    return { success: true };
+  });
+
+  safeHandle('db:workflow_layer_prompt_history:deleteAll', (_e, { project_id, layer_id }) => {
+    db.prepare('UPDATE workflow_layer_prompt_history SET is_active = 0 WHERE project_id = ? AND layer_id = ?').run(project_id, layer_id);
     return { success: true };
   });
 
@@ -765,6 +791,12 @@ function registerDbHandlers() {
   safeHandle('db:screen_designs:delete', (_e, id) => {
     db.prepare('UPDATE screen_designs SET is_active = 0 WHERE id = ?').run(id);
     return { success: true };
+  });
+
+  safeHandle('db:screen_designs:setDartFilePath', (_e, { id, dart_file_path }) => {
+    db.prepare(`UPDATE screen_designs SET dart_file_path = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(dart_file_path ?? null, id);
+    return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
   });
 
   // ----------------------------------------------------------------

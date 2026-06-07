@@ -1,10 +1,23 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme }   from '../../shared/theme-manager.js';
 
-const PROMPT_TEMPLATE = (screenSection, docsSection) => `You are an AI architect generating implementation workflows for AI-assisted development.
+// ── Helper: derive a conventional Dart file path from a screen title ─────────
+function toDartPath(screenTitle) {
+  const slug = (screenTitle || 'screen')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+  return `lib/features/${slug}/presentation/pages/${slug}_page.dart`;
+}
 
-A workflow represents ONE feature implemented end-to-end across all relevant system layers.
-Each workflow layer gets its own prompt that will be passed to an AI code generator.
+// ── Combined Prompt: UI Shell + All Feature Workflows in one pass ─────────────
+// Generates everything for a screen in a single LLM call:
+//   Workflow 1 (type "ui_shell"): HTML → static Dart page, no backend
+//   Workflows 2+ (type "feature"): one per discrete feature, backend + Wire Up
+const FULL_WORKFLOWS_PROMPT_TEMPLATE = (screenSection, docsSection) => `You are an AI architect and Senior Flutter/backend developer generating a COMPLETE set of implementation workflows for AI-assisted development.
+
+You will output ALL workflows for this screen in ONE response — the UI Shell first, then one workflow per feature.
 
 ## Inputs you are given:
 - UI/UX mockup (HTML) — shows the screens and interactions
@@ -15,36 +28,143 @@ ${screenSection}
 
 ${docsSection}
 
-## Your output format (JSON):
+════════════════════════════════════════════════════════════════
+⚠ CRITICAL — Layer Prompt Size Rule (read before writing any prompt field)
+════════════════════════════════════════════════════════════════
+Every layer "prompt" field MUST be 200 words or fewer.
+Write WHAT to build and WHICH files to touch — do NOT embed Dart code, class bodies,
+method implementations, numbered step-by-step code, or import statements.
+The executing AI writes the code itself. Your job is to describe the contract and intent clearly.
+Violating this rule causes the JSON to exceed the output limit and fail to parse.
+
+════════════════════════════════════════════════════════════════
+WORKFLOW 1 — UI Shell  (workflow_type: "ui_shell")
+════════════════════════════════════════════════════════════════
+- ALWAYS the first workflow in the output array
+- Exactly ONE layer named "UI"
+- Converts the HTML mockup to a complete static Flutter page
+- No state management, no backend connections, no real data
+- Every interactive element: onPressed: () {} with a // TODO: wire-{action-name} comment
+
+Dart file path convention (used by this layer AND all Wire Up layers below):
+  lib/features/{snake_case_screen_name}/presentation/pages/{snake_case_screen_name}_page.dart
+
+════════════════════════════════════════════════════════════════
+WORKFLOWS 2+ — Feature Workflows  (workflow_type: "feature")
+════════════════════════════════════════════════════════════════
+- One workflow per discrete feature visible in the mockup
+- NO UI generation layer — the Dart page is created by Workflow 1
+- Layers ordered by dependency: Data Model → Repository → State Management → Wire Up
+- LAST layer of every feature workflow MUST be "Wire Up"
+
+## Your output format (JSON array — all workflows together):
 
 \`\`\`json
-[{
-  "workflow_id": "kebab-case-feature-name",
-  "feature": "Human readable feature name",
-  "screenId": "id for the selected screen",
-  "description": "What this feature does in one sentence",
-  "success_criteria": ["observable outcome 1", "observable outcome 2"],
-  "layers": [
-    {
-      "layer": "layer name from manifest",
-      "order": 1,
-      "purpose": "what this layer does for this feature",
-      "inputs": ["what it receives — from prior layer or user"],
-      "outputs": ["what it produces — schema or contract"],
-      "prompt": "Full AI codegen prompt for this layer. Must reference concrete inputs/outputs. Must be self-contained enough for an AI generator to act on without reading other layers."
-    }
-  ]
-}]
+[
+  {
+    "workflow_id": "ui-shell-{kebab-screen-name}",
+    "workflow_type": "ui_shell",
+    "feature": "{Screen Name} — UI Shell",
+    "screenId": "{screen id}",
+    "description": "Convert the HTML mockup to a complete static Flutter page with placeholder interactions",
+    "success_criteria": [
+      "Dart file created at lib/features/{name}/presentation/pages/{name}_page.dart",
+      "Page compiles with no errors",
+      "All UI elements from the mockup are present",
+      "Route is registered in the app router"
+    ],
+    "layers": [
+      {
+        "layer": "UI",
+        "order": 1,
+        "purpose": "Convert HTML mockup to a complete static Flutter Dart page",
+        "inputs": ["HTML screen design", "project folder structure"],
+        "outputs": ["lib/features/{name}/presentation/pages/{name}_page.dart"],
+        "prompt": "Short descriptive prompt — no code. Max 200 words."
+      }
+    ]
+  },
+  {
+    "workflow_id": "kebab-feature-name",
+    "workflow_type": "feature",
+    "feature": "Human readable feature name",
+    "screenId": "{screen id}",
+    "description": "What this feature does end-to-end",
+    "success_criteria": ["testable outcome 1", "testable outcome 2"],
+    "layers": [
+      {
+        "layer": "layer name from manifest",
+        "order": 1,
+        "purpose": "...",
+        "inputs": ["exact file paths from prior layers"],
+        "outputs": ["exact file paths this layer creates or modifies"],
+        "prompt": "Short descriptive prompt — no code. Max 200 words."
+      }
+    ]
+  }
+]
 \`\`\`
 
-## Rules:
-- Order layers by dependency (DB schema before service, service before gateway, gateway before UI)
-- Only include layers the feature actually touches
-- Each layer's prompt must cite the outputs of the previous layer explicitly
+## Global Rules:
+- First item in the array MUST be the UI Shell workflow (workflow_type: "ui_shell")
+- All remaining items are feature workflows (workflow_type: "feature")
+- One feature workflow per discrete feature — if the mockup has three independent features, output three feature workflows
 - success_criteria must be testable — no vague statements like "works correctly"
-- Extract the API contract (routes, request/response shapes) from the UI interactions shown in the mockup
-- One workflow per discrete feature — if the mockup shows two independent features, output two workflows
-- Do not create unit tests or e2e tests. This will be generated in separate process`;
+- Do not create unit tests or e2e tests — these are generated in a separate process
+- Output the complete JSON array in one block — do not split into multiple blocks or add prose between workflows
+
+════════════════════════════════
+UI Shell Layer Prompt Rules
+════════════════════════════════
+The prompt field for the UI layer must:
+- Begin with: "Understand the project structure first and then implement the changes"
+- State the exact target file path using the convention above
+- Instruct the executing AI to use the linked HTML screen design as the visual reference —
+  do NOT re-describe colors, padding, fonts, or widget layout in this prompt;
+  the HTML is automatically provided to the executing AI at runtime
+- List the names of every interactive element and the // TODO: wire-{action-name} comment
+  that must be placed on each one (e.g. "Google Sign-In button → // TODO: wire-google-sign-in")
+- State the route path and that it must be registered in the app router
+- End with: run the build command and fix all compile errors before completing
+- Stay within 150 words — the HTML reference covers all visual detail
+
+════════════════════════════════
+Wire Up Layer Prompt Rules
+════════════════════════════════
+The prompt field for Wire Up must:
+- Begin with: "Understand the project structure first and then implement the changes"
+- Name the exact Dart page file to modify (the UI Shell output)
+- Name the state class to import (BLoC / Cubit / Provider / Riverpod notifier) and its source file
+- List each // TODO: wire-{action} comment to replace, and the state event/method to call instead
+- Specify how to handle loading, error, and success states (widget or navigation)
+- State: do NOT change layout, colors, padding, or widget structure
+- End with: run the build command and fix all compile errors
+- Stay within 200 words — no code blocks, no full method bodies
+
+════════════════════════════════
+Backend & Data Layer Prompt Rules
+════════════════════════════════
+The prompt field for each backend layer must:
+- Begin with: "Understand the project structure first and then implement the changes"
+- Name the exact files to create or modify
+- Describe the Dart model class: field names, Dart types, serialization approach (json_serializable / freezed / manual)
+- Describe the repository interface: method signatures as text (e.g. "Future<AppUser> signInWithGoogle()")
+- State the storage contract: Firestore collection path + field names, or REST endpoint + shape, or local DB schema
+- State the error/result type to use — derive from the architecture overview
+- State how to register in DI (get_it / Riverpod / BLoC provider) if creating a new service
+- Stay within 200 words — no code blocks
+
+════════════════════════════════
+Implementation Rules  (all layers)
+════════════════════════════════
+- Every layer prompt MUST begin with: "Understand the project structure first and then implement the changes"
+- inputs array: list the exact file paths from prior layers this layer depends on
+- outputs array: list the exact file paths this layer creates or modifies
+- Always add a final "Integration Build & Fix" layer as the LAST layer of every feature workflow:
+  describe (in ≤200 words) running flutter pub get, build_runner, flutter analyze, and flutter build;
+  list specific things to check (missing DI registrations, unresolved imports, env config);
+  do not change feature behaviour`;
+
 
 function extractTextPreview(html) {
   if (!html) return '';
@@ -81,21 +201,48 @@ function parseWorkflowJson(text) {
     return null;
   };
 
-  // Try fenced code block first — but only accept if parse succeeds.
-  // When prompts contain nested ```lang blocks inside JSON strings the non-greedy
-  // regex stops at the first inner fence and produces truncated, invalid JSON.
+  // ── Pass 1: single fenced ```json block (happy path) ────────────────────────
+  // Non-greedy match — only works when there are no nested fences inside strings.
   const fenced = clean.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenced) {
     const result = tryParse(fenced[1].trim());
     if (result) return result;
   }
 
-  // Fallback: outermost [ ... ] — unaffected by nested backtick fences
+  // ── Pass 2: outermost [ ... ] (single contiguous block) ─────────────────────
   const start = clean.indexOf('[');
   const end   = clean.lastIndexOf(']');
   if (start >= 0 && end > start) {
-    return tryParse(clean.slice(start, end + 1));
+    const result = tryParse(clean.slice(start, end + 1));
+    if (result) return result;
   }
+
+  // ── Pass 3: LLM split into multiple ```json blocks — collect all complete
+  //    workflow objects { "feature": ... } and reassemble into one array ────────
+  const objects = [];
+  const blockRe = /```(?:json)?\s*\n?([\s\S]*?)\n?```/g;
+  let m;
+  while ((m = blockRe.exec(clean)) !== null) {
+    const fragment = m[1].trim();
+    // Each block may be a full array, a single object, or a partial object/array.
+    // Try full array first, then wrap as array.
+    const asArray = tryParse(fragment);
+    if (asArray) { objects.push(...asArray); continue; }
+    const asObj = (() => {
+      try {
+        // Find outermost { ... } in the fragment
+        const os = fragment.indexOf('{');
+        const oe = fragment.lastIndexOf('}');
+        if (os >= 0 && oe > os) {
+          const parsed = JSON.parse(fragment.slice(os, oe + 1));
+          if (parsed && typeof parsed.feature === 'string') return parsed;
+        }
+      } catch (_) {}
+      return null;
+    })();
+    if (asObj) objects.push(asObj);
+  }
+  if (objects.length > 0) return objects;
 
   return null;
 }
@@ -413,10 +560,16 @@ export class GenerateWorkflowsPage {
     let screenSection = '';
     let docsSection   = '';
 
+    // Strip HTML tags/styles/scripts down to readable text for the generation phase.
+    // The full HTML is not needed here — the LLM only needs to identify features,
+    // field names, and interactions to plan workflows. Full HTML is injected by the
+    // runner at execution time for the UI Shell layer.
+    const screenText = extractTextPreview(screen.html_content || '');
+
     if (isCli) {
-      // Write content to temp files; embed file paths in prompt
+      // Write stripped text (not raw HTML) to temp file — smaller file, fewer tokens
       const files = [
-        { name: `screen-${screen.id}.html`, content: screen.html_content || '' },
+        { name: `screen-${screen.id}.txt`, content: screenText || '(no screen content)' },
         ...selectedDocs.map(d => ({ name: `doc-${d.id}-${d.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)}.txt`, content: d.content || '' })),
       ];
       const paths = await window.app.writeTempFiles(files);
@@ -429,8 +582,8 @@ export class GenerateWorkflowsPage {
         docsSection = `## Documents:\n(none selected)`;
       }
     } else {
-      // Embed content directly
-      screenSection = `## UI/UX Mockup (Screen: "${screen.title}"):\n${screen.html_content || '(no HTML content)'}`;
+      // Embed stripped text directly — not raw HTML
+      screenSection = `## UI/UX Mockup (Screen: "${screen.title}"):\n${screenText || '(no screen content)'}`;
       if (selectedDocs.length > 0) {
         const docLines = selectedDocs.map(d => `### ${d.title}\n${d.content || '(empty)'}`).join('\n\n');
         docsSection = `## Documents:\n${docLines}`;
@@ -439,7 +592,7 @@ export class GenerateWorkflowsPage {
       }
     }
 
-    const prompt = PROMPT_TEMPLATE(screenSection, docsSection);
+    const prompt = FULL_WORKFLOWS_PROMPT_TEMPLATE(screenSection, docsSection);
     textarea.value = prompt;
   }
 
@@ -567,15 +720,32 @@ export class GenerateWorkflowsPage {
 
     let added = 0;
     const errors = [];
+    // Derive the conventional dart file path for this screen (used to store on UI Shell approval)
+    const selectedScreen   = this._screens.find(s => s.id === this._selectedScreenId);
+    const derivedDartPath  = selectedScreen ? toDartPath(selectedScreen.title) : null;
 
     for (const w of this._parsedWorkflows) {
       try {
+        const workflowType = w.workflow_type === 'ui_shell' ? 'ui_shell' : 'feature';
         const wf = await window.db.workflows.create({
           project_id:       this._projectId,
           feature:          w.feature || 'Untitled',
           description:      w.description || null,
           screen_design_id: this._selectedScreenId,
+          workflow_type:    workflowType,
         });
+
+        // For the UI Shell workflow: save the dart_file_path to the screen design record
+        // so the workflow runner knows to reference it for subsequent feature workflows.
+        if (workflowType === 'ui_shell' && this._selectedScreenId && derivedDartPath) {
+          try {
+            await window.db.screenDesigns.setDartFilePath({
+              id:             this._selectedScreenId,
+              dart_file_path: derivedDartPath,
+            });
+            if (selectedScreen) selectedScreen.dart_file_path = derivedDartPath;
+          } catch (_) { /* non-fatal */ }
+        }
 
         const criteria = Array.isArray(w.success_criteria) ? w.success_criteria : [];
         for (const c of criteria) {

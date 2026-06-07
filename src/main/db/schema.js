@@ -20,6 +20,10 @@ function applySchema(db) {
     // Status tracking for workflow layers and workflows
     `ALTER TABLE layers    ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
     `ALTER TABLE workflows ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
+    // Dart file path generated from the UI Shell workflow
+    `ALTER TABLE screen_designs ADD COLUMN dart_file_path TEXT`,
+    // Workflow type: 'ui_shell' | 'feature'
+    `ALTER TABLE workflows ADD COLUMN workflow_type TEXT NOT NULL DEFAULT 'feature'`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -60,6 +64,7 @@ function applySchema(db) {
       feature          TEXT    NOT NULL,
       description      TEXT,
       screen_design_id INTEGER REFERENCES screen_designs(id) ON DELETE SET NULL,
+      workflow_type    TEXT    NOT NULL DEFAULT 'feature',
       is_active        INTEGER NOT NULL DEFAULT 1,
       created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -184,6 +189,18 @@ function applySchema(db) {
       prompt            TEXT    NOT NULL,
       is_active         INTEGER NOT NULL DEFAULT 1,
       executed_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
+    -- WORKFLOW LAYER PROMPT HISTORY
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS workflow_layer_prompt_history (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      layer_id    INTEGER REFERENCES layers(id) ON DELETE CASCADE,
+      prompt      TEXT    NOT NULL,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      executed_at TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
     -- ----------------------------------------------------------------

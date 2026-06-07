@@ -1,6 +1,6 @@
 'use strict';
 
-const { ipcMain }          = require('electron');
+const { ipcMain, BrowserWindow, app } = require('electron');
 const { safeHandle }       = require('../../ipc-safe-handle');
 const { spawn, execSync }  = require('child_process');
 const http                 = require('node:http');
@@ -53,12 +53,13 @@ function createCtx() {
   return { proc: null, req: null, cancelled: false };
 }
 
-const _mainCtx     = createCtx();
-const _queueCtx    = createCtx();
-const _validateCtx = createCtx();
-const _workflowCtx = createCtx();
-const _genWfCtx    = createCtx();
-const _testGenCtx  = createCtx();
+const _mainCtx       = createCtx();
+const _queueCtx      = createCtx();
+const _validateCtx   = createCtx();
+const _workflowCtx   = createCtx();
+const _genWfCtx      = createCtx();
+const _testGenCtx    = createCtx();
+const _wfAiEditCtx   = createCtx();
 
 function _logAiCall(type, modelName, exe, promptOrMessages) {
   const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -90,8 +91,20 @@ function killCtx(ctx) {
   }
 }
 
+const _SUBWIN_DONE = new Set(['queueChat:done', 'workflowChat:done', 'genWorkflowChat:done', 'testGenChat:done']);
+
+function _flashWin(wc) {
+  const win = BrowserWindow.fromWebContents(wc);
+  if (!win || win.isFocused()) return;
+  win.flashFrame(true);
+  if (process.platform === 'darwin') app.dock.bounce('informational');
+}
+
 function send(wc, ch, payload) {
-  if (!wc.isDestroyed()) wc.send(ch, payload);
+  if (!wc.isDestroyed()) {
+    wc.send(ch, payload);
+    if (_SUBWIN_DONE.has(ch)) _flashWin(wc);
+  }
 }
 
 function stripAnsi(str) {
@@ -182,7 +195,7 @@ function applyPatches(html, patches) {
 // Anthropic SSE streaming
 // ctx controls subprocess lifetime; tokenCh/doneCh are the IPC channels.
 // ----------------------------------------------------------------
-function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode) {
+function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode, systemPrompt) {
   _logAiCall('anthropic', model.model_name || 'claude-sonnet-4-6', null, messages || prompt);
   let msgs;
   if (editPayload) {
@@ -194,12 +207,20 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
     msgs = [{ role: 'user', content: prompt }];
   }
 
-  const body = JSON.stringify({
+  // Cache the stable system context (layer prompt / screen design) so repeated
+  // calls within a run only pay ~10% of those input tokens on cache hits.
+  const systemArr = systemPrompt
+    ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+    : undefined;
+
+  const bodyObj = {
     model:      model.model_name || 'claude-sonnet-4-6',
     max_tokens: model.max_tokens || 8096,
     stream:     true,
     messages:   msgs,
-  });
+  };
+  if (systemArr) bodyObj.system = systemArr;
+  const body = JSON.stringify(bodyObj);
 
   let finished = false;
   const finish = (result) => {
@@ -214,10 +235,11 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
     path:     '/v1/messages',
     method:   'POST',
     headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         model.api_key || '',
-      'anthropic-version': '2023-06-01',
-      'Content-Length':    Buffer.byteLength(body),
+      'Content-Type':        'application/json',
+      'x-api-key':           model.api_key || '',
+      'anthropic-version':   '2023-06-01',
+      'anthropic-beta':      'prompt-caching-2024-07-31',
+      'Content-Length':      Buffer.byteLength(body),
     },
   }, (res) => {
     let accumulated = '';
@@ -555,9 +577,9 @@ function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
 // ----------------------------------------------------------------
 // Dispatch helper — picks the right backend
 // ----------------------------------------------------------------
-function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode) {
+function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode, systemPrompt) {
   if (model.type === 'anthropic') {
-    runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
+    runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode, systemPrompt);
   } else if (model.type === 'ollama') {
     runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
   } else if (model.type === 'api') {
@@ -626,10 +648,10 @@ function registerChatHandlers() {
   // --- Workflow runner window chat (workflowChat:*) — separate subprocess slot ---
   safeHandle('workflowChat:cancel', () => killCtx(_workflowCtx));
 
-  safeHandle('workflowChat:generate', (event, { prompt, model, cwd }) => {
+  safeHandle('workflowChat:generate', (event, { prompt, model, cwd, systemPrompt }) => {
     if (_workflowCtx.proc || _workflowCtx.req) killCtx(_workflowCtx);
     _workflowCtx.cancelled = false;
-    dispatch(event.sender, prompt, null, model, null, _workflowCtx, 'workflowChat:token', 'workflowChat:done', cwd, true);
+    dispatch(event.sender, prompt, null, model, null, _workflowCtx, 'workflowChat:token', 'workflowChat:done', cwd, true, systemPrompt);
     return { started: true };
   });
 
@@ -650,6 +672,16 @@ function registerChatHandlers() {
     if (_testGenCtx.proc || _testGenCtx.req) killCtx(_testGenCtx);
     _testGenCtx.cancelled = false;
     dispatch(event.sender, prompt, null, model, null, _testGenCtx, 'testGenChat:token', 'testGenChat:done', null, true);
+    return { started: true };
+  });
+
+  // --- Workflow AI Edit window chat (wfAiEditChat:*) — separate subprocess slot ---
+  safeHandle('wfAiEditChat:cancel', () => killCtx(_wfAiEditCtx));
+
+  safeHandle('wfAiEditChat:generate', (event, { prompt, model, cwd, systemPrompt }) => {
+    if (_wfAiEditCtx.proc || _wfAiEditCtx.req) killCtx(_wfAiEditCtx);
+    _wfAiEditCtx.cancelled = false;
+    dispatch(event.sender, prompt, null, model, null, _wfAiEditCtx, 'wfAiEditChat:token', 'wfAiEditChat:done', cwd, true, systemPrompt);
     return { started: true };
   });
 }
