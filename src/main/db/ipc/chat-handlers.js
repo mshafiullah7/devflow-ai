@@ -198,8 +198,10 @@ function applyPatches(html, patches) {
 function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode, systemPrompt) {
   _logAiCall('anthropic', model.model_name || 'claude-sonnet-4-6', null, messages || prompt);
   let msgs;
+  let isDiffMode = false;
   if (editPayload) {
-    const content = buildEditPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
+    isDiffMode = true;
+    const content = buildDiffPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
     msgs = [{ role: 'user', content }];
   } else if (messages && messages.length > 0) {
     msgs = messages;
@@ -243,6 +245,7 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
     },
   }, (res) => {
     let accumulated = '';
+    const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
     res.on('data', (chunk) => {
       for (const line of chunk.toString('utf8').split('\n')) {
         if (!line.startsWith('data: ')) continue;
@@ -250,16 +253,39 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
         if (raw === '[DONE]') continue;
         try {
           const data = JSON.parse(raw);
+          if (data.type === 'message_start') {
+            const u = data.message?.usage || {};
+            usage.input_tokens                = u.input_tokens                || 0;
+            usage.cache_read_input_tokens     = u.cache_read_input_tokens     || 0;
+            usage.cache_creation_input_tokens = u.cache_creation_input_tokens || 0;
+          }
+          if (data.type === 'message_delta') {
+            usage.output_tokens = data.usage?.output_tokens || 0;
+          }
           if (data.type === 'content_block_delta' && data.delta?.text) {
             accumulated += data.delta.text;
             send(wc, tokenCh, { text: data.delta.text });
           }
           if (data.type === 'message_stop') {
             if (rawMode) {
-              finish({ html: null, raw: accumulated, error: null });
+              finish({ html: null, raw: accumulated, usage, error: null });
+            } else if (isDiffMode) {
+              const patches = extractPatches(accumulated);
+              if (patches) {
+                try {
+                  const html = applyPatches(editPayload.htmlContent, patches);
+                  finish({ html, raw: accumulated, usage, error: null });
+                } catch (err) {
+                  const html = extractHtml(accumulated);
+                  finish({ html, raw: accumulated, usage, error: html ? null : `Patch failed (${err.message}) and no full HTML found` });
+                }
+              } else {
+                const html = extractHtml(accumulated);
+                finish({ html, raw: accumulated, usage, error: html ? null : 'No patches or HTML found in response' });
+              }
             } else {
               const html = extractHtml(accumulated);
-              finish({ html, raw: accumulated, error: html ? null : 'Could not extract HTML from response' });
+              finish({ html, raw: accumulated, usage, error: html ? null : 'Could not extract HTML from response' });
             }
           }
         } catch (_) {}
@@ -617,10 +643,10 @@ function registerChatHandlers() {
   // --- Main window chat (chat:*) ---
   safeHandle('chat:cancel', () => killCtx(_mainCtx));
 
-  safeHandle('chat:generate', (event, { prompt, messages, editPayload, model, cwd }) => {
+  safeHandle('chat:generate', (event, { prompt, messages, editPayload, model, cwd, rawMode }) => {
     if (_mainCtx.proc || _mainCtx.req) killCtx(_mainCtx);
     _mainCtx.cancelled = false;
-    dispatch(event.sender, prompt, editPayload, model, messages, _mainCtx, 'chat:token', 'chat:done', cwd);
+    dispatch(event.sender, prompt, editPayload, model, messages, _mainCtx, 'chat:token', 'chat:done', cwd, rawMode);
     return { started: true };
   });
 
@@ -661,7 +687,7 @@ function registerChatHandlers() {
   safeHandle('genWorkflowChat:generate', (event, { prompt, model }) => {
     if (_genWfCtx.proc || _genWfCtx.req) killCtx(_genWfCtx);
     _genWfCtx.cancelled = false;
-    dispatch(event.sender, prompt, null, model, null, _genWfCtx, 'genWorkflowChat:token', 'genWorkflowChat:done');
+    dispatch(event.sender, prompt, null, model, null, _genWfCtx, 'genWorkflowChat:token', 'genWorkflowChat:done', null, true);
     return { started: true };
   });
 

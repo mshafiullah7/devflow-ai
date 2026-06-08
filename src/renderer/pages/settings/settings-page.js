@@ -289,7 +289,7 @@ export class SettingsPage {
   async _renderModelMapping() {
     const main = this.container.querySelector('#stMainContent');
 
-    const PAGE_KEYS = ['mockups', 'documents', 'workflows', 'project-layers', 'issues', 'test-generator', 'test-runner', 'git-changes', 'ai-console'];
+    const PAGE_KEYS = ['mockups', 'documents', 'workflows', 'generate-workflows', 'project-layers', 'issues', 'test-generator', 'test-runner', 'git-changes', 'ai-console'];
 
     const [configs, ...mappings] = await Promise.all([
       window.db.modelConfigs.list(),
@@ -315,6 +315,7 @@ export class SettingsPage {
           { key: 'mockups',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,                                                                               name: 'Mockups' },
           { key: 'documents',       icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,                                                  name: 'Documents' },
           { key: 'workflows',       icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,                                                                name: 'Workflows' },
+          { key: 'generate-workflows', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>`, name: 'Generate Workflows' },
           { key: 'project-layers',   icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,                                       name: 'Layers' },
         ],
       },

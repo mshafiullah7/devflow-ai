@@ -456,6 +456,12 @@ export class ProjectLayersPage {
               </button>
               <span class="pl-exec-timer" id="plExecTimer" style="display:none;">0s</span>
             </div>
+            <p class="pl-exec-hint">
+              Sends the setup instructions above to the configured CLI tool (e.g. claude, gemini, aider)
+              running inside the selected project folder — the AI agent can read, write, and scaffold
+              files directly in your codebase.
+              Requires a <strong>CLI</strong> model and a <strong>project folder</strong> to be set.
+            </p>
             <div class="pl-exec-output" id="plExecOutput" style="display:none;"></div>
           </div>
 
@@ -853,8 +859,15 @@ export class ProjectLayersPage {
         if (statusEl) statusEl.textContent = `Generating… (${accumulated.length} chars)`;
       });
 
-      window.app.chat.onDone(async ({ raw }) => {
+      window.app.chat.onDone(async ({ raw, usage }) => {
         window.app.chat.offAll();
+
+        if (usage) {
+          const parts = [`in: ${(usage.input_tokens || 0).toLocaleString()}`, `out: ${(usage.output_tokens || 0).toLocaleString()}`];
+          if (usage.cache_read_input_tokens > 0) parts.push(`${usage.cache_read_input_tokens.toLocaleString()} cached`);
+          const statusEl = overlay.querySelector('#plModalStatusText');
+          if (statusEl) statusEl.textContent = parts.join(' · ');
+        }
 
         const responseText = raw || accumulated;
 
@@ -904,7 +917,7 @@ export class ProjectLayersPage {
         }
       });
 
-      window.app.chat.generate({ prompt, model: this._aiModelConfig });
+      window.app.chat.generate({ prompt, model: this._aiModelConfig, rawMode: true });
     });
   }
 

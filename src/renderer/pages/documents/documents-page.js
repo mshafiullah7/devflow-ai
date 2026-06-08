@@ -1065,6 +1065,9 @@ export class DocumentsPage {
       } else if (cfg.type === 'api') {
         const reply = await this._runAiAskApi(cfg, messages, aiMsgEl);
         if (reply) this._chatHistory.push({ role: 'user', content: userMessage }, { role: 'assistant', content: reply });
+      } else if (cfg.type === 'anthropic') {
+        const reply = await this._runAiAskAnthropic(cfg, contextParts.join('\n'), instruction, aiMsgEl);
+        if (reply) this._chatHistory.push({ role: 'user', content: instruction }, { role: 'assistant', content: reply });
       } else {
         await this._runAiAskCli(cfg, contextParts.join('\n'), tailParts.join('\n'), aiMsgEl);
       }
@@ -1094,6 +1097,7 @@ export class DocumentsPage {
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '', fullText = '';
+    const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -1106,10 +1110,15 @@ export class DocumentsPage {
           const data  = JSON.parse(line);
           const delta = data.message?.content || '';
           if (delta) { fullText += delta; this._updateChatMsg(aiMsgEl, fullText); }
+          if (data.done) {
+            usage.input_tokens  = data.prompt_eval_count || 0;
+            usage.output_tokens = data.eval_count        || 0;
+          }
         } catch { /* skip */ }
       }
     }
     if (!fullText.trim()) { this._updateChatMsg(aiMsgEl, 'No response from Ollama.', 'error'); return null; }
+    this._appendTokenUsage(aiMsgEl, usage);
     return fullText;
   }
 
@@ -1137,6 +1146,7 @@ export class DocumentsPage {
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '', fullText = '';
+    const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -1148,23 +1158,119 @@ export class DocumentsPage {
         const data = line.slice(6).trim();
         if (data === '[DONE]') continue;
         try {
-          const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+          const chunk = JSON.parse(data);
+          const delta = chunk.choices?.[0]?.delta?.content;
           if (delta) { fullText += delta; this._updateChatMsg(aiMsgEl, fullText); }
+          if (chunk.usage) {
+            usage.input_tokens  = chunk.usage.prompt_tokens     || 0;
+            usage.output_tokens = chunk.usage.completion_tokens || 0;
+          }
         } catch { /* skip */ }
       }
     }
     if (!fullText.trim()) { this._updateChatMsg(aiMsgEl, 'No response from model.', 'error'); return null; }
+    this._appendTokenUsage(aiMsgEl, usage);
     return fullText;
   }
 
-  _appendCliPromptPreview(shortPrompt) {
+  async _runAiAskAnthropic(cfg, systemContext, instruction, aiMsgEl) {
+    const apiKey = cfg.api_key || '';
+    if (!apiKey) { this._updateChatMsg(aiMsgEl, 'api_key not configured for this Anthropic model.', 'error'); return null; }
+
+    // Document context in system with cache_control — large enough to cross the 2048-token cache threshold
+    const systemArr = [{ type: 'text', text: systemContext, cache_control: { type: 'ephemeral' } }];
+    const messages  = [...this._chatHistory, { role: 'user', content: instruction }];
+    const body = JSON.stringify({
+      model:      cfg.model_name || 'claude-haiku-4-5',
+      max_tokens: cfg.max_tokens || 8096,
+      stream:     true,
+      system:     systemArr,
+      messages,
+    });
+
+    let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:  'POST',
+        headers: {
+          'Content-Type':      'application/json',
+          'x-api-key':         apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta':    'prompt-caching-2024-07-31',
+        },
+        body,
+      });
+    } catch (err) {
+      this._updateChatMsg(aiMsgEl, `Request failed: ${err.message}`, 'error');
+      return null;
+    }
+
+    if (!res.ok) {
+      this._updateChatMsg(aiMsgEl, `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`, 'error');
+      return null;
+    }
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', fullText = '';
+    const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(data);
+          if (chunk.type === 'message_start') {
+            const u = chunk.message?.usage || {};
+            usage.input_tokens              = u.input_tokens              || 0;
+            usage.cache_read_input_tokens   = u.cache_read_input_tokens   || 0;
+            usage.cache_creation_input_tokens = u.cache_creation_input_tokens || 0;
+          }
+          if (chunk.type === 'message_delta') {
+            usage.output_tokens = chunk.usage?.output_tokens || 0;
+          }
+          if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+            fullText += chunk.delta.text;
+            this._updateChatMsg(aiMsgEl, fullText);
+          }
+        } catch { /* skip malformed SSE chunk */ }
+      }
+    }
+
+    if (!fullText.trim()) { this._updateChatMsg(aiMsgEl, 'No response from Anthropic.', 'error'); return null; }
+    this._appendTokenUsage(aiMsgEl, usage);
+    return fullText;
+  }
+
+  _appendTokenUsage(msgEl, usage) {
+    if (!msgEl || !usage) return;
+    const { input_tokens = 0, output_tokens = 0, cache_read_input_tokens = 0, cache_creation_input_tokens = 0 } = usage;
+    const parts = [
+      `in: ${input_tokens.toLocaleString()}`,
+      `out: ${output_tokens.toLocaleString()}`,
+    ];
+    if (cache_read_input_tokens > 0)     parts.push(`${cache_read_input_tokens.toLocaleString()} cached`);
+    if (cache_creation_input_tokens > 0) parts.push(`${cache_creation_input_tokens.toLocaleString()} cache write`);
+    const el = document.createElement('div');
+    el.className = 'doc-ai-msg__usage';
+    el.textContent = parts.join(' · ');
+    msgEl.insertAdjacentElement('afterend', el);
+  }
+
+  _appendCliPromptPreview(shortPrompt, label = 'Prompt sent to CLI') {
     const msgsEl = this.container.querySelector('#docAiMessages');
     if (!msgsEl) return;
     const el = document.createElement('div');
     el.className = 'doc-ai-msg doc-ai-msg--prompt-preview';
     el.innerHTML = `
       <details class="doc-ai-prompt-details">
-        <summary class="doc-ai-prompt-details__summary">Prompt sent to CLI</summary>
+        <summary class="doc-ai-prompt-details__summary">${escHtml(label)}</summary>
         <pre class="doc-ai-prompt-details__pre">${escHtml(shortPrompt)}</pre>
       </details>`;
     msgsEl.appendChild(el);
@@ -1288,6 +1394,8 @@ export class DocumentsPage {
         await this._runAiEditOllama(cfg, prompt, aiMsgEl, contentTA, prevContent);
       } else if (cfg.type === 'api') {
         await this._runAiEditApi(cfg, prompt, aiMsgEl, contentTA, prevContent);
+      } else if (cfg.type === 'anthropic') {
+        await this._runAiEditAnthropic(cfg, contextParts.join('\n'), tailParts.join('\n'), aiMsgEl, contentTA, prevContent);
       } else {
         await this._runAiEditCli(cfg, contextParts.join('\n'), tailParts.join('\n'), aiMsgEl, contentTA, prevContent);
       }
@@ -1344,6 +1452,7 @@ export class DocumentsPage {
     let buffer     = '';
     let fullText   = '';
     let charCount  = 0;
+    const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1361,6 +1470,10 @@ export class DocumentsPage {
             charCount += delta.length;
             this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
           }
+          if (data.done) {
+            usage.input_tokens  = data.prompt_eval_count || 0;
+            usage.output_tokens = data.eval_count        || 0;
+          }
         } catch { /* skip malformed NDJSON line */ }
       }
     }
@@ -1371,6 +1484,7 @@ export class DocumentsPage {
       if (activeDoc) activeDoc.content = fullText.trim();
       this._refreshPreviewIfActive();
       this._setChatMsgApplied(aiMsgEl, fullText, prevContent);
+      this._appendTokenUsage(aiMsgEl, usage);
     } else {
       this._updateChatMsg(aiMsgEl, 'No content returned by Ollama.', 'error');
     }
@@ -1408,6 +1522,7 @@ export class DocumentsPage {
     let buffer    = '';
     let fullText  = '';
     let charCount = 0;
+    const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1427,6 +1542,10 @@ export class DocumentsPage {
             charCount += delta.length;
             this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
           }
+          if (chunk.usage) {
+            usage.input_tokens  = chunk.usage.prompt_tokens     || 0;
+            usage.output_tokens = chunk.usage.completion_tokens || 0;
+          }
         } catch { /* skip malformed SSE chunk */ }
       }
     }
@@ -1437,8 +1556,100 @@ export class DocumentsPage {
       if (activeDoc) activeDoc.content = fullText.trim();
       this._refreshPreviewIfActive();
       this._setChatMsgApplied(aiMsgEl, fullText, prevContent);
+      this._appendTokenUsage(aiMsgEl, usage);
     } else {
       this._updateChatMsg(aiMsgEl, 'No content returned by model.', 'error');
+    }
+  }
+
+  async _runAiEditAnthropic(cfg, systemContext, instructionText, aiMsgEl, contentTA, prevContent) {
+    const apiKey = cfg.api_key || '';
+    if (!apiKey) {
+      this._updateChatMsg(aiMsgEl, 'api_key not configured for this Anthropic model.', 'error');
+      return;
+    }
+
+    this._appendCliPromptPreview(instructionText, `Prompt sent to Anthropic API  ·  ${cfg.model_name || 'claude-haiku-4-5'}`);
+
+    // Document context in system with cache_control — large enough to cross the 2048-token cache threshold
+    const systemArr = [{ type: 'text', text: systemContext, cache_control: { type: 'ephemeral' } }];
+    const body = JSON.stringify({
+      model:      cfg.model_name || 'claude-haiku-4-5',
+      max_tokens: cfg.max_tokens || 8096,
+      stream:     true,
+      system:     systemArr,
+      messages:   [{ role: 'user', content: instructionText }],
+    });
+
+    let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:  'POST',
+        headers: {
+          'Content-Type':      'application/json',
+          'x-api-key':         apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta':    'prompt-caching-2024-07-31',
+        },
+        body,
+      });
+    } catch (err) {
+      this._updateChatMsg(aiMsgEl, `Request failed: ${err.message}`, 'error');
+      return;
+    }
+
+    if (!res.ok) {
+      const errText = await res.text();
+      this._updateChatMsg(aiMsgEl, `HTTP ${res.status}: ${errText.slice(0, 200)}`, 'error');
+      return;
+    }
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer    = '';
+    let fullText  = '';
+    let charCount = 0;
+    const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(data);
+          if (chunk.type === 'message_start') {
+            const u = chunk.message?.usage || {};
+            usage.input_tokens                = u.input_tokens                || 0;
+            usage.cache_read_input_tokens     = u.cache_read_input_tokens     || 0;
+            usage.cache_creation_input_tokens = u.cache_creation_input_tokens || 0;
+          }
+          if (chunk.type === 'message_delta') {
+            usage.output_tokens = chunk.usage?.output_tokens || 0;
+          }
+          if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+            fullText  += chunk.delta.text;
+            charCount += chunk.delta.text.length;
+            this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
+          }
+        } catch { /* skip malformed SSE chunk */ }
+      }
+    }
+
+    if (fullText.trim()) {
+      if (contentTA) { contentTA.value = fullText.trim(); this._dirty = true; }
+      const activeDoc = this._docs.find(d => d.id === this._activeId);
+      if (activeDoc) activeDoc.content = fullText.trim();
+      this._refreshPreviewIfActive();
+      this._setChatMsgApplied(aiMsgEl, fullText, prevContent);
+      this._appendTokenUsage(aiMsgEl, usage);
+    } else {
+      this._updateChatMsg(aiMsgEl, 'No content returned by Anthropic.', 'error');
     }
   }
 

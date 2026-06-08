@@ -13,8 +13,8 @@ function openWorkflowWindow(data) {
   }
 
   _win = new BrowserWindow({
-    width:  860,
-    height: 640,
+    width:  1400,
+    height: 1050,
     title:  'Workflow Runner',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

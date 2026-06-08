@@ -1542,6 +1542,14 @@
   color: var(--text-secondary);
 }
 
+.doc-ai-msg__usage {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  padding: 1px 4px 5px 4px;
+  opacity: 0.65;
+  letter-spacing: 0.01em;
+}
+
 /* Compose area */
 .doc-ai-card__compose {
   flex-shrink: 0;

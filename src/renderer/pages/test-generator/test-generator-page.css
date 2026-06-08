@@ -136,6 +136,37 @@
   opacity: .3;
 }
 
+/* ── Tabs ────────────────────────────────────────────────────── */
+.tg-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.tg-tab {
+  padding: 8px 18px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color .15s, border-color .15s;
+}
+
+.tg-tab:hover {
+  color: var(--text-primary);
+}
+
+.tg-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
 /* ── Section ─────────────────────────────────────────────────── */
 .tg-section {
   margin-bottom: 36px;

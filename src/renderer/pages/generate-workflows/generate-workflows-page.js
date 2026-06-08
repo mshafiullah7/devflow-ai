@@ -1,5 +1,6 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme }   from '../../shared/theme-manager.js';
+import { ModelPicker }        from '../../components/model-picker/model-picker.js';
 
 // ── Helper: derive a conventional Dart file path from a screen title ─────────
 function toDartPath(screenTitle) {
@@ -13,51 +14,88 @@ function toDartPath(screenTitle) {
 
 // ── Combined Prompt: UI Shell + All Feature Workflows in one pass ─────────────
 // Generates everything for a screen in a single LLM call:
-//   Workflow 1 (type "ui_shell"): HTML → static Dart page, no backend
+//   Workflow 1 (type "ui_shell"): static Dart page, no backend
 //   Workflows 2+ (type "feature"): one per discrete feature, backend + Wire Up
-const FULL_WORKFLOWS_PROMPT_TEMPLATE = (screenSection, docsSection) => `You are an AI architect and Senior Flutter/backend developer generating a COMPLETE set of implementation workflows for AI-assisted development.
+const FULL_WORKFLOWS_PROMPT_TEMPLATE = (screenSection, docsSection, layersSection) => `You are an AI architect and Senior Flutter/backend developer generating a COMPLETE set of implementation workflows for AI-assisted development.
 
-You will output ALL workflows for this screen in ONE response — the UI Shell first, then one workflow per feature.
+Output ALL workflows for this screen in ONE response — the UI Shell first, then one workflow per feature.
 
-## Inputs you are given:
-- UI/UX mockup (HTML) — shows the screens and interactions
-- Project manifest (YAML) — system layers, tech stack, conventions
-- Architecture overview — how layers connect and why
+## Inputs:
+- UI/UX Mockup (Screen text) — functional elements, labels, field names, and interactions (HTML tags stripped; full HTML is injected at runtime for the UI Shell layer)
+- Project overview and manifest (YAML) — system layers, tech stack, conventions
 
 ${screenSection}
 
 ${docsSection}
 
 ════════════════════════════════════════════════════════════════
-⚠ CRITICAL — Layer Prompt Size Rule (read before writing any prompt field)
+AVAILABLE PROJECT LAYERS  (use ONLY these exact names in every "layer" field)
 ════════════════════════════════════════════════════════════════
-Every layer "prompt" field MUST be 200 words or fewer.
-Write WHAT to build and WHICH files to touch — do NOT embed Dart code, class bodies,
-method implementations, numbered step-by-step code, or import statements.
-The executing AI writes the code itself. Your job is to describe the contract and intent clearly.
-Violating this rule causes the JSON to exceed the output limit and fail to parse.
+${layersSection}
+
+Every "layer" field in every workflow object MUST exactly match one of these names.
+Exception: Workflow 1 uses "UI"; every feature workflow ends with "Wire Up" then "Integration Build & Fix".
+
+════════════════════════════════════════════════════════════════
+UNIVERSAL RULES  (apply to every layer, every workflow)
+════════════════════════════════════════════════════════════════
+- Every "prompt" field MUST begin with: "Understand the project structure first and then implement the changes"
+- Every "prompt" field MUST end with: "Run the build command and fix all compile errors before completing."
+- Every "prompt" field MUST be ≤200 words — describe WHAT to build and WHICH files to touch.
+  Never include: Dart code, class bodies, method implementations, numbered step-by-step code, or import statements.
+- inputs: exact file paths from prior layers this layer depends on
+- outputs: exact file paths this layer creates or modifies
+- success_criteria must be testable — no vague statements like "works correctly"
+- Do not generate unit tests or e2e tests
+- Output the complete JSON array in one block — no prose between workflows
 
 ════════════════════════════════════════════════════════════════
 WORKFLOW 1 — UI Shell  (workflow_type: "ui_shell")
 ════════════════════════════════════════════════════════════════
-- ALWAYS the first workflow in the output array
+- Always the FIRST item in the output array
 - Exactly ONE layer named "UI"
-- Converts the HTML mockup to a complete static Flutter page
-- No state management, no backend connections, no real data
+- Converts the HTML mockup to a complete static Flutter page — no state management, no backend, no real data
 - Every interactive element: onPressed: () {} with a // TODO: wire-{action-name} comment
 
-Dart file path convention (used by this layer AND all Wire Up layers below):
+Dart file path convention:
   lib/features/{snake_case_screen_name}/presentation/pages/{snake_case_screen_name}_page.dart
+
+UI layer "prompt" must also:
+- State the exact target Dart file path using the convention above
+- Reference the linked HTML screen design as the visual source — do NOT re-describe colors, padding, fonts, or widget layout (full HTML is auto-injected at runtime)
+- List every interactive element and its exact // TODO: wire-{action-name} comment
+- State the route path and that it must be registered in the app router
+- Stay within 150 words
 
 ════════════════════════════════════════════════════════════════
 WORKFLOWS 2+ — Feature Workflows  (workflow_type: "feature")
 ════════════════════════════════════════════════════════════════
 - One workflow per discrete feature visible in the mockup
-- NO UI generation layer — the Dart page is created by Workflow 1
+- No UI generation layer — Dart page is created by Workflow 1
 - Layers ordered by dependency: Data Model → Repository → State Management → Wire Up
-- LAST layer of every feature workflow MUST be "Wire Up"
+- SECOND-TO-LAST layer MUST be "Wire Up"
+- LAST layer MUST be "Integration Build & Fix"
 
-## Your output format (JSON array — all workflows together):
+Wire Up layer "prompt" must also:
+- Name the exact Dart page file to modify (the UI Shell output)
+- Name the state class (BLoC / Cubit / Provider / Riverpod notifier) and its source file
+- List each // TODO: wire-{action} comment to replace and the state event/method to call instead
+- Specify how to handle loading, error, and success states (widget or navigation)
+- State: do NOT change layout, colors, padding, or widget structure
+
+Integration Build & Fix layer "prompt" must also:
+- Describe running: flutter pub get, build_runner, flutter analyze, flutter build
+- List specific things to verify: missing DI registrations, unresolved imports, env config
+- State: do NOT change feature behaviour
+
+Backend & Data layer "prompt" must also:
+- Name exact files to create or modify
+- Describe the Dart model: field names, types, serialization approach (json_serializable / freezed / manual)
+- Describe the repository interface: method signatures as plain text (e.g. "Future<AppUser> signInWithGoogle()")
+- State the storage contract: Firestore collection path + field names, or REST endpoint + shape, or local DB schema
+- State the error/result type and how to register in DI (get_it / Riverpod / BLoC provider)
+
+## Output format (JSON array — all workflows together):
 
 \`\`\`json
 [
@@ -80,7 +118,7 @@ WORKFLOWS 2+ — Feature Workflows  (workflow_type: "feature")
         "purpose": "Convert HTML mockup to a complete static Flutter Dart page",
         "inputs": ["HTML screen design", "project folder structure"],
         "outputs": ["lib/features/{name}/presentation/pages/{name}_page.dart"],
-        "prompt": "Short descriptive prompt — no code. Max 200 words."
+        "prompt": "Understand the project structure first and then implement the changes. ..."
       }
     ]
   },
@@ -93,77 +131,18 @@ WORKFLOWS 2+ — Feature Workflows  (workflow_type: "feature")
     "success_criteria": ["testable outcome 1", "testable outcome 2"],
     "layers": [
       {
-        "layer": "layer name from manifest",
+        "layer": "exact name from AVAILABLE PROJECT LAYERS above",
         "order": 1,
         "purpose": "...",
         "inputs": ["exact file paths from prior layers"],
         "outputs": ["exact file paths this layer creates or modifies"],
-        "prompt": "Short descriptive prompt — no code. Max 200 words."
+        "prompt": "Understand the project structure first and then implement the changes. ..."
       }
     ]
   }
 ]
 \`\`\`
-
-## Global Rules:
-- First item in the array MUST be the UI Shell workflow (workflow_type: "ui_shell")
-- All remaining items are feature workflows (workflow_type: "feature")
-- One feature workflow per discrete feature — if the mockup has three independent features, output three feature workflows
-- success_criteria must be testable — no vague statements like "works correctly"
-- Do not create unit tests or e2e tests — these are generated in a separate process
-- Output the complete JSON array in one block — do not split into multiple blocks or add prose between workflows
-
-════════════════════════════════
-UI Shell Layer Prompt Rules
-════════════════════════════════
-The prompt field for the UI layer must:
-- Begin with: "Understand the project structure first and then implement the changes"
-- State the exact target file path using the convention above
-- Instruct the executing AI to use the linked HTML screen design as the visual reference —
-  do NOT re-describe colors, padding, fonts, or widget layout in this prompt;
-  the HTML is automatically provided to the executing AI at runtime
-- List the names of every interactive element and the // TODO: wire-{action-name} comment
-  that must be placed on each one (e.g. "Google Sign-In button → // TODO: wire-google-sign-in")
-- State the route path and that it must be registered in the app router
-- End with: run the build command and fix all compile errors before completing
-- Stay within 150 words — the HTML reference covers all visual detail
-
-════════════════════════════════
-Wire Up Layer Prompt Rules
-════════════════════════════════
-The prompt field for Wire Up must:
-- Begin with: "Understand the project structure first and then implement the changes"
-- Name the exact Dart page file to modify (the UI Shell output)
-- Name the state class to import (BLoC / Cubit / Provider / Riverpod notifier) and its source file
-- List each // TODO: wire-{action} comment to replace, and the state event/method to call instead
-- Specify how to handle loading, error, and success states (widget or navigation)
-- State: do NOT change layout, colors, padding, or widget structure
-- End with: run the build command and fix all compile errors
-- Stay within 200 words — no code blocks, no full method bodies
-
-════════════════════════════════
-Backend & Data Layer Prompt Rules
-════════════════════════════════
-The prompt field for each backend layer must:
-- Begin with: "Understand the project structure first and then implement the changes"
-- Name the exact files to create or modify
-- Describe the Dart model class: field names, Dart types, serialization approach (json_serializable / freezed / manual)
-- Describe the repository interface: method signatures as text (e.g. "Future<AppUser> signInWithGoogle()")
-- State the storage contract: Firestore collection path + field names, or REST endpoint + shape, or local DB schema
-- State the error/result type to use — derive from the architecture overview
-- State how to register in DI (get_it / Riverpod / BLoC provider) if creating a new service
-- Stay within 200 words — no code blocks
-
-════════════════════════════════
-Implementation Rules  (all layers)
-════════════════════════════════
-- Every layer prompt MUST begin with: "Understand the project structure first and then implement the changes"
-- inputs array: list the exact file paths from prior layers this layer depends on
-- outputs array: list the exact file paths this layer creates or modifies
-- Always add a final "Integration Build & Fix" layer as the LAST layer of every feature workflow:
-  describe (in ≤200 words) running flutter pub get, build_runner, flutter analyze, and flutter build;
-  list specific things to check (missing DI registrations, unresolved imports, env config);
-  do not change feature behaviour`;
+`;
 
 
 function extractTextPreview(html) {
@@ -260,6 +239,7 @@ export class GenerateWorkflowsPage {
     this.container         = container;
     this._projectId        = null;
     this._modelConfig      = null;
+    this._picker           = null;
     this._screens          = [];
     this._documents        = [];
     this._projectLayers    = [];
@@ -285,6 +265,7 @@ export class GenerateWorkflowsPage {
 
   unmount() {
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
+    if (this._picker)   { this._picker.unmount(); this._picker = null; }
     window.app.genWorkflowChat.offAll();
   }
 
@@ -294,6 +275,7 @@ export class GenerateWorkflowsPage {
   async _init({ projectId, modelConfig }) {
     window.app.genWorkflowChat.offAll();
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
+    if (this._picker)   { this._picker.unmount(); this._picker = null; }
 
     this._projectId        = projectId;
     this._modelConfig      = modelConfig;
@@ -304,16 +286,30 @@ export class GenerateWorkflowsPage {
     this._parsedWorkflows  = null;
     this._lastPrompt       = '';
 
-    const [screens, documents, projectLayers] = await Promise.all([
+    const [screens, documents, projectLayers, mapping] = await Promise.all([
       window.db.screenDesigns.list(projectId),
       window.db.documents.list(projectId),
       window.db.projectLayers.list(projectId),
+      window.db.modelMapping.get('generate-workflows'),
     ]);
     this._screens        = screens        || [];
     this._documents      = documents      || [];
     this._projectLayers  = projectLayers  || [];
 
     this._render();
+
+    this._picker = new ModelPicker({
+      anchor:    this.container.querySelector('#gwModelPicker'),
+      onSelect:  model => {
+        const prevIsCli = (this._modelConfig?.type ?? 'cli') === 'cli';
+        const nextIsCli = (model?.type ?? 'cli') === 'cli';
+        this._modelConfig = model;
+        // Rebuild prompt when switching between CLI (file refs) and API (inline text)
+        if (prevIsCli !== nextIsCli) this._buildPrompt();
+      },
+      initialId: mapping?.model_config_id ?? modelConfig?.id ?? null,
+    });
+    await this._picker.reload();
 
     // Auto-select first screen
     if (this._screens.length > 0) {
@@ -339,6 +335,7 @@ export class GenerateWorkflowsPage {
             <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
           </svg>
           <span class="gw-header__title">Generate Workflows</span>
+          <div class="gw-header__model" id="gwModelPicker"></div>
         </header>
 
         <div class="gw-body">
@@ -396,7 +393,7 @@ export class GenerateWorkflowsPage {
                 <span class="gw-output-status gw-output-status--running" id="gwOutputStatus">Running</span>
                 <span class="gw-output-label">AI Output</span>
                 <span class="gw-elapsed" id="gwElapsed"></span>
-                <button class="gw-stop-btn" id="gwBtnStop">■ Stop</button>
+                <button class="gw-stop-btn" id="gwBtnStop" hidden>Cancel</button>
               </div>
               <pre class="gw-output-pre" id="gwOutputPre"></pre>
               <div class="gw-output-footer" id="gwOutputFooter" hidden></div>
@@ -406,6 +403,7 @@ export class GenerateWorkflowsPage {
             <div id="gwPreviewArea" hidden>
               <div class="gw-preview-hd">
                 <span class="gw-preview-title" id="gwPreviewTitle">Generated Workflows</span>
+                <span class="gw-preview-usage" id="gwPreviewUsage"></span>
                 <button class="gw-approve-btn" id="gwBtnApprove">
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                     <path d="M3 8l4 4 6-6" stroke="currentColor" stroke-width="1.5"
@@ -592,7 +590,18 @@ export class GenerateWorkflowsPage {
       }
     }
 
-    const prompt = FULL_WORKFLOWS_PROMPT_TEMPLATE(screenSection, docsSection);
+    const layersSection = this._projectLayers.length > 0
+      ? this._projectLayers
+          .map(pl => {
+            const parts = [`- ${pl.name}`];
+            if (pl.description) parts.push(pl.description);
+            if (pl.folder_path) parts.push(`(${pl.folder_path})`);
+            return parts.join('  |  ');
+          })
+          .join('\n')
+      : '(no project layers defined — add layers in Project Layers before generating)';
+
+    const prompt = FULL_WORKFLOWS_PROMPT_TEMPLATE(screenSection, docsSection, layersSection);
     textarea.value = prompt;
   }
 
@@ -626,6 +635,8 @@ export class GenerateWorkflowsPage {
     this.container.querySelector('#gwOutputPre').textContent = '';
     const footer = this.container.querySelector('#gwOutputFooter');
     if (footer) footer.hidden = true;
+    const stopBtn = this.container.querySelector('#gwBtnStop');
+    if (stopBtn) stopBtn.hidden = false;
     this._setStatus('running', 'Running');
     this._refreshGenerateBtn();
     this._startTimer();
@@ -636,14 +647,14 @@ export class GenerateWorkflowsPage {
       if (pre) { pre.textContent += text; pre.scrollTop = pre.scrollHeight; }
     });
 
-    window.app.genWorkflowChat.onDone(({ raw, error }) => {
-      this._onDone(raw, error);
+    window.app.genWorkflowChat.onDone(({ raw, usage, error }) => {
+      this._onDone(raw, usage, error);
     });
 
     window.app.genWorkflowChat.generate({ prompt, model: this._modelConfig });
   }
 
-  _onDone(raw, error) {
+  _onDone(raw, usage, error) {
     window.app.genWorkflowChat.offAll();
     this._generating = false;
     this._stopTimer();
@@ -654,7 +665,8 @@ export class GenerateWorkflowsPage {
       : 0;
     const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
 
-    this.container.querySelector('#gwBtnStop')?.remove();
+    const stopBtn = this.container.querySelector('#gwBtnStop');
+    if (stopBtn) stopBtn.hidden = true;
     this._refreshGenerateBtn();
 
     // 'Could not extract HTML from response' is expected here — this page returns JSON, not HTML.
@@ -667,7 +679,7 @@ export class GenerateWorkflowsPage {
     }
 
     this._setStatus('done', 'Done');
-    this._showOutputFooter(`✔ Completed in ${elapsedStr}`, true);
+    this._showOutputFooter(`✔ Completed in ${elapsedStr}`, true, usage);
 
     const rawContent = raw || this._outputBuf;
     const parsed = parseWorkflowJson(rawContent);
@@ -680,6 +692,20 @@ export class GenerateWorkflowsPage {
 
     this._parsedWorkflows = parsed;
     this._renderPreview(parsed);
+
+    const usageEl = this.container.querySelector('#gwPreviewUsage');
+    if (usageEl && usage && (usage.input_tokens || usage.output_tokens)) {
+      const parts = [
+        `in: ${(usage.input_tokens || 0).toLocaleString()}`,
+        `out: ${(usage.output_tokens || 0).toLocaleString()}`,
+      ];
+      if (usage.cache_read_input_tokens > 0)     parts.push(`${usage.cache_read_input_tokens.toLocaleString()} cached`);
+      if (usage.cache_creation_input_tokens > 0) parts.push(`${usage.cache_creation_input_tokens.toLocaleString()} cache write`);
+      usageEl.textContent = parts.join(' · ');
+    } else if (usageEl) {
+      usageEl.textContent = '';
+    }
+
     this._showPanel('preview');
   }
 
@@ -689,7 +715,8 @@ export class GenerateWorkflowsPage {
     this._generating = false;
     this._stopTimer();
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
-    this.container.querySelector('#gwBtnStop')?.remove();
+    const stopBtn = this.container.querySelector('#gwBtnStop');
+    if (stopBtn) stopBtn.hidden = true;
     this._setStatus('error', 'Stopped');
     this._showOutputFooter('Stopped by user.', false);
     this._addRetryBtn();
@@ -816,10 +843,20 @@ export class GenerateWorkflowsPage {
     el.textContent = text;
   }
 
-  _showOutputFooter(msg, success) {
+  _showOutputFooter(msg, success, usage) {
     const footer = this.container.querySelector('#gwOutputFooter');
     if (!footer) return;
-    footer.innerHTML = `<span class="${success ? 'gw-footer-done' : 'gw-footer-error'}">${escHtml(msg)}</span>`;
+    let usageHtml = '';
+    if (usage && (usage.input_tokens || usage.output_tokens)) {
+      const parts = [
+        `in: ${(usage.input_tokens || 0).toLocaleString()}`,
+        `out: ${(usage.output_tokens || 0).toLocaleString()}`,
+      ];
+      if (usage.cache_read_input_tokens > 0)     parts.push(`${usage.cache_read_input_tokens.toLocaleString()} cached`);
+      if (usage.cache_creation_input_tokens > 0) parts.push(`${usage.cache_creation_input_tokens.toLocaleString()} cache write`);
+      usageHtml = `<span class="gw-footer-usage">${escHtml(parts.join(' · '))}</span>`;
+    }
+    footer.innerHTML = `<span class="${success ? 'gw-footer-done' : 'gw-footer-error'}">${escHtml(msg)}</span>${usageHtml}`;
     footer.hidden = false;
   }
 

@@ -140,15 +140,17 @@ export class WorkflowRunnerPage {
       return;
     }
 
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
     this._fitAddon = new window.FitAddon.FitAddon();
     this._term = new window.Terminal({
       fontFamily:      'Consolas, "Cascadia Code", "Courier New", monospace',
       fontSize:        12,
       lineHeight:      1.4,
       theme: {
-        background:    '#0d0d0d',
-        foreground:    '#d4d4d4',
-        cursor:        '#c0c0c0',
+        background:          css('--console-bg')     || '#0d0d0d',
+        foreground:          css('--console-output') || '#d4d4d4',
+        cursor:              css('--console-caret')  || '#c0c0c0',
         selectionBackground: 'rgba(255,255,255,0.18)',
         black:   '#1e1e1e', brightBlack:   '#555',
         red:     '#f44747', brightRed:     '#f44747',

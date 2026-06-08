@@ -47,15 +47,6 @@ function inferExtensions(setupInstructions) {
   return FILE_EXTENSIONS.default;
 }
 
-function inferTestFileExt(setupInstructions) {
-  const s = (setupInstructions || '').toLowerCase();
-  if (s.includes('flutter') || s.includes('dart'))   return 'dart';
-  if (s.includes('python'))                           return 'py';
-  if (s.includes('.net') || s.includes('c#'))        return 'cs';
-  if (s.includes('typescript') || s.includes('.ts')) return 'ts';
-  return 'js';
-}
-
 function inferDefaultTestFolder(layer) {
   const s = (layer.setup_instructions || '').toLowerCase();
   const isNonJs = s.includes('.net') || s.includes('c#') || s.includes('dotnet')
@@ -66,20 +57,6 @@ function inferDefaultTestFolder(layer) {
   return '';
 }
 
-
-function inferE2eFramework(setupInstructions) {
-  const s = (setupInstructions || '').toLowerCase();
-  return s.includes('cypress') ? 'Cypress' : 'Playwright';
-}
-
-function stripHtmlText(html, maxLen = 800) {
-  const text = (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
-}
-
-function layerSlug(name) {
-  return (name || 'layer').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
 
 function buildFileTree(files) {
   const root = { name: '', path: '', type: 'dir', children: {} };
@@ -113,6 +90,7 @@ export class TestGeneratorPage {
     this._modelCfg    = null;
     this._picker      = null;
     this._e2eEnabled  = false;
+    this._activeTab   = 'unit';   // 'unit' | 'e2e'
 
     // Unit test state
     this._unitFiles      = [];
@@ -121,12 +99,9 @@ export class TestGeneratorPage {
     this._unitTestFolder = '';
 
     // E2E test state
-    this._mockups      = [];
-    this._e2eSelected  = new Set();
-    this._e2eFlowDesc  = '';
-    this._e2eCode      = '';
-    this._e2eStreaming = false;
-    this._e2eSaved     = null;
+    this._mockups     = [];
+    this._e2eSelected = new Set();
+    this._e2eFlowDesc = '';
   }
 
   async mount() {
@@ -175,7 +150,6 @@ export class TestGeneratorPage {
     this._git?.stopPoll();
     removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
-    if (this._e2eStreaming) window.app.chat.offAll();
     this._picker?.unmount();
   }
 
@@ -254,9 +228,15 @@ export class TestGeneratorPage {
         </div>`;
     }
 
+    const unitActive = this._activeTab === 'unit';
     return `
-      ${this._unitSectionHtml()}
-      <div id="tgE2eWrapper">${this._e2eSectionHtml()}</div>
+      <div class="tg-tabs">
+        <button class="tg-tab ${unitActive ? 'tg-tab--active' : ''}" data-tab="unit">Unit Tests</button>
+        <button class="tg-tab ${!unitActive ? 'tg-tab--active' : ''}" data-tab="e2e">E2E Tests</button>
+      </div>
+      <div id="tgTabContent">
+        ${unitActive ? this._unitSectionHtml() : this._e2eSectionHtml()}
+      </div>
     `;
   }
 
@@ -271,9 +251,6 @@ export class TestGeneratorPage {
 
     return `
       <div class="tg-section" id="tgUnitSection">
-        <div class="tg-section__header">
-          <h2 class="tg-section__title">Unit Tests</h2>
-        </div>
 
         <p class="tg-sub-label">Source Files</p>
         <div class="tg-file-picker-wrap">
@@ -311,7 +288,6 @@ export class TestGeneratorPage {
       return `
         <div class="tg-section tg-section--e2e" id="tgE2eSection">
           <div class="tg-section__header">
-            <h2 class="tg-section__title">E2E Tests</h2>
             <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgE2eToggle">Enable E2E Tests</button>
           </div>
           <div class="tg-e2e-disabled">
@@ -329,17 +305,7 @@ export class TestGeneratorPage {
     }
 
     // ── Enabled state ───────────────────────────────────────────
-    const l   = this._activeLayer;
-    const ext = inferTestFileExt(l.setup_instructions);
-    const defaultFilename = `${l.folder_path}/__tests__/${layerSlug(l.name)}.e2e.spec.${ext}`;
-
-    const canGenerate = this._e2eSelected.size > 0 && !!this._modelCfg && !this._e2eStreaming;
-    const hasCode     = this._e2eCode.length > 0;
-
-    let statusText = '';
-    let statusClass = '';
-    if (this._e2eStreaming) { statusText = 'Generating…'; statusClass = 'tg-generate-status--streaming'; }
-    else if (hasCode)       { statusText = 'Done'; statusClass = 'tg-generate-status--done'; }
+    const canGenerate = this._e2eSelected.size > 0 && !!this._modelCfg;
 
     const mockupsHtml = this._mockups.length
       ? this._mockups.map(m => `
@@ -352,9 +318,7 @@ export class TestGeneratorPage {
     return `
       <div class="tg-section tg-section--e2e" id="tgE2eSection">
         <div class="tg-section__header">
-          <h2 class="tg-section__title">E2E Tests</h2>
           ${autoDetected ? '<span class="tg-section__badge">UI Layer</span>' : ''}
-          ${this._e2eRunning ? '<span class="tg-section__badge">Running…</span>' : ''}
           <button class="tg-btn tg-btn--sm tg-e2e-disable-btn" id="tgE2eToggle" title="Disable E2E tests for this layer">Disable</button>
         </div>
 
@@ -369,17 +333,6 @@ export class TestGeneratorPage {
             title="${!this._modelCfg ? 'Select a model first' : this._e2eSelected.size === 0 ? 'Select at least one mockup' : ''}">
             Generate E2E Tests
           </button>
-          <span class="tg-generate-status ${statusClass}" id="tgE2eStatus">${statusText}</span>
-        </div>
-
-        <div class="tg-code-wrap ${hasCode ? '' : 'tg-code-wrap--hidden'} ${this._e2eStreaming ? 'tg-code-wrap--streaming' : ''}" id="tgE2eCodeWrap">
-          <pre class="tg-code-output" id="tgE2eCode">${escHtml(this._e2eCode)}</pre>
-        </div>
-
-        <div class="tg-save-bar ${hasCode ? '' : 'tg-save-bar--hidden'}" id="tgE2eSaveBar">
-          <input class="tg-filename-input" id="tgE2eFilename" value="${escHtml(defaultFilename)}" spellcheck="false"/>
-          <button class="tg-btn" id="tgE2eSave">Save to File</button>
-          <span class="tg-save-status" id="tgE2eSaveStatus"></span>
         </div>
       </div>`;
   }
@@ -547,6 +500,27 @@ export class TestGeneratorPage {
       }
     });
 
+    // Tab switching
+    this.container.querySelector('.tg-tabs')
+      ?.addEventListener('click', e => {
+        const tabBtn = e.target.closest('[data-tab]');
+        if (!tabBtn) return;
+        const tab = tabBtn.dataset.tab;
+        if (tab === this._activeTab) return;
+        this._activeTab = tab;
+        // Swap active class on tab buttons
+        this.container.querySelectorAll('.tg-tab').forEach(btn => {
+          btn.classList.toggle('tg-tab--active', btn.dataset.tab === tab);
+        });
+        // Re-render tab content
+        const content = this.container.querySelector('#tgTabContent');
+        if (content) {
+          content.innerHTML = tab === 'unit' ? this._unitSectionHtml() : this._e2eSectionHtml();
+          this._bindMainEvents();
+          if (tab === 'unit') this._applyIndeterminateStates();
+        }
+      });
+
     // Select All / Clear unit files; dir expand/collapse
     main.addEventListener('click', e => {
       // Folder row: toggle expand/collapse (ignore clicks on the checkbox itself)
@@ -574,14 +548,13 @@ export class TestGeneratorPage {
       }
       if (e.target.id === 'tgE2eToggle') {
         this._e2eEnabled = !this._e2eEnabled;
-        const wrapper = this.container.querySelector('#tgE2eWrapper');
-        if (wrapper) wrapper.innerHTML = this._e2eSectionHtml();
+        const content = this.container.querySelector('#tgTabContent');
+        if (content) { content.innerHTML = this._e2eSectionHtml(); this._bindMainEvents(); }
         return;
       }
       if (e.target.id === 'tgUnitGenerate')    { this._generateUnit();     return; }
       if (e.target.id === 'tgE2eGenerate')     { this._generateE2e();      return; }
       if (e.target.id === 'tgBrowseTestFolder'){ this._browseTestFolder(); return; }
-      if (e.target.id === 'tgE2eSave')         { this._saveFile('e2e');    return; }
     });
 
     // Sync flow textarea and test folder input
@@ -593,9 +566,6 @@ export class TestGeneratorPage {
 
   // ─── Layer selection ─────────────────────────────────────────
   async _selectLayer(layer) {
-    // Cancel any in-progress work
-    if (this._e2eStreaming) window.app.chat.offAll();
-
     this._activeLayer    = layer;
     this._isUiLayer      = this._detectUiLayer(layer);
     this._e2eEnabled     = this._isUiLayer;
@@ -606,8 +576,6 @@ export class TestGeneratorPage {
     this._mockups        = [];
     this._e2eSelected    = new Set();
     this._e2eFlowDesc    = '';
-    this._e2eCode        = '';
-    this._e2eStreaming   = false;
 
     // Update context bar path and re-render main panel
     this._rerenderSidebar();
@@ -661,7 +629,7 @@ export class TestGeneratorPage {
     }
     const e2eBtn = this.container.querySelector('#tgE2eGenerate');
     if (e2eBtn) {
-      const can = this._e2eSelected.size > 0 && !!this._modelCfg && !this._e2eStreaming;
+      const can = this._e2eSelected.size > 0 && !!this._modelCfg;
       e2eBtn.disabled = !can;
     }
   }
@@ -687,6 +655,7 @@ export class TestGeneratorPage {
     if (!this._unitSelected.size) return;
 
     await window.app.openTestGenerationWindow({
+      mode:       'unit',
       layer:      this._activeLayer,
       files:      [...this._unitSelected],
       testFolder,
@@ -705,101 +674,22 @@ export class TestGeneratorPage {
   }
 
   async _generateE2e() {
-    if (!this._activeLayer || this._e2eStreaming) return;
+    if (!this._activeLayer) return;
 
     const selectedMockups = this._mockups.filter(m => this._e2eSelected.has(m.id));
     if (!selectedMockups.length) return;
 
-    const mockupParts = selectedMockups.map(m =>
-      `### ${m.title || `Mockup ${m.id}`}\n${stripHtmlText(m.html_content || '', 800)}`
-    ).join('\n\n---\n\n');
+    const testFolder = inferDefaultTestFolder(this._activeLayer)
+      || (this._activeLayer.folder_path ? this._activeLayer.folder_path + '/__tests__' : '');
 
-    const l         = this._activeLayer;
-    const framework = inferE2eFramework(l.setup_instructions);
-    const prompt    = `You are an expert QA engineer writing end-to-end tests.
-
-## Tech Stack & Layer Context
-${l.setup_instructions || '(no setup instructions provided)'}
-
-## Layer: ${l.name}
-
-## UI Mockups
-${mockupParts}
-
-## User Flow Description
-${this._e2eFlowDesc || '(none provided — infer flows from the mockups above)'}
-
-## Task
-Generate ${framework} end-to-end tests covering the user flows shown in the mockups above.
-- Use ${framework} syntax and best practices
-- One describe() block per screen or major user flow
-- Use accessible role selectors, data-testid, or text selectors
-- Include: navigation flows, form submissions, error states, success confirmations
-- Tests should be independent — no shared state between tests
-
-Output ONLY the test file content. No explanation. Start directly with import statements.`;
-
-    this._e2eCode      = '';
-    this._e2eStreaming  = true;
-    this._setE2eStreamingUI(true);
-
-    window.app.chat.offAll();
-    window.app.chat.onToken(({ text }) => {
-      this._e2eCode += text;
-      const pre = this.container.querySelector('#tgE2eCode');
-      if (pre) { pre.textContent = this._e2eCode; pre.scrollTop = pre.scrollHeight; }
-      const wrap = this.container.querySelector('#tgE2eCodeWrap');
-      if (wrap) wrap.classList.remove('tg-code-wrap--hidden');
+    await window.app.openTestGenerationWindow({
+      mode:      'e2e',
+      layer:     this._activeLayer,
+      mockups:   selectedMockups,
+      flowDesc:  this._e2eFlowDesc,
+      testFolder,
+      modelCfg:  this._modelCfg,
     });
-    window.app.chat.onDone(({ error }) => {
-      window.app.chat.offAll();
-      this._e2eStreaming = false;
-      this._setE2eStreamingUI(false);
-      if (error) {
-        const pre = this.container.querySelector('#tgE2eCode');
-        if (pre) pre.textContent += `\n\n[Error: ${error}]`;
-      }
-      this._showSaveBar('e2e');
-    });
-    window.app.chat.generate({ prompt, model: this._modelCfg });
-  }
-
-  _setE2eStreamingUI(streaming) {
-    const btn  = this.container.querySelector('#tgE2eGenerate');
-    const wrap = this.container.querySelector('#tgE2eCodeWrap');
-    const stat = this.container.querySelector('#tgE2eStatus');
-    if (btn)  btn.disabled = streaming;
-    if (wrap) wrap.classList.toggle('tg-code-wrap--streaming', streaming);
-    if (stat) {
-      stat.textContent = streaming ? 'Generating…' : this._e2eCode ? 'Done' : '';
-      stat.className = `tg-generate-status ${streaming ? 'tg-generate-status--streaming' : this._e2eCode ? 'tg-generate-status--done' : ''}`;
-    }
-  }
-
-  _showSaveBar() {
-    const bar = this.container.querySelector('#tgE2eSaveBar');
-    if (bar) bar.classList.remove('tg-save-bar--hidden');
-  }
-
-  // ─── Save to file (E2E only) ──────────────────────────────────
-  async _saveFile(type) {
-    const filepath = this.container.querySelector('#tgE2eFilename')?.value?.trim();
-    const content  = this._e2eCode;
-    const statusEl = this.container.querySelector('#tgE2eSaveStatus');
-    if (!filepath || !content) return;
-
-    const ok = await window.shell.writeFile(filepath, content);
-    if (statusEl) {
-      if (ok) {
-        statusEl.textContent = 'Saved';
-        statusEl.className   = 'tg-save-status tg-save-status--ok';
-        this._e2eSaved       = filepath;
-        setTimeout(() => { statusEl.textContent = ''; }, 4000);
-      } else {
-        statusEl.textContent = 'Save failed — check path and permissions';
-        statusEl.className   = 'tg-save-status tg-save-status--err';
-      }
-    }
   }
 
 }

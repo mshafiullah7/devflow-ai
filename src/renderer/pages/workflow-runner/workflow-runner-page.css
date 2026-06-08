@@ -96,7 +96,7 @@
 
 /* Sidebar */
 .wfr-sidebar {
-  width: 230px;
+  width: 400px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
@@ -287,7 +287,7 @@
 .wfr-terminal-wrap {
   flex: 1 1 auto;
   min-height: 0;
-  background: #0d0d0d;
+  background: var(--console-bg);
   padding: 6px 4px 4px 8px;
   overflow: hidden;
   position: relative;

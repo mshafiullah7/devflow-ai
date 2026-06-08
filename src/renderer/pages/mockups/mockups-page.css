@@ -726,6 +726,13 @@
   background: var(--bg);
 }
 
+.scr-chat-usage {
+  padding: 4px 10px 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
 /* ------------------------------------------------------------------ */
 /* Chat history group                                                   */
 /* ------------------------------------------------------------------ */

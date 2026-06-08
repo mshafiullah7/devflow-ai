@@ -430,6 +430,23 @@
   min-width: 32px;
 }
 
+/* Hint below Execute bar */
+.pl-exec-hint {
+  margin: 8px 0 0;
+  max-width: 500px;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 0 4px 4px 0;
+}
+.pl-exec-hint strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 /* Output / streaming area */
 .pl-exec-output {
   margin-top: 8px;

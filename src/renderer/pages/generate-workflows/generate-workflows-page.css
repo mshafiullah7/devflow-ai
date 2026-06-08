@@ -36,6 +36,11 @@
   flex: 1;
 }
 
+.gw-header__model {
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
 /* ── Body (sidebar + main) ──────────────────────────────────────── */
 .gw-body {
   display: flex;
@@ -363,6 +368,7 @@
 }
 .gw-footer-done  { color: #16a34a; flex: 1; }
 .gw-footer-error { color: #dc2626; flex: 1; }
+.gw-footer-usage { font-size: 10px; color: var(--text-muted); letter-spacing: 0.02em; white-space: nowrap; }
 
 .gw-retry-btn {
   padding: 4px 10px;
@@ -400,7 +406,13 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.gw-preview-usage {
   flex: 1;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
 }
 
 .gw-approve-btn {

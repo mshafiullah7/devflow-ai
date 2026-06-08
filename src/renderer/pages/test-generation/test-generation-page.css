@@ -14,6 +14,14 @@ body {
   overflow: hidden;
 }
 
+/* ── Page wrapper ────────────────────────────────────────────── */
+.tgw-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
 /* ── Header ──────────────────────────────────────────────────── */
 .tgw-header {
   display: flex;
@@ -29,7 +37,6 @@ body {
 .tgw-header-info {
   flex: 1;
   min-width: 0;
-  -webkit-app-region: no-drag;
 }
 
 .tgw-title {
@@ -51,22 +58,12 @@ body {
   font-family: var(--font-mono);
 }
 
-.tgw-progress-pill {
+.tgw-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 3px 10px;
   -webkit-app-region: no-drag;
-}
-
-.tgw-progress-pill--done {
-  color: #22c55e;
-  border-color: #22c55e44;
-  background: #22c55e11;
 }
 
 /* ── Body ────────────────────────────────────────────────────── */
@@ -77,39 +74,55 @@ body {
   overflow: hidden;
 }
 
-/* ── File list sidebar ───────────────────────────────────────── */
-.tgw-file-list {
-  width: 220px;
+/* ── Sidebar (item list) ─────────────────────────────────────── */
+.tgw-sidebar {
+  width: 230px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  padding: 6px 0;
+  overflow: hidden;
 }
 
-.tgw-file-item {
+.tgw-sidebar-hd {
+  padding: 8px 12px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tgw-item-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.tgw-item-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 7px;
   padding: 6px 10px;
-  cursor: default;
+  cursor: pointer;
   transition: background 0.1s;
   min-width: 0;
+  border-left: 2px solid transparent;
 }
 
-.tgw-file-item--active {
+.tgw-item-row:hover {
+  background: var(--surface-hover);
+}
+
+.tgw-item-row--active {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-left-color: var(--accent);
 }
 
-.tgw-file-icon {
-  font-size: 12px;
-  flex-shrink: 0;
-  line-height: 1.5;
-}
-
-.tgw-file-name {
+.tgw-item-name {
   font-size: 11.5px;
   font-family: var(--font-mono);
   color: var(--text-secondary);
@@ -117,24 +130,50 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  flex: 1;
 }
 
-.tgw-file-item--active   .tgw-file-name { color: var(--accent); }
-.tgw-file-item--saved    .tgw-file-name { color: var(--text-muted); }
-.tgw-file-item--error    .tgw-file-name { color: #dc2626; }
+.tgw-item-row--active .tgw-item-name { color: var(--accent); }
 
-.tgw-file-icon--pending    { color: var(--text-muted); }
-.tgw-file-icon--generating { color: var(--accent); animation: tgw-pulse 1s ease-in-out infinite; }
-.tgw-file-icon--saved      { color: #22c55e; }
-.tgw-file-icon--error      { color: #dc2626; }
+/* ── Status chips ────────────────────────────────────────────── */
+.tgw-status-chip {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.tgw-status--pending {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+}
+
+.tgw-status--generating {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  animation: tgw-pulse 1s ease-in-out infinite;
+}
+
+.tgw-status--saved {
+  color: #16a34a;
+  background: #16a34a18;
+}
+
+.tgw-status--error {
+  color: #dc2626;
+  background: #dc262618;
+}
 
 @keyframes tgw-pulse {
   0%, 100% { opacity: 1; }
-  50%       { opacity: .3; }
+  50%       { opacity: .4; }
 }
 
-/* ── Main panel ──────────────────────────────────────────────── */
-.tgw-main {
+/* ── Output panel ────────────────────────────────────────────── */
+.tgw-output-panel {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -142,28 +181,34 @@ body {
   overflow: hidden;
 }
 
-.tgw-current-label {
-  padding: 8px 14px 6px;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.tgw-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  background: var(--bg);
+  min-height: 36px;
 }
 
-.tgw-current-file {
-  padding: 4px 14px 8px;
+.tgw-output-item-name {
   font-size: 12px;
   font-family: var(--font-mono);
   color: var(--accent);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 28px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tgw-output-elapsed {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
 }
 
 .tgw-code-wrap {
@@ -204,12 +249,29 @@ body {
   text-overflow: ellipsis;
 }
 
-.tgw-footer-status--done  { color: #22c55e; font-weight: 600; }
+.tgw-footer-status--done  { color: #16a34a; font-weight: 600; }
 .tgw-footer-status--error { color: #f59e0b; }
+
+.tgw-progress-pill {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+
+.tgw-progress-pill--done {
+  color: #16a34a;
+  border-color: #16a34a44;
+  background: #16a34a11;
+}
 
 /* ── Buttons ─────────────────────────────────────────────────── */
 .tgw-btn {
-  padding: 5px 14px;
+  padding: 5px 13px;
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 500;
@@ -217,26 +279,54 @@ body {
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   color: var(--text-primary);
-  transition: background 0.1s, border-color 0.1s;
+  transition: background 0.1s, border-color 0.1s, opacity 0.1s;
   white-space: nowrap;
 }
 
-.tgw-btn:hover { background: var(--surface-hover); }
+.tgw-btn:hover:not(:disabled) { background: var(--surface-hover); }
+
+.tgw-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
 
 .tgw-btn--primary {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
-.tgw-btn--primary:hover { filter: brightness(1.1); }
+.tgw-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  background: var(--accent);
+}
+
+.tgw-btn--outline {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tgw-btn--outline:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.tgw-btn--stop {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+.tgw-btn--stop:hover:not(:disabled) {
+  border-color: #dc2626;
+  color: #dc2626;
+  background: #dc262610;
+}
 
 .tgw-btn--danger {
   border-color: #dc262644;
   color: #dc2626;
 }
-.tgw-btn--danger:hover { background: #dc262611; }
+.tgw-btn--danger:hover:not(:disabled) { background: #dc262611; }
 
-/* ── Idle / waiting state ────────────────────────────────────── */
+/* ── Waiting state ───────────────────────────────────────────── */
 .tgw-waiting {
   flex: 1;
   display: flex;
@@ -248,10 +338,10 @@ body {
   font-size: 12.5px;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────── */
-.tgw-file-list::-webkit-scrollbar,
+/* ── Scrollbars ──────────────────────────────────────────────── */
+.tgw-item-list::-webkit-scrollbar,
 .tgw-code-wrap::-webkit-scrollbar { width: 4px; }
-.tgw-file-list::-webkit-scrollbar-track,
+.tgw-item-list::-webkit-scrollbar-track,
 .tgw-code-wrap::-webkit-scrollbar-track { background: transparent; }
-.tgw-file-list::-webkit-scrollbar-thumb,
+.tgw-item-list::-webkit-scrollbar-thumb,
 .tgw-code-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }

@@ -2151,10 +2151,9 @@ export class MockupsPage {
         model,
       };
       if (isCli) {
-        previewText = `[Edit via temp file — HTML will be written to a temp file on disk]\n\nInstruction:\n${desc}\n\nExisting HTML: ${screen.html_content.length} chars (passed via temp file)`;
+        previewText = `[Edit via diff patches — HTML will be written to a temp file on disk]\n\nInstruction:\n${desc}\n\nExisting HTML: ${screen.html_content.length} chars (passed via temp file)`;
       } else {
-        // For API/Ollama show the inline prompt for transparency
-        previewText = buildEditPromptInline(desc, screen.html_content, project?.description || '');
+        previewText = `[Edit via diff patches — model returns JSON search-replace patches, not full HTML]\n\nInstruction:\n${desc}\n\nExisting HTML: ${screen.html_content.length} chars (sent inline)`;
       }
     } else {
       const prompt = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt());
@@ -2235,7 +2234,7 @@ export class MockupsPage {
         }
       });
 
-      window.app.chat.onDone(async ({ html, raw, error }) => {
+      window.app.chat.onDone(async ({ html, raw, usage, error }) => {
         clearInterval(genTimer);
         window.app.chat.offAll();
         const rawText    = raw || '';
@@ -2279,6 +2278,18 @@ export class MockupsPage {
                 }
               );
             });
+          }
+          if (usage && (usage.input_tokens || usage.output_tokens)) {
+            const parts = [
+              `in: ${(usage.input_tokens || 0).toLocaleString()}`,
+              `out: ${(usage.output_tokens || 0).toLocaleString()}`,
+            ];
+            if (usage.cache_read_input_tokens > 0)     parts.push(`${usage.cache_read_input_tokens.toLocaleString()} cached`);
+            if (usage.cache_creation_input_tokens > 0) parts.push(`${usage.cache_creation_input_tokens.toLocaleString()} cache write`);
+            const usageEl = document.createElement('div');
+            usageEl.className = 'scr-chat-usage';
+            usageEl.textContent = parts.join(' · ');
+            previewBubble.appendChild(usageEl);
           }
         } else {
           previewBubble.innerHTML = `

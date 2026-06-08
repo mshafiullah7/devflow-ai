@@ -12,12 +12,14 @@ function openTestGenerationWindow(data) {
     return;
   }
 
+  const title = data?.mode === 'e2e' ? 'Generate E2E Tests' : 'Generate Unit Tests';
+
   _win = new BrowserWindow({
-    width:  920,
-    height: 640,
-    minWidth:  700,
-    minHeight: 480,
-    title:  'Generate Unit Tests',
+    width:     980,
+    height:    680,
+    minWidth:  720,
+    minHeight: 500,
+    title,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },

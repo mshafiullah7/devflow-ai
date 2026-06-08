@@ -1,7 +1,7 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme }   from '../../shared/theme-manager.js';
 
-// ── Helpers (duplicated from test-generator so the window is self-contained) ─
+// ── Helpers ───────────────────────────────────────────────────────
 function inferTestFileExt(setupInstructions) {
   const s = (setupInstructions || '').toLowerCase();
   if (s.includes('flutter') || s.includes('dart'))   return 'dart';
@@ -11,29 +11,50 @@ function inferTestFileExt(setupInstructions) {
   return 'js';
 }
 
-function computeTestFilePath(relPath, testFolder, ext) {
+function inferE2eFramework(setupInstructions) {
+  const s = (setupInstructions || '').toLowerCase();
+  return s.includes('cypress') ? 'Cypress' : 'Playwright';
+}
+
+function computeUnitTestPath(relPath, testFolder, ext) {
   const rel        = relPath.replace(/\\/g, '/');
   const withoutExt = rel.replace(/\.[^/.]+$/, '');
   return testFolder.replace(/\\/g, '/') + '/' + withoutExt + '.test.' + ext;
 }
 
-const STATUS_ICON = { pending: '○', generating: '…', saved: '✓', error: '✗' };
+function computeE2eTestPath(title, testFolder, ext) {
+  const slug = (title || 'mockup')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return testFolder.replace(/\\/g, '/') + '/' + slug + '.e2e.spec.' + ext;
+}
 
+function stripHtmlText(html, maxLen = 800) {
+  const text = (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
+}
+
+// ─────────────────────────────────────────────────────────────────
 export class TestGenerationPage {
   constructor(container) {
     this.container = container;
 
+    this._mode       = 'unit';   // 'unit' | 'e2e'
     this._layer      = null;
-    this._files      = [];
     this._testFolder = '';
     this._modelCfg   = null;
     this._ext        = 'js';
+    this._flowDesc   = '';
 
-    this._progress   = [];   // [{relPath, status, outPath, errMsg}]
-    this._running    = false;
-    this._aborted    = false;
-    this._liveCode   = '';
-    this._currentIdx = -1;
+    this._progress    = [];   // [{label, relPath?, mockup?, status, outPath, errMsg}]
+    this._selectedIdx = null;
+    this._running     = false;
+    this._aborted     = false;
+    this._liveCode    = '';
+    this._currentIdx  = null;
+    this._timerInt    = null;
+    this._startTime   = null;
   }
 
   mount() {
@@ -41,29 +62,44 @@ export class TestGenerationPage {
     applyStoredTheme();
 
     this.container.innerHTML = this._waitingTemplate();
-
     window.app.testGenerationWindow.onInit(data => this._onInit(data));
   }
 
-  // ─── Init ─────────────────────────────────────────────────────
-  _onInit({ layer, files, testFolder, modelCfg }) {
-    this._layer      = layer;
-    this._files      = files || [];
-    this._testFolder = testFolder || '';
-    this._modelCfg   = modelCfg;
-    this._ext        = inferTestFileExt(layer?.setup_instructions);
+  // ─── Init ──────────────────────────────────────────────────────
+  _onInit(data) {
+    this._mode       = data.mode || 'unit';
+    this._layer      = data.layer;
+    this._testFolder = data.testFolder || '';
+    this._modelCfg   = data.modelCfg;
+    this._ext        = inferTestFileExt(data.layer?.setup_instructions);
+    this._flowDesc   = data.flowDesc || '';
 
-    this._progress   = this._files.map(f => ({ relPath: f, status: 'pending', outPath: '', errMsg: '' }));
-    this._running    = false;
-    this._aborted    = false;
-    this._liveCode   = '';
-    this._currentIdx = -1;
+    if (this._mode === 'unit') {
+      this._progress = (data.files || []).map(relPath => ({
+        label: relPath.replace(/\\/g, '/').split('/').pop(),
+        relPath,
+        status: 'pending', outPath: '', errMsg: '',
+      }));
+    } else {
+      this._progress = (data.mockups || []).map(mockup => ({
+        label:  mockup.title || `Mockup ${mockup.id}`,
+        mockup,
+        status: 'pending', outPath: '', errMsg: '',
+      }));
+    }
+
+    this._selectedIdx = this._progress.length > 0 ? 0 : null;
+    this._running     = false;
+    this._aborted     = false;
+    this._liveCode    = '';
+    this._currentIdx  = null;
+    this._clearTimer();
 
     this.container.innerHTML = this._template();
     this._bindEvents();
   }
 
-  // ─── Templates ────────────────────────────────────────────────
+  // ─── Templates ─────────────────────────────────────────────────
   _waitingTemplate() {
     return `
       <div class="tgw-waiting">
@@ -76,119 +112,203 @@ export class TestGenerationPage {
   }
 
   _template() {
-    const name  = this._layer?.name ?? 'Layer';
-    const total = this._files.length;
+    const name      = this._layer?.name ?? 'Layer';
+    const modeLabel = this._mode === 'e2e' ? 'E2E' : 'Unit';
+    const sidebarHd = this._mode === 'e2e' ? 'Mockups' : 'Source Files';
+    const total     = this._progress.length;
+
     return `
-      <header class="tgw-header">
-        <div class="tgw-header-info">
-          <div class="tgw-title">Generating Unit Tests · ${escHtml(name)}</div>
-          <div class="tgw-subtitle">${escHtml(this._testFolder)}</div>
-        </div>
-        <span class="tgw-progress-pill" id="tgwPill">0 / ${total}</span>
-      </header>
-
-      <div class="tgw-body">
-        <div class="tgw-file-list" id="tgwFileList">
-          ${this._fileListHtml()}
-        </div>
-
-        <div class="tgw-main">
-          <div class="tgw-current-label">Currently generating</div>
-          <div class="tgw-current-file" id="tgwCurrentFile">—</div>
-          <div class="tgw-code-wrap" id="tgwCodeWrap">
-            <pre class="tgw-code" id="tgwCode"></pre>
+      <div class="tgw-page">
+        <header class="tgw-header">
+          <div class="tgw-header-info">
+            <div class="tgw-title">${modeLabel} Tests · ${escHtml(name)}</div>
+            <div class="tgw-subtitle">${escHtml(this._testFolder)}</div>
           </div>
-        </div>
-      </div>
+          <div class="tgw-header-actions">
+            <button class="tgw-btn tgw-btn--outline" id="tgwBtnRunSelected"
+              ${this._selectedIdx === null ? 'disabled' : ''}>▶ Run Selected</button>
+            <button class="tgw-btn tgw-btn--primary" id="tgwBtnRunAll"
+              ${total === 0 ? 'disabled' : ''}>▶ Run All</button>
+            <button class="tgw-btn tgw-btn--stop" id="tgwBtnStop" hidden>■ Stop</button>
+          </div>
+        </header>
 
-      <footer class="tgw-footer">
-        <span class="tgw-footer-status" id="tgwStatus">Ready — ${total} file${total !== 1 ? 's' : ''} selected</span>
-        <button class="tgw-btn tgw-btn--primary" id="tgwStart">Start Generation</button>
-        <button class="tgw-btn tgw-btn--danger" id="tgwCancel" style="display:none">Cancel</button>
-      </footer>`;
+        <div class="tgw-body">
+          <aside class="tgw-sidebar">
+            <div class="tgw-sidebar-hd">${sidebarHd}</div>
+            <div class="tgw-item-list" id="tgwItemList">${this._itemListHtml()}</div>
+          </aside>
+
+          <section class="tgw-output-panel">
+            <div class="tgw-output-header">
+              <span class="tgw-output-item-name" id="tgwCurrentName">—</span>
+              <span class="tgw-output-elapsed"   id="tgwElapsed"></span>
+            </div>
+            <div class="tgw-code-wrap" id="tgwCodeWrap">
+              <pre class="tgw-code" id="tgwCode"></pre>
+            </div>
+          </section>
+        </div>
+
+        <footer class="tgw-footer">
+          <span class="tgw-footer-status" id="tgwStatus">
+            Ready — ${total} ${this._mode === 'e2e' ? 'mockup' : 'file'}${total !== 1 ? 's' : ''} selected
+          </span>
+          <span class="tgw-progress-pill" id="tgwPill">0 / ${total}</span>
+        </footer>
+      </div>`;
   }
 
-  _fileListHtml() {
+  _itemListHtml() {
+    const CHIP = {
+      pending:    'Pending',
+      generating: 'Generating',
+      saved:      'Saved',
+      error:      'Error',
+    };
     return this._progress.map((item, i) => {
-      const icon   = STATUS_ICON[item.status] ?? '○';
-      const active = i === this._currentIdx ? 'tgw-file-item--active' : '';
-      const name   = item.relPath.split('/').pop();
+      const active = i === this._selectedIdx ? 'tgw-item-row--active' : '';
       return `
-        <div class="tgw-file-item tgw-file-item--${item.status} ${active}">
-          <span class="tgw-file-icon tgw-file-icon--${item.status}">${icon}</span>
-          <span class="tgw-file-name" title="${escHtml(item.relPath)}">${escHtml(name)}</span>
+        <div class="tgw-item-row tgw-item-row--${item.status} ${active}" data-idx="${i}">
+          <span class="tgw-status-chip tgw-status--${item.status}">${CHIP[item.status] ?? item.status}</span>
+          <span class="tgw-item-name" title="${escHtml(item.relPath || item.label || '')}">${escHtml(item.label)}</span>
         </div>`;
     }).join('');
   }
 
-  // ─── Event binding ─────────────────────────────────────────────
+  // ─── Event binding ──────────────────────────────────────────────
   _bindEvents() {
-    this.container.querySelector('#tgwStart')
-      ?.addEventListener('click', () => this._begin());
-    this.container.querySelector('#tgwCancel')
-      ?.addEventListener('click', () => this._cancel());
+    this.container.querySelector('#tgwBtnRunAll')
+      ?.addEventListener('click', () => this._runAll());
+    this.container.querySelector('#tgwBtnRunSelected')
+      ?.addEventListener('click', () => this._runSelected());
+    this.container.querySelector('#tgwBtnStop')
+      ?.addEventListener('click', () => this._stop());
+
+    this.container.querySelector('#tgwItemList')
+      ?.addEventListener('click', e => {
+        if (this._running) return;
+        const row = e.target.closest('[data-idx]');
+        if (!row) return;
+        this._selectedIdx = parseInt(row.dataset.idx, 10);
+        this._refreshItemList();
+        this._updateToolbar();
+      });
   }
 
-  _begin() {
-    const startBtn  = this.container.querySelector('#tgwStart');
-    const cancelBtn = this.container.querySelector('#tgwCancel');
-    if (startBtn)  startBtn.style.display  = 'none';
-    if (cancelBtn) cancelBtn.style.display = '';
-    this._startGeneration();
-  }
-
-  // ─── Generation loop ──────────────────────────────────────────
-  async _startGeneration() {
-    if (!this._files.length) {
-      this._setDone(0, 0);
-      return;
-    }
-
+  // ─── Run All ────────────────────────────────────────────────────
+  async _runAll() {
+    if (this._running || !this._progress.length) return;
     this._running = true;
     this._aborted = false;
+    this._updateToolbar();
 
     for (let i = 0; i < this._progress.length; i++) {
       if (this._aborted) break;
-
-      this._currentIdx = i;
-      this._liveCode   = '';
-      this._setFileStatus(i, 'generating');
-      this._setCurrentFile(this._progress[i].relPath);
-      this._updateStatus(`Generating ${i + 1} of ${this._progress.length}…`);
-
-      const absPath = `${this._layer.folder_path}/${this._progress[i].relPath}`;
-      let content   = await window.shell.readFile(absPath);
-      if (content === null) {
-        this._setFileStatus(i, 'error', '', 'Could not read file');
-        continue;
-      }
-      if (content.length > 8000) content = content.slice(0, 8000) + '\n// [truncated]';
-
-      const prompt = this._buildPrompt(this._progress[i].relPath, content);
-
-      let code;
-      try {
-        code = await this._streamFile(prompt);
-      } catch (err) {
-        this._setFileStatus(i, 'error', '', err.message || 'Generation failed');
-        continue;
-      }
-
-      if (this._aborted) break;
-
-      const outPath = computeTestFilePath(this._progress[i].relPath, this._testFolder, this._ext);
-      const ok      = await window.shell.writeFile(outPath, code);
-      this._setFileStatus(i, ok ? 'saved' : 'error', outPath, ok ? '' : 'Write failed — check permissions');
+      if (this._progress[i].status !== 'pending') continue;
+      await this._runItem(i);
     }
 
     this._running    = false;
-    this._currentIdx = -1;
-    const saved  = this._progress.filter(p => p.status === 'saved').length;
-    const errors = this._progress.filter(p => p.status === 'error').length;
-    this._setDone(saved, errors);
+    this._currentIdx = null;
+    this._clearTimer();
+    this._updateToolbar();
+    this._updateCurrentItem(null);
+    this._showDoneSummary();
   }
 
-  _buildPrompt(relPath, content) {
+  // ─── Run Selected ───────────────────────────────────────────────
+  async _runSelected() {
+    if (this._running || this._selectedIdx === null) return;
+    const item = this._progress[this._selectedIdx];
+    if (!item) return;
+    if (item.status === 'saved') {
+      this._updateStatus('Already saved.');
+      return;
+    }
+    if (item.status === 'error') {
+      item.status = 'pending';
+    }
+    this._running = true;
+    this._aborted = false;
+    this._updateToolbar();
+
+    await this._runItem(this._selectedIdx);
+
+    this._running    = false;
+    this._currentIdx = null;
+    this._clearTimer();
+    this._updateToolbar();
+    this._updateCurrentItem(null);
+    this._showDoneSummary();
+  }
+
+  // ─── Core item runner ───────────────────────────────────────────
+  async _runItem(i) {
+    this._currentIdx = i;
+    this._liveCode   = '';
+    this._setItemStatus(i, 'generating');
+    this._updateCurrentItem(this._progress[i].label);
+    this._updateStatus(`Generating ${i + 1} of ${this._progress.length}…`);
+    this._startTimer();
+
+    const pre = this.container.querySelector('#tgwCode');
+    if (pre) pre.textContent = '';
+
+    try {
+      let prompt, outPath;
+
+      if (this._mode === 'unit') {
+        const absPath = `${this._layer.folder_path}/${this._progress[i].relPath}`;
+        let src = await window.shell.readFile(absPath);
+        if (src === null) {
+          this._setItemStatus(i, 'error', '', 'Could not read file');
+          return;
+        }
+        if (src.length > 8000) src = src.slice(0, 8000) + '\n// [truncated]';
+        prompt  = this._buildUnitPrompt(this._progress[i].relPath, src);
+        outPath = computeUnitTestPath(this._progress[i].relPath, this._testFolder, this._ext);
+      } else {
+        prompt  = this._buildE2ePrompt(this._progress[i].mockup);
+        outPath = computeE2eTestPath(this._progress[i].mockup.title, this._testFolder, this._ext);
+      }
+
+      const code = await this._streamItem(prompt);
+
+      if (this._aborted) {
+        this._setItemStatus(i, 'pending');
+        return;
+      }
+
+      const ok = await window.shell.writeFile(outPath, code);
+      this._setItemStatus(i, ok ? 'saved' : 'error', outPath, ok ? '' : 'Write failed — check permissions');
+    } catch (err) {
+      this._setItemStatus(i, this._aborted ? 'pending' : 'error', '', err.message || 'Generation failed');
+    }
+
+    this._clearTimer();
+  }
+
+  // ─── Stop ───────────────────────────────────────────────────────
+  _stop() {
+    if (!this._running) return;
+    this._aborted = true;
+    this._running = false;
+    window.app.testGenChat.cancel();
+    window.app.testGenChat.offAll();
+    this._progress.forEach(item => {
+      if (item.status === 'generating') item.status = 'pending';
+    });
+    this._currentIdx = null;
+    this._clearTimer();
+    this._refreshItemList();
+    this._updateToolbar();
+    this._updateCurrentItem(null);
+    this._updateStatus('Cancelled.');
+  }
+
+  // ─── Prompt builders ───────────────────────────────────────────
+  _buildUnitPrompt(relPath, content) {
     const l = this._layer;
     return `You are an expert software engineer writing unit tests.
 
@@ -212,7 +332,36 @@ Generate comprehensive unit tests using the testing framework implied by the tec
 Output ONLY the test file content. No explanation text. Start directly with import or require statements.`;
   }
 
-  _streamFile(prompt) {
+  _buildE2ePrompt(mockup) {
+    const l         = this._layer;
+    const framework = inferE2eFramework(l.setup_instructions);
+    const mockupText = stripHtmlText(mockup.html_content || '', 800);
+    return `You are an expert QA engineer writing end-to-end tests.
+
+## Tech Stack & Layer Context
+${l.setup_instructions || '(no setup instructions provided)'}
+
+## Layer: ${l.name}
+
+## UI Mockup: ${mockup.title || `Mockup ${mockup.id}`}
+${mockupText}
+
+## User Flow Description
+${this._flowDesc || '(none provided — infer flows from the mockup above)'}
+
+## Task
+Generate ${framework} end-to-end tests for the screen shown in the mockup above.
+- Use ${framework} syntax and best practices
+- One describe() block for this screen
+- Use accessible role selectors, data-testid, or text selectors
+- Include: navigation flows, form submissions, error states, success confirmations
+- Tests should be independent — no shared state between tests
+
+Output ONLY the test file content. No explanation. Start directly with import statements.`;
+  }
+
+  // ─── Streaming ─────────────────────────────────────────────────
+  _streamItem(prompt) {
     return new Promise((resolve, reject) => {
       let code = '';
       window.app.testGenChat.offAll();
@@ -233,66 +382,96 @@ Output ONLY the test file content. No explanation text. Start directly with impo
     });
   }
 
-  // ─── DOM helpers ──────────────────────────────────────────────
-  _setFileStatus(index, status, outPath = '', errMsg = '') {
+  // ─── DOM helpers ───────────────────────────────────────────────
+  _setItemStatus(index, status, outPath = '', errMsg = '') {
     if (!this._progress[index]) return;
     this._progress[index] = { ...this._progress[index], status, outPath, errMsg };
+    this._refreshItemList();
+  }
 
-    const listEl = this.container.querySelector('#tgwFileList');
-    if (listEl) listEl.innerHTML = this._fileListHtml();
+  _refreshItemList() {
+    const el = this.container.querySelector('#tgwItemList');
+    if (el) el.innerHTML = this._itemListHtml();
 
     const saved = this._progress.filter(p => p.status === 'saved').length;
     const pill  = this.container.querySelector('#tgwPill');
     if (pill) pill.textContent = `${saved} / ${this._progress.length}`;
   }
 
-  _setCurrentFile(relPath) {
-    const el = this.container.querySelector('#tgwCurrentFile');
-    if (el) el.textContent = relPath || '—';
-    const pre = this.container.querySelector('#tgwCode');
-    if (pre) pre.textContent = '';
+  _updateToolbar() {
+    const runAll  = this.container.querySelector('#tgwBtnRunAll');
+    const runSel  = this.container.querySelector('#tgwBtnRunSelected');
+    const stop    = this.container.querySelector('#tgwBtnStop');
+
+    if (this._running) {
+      if (runAll)  { runAll.hidden  = true;  runAll.disabled  = true; }
+      if (runSel)  { runSel.hidden  = true;  runSel.disabled  = true; }
+      if (stop)    { stop.hidden    = false; }
+    } else {
+      if (runAll)  { runAll.hidden  = false; runAll.disabled  = this._progress.length === 0; }
+      if (runSel)  { runSel.hidden  = false; runSel.disabled  = this._selectedIdx === null; }
+      if (stop)    { stop.hidden    = true; }
+    }
   }
 
-  _updateStatus(text) {
+  _updateCurrentItem(label) {
+    const el = this.container.querySelector('#tgwCurrentName');
+    if (el) el.textContent = label || '—';
+    if (!label) {
+      const pre = this.container.querySelector('#tgwCode');
+      if (pre) pre.textContent = '';
+      const elapsed = this.container.querySelector('#tgwElapsed');
+      if (elapsed) elapsed.textContent = '';
+    }
+  }
+
+  _updateStatus(text, variant = '') {
     const el = this.container.querySelector('#tgwStatus');
-    if (el) { el.textContent = text; el.className = 'tgw-footer-status'; }
+    if (!el) return;
+    el.textContent = text;
+    el.className   = `tgw-footer-status${variant ? ' tgw-footer-status--' + variant : ''}`;
   }
 
-  _setDone(saved, errors) {
-    const total   = this._progress.length;
-    const pill    = this.container.querySelector('#tgwPill');
-    const status  = this.container.querySelector('#tgwStatus');
-    const cancelBtn = this.container.querySelector('#tgwCancel');
-    const current = this.container.querySelector('#tgwCurrentFile');
+  _showDoneSummary() {
+    const total  = this._progress.length;
+    const saved  = this._progress.filter(p => p.status === 'saved').length;
+    const errors = this._progress.filter(p => p.status === 'error').length;
+    const pill   = this.container.querySelector('#tgwPill');
 
-    if (pill)   { pill.textContent = `${saved} / ${total}`; pill.classList.add('tgw-progress-pill--done'); }
-    if (current) current.textContent = '—';
+    if (pill) {
+      pill.textContent = `${saved} / ${total}`;
+      if (errors === 0 && saved > 0) pill.classList.add('tgw-progress-pill--done');
+    }
 
-    const aborted = this._aborted;
-    if (status) {
-      if (aborted) {
-        status.textContent = 'Cancelled.';
-        status.className   = 'tgw-footer-status tgw-footer-status--error';
-      } else if (errors > 0) {
-        status.textContent = `Done — ${saved} saved, ${errors} error${errors > 1 ? 's' : ''}.`;
-        status.className   = 'tgw-footer-status tgw-footer-status--error';
-      } else {
-        status.textContent = `All ${saved} test file${saved !== 1 ? 's' : ''} saved successfully.`;
-        status.className   = 'tgw-footer-status tgw-footer-status--done';
+    if (this._aborted) {
+      this._updateStatus('Cancelled.', 'error');
+    } else if (errors > 0) {
+      this._updateStatus(`Done — ${saved} saved, ${errors} error${errors > 1 ? 's' : ''}.`, 'error');
+    } else {
+      const noun = this._mode === 'e2e' ? 'spec file' : 'test file';
+      this._updateStatus(`All ${saved} ${noun}${saved !== 1 ? 's' : ''} saved successfully.`, 'done');
+    }
+  }
+
+  // ─── Timer ─────────────────────────────────────────────────────
+  _startTimer() {
+    this._clearTimer();
+    this._startTime = Date.now();
+    this._timerInt  = setInterval(() => {
+      const elapsed = this.container.querySelector('#tgwElapsed');
+      if (elapsed && this._startTime) {
+        elapsed.textContent = this._fmt(Date.now() - this._startTime);
       }
-    }
-    if (cancelBtn) { cancelBtn.textContent = 'Close'; cancelBtn.className = 'tgw-btn'; }
+    }, 500);
   }
 
-  // ─── Cancel ───────────────────────────────────────────────────
-  _cancel() {
-    if (!this._running) {
-      window.close();
-      return;
-    }
-    this._aborted = true;
-    this._running = false;
-    window.app.testGenChat.cancel();
-    window.app.testGenChat.offAll();
+  _clearTimer() {
+    if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
+    this._startTime = null;
+  }
+
+  _fmt(ms) {
+    const s = Math.floor(ms / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
   }
 }
