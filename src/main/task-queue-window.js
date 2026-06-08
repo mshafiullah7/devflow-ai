@@ -13,8 +13,8 @@ function openTaskQueueWindow(projectId) {
   }
 
   _win = new BrowserWindow({
-    width:  900,
-    height: 680,
+    width:  1280,
+    height: 960,
     title:  'Task Queue',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

@@ -14,8 +14,8 @@ function openQueueWindow(projectId) {
   }
 
   _win = new BrowserWindow({
-    width:  520,
-    height: 700,
+    width:  1280,
+    height: 960,
     title:  'Task Queue',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

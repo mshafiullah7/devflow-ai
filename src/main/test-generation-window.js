@@ -15,8 +15,8 @@ function openTestGenerationWindow(data) {
   const title = data?.mode === 'e2e' ? 'Generate E2E Tests' : 'Generate Unit Tests';
 
   _win = new BrowserWindow({
-    width:     980,
-    height:    680,
+    width:     1280,
+    height:    960,
     minWidth:  720,
     minHeight: 500,
     title,

@@ -13,8 +13,8 @@ function openWorkflowAiEditWindow(data) {
   }
 
   _win = new BrowserWindow({
-    width:    1100,
-    height:   800,
+    width:    1280,
+    height:   960,
     minWidth:  800,
     minHeight: 600,
     title:    'AI Edit — Layer',

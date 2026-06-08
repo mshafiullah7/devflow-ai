@@ -78,7 +78,7 @@
 .mp-menu {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  right: 0;
   z-index: 300;
   min-width: 200px;
   background: var(--bg-secondary);
@@ -126,8 +126,6 @@
 
 .mp-menu__label {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
