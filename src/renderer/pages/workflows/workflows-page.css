@@ -9,10 +9,21 @@
   min-width: 160px;
 }
 
-/* Workflow list items are divs — ensure cursor and no-drag */
+/* Workflow list items */
 .eus-src-item[data-wf] {
   cursor: pointer;
   -webkit-app-region: no-drag;
+  align-items: center;
+}
+
+/* Right side: status badge + delete — always visible, vertically centered */
+.eus-src-item[data-wf] .wf-item-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 1;
 }
 
 /* pl-list-* layout helpers (from project-layers — not injected on this page) */
@@ -35,6 +46,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  flex: 1;
 }
 .pl-list-path {
   font-size: 10px;
@@ -44,6 +56,7 @@
   white-space: nowrap;
   font-family: var(--font-mono, monospace);
   text-align: left;
+  width: 100%;
 }
 .pl-list-path--empty {
   font-style: italic;
@@ -980,10 +993,6 @@
 .wf-wfstatus--progress { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 .wf-wfstatus--done     { background: rgba(34,197,94,.12); color: #16a34a; }
 
-/* Keep the workflow list title row aligned with badge */
-.pl-list-title-row {
-  align-items: center;
-}
 
 /* AI Edit styles live in workflow-ai-edit-page.css */
 /*

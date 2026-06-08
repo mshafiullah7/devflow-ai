@@ -245,13 +245,13 @@ export class WorkflowsPage {
           <div class="pl-list-title-row">
             <span class="eus-src-item__id">#${w.id}</span>
             <span class="eus-src-item__title">${escHtml(w.feature || 'Untitled')}</span>
-            ${this._wfStatusBadgeHtml(w.status || 'open')}
           </div>
           ${w.description
-            ? `<span class="pl-list-path" title="${escHtml(w.description)}">${escHtml(w.description.slice(0, 60))}</span>`
+            ? `<span class="pl-list-path" title="${escHtml(w.description)}">${escHtml(w.description)}</span>`
             : `<span class="pl-list-path pl-list-path--empty">No description</span>`}
         </div>
-        <div class="eus-src-item__actions">
+        <div class="eus-src-item__actions wf-item-right">
+          ${this._wfStatusBadgeHtml(w.status || 'open')}
           <button class="eus-story-action eus-story-action--delete wf-list-del"
             data-wf-del="${w.id}" title="Delete workflow" aria-label="Delete">
             <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
