@@ -1,8 +1,14 @@
 'use strict';
 
-const { ipcMain } = require('electron');
+const { ipcMain, BrowserWindow } = require('electron');
 const { shell } = require('electron');
 const { safeHandle } = require('../../ipc-safe-handle');
+
+function broadcastToAll(channel, payload) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(channel, payload);
+  }
+}
 const os        = require('os');
 const fs        = require('fs');
 const path      = require('path');
@@ -100,7 +106,9 @@ function registerDbHandlers() {
     const result = db.prepare(
       'INSERT INTO workflows (project_id, workflow_id, feature, description, screen_design_id, workflow_type) VALUES (?, ?, ?, ?, ?, ?)'
     ).run(project_id, wfId, feature, description ?? null, screen_design_id ?? null, workflow_type ?? 'feature');
-    return db.prepare('SELECT * FROM workflows WHERE id = ?').get(result.lastInsertRowid);
+    const wf = db.prepare('SELECT * FROM workflows WHERE id = ?').get(result.lastInsertRowid);
+    broadcastToAll('workflow:workflowsChanged', { projectId: project_id });
+    return wf;
   });
 
   safeHandle('db:workflows:update', (_e, args) => {
@@ -136,7 +144,9 @@ function registerDbHandlers() {
   // open | in_progress | completed
   safeHandle('db:workflows:updateStatus', (_e, { id, status }) => {
     db.prepare(`UPDATE workflows SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
-    return db.prepare('SELECT * FROM workflows WHERE id = ?').get(id);
+    const wf = db.prepare('SELECT * FROM workflows WHERE id = ?').get(id);
+    broadcastToAll('workflow:workflowsChanged', { projectId: wf?.project_id });
+    return wf;
   });
 
   // ----------------------------------------------------------------
@@ -236,7 +246,9 @@ function registerDbHandlers() {
   // open | executed | failed | needs_review
   safeHandle('db:layers:updateStatus', (_e, { id, status }) => {
     db.prepare(`UPDATE layers SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
-    return db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
+    const layer = db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
+    broadcastToAll('workflow:layerStatusChanged', { layerId: id, workflowId: layer?.workflow_id, status });
+    return layer;
   });
 
   // Returns { total, completed } across all workflow layers for a project

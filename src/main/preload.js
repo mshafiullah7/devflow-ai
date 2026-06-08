@@ -354,6 +354,14 @@ contextBridge.exposeInMainWorld('app', {
   workflowAiEditWindow: {
     onInit: (cb) => ipcRenderer.on('workflowAiEdit:init', (_e, p) => cb(p)),
   },
+  workflowEvents: {
+    onLayerStatusChanged: (cb) => ipcRenderer.on('workflow:layerStatusChanged', (_e, p) => cb(p)),
+    onWorkflowsChanged:   (cb) => ipcRenderer.on('workflow:workflowsChanged',   (_e, p) => cb(p)),
+    offAll: () => {
+      ipcRenderer.removeAllListeners('workflow:layerStatusChanged');
+      ipcRenderer.removeAllListeners('workflow:workflowsChanged');
+    },
+  },
 });
 
 

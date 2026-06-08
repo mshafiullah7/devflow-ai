@@ -76,9 +76,11 @@ export class WorkflowsPage {
     this._bindHeaderEvents();
     this._initResizable();
     await this._loadWorkflows();
+    this._subscribeToRunnerEvents();
   }
 
   unmount() {
+    window.app.workflowEvents.offAll();
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
     this._git?.stopPoll();
     removeCss('pages/workflows/workflows-page.css');
@@ -86,6 +88,60 @@ export class WorkflowsPage {
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('pages/user-stories/user-stories.css');
     this._picker?.unmount();
+  }
+
+  // ----------------------------------------------------------------
+  // Cross-window event subscriptions (Workflow Runner / Generate Workflows)
+  // ----------------------------------------------------------------
+  _subscribeToRunnerEvents() {
+    window.app.workflowEvents.onLayerStatusChanged(({ layerId, workflowId, status }) => {
+      // Update in-memory layer if it belongs to the currently selected workflow
+      if (workflowId === this._activeId) {
+        const layer = this._layers.find(l => l.id === layerId);
+        if (layer) {
+          layer.status = status;
+          this._refreshLayersTab();
+        }
+      }
+      // Update workflow status badge in the list (re-fetch the workflow row)
+      window.db.workflows.get(workflowId).then(wf => {
+        if (!wf) return;
+        const idx = this._workflows.findIndex(w => w.id === wf.id);
+        if (idx >= 0) {
+          this._workflows[idx].status = wf.status;
+          this._renderList();
+        }
+      });
+    });
+
+    window.app.workflowEvents.onWorkflowsChanged(({ projectId }) => {
+      if (projectId !== this._projectId) return;
+      // Re-fetch the full workflow list and re-render, keeping active selection if possible
+      const previousActiveId = this._activeId;
+      window.db.workflows.list(this._projectId).then(async workflows => {
+        this._workflows = workflows || [];
+        this._renderList();
+        // If current selection still exists keep it, otherwise reselect first
+        const stillActive = this._workflows.find(w => w.id === previousActiveId);
+        if (stillActive) {
+          // Refresh layers/criteria for current workflow in case they changed
+          const [layers, criteria] = await Promise.all([
+            window.db.layers.list(this._activeId),
+            window.db.successCriteria.list(this._activeId),
+          ]);
+          this._layers   = (layers   || []).slice().sort((a, b) => a.order_num - b.order_num);
+          this._criteria = criteria  || [];
+          this._renderDetail();
+        } else if (this._workflows.length > 0) {
+          await this._selectWorkflow(this._workflows[0].id);
+        } else {
+          this._activeId = null;
+          this._layers   = [];
+          this._criteria = [];
+          this._renderDetail();
+        }
+      });
+    });
   }
 
   // ----------------------------------------------------------------
