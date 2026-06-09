@@ -296,10 +296,12 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     if (this._workflow) {
       await window.db.workflows.updateStatus({ id: this._workflow.id, status: 'in_progress' });
     }
+    let sessionStarted = false;
     for (const layer of this._layers) {
       if (!this._running) break;
       if (this._statuses[layer.id] !== 'open') continue;
-      await this._runLayer(layer);
+      await this._runLayer(layer, { continueSession: sessionStarted });
+      sessionStarted = true;
     }
     this._running = false;
     this._updateToolbar();
@@ -310,7 +312,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
   // ── Core layer runner ────────────────────────────────────────────────────
 
-  _runLayer(layer) {
+  _runLayer(layer, { continueSession = false } = {}) {
     return new Promise(async (resolve) => {
       const idx   = this._layers.indexOf(layer);
       const total = this._layers.length;
@@ -360,13 +362,14 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         this._fitTerminal();
 
         const result = await window.app.wfrPty.runLayer({
-          layerId:      layer.id,
-          prompt:       this._buildLayerUserPrompt(layer),
-          systemPrompt: this._buildLayerSystemContext() || undefined,
-          model:        this._modelConfig,
-          cwd:          this._getCwd(layer) || undefined,
-          cols:         this._term.cols,
-          rows:         this._term.rows,
+          layerId:         layer.id,
+          prompt:          this._buildLayerUserPrompt(layer),
+          systemPrompt:    this._buildLayerSystemContext() || undefined,
+          model:           this._modelConfig,
+          cwd:             this._getCwd(layer) || undefined,
+          cols:            this._term.cols,
+          rows:            this._term.rows,
+          continueSession,
         });
 
         if (!result?.ok) await finish(result?.error || 'Failed to start PTY');

@@ -152,7 +152,7 @@ function registerWfrPtyHandlers() {
   // This avoids the TUI progress display that --verbose produces, which clears the
   // screen using ANSI escape sequences and hides intermediate work from the user.
   // ---------------------------------------------------------------------------
-  safeHandle('wfrPty:runLayer', (event, { layerId, prompt, systemPrompt, model, cwd, cols, rows }) => {
+  safeHandle('wfrPty:runLayer', (event, { layerId, prompt, systemPrompt, model, cwd, cols, rows, continueSession }) => {
     killPty();
     _wc = event.sender;
 
@@ -160,7 +160,8 @@ function registerWfrPtyHandlers() {
     const modelName = model.model_name || 'claude-haiku-4-5';
     const isPython  = exeRaw.toLowerCase().endsWith('.py');
 
-    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${prompt}` : (prompt || '');
+    // When continuing a session the system context is already in history — send only the new prompt.
+    const fullPrompt = (!continueSession && systemPrompt) ? `${systemPrompt}\n\n---\n\n${prompt}` : (prompt || '');
     const spawnCwd   = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
 
     // For Python agents, spawn: python <script.py>
@@ -192,6 +193,7 @@ function registerWfrPtyHandlers() {
 
       spawnExe  = resolveExe(exeRaw);
       spawnArgs = [
+        ...(continueSession ? ['-c'] : []),
         '--dangerously-skip-permissions',
         '--print',
         '--verbose',

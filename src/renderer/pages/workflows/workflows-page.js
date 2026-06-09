@@ -842,7 +842,11 @@ export class WorkflowsPage {
     const base = layer.prompt ||
       `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`;
 
-    if (!this._screenDesign) return base;
+    const isUiShellFirstLayer =
+      this._activeWorkflow?.workflow_type === 'ui_shell' &&
+      this._layers[0]?.id === layer.id;
+
+    if (!this._screenDesign || !isUiShellFirstLayer) return base;
 
     const screenRef = this._screenFilePath
       ? `See file: ${this._screenFilePath}`
@@ -863,7 +867,11 @@ ${base}`;
   _getDisplayPrompt(layer) {
     const base = layer.prompt || `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`;
 
-    if (!this._screenDesign) return base;
+    const isUiShellFirstLayer =
+      this._activeWorkflow?.workflow_type === 'ui_shell' &&
+      this._layers[0]?.id === layer.id;
+
+    if (!this._screenDesign || !isUiShellFirstLayer) return base;
 
     const screenRef = this._screenFilePath
       ? `See file: ${this._screenFilePath}`

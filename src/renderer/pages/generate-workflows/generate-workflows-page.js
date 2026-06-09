@@ -39,7 +39,6 @@ Exception: Workflow 1 uses "UI"; every feature workflow ends with "Wire Up" then
 ════════════════════════════════════════════════════════════════
 UNIVERSAL RULES  (apply to every layer, every workflow)
 ════════════════════════════════════════════════════════════════
-- Every "prompt" field MUST begin with: "Understand the project structure first and then implement the changes"
 - Every "prompt" field MUST end with: "Run the build command and fix all compile errors before completing."
 - Every "prompt" field MUST be ≤200 words — describe WHAT to build and WHICH files to touch.
   Never include: Dart code, class bodies, method implementations, numbered step-by-step code, or import statements.
@@ -118,7 +117,7 @@ Backend & Data layer "prompt" must also:
         "purpose": "Convert HTML mockup to a complete static Flutter Dart page",
         "inputs": ["HTML screen design", "project folder structure"],
         "outputs": ["lib/features/{name}/presentation/pages/{name}_page.dart"],
-        "prompt": "Understand the project structure first and then implement the changes. ..."
+        "prompt": "..."
       }
     ]
   },
@@ -136,7 +135,7 @@ Backend & Data layer "prompt" must also:
         "purpose": "...",
         "inputs": ["exact file paths from prior layers"],
         "outputs": ["exact file paths this layer creates or modifies"],
-        "prompt": "Understand the project structure first and then implement the changes. ..."
+        "prompt": "..."
       }
     ]
   }
