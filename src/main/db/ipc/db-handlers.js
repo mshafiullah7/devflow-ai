@@ -204,6 +204,25 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM layers WHERE id = ?').get(result.lastInsertRowid);
   });
 
+  // Recalculates and persists the workflow status based on its active layers.
+  // completed: all layers are executed/needs_review (none open, none failed)
+  // in_progress: at least one layer attempted (executed/needs_review/failed) but not all succeeded
+  // open: all layers still open
+  function recalcWorkflowStatus(workflowId) {
+    const SUCCESS  = ['executed', 'needs_review'];
+    const ATTEMPTED = ['executed', 'needs_review', 'failed'];
+    const layers = db.prepare(`SELECT status FROM layers WHERE workflow_id = ? AND is_active = 1`).all(workflowId);
+    if (!layers.length) return;
+    const anyAttempted = layers.some(l => ATTEMPTED.includes(l.status));
+    const allSucceeded = layers.every(l => SUCCESS.includes(l.status));
+    const newStatus = allSucceeded ? 'completed' : anyAttempted ? 'in_progress' : 'open';
+    const wf = db.prepare('SELECT * FROM workflows WHERE id = ?').get(workflowId);
+    if (wf && wf.status !== newStatus) {
+      db.prepare(`UPDATE workflows SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(newStatus, workflowId);
+      broadcastToAll('workflow:workflowsChanged', { projectId: wf.project_id });
+    }
+  }
+
   safeHandle('db:layers:update', (_e, args) => {
     const { id, layer, order_num, purpose, inputs, outputs, prompt, is_active, status } = args;
     const hasProjectLayer = Object.prototype.hasOwnProperty.call(args, 'project_layer_id');
@@ -235,7 +254,13 @@ function registerDbHandlers() {
       status    ?? null, status    ?? null,
       id
     );
-    return db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
+    const updatedLayer = db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
+    // When status was explicitly included in the update, fire the same events as updateStatus
+    if (status != null && updatedLayer?.workflow_id) {
+      broadcastToAll('workflow:layerStatusChanged', { layerId: id, workflowId: updatedLayer.workflow_id, status: updatedLayer.status });
+      recalcWorkflowStatus(updatedLayer.workflow_id);
+    }
+    return updatedLayer;
   });
 
   safeHandle('db:layers:delete', (_e, id) => {
@@ -248,6 +273,7 @@ function registerDbHandlers() {
     db.prepare(`UPDATE layers SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
     const layer = db.prepare('SELECT * FROM layers WHERE id = ?').get(id);
     broadcastToAll('workflow:layerStatusChanged', { layerId: id, workflowId: layer?.workflow_id, status });
+    if (layer?.workflow_id) recalcWorkflowStatus(layer.workflow_id);
     return layer;
   });
 

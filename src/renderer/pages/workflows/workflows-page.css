@@ -421,6 +421,8 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .wf-field {

@@ -255,12 +255,6 @@ export class TestRunnerWindowPage {
             <span class="tr-result tr-result--duration" id="trDuration" hidden></span>
             <span class="tr-result tr-result--exit" id="trExitCode" hidden></span>
             <div class="tr-results-actions" id="trResultsActions" hidden>
-              <button class="tr-fix-issue-btn" id="trFixIssueBtn">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M13 2l1 1-2 2-1-1 2-2zM2 14l3-1-2-2-1 3zM4 10l6-6 2 2-6 6-2-2z" fill="currentColor"/>
-                </svg>
-                Add to Queue
-              </button>
               <button class="tr-log-issue-btn" id="trLogIssueBtn">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                   <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6"/>
@@ -476,6 +470,7 @@ export class TestRunnerWindowPage {
     this._showResults(exitCode, results);
     await this._saveRun(exitCode, results);
     this._notifyTelegram(exitCode, results);
+    await this._autoQueueFailures(exitCode);
   }
 
   _notifyTelegram(exitCode, results) {
@@ -533,11 +528,6 @@ export class TestRunnerWindowPage {
     const actionsEl = this.container.querySelector('#trResultsActions');
     if (actionsEl) actionsEl.hidden = !hasFailed;
 
-    const fixBtn = this.container.querySelector('#trFixIssueBtn');
-    if (fixBtn) {
-      fixBtn.onclick = () => this._fixIssues(this._outputText, exitCode, this._lastRunId);
-    }
-
     const logBtn = this.container.querySelector('#trLogIssueBtn');
     if (logBtn) {
       logBtn.onclick = () => this._showLogIssueModal(results, exitCode);
@@ -561,18 +551,26 @@ export class TestRunnerWindowPage {
 
   _extractErrorSnippet(output) {
     if (!output) return '';
-    const lines = output.split('\n');
-    const errorLines = [];
-    let capturing = false;
-    for (const line of lines) {
-      if (/FAIL |● |Error:|FAILED|AssertionError|at Object\.|expected|received/i.test(line)) {
-        capturing = true;
+    const initialFailures = this._extractTestFailures(output);
+    if (!initialFailures.length) return output.trim();
+
+    let failures = initialFailures;
+    const rawSections = this._extractRawSections(output);
+    if (rawSections) {
+      const rawBlocks = rawSections
+        .split(/\n(?=\[\d+\]\n)/)
+        .map(s => s.trim())
+        .filter(s => s);
+      if (rawBlocks.length === initialFailures.length) {
+        failures = initialFailures.map((f, i) => ({
+          name: f.name,
+          body: rawBlocks[i].replace(/^\[\d+\]\s*\n?/, '').trim(),
+        }));
       }
-      if (capturing) errorLines.push(line);
-      if (errorLines.length >= 30) break;
     }
-    const snippet = (errorLines.length ? errorLines : lines.slice(0, 30)).join('\n').trim();
-    return snippet.length > 1200 ? snippet.slice(0, 1200) + '\n…' : snippet;
+
+    const grouped = this._groupFailuresByFile(failures);
+    return grouped.map(g => `--- ${g._file}\n\n${g.body}`).join('\n\n');
   }
 
   async _showLogIssueModal(results, exitCode, overrides = {}) {
@@ -706,409 +704,58 @@ export class TestRunnerWindowPage {
   }
 
   // ----------------------------------------------------------------
-  // Fix Issues
+  // Auto-queue failures after run
   // ----------------------------------------------------------------
-  _parseTasksJson(raw) {
-    if (!raw) return null;
+  async _autoQueueFailures(exitCode) {
+    const initialFailures = this._extractTestFailures(this._outputText);
+    if (!initialFailures.length) return;
 
-    const text = raw
-      .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
-      .replace(/\x1B\][^\x07]*\x07/g, '')
-      .trim();
-
-    if (text.startsWith('[')) {
-      try {
-        const r = JSON.parse(text);
-        if (Array.isArray(r) && r.length > 0) return r;
-      } catch (_) {}
-    }
-
-    const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
-    if (fenceMatch) {
-      try {
-        const r = JSON.parse(fenceMatch[1].trim());
-        if (Array.isArray(r) && r.length > 0) return r;
-      } catch (_) {}
-    }
-
-    let best   = null;
-    let depth  = 0;
-    let start  = -1;
-    let inStr  = false;
-    let escape = false;
-
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-
-      if (escape)              { escape = false; continue; }
-      if (c === '\\' && inStr) { escape = true;  continue; }
-      if (c === '"')           { inStr = !inStr;  continue; }
-      if (inStr)               continue;
-
-      if (c === '[') {
-        if (depth === 0) start = i;
-        depth++;
-      } else if (c === ']') {
-        depth--;
-        if (depth === 0 && start !== -1) {
-          try {
-            const candidate = text.slice(start, i + 1);
-            const parsed    = JSON.parse(candidate);
-            if (Array.isArray(parsed) && parsed.length > 0) best = parsed;
-          } catch (_) {}
-          start = -1;
-        }
+    let failures = initialFailures;
+    const rawSections = this._extractRawSections(this._outputText);
+    if (rawSections) {
+      const rawBlocks = rawSections
+        .split(/\n(?=\[\d+\]\n)/)
+        .map(s => s.trim())
+        .filter(s => s);
+      if (rawBlocks.length === initialFailures.length) {
+        failures = initialFailures.map((f, i) => ({
+          name: f.name,
+          body: rawBlocks[i].replace(/^\[\d+\]\s*\n?/, '').trim(),
+        }));
       }
     }
 
-    return best;
-  }
-
-  _fixQueueKey(runId) {
-    return `devflow-tr-fix-queued-${this._projectId}-${runId}`;
-  }
-
-  async _fixIssues(outputText, exitCode, runId) {
-    if (runId && localStorage.getItem(this._fixQueueKey(runId))) {
-      this._showAlreadyQueuedModal();
-      return;
-    }
-
-    const src = (outputText || '').trim();
-    if (!src) {
-      this._showFixFeedback('No test output to analyze.', false);
-      return;
-    }
-
-    this._showAddToQueueModal(src, runId);
-  }
-
-  async _fetchGitContext() {
-    const cwd = this._project?.project_path;
-    if (!cwd) return { summary: '', badge: '' };
-    try {
-      const [statusRes, diffRes, logRes] = await Promise.all([
-        window.db.terminal.exec({ command: 'git status --short 2>&1',             cwd }).catch(() => ({ stdout: '' })),
-        window.db.terminal.exec({ command: 'git diff --name-status HEAD 2>&1',    cwd }).catch(() => ({ stdout: '' })),
-        window.db.terminal.exec({ command: 'git log --diff-filter=D --name-only --oneline -n 10 2>&1', cwd }).catch(() => ({ stdout: '' })),
-      ]);
-
-      const statusOut = (statusRes.stdout || '').trim();
-      const diffOut   = (diffRes.stdout   || '').trim();
-      const logOut    = (logRes.stdout    || '').trim();
-
-      const deletedUncommitted = [
-        ...statusOut.split('\n')
-          .filter(l => /^D[ D]|^ D/.test(l))
-          .map(l => l.replace(/^.{2}\s+/, '').trim()),
-        ...diffOut.split('\n')
-          .filter(l => /^D\t/.test(l))
-          .map(l => l.slice(2).trim()),
-      ];
-
-      const deletedCommitted = logOut.split('\n')
-        .map(l => l.trim())
-        .filter(l => l && !l.match(/^[0-9a-f]{5,}\s/i) && /\.\w+$/.test(l));
-
-      const allDeleted = [...new Set([...deletedUncommitted, ...deletedCommitted])]
-        .filter(Boolean);
-
-      const parts = [];
-      if (allDeleted.length) {
-        parts.push(`Deleted files (git):\n${allDeleted.map(f => `  - ${f}`).join('\n')}`);
-      }
-      if (statusOut) {
-        parts.push(`Git working-tree status:\n${statusOut}`);
-      }
-
-      let badge = '';
-      if (allDeleted.length) {
-        badge = `📂 ${allDeleted.length} deleted file${allDeleted.length > 1 ? 's' : ''} in git`;
-      } else if (statusOut) {
-        badge = `📂 Git: ${statusOut.split('\n').filter(Boolean).length} change${statusOut.split('\n').filter(Boolean).length > 1 ? 's' : ''}`;
-      } else if (logOut) {
-        badge = '📂 Git: clean working tree';
-      } else {
-        badge = '📂 Git: not available';
-      }
-
-      return { summary: parts.join('\n\n'), badge };
-    } catch {
-      return { summary: '', badge: '📂 Git: not available' };
-    }
-  }
-
-  async _showAddToQueueModal(rawOutput, runId) {
-    const overlay = document.createElement('div');
-    overlay.className = 'tr-modal-overlay';
-    overlay.innerHTML = `
-      <div class="tr-modal tr-modal--aq">
-        <div class="tr-modal__header">
-          <h2 class="tr-modal__title">Add to Queue</h2>
-          <span id="trAqStatus" class="tr-aq-status"></span>
-          <button class="tr-modal__close" id="trAqClose" aria-label="Close">&times;</button>
-        </div>
-        <div class="tr-modal__body tr-aq-body">
-          <textarea class="tr-aq-textarea" id="trAqText" spellcheck="false"></textarea>
-        </div>
-        <div class="tr-modal__footer">
-          <span class="tr-aq-tokens" id="trAqTokens"></span>
-          <button class="tr-modal__btn tr-modal__btn--cancel"         id="trAqCancel">Cancel</button>
-          <button class="tr-modal__btn tr-modal__btn--extract-direct" id="trAqExtractDirect">Extract (No AI)</button>
-          <button class="tr-modal__btn tr-modal__btn--extract"        id="trAqExtract">Extract (AI)</button>
-          <button class="tr-modal__btn tr-modal__btn--save"           id="trAqSend" disabled>Send to Tasks</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    const textEl           = overlay.querySelector('#trAqText');
-    const statusEl         = overlay.querySelector('#trAqStatus');
-    const extractBtn       = overlay.querySelector('#trAqExtract');
-    const extractDirectBtn = overlay.querySelector('#trAqExtractDirect');
-    const sendBtn          = overlay.querySelector('#trAqSend');
-    const tokensEl         = overlay.querySelector('#trAqTokens');
-
-    const _updateTokens = (text) => {
-      if (!tokensEl) return;
-      const n = this._estimateTokens(text);
-      tokensEl.textContent = `~${n.toLocaleString()} tokens`;
-    };
-    textEl.addEventListener('input', () => _updateTokens(textEl.value));
-
-    const _initialFailures = this._extractTestFailures(rawOutput);
-    const _rawSections     = this._extractRawSections(rawOutput);
-    const _filteredText    = _rawSections
-      || (_initialFailures.length
-        ? _initialFailures.map((f, i) => `[${i + 1}] ${f.name}\n${f.body}`).join('\n\n')
-        : rawOutput.slice(-4000));
-
-    const _buildPrompt = (failures) => {
-      return `You are a test failure analyst for a software project queue system.
-
-Below are pre-extracted test failure entries. Group them by their source file and output in exactly this format:
-
----
-Test cases failed in - {relative/path/to/file.spec.js}
-Analyze for the failed test cases and check if functionality is removed then delete the test case else fix the test cases
-
-[1]
-e2e test case: {test name}
-Failed test case details:
-
-{full error output, unchanged}
-
-[2]
-e2e test case: {test name}
-Failed test case details:
-
-{full error output, unchanged}
-
----
-Test cases failed in - {next file if any}
-Analyze for the failed test cases and check if functionality is removed then delete the test case else fix the test cases
-...
-
-Rules:
-- Do not modify or clean the error content — copy it verbatim
-- Use a line containing exactly "---" to separate file groups
-- Number test cases within each group starting at [1]
-- If the file path cannot be determined, use "unknown"
-- Always include the instruction line immediately after each "Test cases failed in" line
-
-Failures to process:
-${failures}`;
-    };
-
-    textEl.value = _buildPrompt(_filteredText);
-    _updateTokens(textEl.value);
-
-    const _showGrouped = (grouped) => {
-      textEl.value = grouped.map(g => {
-        const header = `---\nTest cases failed in - ${g._file}\nAnalyze for the failed test cases and check if functionality is removed then delete the test case else fix the test cases`;
-        return `${header}\n\n${g.body}`;
-      }).join('\n\n') + '\n\n---';
-      textEl.scrollTop = 0;
-      _updateTokens(textEl.value);
-    };
-
-    const close = () => overlay.remove();
-    overlay.querySelector('#trAqClose').addEventListener('click', close);
-    overlay.querySelector('#trAqCancel').addEventListener('click', close);
-
-    let extractedFailures = null;
-
-    extractBtn.addEventListener('click', () => {
-      const cfg = this._modelCfg;
-
-      if (!cfg) {
-        if (!_initialFailures.length) {
-          statusEl.textContent = '✗ No failures detected — check the output or select a model';
-          statusEl.className   = 'tr-aq-status tr-aq-status--err';
-          return;
-        }
-        const grouped    = this._groupFailuresByFile(_initialFailures);
-        extractedFailures = grouped;
-        _showGrouped(grouped);
-        const totalTests = _initialFailures.length;
-        const totalFiles = grouped.length;
-        statusEl.textContent = totalFiles === 1
-          ? `✓ ${totalTests} failure${totalTests > 1 ? 's' : ''} in 1 file`
-          : `✓ ${totalTests} failures across ${totalFiles} files`;
-        statusEl.className  = 'tr-aq-status tr-aq-status--ok';
-        sendBtn.disabled    = false;
-        sendBtn.textContent = `Send ${totalFiles} task${totalFiles > 1 ? 's' : ''} to Queue`;
-        return;
-      }
-
-      extractBtn.disabled    = true;
-      extractBtn.textContent = 'Analyzing…';
-      statusEl.textContent   = '⏳ Analyzing with AI…';
-      statusEl.className     = 'tr-aq-status';
-
-      const fullPrompt = textEl.value;
-      textEl.value     = '';
-
-      let aiOutput = '';
-      window.app.chat.offAll();
-      window.app.chat.onToken(({ text }) => {
-        aiOutput     += text;
-        textEl.value  = aiOutput;
-        textEl.scrollTop = textEl.scrollHeight;
-        _updateTokens(aiOutput);
+    const grouped = this._groupFailuresByFile(failures);
+    for (const f of grouped) {
+      await window.db.promptQueue.add({
+        project_id:    this._projectId,
+        user_story_id: null,
+        story_title:   f.name,
+        prompt_id:     null,
+        tag:           'Test Fix',
+        prompt_text:   `--- ${f._file}\n\n${f.body}`,
+        layer_id:      null,
       });
-      window.app.chat.onDone(() => {
-        window.app.chat.offAll();
-        extractBtn.disabled    = false;
-        extractBtn.textContent = 'Extract (AI)';
+    }
 
-        const fileBlocks = aiOutput
-          .split(/\n?---\n?/)
-          .map(s => s.trim())
-          .filter(s => s && /^Test cases failed in\s*-\s*/i.test(s));
-
-        if (!fileBlocks.length) {
-          statusEl.textContent = '✗ No failures detected in the output';
-          statusEl.className   = 'tr-aq-status tr-aq-status--err';
-          return;
-        }
-
-        extractedFailures = fileBlocks.map(block => {
-          const fileMatch = block.match(/^Test cases failed in\s*-\s*(.+)/i);
-          const file      = fileMatch ? fileMatch[1].trim() : 'unknown';
-          const shortName = file.split(/[/\\]/).pop();
-          const count     = (block.match(/^\[\d+\]/gm) || []).length || 1;
-          return {
-            name:    `Fix failing tests — ${shortName}`,
-            body:    block,
-            _file:   file,
-            _count:  count,
-            _intent: 'FIX',
-            _reason: '',
-          };
-        });
-
-        const totalFiles = extractedFailures.length;
-        const totalTests = extractedFailures.reduce((s, g) => s + g._count, 0);
-        statusEl.textContent = totalFiles === 1
-          ? `✓ ${totalTests} failure${totalTests > 1 ? 's' : ''} in 1 file`
-          : `✓ ${totalTests} failures across ${totalFiles} files`;
-        statusEl.className  = 'tr-aq-status tr-aq-status--ok';
-        sendBtn.disabled    = false;
-        sendBtn.textContent = `Send ${totalFiles} task${totalFiles > 1 ? 's' : ''} to Queue`;
-      });
-
-      window.app.chat.generate({ prompt: fullPrompt, model: cfg });
-    });
-
-    extractDirectBtn.addEventListener('click', () => {
-      if (!_initialFailures.length) {
-        statusEl.textContent = '✗ No failures detected in the output';
-        statusEl.className   = 'tr-aq-status tr-aq-status--err';
-        return;
-      }
-
-      let failures = _initialFailures;
-
-      if (_rawSections) {
-        const rawBlocks = _rawSections
-          .split(/\n(?=\[\d+\]\n)/)
-          .map(s => s.trim())
-          .filter(s => s);
-
-        if (rawBlocks.length === _initialFailures.length) {
-          failures = _initialFailures.map((f, i) => ({
-            name: f.name,
-            body: rawBlocks[i].replace(/^\[\d+\]\s*\n?/, '').trim(),
-          }));
-        }
-      }
-
-      const grouped     = this._groupFailuresByFile(failures);
-      extractedFailures = grouped;
-      _showGrouped(grouped);
-      const totalTests = _initialFailures.length;
-      const totalFiles = grouped.length;
-      statusEl.textContent = totalFiles === 1
-        ? `✓ ${totalTests} failure${totalTests > 1 ? 's' : ''} in 1 file`
-        : `✓ ${totalTests} failures across ${totalFiles} files`;
-      statusEl.className  = 'tr-aq-status tr-aq-status--ok';
-      sendBtn.disabled    = false;
-      sendBtn.textContent = `Send ${totalFiles} task${totalFiles > 1 ? 's' : ''} to Queue`;
-    });
-
-    sendBtn.addEventListener('click', async () => {
-      if (!extractedFailures || !extractedFailures.length) return;
-      sendBtn.disabled    = true;
-      sendBtn.textContent = 'Adding…';
-
-      let created = 0;
-      let removedCount = 0;
-      for (const f of extractedFailures) {
-        const isRemove   = f._intent === 'REMOVE';
-        const tag        = isRemove ? 'Remove Test' : 'Test Fix';
-        const fileHeader = `Test cases failed in - ${f._file}\nAnalyze for the failed test cases and check if functionality is removed then delete the test case else fix the test cases`;
-        const promptText = isRemove
-          ? `${fileHeader}\n\nThe page or feature covered by this spec file has been removed. Delete the following obsolete test cases from the test file.\n\n${f.body}`
-          : `${fileHeader}\n\n${f.body}`;
-
-        await window.db.promptQueue.add({
-          project_id:    this._projectId,
-          user_story_id: null,
-          story_title:   f.name,
-          prompt_id:     null,
-          tag,
-          prompt_text:   promptText,
-          layer_id:      null,
-        });
-        created++;
-        if (isRemove) removedCount++;
-      }
-
-      if (runId) localStorage.setItem(this._fixQueueKey(runId), '1');
-      close();
-
-      if (created > 0) {
-        const fixCount = created - removedCount;
-        const parts = [];
-        if (fixCount    > 0) parts.push(`${fixCount} fix task${fixCount > 1 ? 's' : ''}`);
-        if (removedCount > 0) parts.push(`${removedCount} remove task${removedCount > 1 ? 's' : ''}`);
-        this._showFixFeedback(`${parts.join(' + ')} added to Tasks Queue ✓`, true);
-      }
-    });
-  }
-
-  _estimateTokens(text) {
-    if (!text) return 0;
-    return Math.ceil(text.length / 4);
+    if (grouped.length > 0) {
+      this._showFixFeedback(
+        `${grouped.length} fix task${grouped.length > 1 ? 's' : ''} added to Tasks Queue ✓`,
+        true
+      );
+    }
   }
 
   _groupFailuresByFile(rawFailures) {
     const getFile = ({ name, body }) => {
       const text = `${name}\n${body}`;
+      // Structured extractor format: "File:  path/to/foo.spec.js:42"
       const fm = body.match(/^File:\s+([\S]+)/m);
       if (fm) return fm[1].replace(/:\d+.*$/, '').trim();
+      // Flutter: "test/foo_test.dart:42" or "test/foo_test.dart 42:5"
+      const dartM = text.match(/((?:[\w.-]+[/\\])*[\w.-]+_test\.dart)/i);
+      if (dartM) return dartM[1].trim();
+      // JS/TS: tests\e2e\foo.spec.js:356:1
       const pm = text.match(/((?:[\w.-]+[/\\])*[\w.-]+\.(?:spec|test)\.\w+)/i);
       if (pm) return pm[1].replace(/:\d+.*$/, '').trim();
       return '__unknown__';
@@ -1129,7 +776,7 @@ ${failures}`;
       const title   = `Fix failing tests — ${shortName}`;
 
       const body = failures.map((f, i) =>
-        `[${i + 1}]\ne2e test case: ${f.name}\nFailed test case details:\n\n${f.body}`
+        `[${i + 1}]\ntest case: ${f.name}\nFailed test case details:\n\n${f.body}`
       ).join('\n\n');
 
       return { name: title, body, _file: file, _count: failures.length, _intent, _reason };
@@ -1296,45 +943,6 @@ ${failures}`;
     return failures;
   }
 
-  _showAlreadyQueuedModal() {
-    const overlay = document.createElement('div');
-    overlay.className = 'tr-modal-overlay';
-    overlay.innerHTML = `
-      <div class="tr-modal tr-modal--sm">
-        <div class="tr-modal__header">
-          <h2 class="tr-modal__title">
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="flex-shrink:0">
-              <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            Already Queued
-          </h2>
-          <button class="tr-modal__close" id="trAqClose" aria-label="Close">&times;</button>
-        </div>
-        <div class="tr-modal__body">
-          <p class="tr-fc-summary">
-            Fix tasks for this test run have already been added to <strong>Tasks Queue</strong>.
-          </p>
-          <p class="tr-fc-hint">
-            To generate new fix tasks, run the tests again first — each fresh test run
-            gets its own set of tasks.
-          </p>
-        </div>
-        <div class="tr-modal__footer">
-          <button class="tr-modal__btn tr-modal__btn--save" id="trAqOk">OK</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-    const close = () => overlay.remove();
-    overlay.querySelector('#trAqClose').addEventListener('click', close);
-    overlay.querySelector('#trAqOk').addEventListener('click', close);
-
-    const escFn = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escFn); } };
-    document.addEventListener('keydown', escFn);
-  }
-
   _showFixFeedback(message, success) {
     document.querySelectorAll('.tr-fix-feedback').forEach(el => el.remove());
 
@@ -1391,10 +999,6 @@ ${failures}`;
     const [last, ...older] = this._history;
 
     lastRunEl.innerHTML = this._lastRunSectionHtml(last);
-    const histFixBtn = lastRunEl.querySelector('#trLastRunFixBtn');
-    if (histFixBtn) {
-      histFixBtn.addEventListener('click', () => this._fixIssues(last.output || '', last.exit_code, last.id));
-    }
     const histIssueBtn = lastRunEl.querySelector('#trLastRunIssueBtn');
     if (histIssueBtn) {
       histIssueBtn.addEventListener('click', () => this._showLogIssueModalFromHistory(last));
@@ -1416,12 +1020,6 @@ ${failures}`;
     const outputText = r.output ? escHtml(r.output) : '<span class="tr-output-none">No output captured</span>';
     const histBtns = isFailed
       ? `<div class="tr-last-run-actions">
-           <button class="tr-fix-issue-btn tr-fix-issue-btn--sm" id="trLastRunFixBtn" title="Add fix tasks to queue">
-             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-               <path d="M13 2l1 1-2 2-1-1 2-2zM2 14l3-1-2-2-1 3zM4 10l6-6 2 2-6 6-2-2z" fill="currentColor"/>
-             </svg>
-             Add to Queue
-           </button>
            <button class="tr-log-issue-btn" id="trLastRunIssueBtn" title="Log as issue">
              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>

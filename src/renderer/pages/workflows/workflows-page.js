@@ -103,13 +103,15 @@ export class WorkflowsPage {
           this._refreshLayersTab();
         }
       }
-      // Update workflow status badge in the list (re-fetch the workflow row)
+      // Re-fetch the workflow so the status badge reflects any auto-recalculated status
       window.db.workflows.get(workflowId).then(wf => {
         if (!wf) return;
         const idx = this._workflows.findIndex(w => w.id === wf.id);
         if (idx >= 0) {
           this._workflows[idx].status = wf.status;
           this._renderList();
+          // Also refresh the detail header badge when this is the active workflow
+          if (wf.id === this._activeId) this._renderDetail();
         }
       });
     });
@@ -442,10 +444,11 @@ export class WorkflowsPage {
     const pagesOptions = this._pages.map(p =>
       `<option value="${p.id}" ${wf.screen_design_id === p.id ? 'selected' : ''}>${escHtml(p.title || 'Untitled')}</option>`
     ).join('');
+    const currentStatus = wf.status || 'open';
     return `
       <div class="wf-edit-form" id="wfEditForm">
         <div class="wf-field">
-          <label class="wf-label">Feature / Name</label>
+          <label class="wf-label">Workflow Name</label>
           <input class="wf-input" id="wfEFeature" value="${escHtml(wf.feature || '')}" placeholder="e.g. Code Review">
         </div>
         <div class="wf-field">
@@ -460,6 +463,14 @@ export class WorkflowsPage {
             ${pagesOptions}
           </select>
         </div>` : ''}
+        <div class="wf-field">
+          <label class="wf-label">Status</label>
+          <select class="wf-input wf-select" id="wfEStatus">
+            <option value="open"        ${currentStatus === 'open'        ? 'selected' : ''}>Open</option>
+            <option value="in_progress" ${currentStatus === 'in_progress' ? 'selected' : ''}>In Progress</option>
+            <option value="completed"   ${currentStatus === 'completed'   ? 'selected' : ''}>Completed</option>
+          </select>
+        </div>
         <div class="wf-form-actions">
           <button class="wf-btn-cancel" id="wfBtnCancelEditWf">Cancel</button>
           <button class="wf-btn-save" id="wfBtnSaveWf">Save</button>
@@ -999,12 +1010,17 @@ ${base}`;
     if (!feature) return;
     const pageVal          = this.container.querySelector('#wfEPage')?.value;
     const screen_design_id = pageVal ? +pageVal : null;
+    const status           = this.container.querySelector('#wfEStatus')?.value || 'open';
     await window.db.workflows.update({ id: wf.id, feature, description: desc, screen_design_id });
+    if (status !== (wf.status || 'open')) {
+      await window.db.workflows.updateStatus({ id: wf.id, status });
+    }
     const idx = this._workflows.findIndex(w => w.id === wf.id);
     if (idx >= 0) {
       this._workflows[idx].feature          = feature;
       this._workflows[idx].description      = desc;
       this._workflows[idx].screen_design_id = screen_design_id;
+      this._workflows[idx].status           = status;
     }
     this._editingWf = false;
     this._renderList();

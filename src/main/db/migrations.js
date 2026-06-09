@@ -332,6 +332,43 @@ function runMigrations(db) {
     db.exec('ALTER TABLE prompt_queue ADD COLUMN commit_sha TEXT');
   }
 
+  // Ensure prompt_queue_messages exists and its FK points to prompt_queue (not prompt_queue_old).
+  // When the rename migration above ran, SQLite 3.26+ rewrote the FK reference in
+  // prompt_queue_messages from "prompt_queue" to "prompt_queue_old". After DROP TABLE
+  // prompt_queue_old the FK became dangling, causing "no such table: main.prompt_queue_old"
+  // on any access to prompt_queue_messages.
+  const pqmRow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='prompt_queue_messages'").get();
+  if (!pqmRow) {
+    // Table missing entirely in older databases — create it fresh
+    db.exec(`
+      CREATE TABLE prompt_queue_messages (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        queue_item_id INTEGER NOT NULL REFERENCES prompt_queue(id) ON DELETE CASCADE,
+        role          TEXT    NOT NULL,
+        content       TEXT    NOT NULL,
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  } else if ((pqmRow.sql || '').includes('prompt_queue_old')) {
+    // FK was rewritten to point at the now-dropped prompt_queue_old — rebuild the table
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+      ALTER TABLE prompt_queue_messages RENAME TO prompt_queue_messages_old;
+      CREATE TABLE prompt_queue_messages (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        queue_item_id INTEGER NOT NULL REFERENCES prompt_queue(id) ON DELETE CASCADE,
+        role          TEXT    NOT NULL,
+        content       TEXT    NOT NULL,
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO prompt_queue_messages (id, queue_item_id, role, content, created_at)
+        SELECT id, queue_item_id, role, content, created_at
+        FROM prompt_queue_messages_old;
+      DROP TABLE prompt_queue_messages_old;
+      PRAGMA foreign_keys = ON;
+    `);
+  }
+
   // ---- v2 architecture: drop old user-story tables, create workflow tables ----
   db.exec(`
     PRAGMA foreign_keys = OFF;

@@ -70,6 +70,15 @@ function stripHtmlText(html, maxLen = 800) {
   return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
 }
 
+function stripCodeFences(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('```')) return trimmed;
+  const firstNewline = trimmed.indexOf('\n');
+  if (firstNewline === -1) return trimmed;
+  const inner = trimmed.slice(firstNewline + 1);
+  return inner.endsWith('```') ? inner.slice(0, -3).trimEnd() : inner;
+}
+
 // ─────────────────────────────────────────────────────────────────
 export class TestGenerationPage {
   constructor(container) {
@@ -306,7 +315,8 @@ export class TestGenerationPage {
         outPath = computeE2eTestPath(this._progress[i].mockup.title, this._testFolder, this._naming.ext);
       }
 
-      const code = await this._streamItem(prompt);
+      const raw  = await this._streamItem(prompt);
+      const code = stripCodeFences(raw);
 
       if (this._aborted) {
         this._setItemStatus(i, 'pending');
