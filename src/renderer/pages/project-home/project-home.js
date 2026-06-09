@@ -253,16 +253,7 @@ export class ProjectHomePage {
                   <path d="M9 3h6M9 3v9l-4 6h14l-4-6V3"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Test Generator</span>
-            </button>
-            <button class="ph-nav-item" id="navTestRunner">
-              <span class="ph-nav-item__icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-              </span>
-              <span class="ph-nav-item__label">Test Runner</span>
-              <span class="ph-nav-item__count ${failed > 0 ? 'ph-nav-item__count--danger' : ''}">${failed} failed</span>
+              <span class="ph-nav-item__label">Unit Test Generator</span>
             </button>
 
             <button class="ph-nav-item" id="navIssues">
@@ -275,6 +266,20 @@ export class ProjectHomePage {
               </span>
               <span class="ph-nav-item__label">Issues</span>
               <span class="ph-nav-item__count ${issueTotal > 0 ? 'ph-nav-item__count--danger' : ''}">${issueTotal}</span>
+            </button>
+
+            <button class="ph-nav-item" id="navTestsIssuesQueue">
+              <span class="ph-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"/>
+                  <line x1="8" y1="12" x2="21" y2="12"/>
+                  <line x1="8" y1="18" x2="21" y2="18"/>
+                  <line x1="3" y1="6" x2="3.01" y2="6"/>
+                  <line x1="3" y1="12" x2="3.01" y2="12"/>
+                  <line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+              </span>
+              <span class="ph-nav-item__label">Tests &amp; Issues Queue</span>
             </button>
 
             <div class="ph-sidebar-section">Tools</div>
@@ -423,11 +428,12 @@ export class ProjectHomePage {
     this.container.querySelector('#navTestGenerator')
       .addEventListener('click', () => this.router.navigate('test-generator', { projectId: this.projectId }));
 
-    this.container.querySelector('#navTestRunner')
-      .addEventListener('click', () => this.router.navigate('test-runner', { projectId: this.projectId }));
 
     this.container.querySelector('#navIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
+
+    this.container.querySelector('#navTestsIssuesQueue')
+      .addEventListener('click', () => this.router.navigate('prompt-queue', { projectId: this.projectId }));
 
     this.container.querySelector('#navAiConsole')
       .addEventListener('click', () => this.router.navigate('ai-console', { projectId: this.projectId }));

@@ -40,10 +40,6 @@ router.register('project-layers', async () => {
   const { ProjectLayersPage } = await import('./pages/project-layers/project-layers-page.js');
   return ProjectLayersPage;
 });
-router.register('test-runner', async () => {
-  const { TestRunnerPage } = await import('./pages/test-runner/test-runner-page.js');
-  return TestRunnerPage;
-});
 router.register('style-guide', async () => {
   const { StyleGuidePage } = await import('./pages/style-guide/style-guide-page.js');
   return StyleGuidePage;

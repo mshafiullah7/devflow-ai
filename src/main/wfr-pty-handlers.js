@@ -18,8 +18,13 @@ let _jsonLineBuf = '';    // accumulates partial PTY lines for stream-json parsi
 function formatStreamLine(line) {
   const trimmed = line.trim();
   if (!trimmed) return null;
+  // Strip ANSI codes injected by the PTY around JSON lines before parsing
+  const clean = trimmed
+    .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+    .replace(/\x1B\][^\x07]*\x07/g, '')
+    .replace(/\r/g, '');
   let obj;
-  try { obj = JSON.parse(trimmed); } catch { return trimmed + '\r\n'; }
+  try { obj = JSON.parse(clean); } catch { return clean + '\r\n'; }
 
   switch (obj.type) {
     case 'tool_use': {
@@ -34,23 +39,34 @@ function formatStreamLine(line) {
       return texts ? texts.replace(/\n/g, '\r\n') : null;
     }
     case 'result': {
-      if (obj.subtype === 'error') return `\x1b[31m${obj.result || 'Error'}\x1b[0m\r\n`;
-      const parts = [];
-      if (obj.result) parts.push(obj.result.replace(/\n/g, '\r\n'));
       const u = obj.usage || {};
-      const statsTokens = [];
-      if (u.input_tokens  != null) statsTokens.push(`\x1b[2m↑ ${u.input_tokens.toLocaleString()} in\x1b[0m`);
-      if (u.output_tokens != null) statsTokens.push(`\x1b[2m↓ ${u.output_tokens.toLocaleString()} out\x1b[0m`);
-      if (u.cache_read_input_tokens)     statsTokens.push(`\x1b[2m${u.cache_read_input_tokens.toLocaleString()} cached\x1b[0m`);
-      if (obj.cost_usd    != null) statsTokens.push(`\x1b[2m$${obj.cost_usd.toFixed(4)}\x1b[0m`);
-      if (statsTokens.length) parts.push(`\r\n\x1b[2m── tokens: \x1b[0m${statsTokens.join('\x1b[2m  ·  \x1b[0m')}\r\n`);
-      return parts.length ? parts.join('\r\n') + '\r\n' : null;
+      send('wfrPty:tokenStats', {
+        input:     u.input_tokens               ?? null,
+        output:    u.output_tokens              ?? null,
+        cacheRead: u.cache_read_input_tokens    ?? null,
+        costUsd:   obj.cost_usd                 ?? null,
+      });
+      if (obj.subtype === 'error') return `\x1b[31m${obj.result || 'Error'}\x1b[0m\r\n`;
+      if (!obj.result) return null;
+      // Truncate large result payloads — show only last 15 lines
+      const lines = obj.result.split('\n');
+      const display = lines.length > 15
+        ? ['\x1b[2m… (' + (lines.length - 15) + ' lines omitted)\x1b[0m', ...lines.slice(-15)].join('\n')
+        : obj.result;
+      return display.replace(/\n/g, '\r\n') + '\r\n';
     }
     case 'system':
+      if (obj.subtype === 'thinking_tokens' && obj.estimated_tokens != null) {
+        send('wfrPty:tokenStats', { thinkingTokens: obj.estimated_tokens });
+      }
+      return null;
     case 'tool_result':
       return null;
-    default:
-      return null;
+    default: {
+      // Show a brief dimmed preview of unrecognised event types (truncated)
+      const preview = clean.length > 160 ? clean.slice(0, 160) + '…' : clean;
+      return `\x1b[2m${preview}\x1b[0m\r\n`;
+    }
   }
 }
 
@@ -178,6 +194,7 @@ function registerWfrPtyHandlers() {
       spawnArgs = [
         '--dangerously-skip-permissions',
         '--print',
+        '--verbose',
         '--output-format', 'stream-json',
         '--model', modelName,
         ...(useArg ? [fullPrompt] : []),

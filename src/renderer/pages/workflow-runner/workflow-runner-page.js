@@ -53,6 +53,7 @@ export class WorkflowRunnerPage {
     this._term    = null;
     this._fitAddon = null;
     this._resizeObs = null;
+    this._onWinResize = null;
   }
 
   mount() {
@@ -66,8 +67,9 @@ export class WorkflowRunnerPage {
     window.app.workflowChat.offAll();
     window.app.wfrPty.offAll();
     window.app.wfrPty.kill();
-    if (this._timerInt)  clearInterval(this._timerInt);
-    if (this._resizeObs) this._resizeObs.disconnect();
+    if (this._timerInt)    clearInterval(this._timerInt);
+    if (this._resizeObs)   this._resizeObs.disconnect();
+    if (this._onWinResize) window.removeEventListener('resize', this._onWinResize);
     if (this._term) { this._term.dispose(); this._term = null; }
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
   }
@@ -171,6 +173,20 @@ export class WorkflowRunnerPage {
 
     // Register IPC data listener NOW — before any layer runs — so no PTY output is missed
     window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
+    window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
+
+    // Ctrl+C: copy selected text to clipboard; fall through to PTY only when nothing is selected
+    this._term.attachCustomKeyEventHandler((ev) => {
+      if (ev.type !== 'keydown') return true;
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'c' && !ev.shiftKey) {
+        const sel = this._term.getSelection();
+        if (sel) {
+          navigator.clipboard.writeText(sel).catch(() => {});
+          return false;
+        }
+      }
+      return true;
+    });
 
     // Forward keystrokes to PTY (xterm → PTY stdin)
     this._term.onData((data) => window.app.wfrPty.write(data));
@@ -178,6 +194,10 @@ export class WorkflowRunnerPage {
     // Resize observer wired up immediately too
     this._resizeObs = new ResizeObserver(() => this._fitTerminal());
     this._resizeObs.observe(el);
+
+    // Window resize fallback (belt-and-suspenders alongside ResizeObserver)
+    this._onWinResize = () => this._fitTerminal();
+    window.addEventListener('resize', this._onWinResize);
 
     // Defer fit until xterm's canvas renderer has measured the font cell size.
     // One rAF is not enough — we need at least two frames (open → render → fit).
@@ -203,7 +223,14 @@ export class WorkflowRunnerPage {
     try {
       this._fitAddon.fit();
       window.app.wfrPty.resize({ cols: this._term.cols, rows: this._term.rows });
-    } catch (_) {}
+    } catch (_) {
+      requestAnimationFrame(() => {
+        try {
+          this._fitAddon?.fit();
+          if (this._term) window.app.wfrPty.resize({ cols: this._term.cols, rows: this._term.rows });
+        } catch (_2) {}
+      });
+    }
   }
 
   // ── Run helpers ──────────────────────────────────────────────────────────
@@ -288,6 +315,10 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       const idx   = this._layers.indexOf(layer);
       const total = this._layers.length;
 
+      // Reset token stats display for this layer run
+      const statsEl = this.container.querySelector('#wfrTokenStats');
+      if (statsEl) statsEl.hidden = true;
+
       this._statuses[layer.id] = 'running';
       this._startTimes[layer.id] = Date.now();
       this._selectLayer(layer.id);
@@ -300,8 +331,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       const finish = async (error) => {
         window.app.workflowChat.offAll();
         window.app.wfrPty.offAll();
-        // Re-attach PTY data listener (offAll removes it; re-add for next layer)
+        // Re-attach PTY listeners (offAll removes them; re-add for next layer)
         window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
+        window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
 
         if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
         const elapsed   = this._fmt(Date.now() - this._startTimes[layer.id]);
@@ -323,6 +355,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         window.app.wfrPty.onLayerDone(({ layerId, error }) => {
           if (layerId === layer.id) finish(error);
         });
+
+        // Fit first so cols/rows reflect the actual rendered terminal size
+        this._fitTerminal();
 
         const result = await window.app.wfrPty.runLayer({
           layerId:      layer.id,
@@ -358,6 +393,54 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         cwd:          this._getCwd(layer),
       });
     });
+  }
+
+  // ── Token stats ──────────────────────────────────────────────────────────
+
+  _updateTokenStats({ input, output, cacheRead, costUsd, thinkingTokens }) {
+    const el = this.container.querySelector('#wfrTokenStats');
+    if (!el) return;
+    el.hidden = false;
+
+    const thinkEl = this.container.querySelector('#wfrTokThinking');
+
+    // Live thinking progress — just update the thinking indicator
+    if (thinkingTokens != null && input == null) {
+      if (thinkEl) {
+        thinkEl.textContent = `thinking… ${thinkingTokens.toLocaleString()} tok`;
+        thinkEl.hidden = false;
+      }
+      return;
+    }
+
+    // Final result tokens — replace thinking indicator with final counts
+    if (thinkEl) thinkEl.hidden = true;
+
+    const inEl    = this.container.querySelector('#wfrTokIn');
+    const outEl   = this.container.querySelector('#wfrTokOut');
+    const cacheEl = this.container.querySelector('#wfrTokCache');
+    const costEl  = this.container.querySelector('#wfrTokCost');
+    const sep1    = this.container.querySelector('#wfrTokSep1');
+    const sep2    = this.container.querySelector('#wfrTokSep2');
+
+    if (inEl)  { inEl.textContent  = `↑ ${(input  ?? 0).toLocaleString()} in`;  inEl.hidden  = false; }
+    if (outEl) { outEl.textContent = `↓ ${(output ?? 0).toLocaleString()} out`; outEl.hidden = false; }
+    if (sep1)    sep1.hidden = false;
+
+    if (cacheEl) {
+      if (cacheRead) {
+        cacheEl.textContent = `${cacheRead.toLocaleString()} cached`;
+        cacheEl.hidden = false;
+        if (sep2) sep2.hidden = false;
+      } else {
+        cacheEl.hidden = true;
+        if (sep2) sep2.hidden = true;
+      }
+    }
+    if (costEl) {
+      if (costUsd != null) { costEl.textContent = `$${costUsd.toFixed(4)}`; costEl.hidden = false; }
+      else costEl.hidden = true;
+    }
   }
 
   // ── Timer ────────────────────────────────────────────────────────────────
@@ -429,6 +512,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     window.app.workflowChat.offAll();
     window.app.wfrPty.offAll();
     window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
+    window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     this._layers.forEach(l => {
       if (this._statuses[l.id] === 'running') this._statuses[l.id] = 'open';
@@ -566,6 +650,16 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
                   ${escHtml(this._layers[0]?.layer || '')}
                 </span>
                 <span class="wfr-elapsed" id="wfrElapsed"></span>
+                <div class="wfr-token-stats" id="wfrTokenStats" hidden>
+                  <span class="wfr-token-label">Tokens</span>
+                  <span class="wfr-token-thinking" id="wfrTokThinking" hidden></span>
+                  <span class="wfr-token-stat" id="wfrTokIn" hidden></span>
+                  <span class="wfr-token-sep" id="wfrTokSep1" hidden>·</span>
+                  <span class="wfr-token-stat" id="wfrTokOut" hidden></span>
+                  <span class="wfr-token-sep wfr-token-sep--cache" id="wfrTokSep2" hidden>·</span>
+                  <span class="wfr-token-stat wfr-token-cache" id="wfrTokCache" hidden></span>
+                  <span class="wfr-token-cost" id="wfrTokCost" hidden></span>
+                </div>
               </div>
               <div class="wfr-output-cwd" id="wfrOutputCwd" hidden>
                 <span class="wfr-output-cwd__label">cwd</span>

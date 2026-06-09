@@ -302,11 +302,13 @@ contextBridge.exposeInMainWorld('app', {
     resize:      (data)   => ipcRenderer.invoke('wfrPty:resize', data),
     kill:        ()       => ipcRenderer.invoke('wfrPty:kill'),
     runLayer:    (data)   => ipcRenderer.invoke('wfrPty:runLayer', data),
-    onData:      (cb)     => ipcRenderer.on('wfrPty:data',      (_e, p) => cb(p)),
-    onLayerDone: (cb)     => ipcRenderer.on('wfrPty:layerDone', (_e, p) => cb(p)),
-    offAll:      ()       => {
+    onData:       (cb)    => ipcRenderer.on('wfrPty:data',       (_e, p) => cb(p)),
+    onLayerDone:  (cb)    => ipcRenderer.on('wfrPty:layerDone',  (_e, p) => cb(p)),
+    onTokenStats: (cb)    => ipcRenderer.on('wfrPty:tokenStats', (_e, p) => cb(p)),
+    offAll:       ()      => {
       ipcRenderer.removeAllListeners('wfrPty:data');
       ipcRenderer.removeAllListeners('wfrPty:layerDone');
+      ipcRenderer.removeAllListeners('wfrPty:tokenStats');
     },
   },
   // Separate AI channel for the generate-workflows window.
@@ -337,7 +339,13 @@ contextBridge.exposeInMainWorld('app', {
   },
   openTestGenerationWindow: (data) => ipcRenderer.invoke('app:openTestGenerationWindow', data),
   testGenerationWindow: {
-    onInit: (cb) => ipcRenderer.on('testGen:init', (_e, p) => cb(p)),
+    onInit:         (cb) => ipcRenderer.on('testGen:init',      (_e, p) => cb(p)),
+    onFileSaved:    (cb) => ipcRenderer.on('testGen:fileSaved', (_e, p) => cb(p)),
+    offFileSaved:   ()   => ipcRenderer.removeAllListeners('testGen:fileSaved'),
+  },
+  openTestRunnerWindow: (data) => ipcRenderer.invoke('app:openTestRunnerWindow', data),
+  testRunnerWindow: {
+    onInit: (cb) => ipcRenderer.on('testRunnerWin:init', (_e, p) => cb(p)),
   },
   // Separate AI channel for the workflow AI edit window.
   wfAiEditChat: {
@@ -371,9 +379,10 @@ contextBridge.exposeInMainWorld('ollama', {
 
 contextBridge.exposeInMainWorld('shell', {
   openDrawio: (data)              => invoke('shell:openDrawio', data),
-  readFile:   (filepath)          => invoke('shell:readFile', filepath),
-  writeFile:  (filepath, content) => invoke('shell:writeFile', { filepath, content }),
-  statFile:   (filepath)          => invoke('shell:statFile', filepath),
+  readFile:            (filepath)          => invoke('shell:readFile', filepath),
+  writeFile:           (filepath, content) => invoke('shell:writeFile', { filepath, content }),
+  statFile:            (filepath)          => invoke('shell:statFile', filepath),
+  notifyTestFileSaved: ()                  => invoke('shell:notifyTestFileSaved'),
   openVSCode:     (folderPath) => invoke('shell:openVSCode', folderPath),
   openPowerShell: (folderPath) => invoke('shell:openPowerShell', folderPath),
   listFiles:      (dirPath, extensions) => invoke('shell:listFiles', { dirPath, extensions }),

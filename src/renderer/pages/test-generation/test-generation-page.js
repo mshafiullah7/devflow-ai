@@ -2,13 +2,34 @@ import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme }   from '../../shared/theme-manager.js';
 
 // ── Helpers ───────────────────────────────────────────────────────
-function inferTestFileExt(setupInstructions) {
+// pattern: 'dot-test' → name.test.ext  (JS/TS default)
+//          'spec'     → name.spec.ext  (Angular, Vue)
+//          'underscore'→ name_test.ext (Flutter, Go)
+//          'prefix'   → test_name.ext  (Python/pytest)
+//          'suffix'   → nameTests.ext  (.NET)
+const TEST_NAMING = {
+  flutter:    { ext: 'dart', pattern: 'underscore' },
+  python:     { ext: 'py',   pattern: 'prefix'     },
+  go:         { ext: 'go',   pattern: 'underscore' },
+  ruby:       { ext: 'rb',   pattern: 'spec'       },
+  angular:    { ext: 'ts',   pattern: 'spec'       },
+  vue:        { ext: 'ts',   pattern: 'spec'       },
+  dotnet:     { ext: 'cs',   pattern: 'suffix'     },
+  typescript: { ext: 'ts',   pattern: 'dot-test'   },
+  default:    { ext: 'js',   pattern: 'dot-test'   },
+};
+
+function inferTestNaming(setupInstructions) {
   const s = (setupInstructions || '').toLowerCase();
-  if (s.includes('flutter') || s.includes('dart'))   return 'dart';
-  if (s.includes('python'))                           return 'py';
-  if (s.includes('.net') || s.includes('c#'))        return 'cs';
-  if (s.includes('typescript') || s.includes('.ts')) return 'ts';
-  return 'js';
+  if (s.includes('flutter') || s.includes('dart'))                       return TEST_NAMING.flutter;
+  if (s.includes('python') || s.includes('pytest') || s.includes('pip')) return TEST_NAMING.python;
+  if (s.includes('golang') || /\bgo\b/.test(s))                          return TEST_NAMING.go;
+  if (s.includes('ruby') || s.includes('rspec') || s.includes('rails'))  return TEST_NAMING.ruby;
+  if (s.includes('.net') || s.includes('c#') || s.includes('dotnet'))    return TEST_NAMING.dotnet;
+  if (s.includes('angular'))                                              return TEST_NAMING.angular;
+  if (s.includes('vue') || s.includes('vuejs'))                          return TEST_NAMING.vue;
+  if (s.includes('typescript') || s.includes('.ts'))                     return TEST_NAMING.typescript;
+  return TEST_NAMING.default;
 }
 
 function inferE2eFramework(setupInstructions) {
@@ -16,10 +37,24 @@ function inferE2eFramework(setupInstructions) {
   return s.includes('cypress') ? 'Cypress' : 'Playwright';
 }
 
-function computeUnitTestPath(relPath, testFolder, ext) {
-  const rel        = relPath.replace(/\\/g, '/');
-  const withoutExt = rel.replace(/\.[^/.]+$/, '');
-  return testFolder.replace(/\\/g, '/') + '/' + withoutExt + '.test.' + ext;
+function computeUnitTestPath(relPath, testFolder, naming) {
+  const rel       = relPath.replace(/\\/g, '/');
+  const lastSlash = rel.lastIndexOf('/');
+  const dir       = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+  const fileName  = lastSlash >= 0 ? rel.slice(lastSlash + 1) : rel;
+  const baseName  = fileName.replace(/\.[^/.]+$/, '');
+
+  let testFileName;
+  switch (naming.pattern) {
+    case 'prefix':      testFileName = 'test_'   + baseName + '.' + naming.ext; break;
+    case 'underscore':  testFileName = baseName  + '_test.'  + naming.ext; break;
+    case 'spec':        testFileName = baseName  + '.spec.'  + naming.ext; break;
+    case 'suffix':      testFileName = baseName  + 'Tests.'  + naming.ext; break;
+    default:            testFileName = baseName  + '.test.'  + naming.ext; break;
+  }
+
+  const testRel = dir ? dir + '/' + testFileName : testFileName;
+  return testFolder.replace(/\\/g, '/') + '/' + testRel;
 }
 
 function computeE2eTestPath(title, testFolder, ext) {
@@ -44,7 +79,7 @@ export class TestGenerationPage {
     this._layer      = null;
     this._testFolder = '';
     this._modelCfg   = null;
-    this._ext        = 'js';
+    this._naming     = TEST_NAMING.default;
     this._flowDesc   = '';
 
     this._progress    = [];   // [{label, relPath?, mockup?, status, outPath, errMsg}]
@@ -71,7 +106,7 @@ export class TestGenerationPage {
     this._layer      = data.layer;
     this._testFolder = data.testFolder || '';
     this._modelCfg   = data.modelCfg;
-    this._ext        = inferTestFileExt(data.layer?.setup_instructions);
+    this._naming     = inferTestNaming(data.layer?.setup_instructions);
     this._flowDesc   = data.flowDesc || '';
 
     if (this._mode === 'unit') {
@@ -213,7 +248,6 @@ export class TestGenerationPage {
     this._currentIdx = null;
     this._clearTimer();
     this._updateToolbar();
-    this._updateCurrentItem(null);
     this._showDoneSummary();
   }
 
@@ -239,7 +273,6 @@ export class TestGenerationPage {
     this._currentIdx = null;
     this._clearTimer();
     this._updateToolbar();
-    this._updateCurrentItem(null);
     this._showDoneSummary();
   }
 
@@ -267,10 +300,10 @@ export class TestGenerationPage {
         }
         if (src.length > 8000) src = src.slice(0, 8000) + '\n// [truncated]';
         prompt  = this._buildUnitPrompt(this._progress[i].relPath, src);
-        outPath = computeUnitTestPath(this._progress[i].relPath, this._testFolder, this._ext);
+        outPath = computeUnitTestPath(this._progress[i].relPath, this._testFolder, this._naming);
       } else {
         prompt  = this._buildE2ePrompt(this._progress[i].mockup);
-        outPath = computeE2eTestPath(this._progress[i].mockup.title, this._testFolder, this._ext);
+        outPath = computeE2eTestPath(this._progress[i].mockup.title, this._testFolder, this._naming.ext);
       }
 
       const code = await this._streamItem(prompt);
@@ -281,6 +314,7 @@ export class TestGenerationPage {
       }
 
       const ok = await window.shell.writeFile(outPath, code);
+      if (ok) window.shell.notifyTestFileSaved();
       this._setItemStatus(i, ok ? 'saved' : 'error', outPath, ok ? '' : 'Write failed — check permissions');
     } catch (err) {
       this._setItemStatus(i, this._aborted ? 'pending' : 'error', '', err.message || 'Generation failed');
@@ -418,8 +452,6 @@ Output ONLY the test file content. No explanation. Start directly with import st
     const el = this.container.querySelector('#tgwCurrentName');
     if (el) el.textContent = label || '—';
     if (!label) {
-      const pre = this.container.querySelector('#tgwCode');
-      if (pre) pre.textContent = '';
       const elapsed = this.container.querySelector('#tgwElapsed');
       if (elapsed) elapsed.textContent = '';
     }

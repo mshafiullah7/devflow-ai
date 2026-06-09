@@ -847,11 +847,16 @@ function registerDbHandlers() {
     } catch { return false; }
   });
 
+  safeHandle('shell:notifyTestFileSaved', () => {
+    broadcastToAll('testGen:fileSaved', {});
+  });
+
   safeHandle('shell:listFiles', (_e, { dirPath, extensions }) => {
     try {
       const SKIP_DIRS = new Set([
         'node_modules', '.git', 'dist', 'build', 'out', '.dart_tool',
         '__pycache__', '.next', 'coverage', '.nuxt', '.angular', 'bin', 'obj',
+        '__tests__', 'test', 'tests',
       ]);
       const results = [];
       const walk = (dir, depth) => {

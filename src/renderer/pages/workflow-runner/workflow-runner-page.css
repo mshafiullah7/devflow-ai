@@ -301,3 +301,31 @@
 .wfr-terminal-wrap .xterm-viewport {
   overflow-y: auto !important;
 }
+
+/* Token stats in output header */
+.wfr-token-stats {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-left: 10px;
+}
+.wfr-token-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  font-family: var(--font-sans, system-ui);
+}
+.wfr-token-stat     { font-size: 11px; color: var(--text-muted); }
+.wfr-token-sep      { color: var(--border); font-size: 10px; }
+.wfr-token-cache    { color: var(--text-muted); }
+.wfr-token-cost     { color: var(--text-muted); margin-left: 3px; }
+.wfr-token-thinking { font-size: 11px; color: var(--text-muted); font-style: italic; }

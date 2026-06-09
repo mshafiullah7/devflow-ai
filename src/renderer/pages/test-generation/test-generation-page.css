@@ -76,7 +76,7 @@ body {
 
 /* ── Sidebar (item list) ─────────────────────────────────────── */
 .tgw-sidebar {
-  width: 230px;
+  width: 320px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
