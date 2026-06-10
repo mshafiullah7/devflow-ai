@@ -691,13 +691,16 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       const elapsed = this._startTimes[l.id] ? this._fmt(Date.now() - this._startTimes[l.id]) : '';
       return `
         <div class="wfr-layer-row ${sel ? 'wfr-layer-row--active' : ''}" data-id="${l.id}">
-          <span class="wfr-layer-id">#${l.id}</span>
-          <span class="wfr-status-chip ${STATUS[st].cls}">${STATUS[st].label}</span>
-          <span class="wfr-layer-name">${escHtml(l.layer || 'Layer')}</span>
-          <span class="wfr-layer-right">
-            ${elapsed ? `<span class="wfr-layer-time">${elapsed}</span>` : ''}
-            <span class="wfr-layer-seq">${idx + 1}</span>
-          </span>
+          <div class="wfr-layer-top">
+            <span class="wfr-layer-id">#${l.id}</span>
+            <span class="wfr-status-chip ${STATUS[st].cls}">${STATUS[st].label}</span>
+            <span class="wfr-layer-name">${escHtml(l.layer || 'Layer')}</span>
+            <span class="wfr-layer-right">
+              ${elapsed ? `<span class="wfr-layer-time">${elapsed}</span>` : ''}
+              <span class="wfr-layer-seq">${idx + 1}</span>
+            </span>
+          </div>
+          ${l.purpose ? `<div class="wfr-layer-purpose">${escHtml(l.purpose)}</div>` : ''}
         </div>`;
     }).join('');
   }
@@ -795,9 +798,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
             <div class="wfr-terminal-wrap" id="wfrTerminal"></div>
           </section>
 
-          <!-- Resize divider -->
-          <div class="wfr-resize-divider" id="wfrResizeDivider"></div>
-
           <!-- Right: git diff panel -->
           <aside class="wfr-git-panel" id="wfrGitPanel">
             <div class="wfr-git-panel__header">
@@ -881,7 +881,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     this.container.querySelector('#wfrBtnGitCommit')
       ?.addEventListener('click', () => this._commitChanges());
 
-    this._initResizeDivider();
   }
 
   // ── CLI launcher ─────────────────────────────────────────────────────────
@@ -1177,47 +1176,4 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     }
   }
 
-  _initResizeDivider() {
-    const divider  = this.container.querySelector('#wfrResizeDivider');
-    const terminal = this.container.querySelector('.wfr-output-panel');
-    const gitPanel = this.container.querySelector('#wfrGitPanel');
-    if (!divider || !terminal || !gitPanel) return;
-
-    let dragging = false;
-    let startX   = 0;
-    let startTermW = 0;
-    let startGitW  = 0;
-
-    const onMouseMove = (e) => {
-      if (!dragging) return;
-      const delta   = e.clientX - startX;
-      const newGitW = Math.max(350, startGitW - delta);
-      const newTermW = Math.max(200, startTermW + (startGitW - newGitW));
-      // Use flex-grow ratios so both panels scale when the window resizes.
-      // flex-basis 0px lets all available space be distributed by grow ratio.
-      terminal.style.flex = `${newTermW} 1 0px`;
-      gitPanel.style.flex = `${newGitW} 1 0px`;
-    };
-
-    const onMouseUp = () => {
-      if (!dragging) return;
-      dragging = false;
-      document.body.style.cursor     = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup',   onMouseUp);
-    };
-
-    divider.addEventListener('mousedown', (e) => {
-      dragging   = true;
-      startX     = e.clientX;
-      startTermW = terminal.getBoundingClientRect().width;
-      startGitW  = gitPanel.getBoundingClientRect().width;
-      document.body.style.cursor     = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup',   onMouseUp);
-      e.preventDefault();
-    });
-  }
 }
