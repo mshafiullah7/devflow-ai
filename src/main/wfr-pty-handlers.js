@@ -18,15 +18,26 @@ let _jsonLineBuf = '';    // accumulates partial PTY lines for stream-json parsi
 function formatStreamLine(line) {
   const trimmed = line.trim();
   if (!trimmed) return null;
-  // Strip ANSI codes injected by the PTY around JSON lines before parsing
-  const clean = trimmed
-    .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
-    .replace(/\x1B\][^\x07]*\x07/g, '')
-    .replace(/\r/g, '');
+
   let obj;
-  try { obj = JSON.parse(clean); } catch { return clean + '\r\n'; }
+  try {
+    const clean = trimmed
+      .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+      .replace(/\x1B\][^\x07]*\x07/g, '')
+      .replace(/\r/g, '');
+    obj = JSON.parse(clean);
+  } catch {
+    return trimmed.replace(/\r/g, '') + '\r\n';
+  }
 
   switch (obj.type) {
+    case 'stream_event': {
+      const ev = obj.event || {};
+      if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+        return ev.delta.text || null;
+      }
+      return null;
+    }
     case 'tool_use': {
       const inp    = obj.tool_input || {};
       const detail = inp.file_path || inp.command || inp.query || inp.pattern || inp.path || '';
@@ -34,9 +45,17 @@ function formatStreamLine(line) {
       return `\x1b[36m●\x1b[0m \x1b[1m${obj.tool_name || 'Tool'}\x1b[0m${short ? `(\x1b[2m${short}\x1b[0m)` : ''}\r\n`;
     }
     case 'assistant': {
-      const texts = (obj.message?.content || [])
-        .filter(c => c.type === 'text').map(c => c.text).join('');
-      return texts ? texts.replace(/\n/g, '\r\n') : null;
+      const content = obj.message?.content || [];
+      let output = '';
+      for (const item of content) {
+        if (item.type === 'tool_use') {
+          const inp    = item.input || {};
+          const detail = inp.file_path || inp.command || inp.query || inp.pattern || inp.path || '';
+          const short  = detail.length > 70 ? '…' + detail.slice(-67) : detail;
+          output += `\x1b[36m●\x1b[0m \x1b[1m${item.name || 'Tool'}\x1b[0m${short ? `(\x1b[2m${short}\x1b[0m)` : ''}\r\n`;
+        }
+      }
+      return output || null;
     }
     case 'result': {
       const u = obj.usage || {};
@@ -47,13 +66,7 @@ function formatStreamLine(line) {
         costUsd:   obj.cost_usd                 ?? null,
       });
       if (obj.subtype === 'error') return `\x1b[31m${obj.result || 'Error'}\x1b[0m\r\n`;
-      if (!obj.result) return null;
-      // Truncate large result payloads — show only last 15 lines
-      const lines = obj.result.split('\n');
-      const display = lines.length > 15
-        ? ['\x1b[2m… (' + (lines.length - 15) + ' lines omitted)\x1b[0m', ...lines.slice(-15)].join('\n')
-        : obj.result;
-      return display.replace(/\n/g, '\r\n') + '\r\n';
+      return null;
     }
     case 'system':
       if (obj.subtype === 'thinking_tokens' && obj.estimated_tokens != null) {
@@ -121,6 +134,48 @@ function registerWfrPtyHandlers() {
 
   // Kill any running layer PTY
   safeHandle('wfrPty:kill', () => { killPty(); });
+
+  // Spawn a raw interactive shell
+  safeHandle('wfrPty:spawnShell', (event, { cwd, cols, rows }) => {
+    killPty();
+    _wc = event.sender;
+
+    const isWin = os.platform() === 'win32';
+    const spawnExe = isWin ? 'powershell.exe' : (process.env.SHELL || '/bin/bash');
+    const spawnArgs = isWin ? ['-NoLogo'] : [];
+    const spawnCwd = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
+
+    try {
+      _pty = pty.spawn(spawnExe, spawnArgs, {
+        name: 'xterm-256color',
+        cols: Math.max(2, cols || 120),
+        rows: Math.max(2, rows || 30),
+        cwd:  spawnCwd,
+        env:  {
+          ...process.env,
+          TERM:      'xterm-256color',
+          FORCE_COLOR: '1',
+          COLORTERM: 'truecolor',
+        },
+      });
+    } catch (err) {
+      return { ok: false, error: `Failed to spawn shell: ${err.message}` };
+    }
+
+    _pty.onData((data) => {
+      send('wfrPty:data', data);
+    });
+
+    _pty.onExit(({ exitCode }) => {
+      _pty = null;
+      send('wfrPty:layerDone', {
+        layerId: 'shell',
+        error: exitCode !== 0 ? `Shell exited with code ${exitCode}` : null,
+      });
+    });
+
+    return { ok: true };
+  });
 
   // Run `claude /usage` (or any configured exe) and return its stdout
   safeHandle('wfrPty:runUsage', (_e, { exe, cwd: rawCwd }) => {
@@ -226,6 +281,7 @@ function registerWfrPtyHandlers() {
     // For Python agents, spawn: python <script.py>
     // For everything else (claude, any other CLI): spawn exe directly
     let spawnExe, spawnArgs;
+    let useArg = true;
 
     if (isPython) {
       // Python agent — write prompt to temp file and pass path as first arg,
@@ -248,7 +304,7 @@ function registerWfrPtyHandlers() {
       // Prompt as positional arg: avoids stdin entirely.
       // If the prompt exceeds 20 KB (edge case), fall back to PTY-stdin delivery.
       const MAX_ARG = 20000;
-      const useArg  = fullPrompt.length <= MAX_ARG;
+      useArg  = fullPrompt.length <= MAX_ARG;
 
       spawnExe  = resolveExe(exeRaw);
       spawnArgs = [
@@ -257,21 +313,10 @@ function registerWfrPtyHandlers() {
         '--print',
         '--verbose',
         '--output-format', 'stream-json',
+        '--include-partial-messages',
         '--model', modelName,
         ...(useArg ? [fullPrompt] : []),
       ];
-
-      if (!useArg) {
-        // Prompt too long for a CLI arg — write to temp file and deliver via stdin
-        const ts = Date.now();
-        _tmpFile = path.join(os.tmpdir(), `wfr-prompt-${ts}.txt`);
-        try {
-          fs.writeFileSync(_tmpFile, fullPrompt, 'utf8');
-        } catch (err) {
-          send('wfrPty:layerDone', { layerId, error: err.message });
-          return { ok: false };
-        }
-      }
     }
 
     try {
@@ -294,17 +339,14 @@ function registerWfrPtyHandlers() {
 
     // If using stdin delivery (long prompt), write it now followed by
     // Windows EOF (Ctrl+Z on its own line).
-    if (_tmpFile && !isPython) {
-      try {
-        const content = fs.readFileSync(_tmpFile, 'utf8');
-        // Small delay so the process has time to open its stdin read loop
-        setTimeout(() => {
-          if (_pty) {
-            _pty.write(content);
-            _pty.write('\r\n\x1a'); // CRLF + Ctrl+Z = EOF on Windows PTY
-          }
-        }, 120);
-      } catch (_) {}
+    if (!useArg && !isPython) {
+      // Small delay so the process has time to open its stdin read loop
+      setTimeout(() => {
+        if (_pty) {
+          _pty.write(fullPrompt);
+          _pty.write('\r\n\x1a'); // CRLF + Ctrl+Z = EOF on Windows PTY
+        }
+      }, 120);
     }
 
     _jsonLineBuf = '';

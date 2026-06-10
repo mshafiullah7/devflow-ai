@@ -299,6 +299,7 @@ contextBridge.exposeInMainWorld('app', {
   // PTY-backed terminal for the workflow runner window
   wfrPty: {
     write:          (data) => ipcRenderer.invoke('wfrPty:write', data),
+    spawnShell:     (data) => ipcRenderer.invoke('wfrPty:spawnShell', data),
     resize:         (data) => ipcRenderer.invoke('wfrPty:resize', data),
     kill:           ()     => ipcRenderer.invoke('wfrPty:kill'),
     runLayer:       (data) => ipcRenderer.invoke('wfrPty:runLayer', data),

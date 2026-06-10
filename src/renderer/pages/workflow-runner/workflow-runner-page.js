@@ -187,6 +187,11 @@ export class WorkflowRunnerPage {
     // Register IPC data listener NOW — before any layer runs — so no PTY output is missed
     window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
     window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
+    window.app.wfrPty.onLayerDone(({ layerId, error }) => {
+      if (layerId === 'shell' && this._term) {
+        this._term.writeln(`\r\n${ANSI.red}Shell exited.${ANSI.reset}`);
+      }
+    });
 
     // Ctrl+C: copy selected text to clipboard; fall through to PTY only when nothing is selected
     this._term.attachCustomKeyEventHandler((ev) => {
@@ -219,16 +224,27 @@ export class WorkflowRunnerPage {
     const doFit = () => {
       try {
         this._fitAddon.fit();
-        this._term.writeln(`${ANSI.dim}Terminal ready. Select a layer and press Run.${ANSI.reset}`);
+        this._spawnShell();
       } catch (_) {
         // Renderer not ready yet — retry after one more paint
         setTimeout(() => {
           try { this._fitAddon.fit(); } catch (_2) { console.warn('wfr: fit retry failed', _2); }
-          this._term.writeln(`${ANSI.dim}Terminal ready. Select a layer and press Run.${ANSI.reset}`);
+          this._spawnShell();
         }, 80);
       }
     };
     requestAnimationFrame(() => requestAnimationFrame(doFit));
+  }
+
+  async _spawnShell() {
+    if (!this._term) return;
+    const layer = this._layers.find(l => l.id === this._selectedId);
+    const cwd = layer ? this._getCwd(layer) : (this._project?.project_path || null);
+    await window.app.wfrPty.spawnShell({
+      cwd,
+      cols: this._term.cols,
+      rows: this._term.rows
+    });
   }
 
   _fitTerminal() {
@@ -385,12 +401,20 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       // Write banner to terminal
       if (this._term) this._term.write(layerBanner(layer.layer || 'Layer', idx, total));
 
+      let finished = false;
       const finish = async (error) => {
+        if (finished) return;
+        finished = true;
         window.app.workflowChat.offAll();
         window.app.wfrPty.offAll();
         // Re-attach PTY listeners (offAll removes them; re-add for next layer)
         window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
         window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
+        window.app.wfrPty.onLayerDone(({ layerId, error }) => {
+          if (layerId === 'shell' && this._term) {
+            this._term.writeln(`\r\n${ANSI.red}Shell exited.${ANSI.reset}`);
+          }
+        });
 
         if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
         const elapsed   = this._fmt(Date.now() - this._startTimes[layer.id]);
@@ -416,6 +440,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
         // Show /usage snapshot after the layer completes (CLI path only)
         if (this._modelConfig?.type === 'cli') await this._writeUsageSnapshot('after', layer);
+
+        // Re-spawn interactive shell so terminal stays active (CLI path only)
+        if (this._modelConfig?.type === 'cli') this._spawnShell();
 
         resolve();
       };
@@ -609,11 +636,16 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   // ── Selection ────────────────────────────────────────────────────────────
 
   _selectLayer(id) {
+    const oldId = this._selectedId;
     this._selectedId = id;
     this._refreshLayerList();
     this._updateLayerHeader();
     this._updateToolbar();
     this._refreshGitPanel();
+
+    if (oldId !== id && !this._running && this._modelConfig?.type === 'cli') {
+      this._spawnShell();
+    }
   }
 
   _updateLayerHeader() {
