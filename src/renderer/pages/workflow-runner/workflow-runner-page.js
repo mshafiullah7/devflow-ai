@@ -64,6 +64,7 @@ export class WorkflowRunnerPage {
     this._gitFiles         = [];
     this._gitPollInterval  = null;
     this._gitExpandedFiles = new Set();
+    this._switchingShell   = false;
   }
 
   mount() {
@@ -188,7 +189,7 @@ export class WorkflowRunnerPage {
     window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
     window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
     window.app.wfrPty.onLayerDone(({ layerId, error }) => {
-      if (layerId === 'shell' && this._term) {
+      if (layerId === 'shell' && this._term && !this._switchingShell) {
         this._term.writeln(`\r\n${ANSI.red}Shell exited.${ANSI.reset}`);
       }
     });
@@ -238,6 +239,7 @@ export class WorkflowRunnerPage {
 
   async _spawnShell() {
     if (!this._term) return;
+    this._switchingShell = true;
     const layer = this._layers.find(l => l.id === this._selectedId);
     const cwd = layer ? this._getCwd(layer) : (this._project?.project_path || null);
     await window.app.wfrPty.spawnShell({
@@ -245,6 +247,7 @@ export class WorkflowRunnerPage {
       cols: this._term.cols,
       rows: this._term.rows
     });
+    this._switchingShell = false;
   }
 
   _fitTerminal() {
@@ -411,7 +414,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
         window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
         window.app.wfrPty.onLayerDone(({ layerId, error }) => {
-          if (layerId === 'shell' && this._term) {
+          if (layerId === 'shell' && this._term && !this._switchingShell) {
             this._term.writeln(`\r\n${ANSI.red}Shell exited.${ANSI.reset}`);
           }
         });
@@ -467,6 +470,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         // Fit first so cols/rows reflect the actual rendered terminal size
         this._fitTerminal();
 
+        this._switchingShell = true;
         const result = await window.app.wfrPty.runLayer({
           layerId:         layer.id,
           prompt:          this._buildLayerUserPrompt(layer),
@@ -477,6 +481,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
           rows:            this._term.rows,
           continueSession,
         });
+        this._switchingShell = false;
 
         if (!result?.ok) await finish(result?.error || 'Failed to start PTY');
         return;
