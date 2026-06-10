@@ -166,8 +166,11 @@ function registerWfrPtyHandlers() {
       send('wfrPty:data', data);
     });
 
+    const myPty = _pty;
     _pty.onExit(({ exitCode }) => {
-      _pty = null;
+      if (_pty === myPty) {
+        _pty = null;
+      }
       send('wfrPty:layerDone', {
         layerId: 'shell',
         error: exitCode !== 0 ? `Shell exited with code ${exitCode}` : null,
@@ -366,6 +369,7 @@ function registerWfrPtyHandlers() {
       }
     });
 
+    const myPty = _pty;
     _pty.onExit(({ exitCode }) => {
       // Flush any remaining buffered content
       if (_jsonLineBuf.trim() && !isPython) {
@@ -373,7 +377,9 @@ function registerWfrPtyHandlers() {
         if (out) send('wfrPty:data', out);
         _jsonLineBuf = '';
       }
-      _pty = null;
+      if (_pty === myPty) {
+        _pty = null;
+      }
       if (_tmpFile) { try { fs.unlinkSync(_tmpFile); } catch (_) {} _tmpFile = null; }
       send('wfrPty:layerDone', {
         layerId,
