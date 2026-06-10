@@ -150,6 +150,40 @@ function registerWfrPtyHandlers() {
     });
   });
 
+  // Open a real PowerShell window running the Python agent with the given prompt.
+  // Uses a temp .ps1 file so the prompt content never needs shell escaping.
+  safeHandle('wfrPty:openInTerminal', (_e, { scriptPath, project, message }) => {
+    const spawnCwd = (project && fs.existsSync(project)) ? project : os.homedir();
+
+    const q = (s) => s.replace(/"/g, '`"');  // escape " for PS double-quoted strings
+    const script = [
+      `Set-Location "${q(spawnCwd)}"`,
+      `python "${q(scriptPath)}" --project "${q(spawnCwd)}" --message @'`,
+      message || '',
+      `'@`,
+    ].join('\n');
+
+    const psFile = path.join(os.tmpdir(), `wfr-cli-${Date.now()}.ps1`);
+    try {
+      fs.writeFileSync(psFile, script, 'utf8');
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+
+    const { spawn } = require('node:child_process');
+    const proc = spawn(
+      'cmd.exe',
+      ['/c', 'start', 'powershell.exe', '-NoExit', '-NoLogo', '-File', psFile],
+      { detached: true, stdio: 'ignore' }
+    );
+    proc.unref();
+
+    // Give PowerShell time to read the file before we delete it
+    setTimeout(() => { try { fs.unlinkSync(psFile); } catch (_) {} }, 8000);
+
+    return { ok: true };
+  });
+
   // ---------------------------------------------------------------------------
   // Spawn a new PTY to execute one workflow layer.
   //
@@ -221,6 +255,7 @@ function registerWfrPtyHandlers() {
         ...(continueSession ? ['-c'] : []),
         '--dangerously-skip-permissions',
         '--print',
+        '--verbose',
         '--output-format', 'stream-json',
         '--model', modelName,
         ...(useArg ? [fullPrompt] : []),

@@ -298,11 +298,12 @@ contextBridge.exposeInMainWorld('app', {
   },
   // PTY-backed terminal for the workflow runner window
   wfrPty: {
-    write:       (data)   => ipcRenderer.invoke('wfrPty:write', data),
-    resize:      (data)   => ipcRenderer.invoke('wfrPty:resize', data),
-    kill:        ()       => ipcRenderer.invoke('wfrPty:kill'),
-    runLayer:    (data)   => ipcRenderer.invoke('wfrPty:runLayer', data),
-    runUsage:    (data)   => ipcRenderer.invoke('wfrPty:runUsage', data),
+    write:          (data) => ipcRenderer.invoke('wfrPty:write', data),
+    resize:         (data) => ipcRenderer.invoke('wfrPty:resize', data),
+    kill:           ()     => ipcRenderer.invoke('wfrPty:kill'),
+    runLayer:       (data) => ipcRenderer.invoke('wfrPty:runLayer', data),
+    runUsage:       (data) => ipcRenderer.invoke('wfrPty:runUsage', data),
+    openInTerminal: (data) => ipcRenderer.invoke('wfrPty:openInTerminal', data),
     onData:       (cb)    => ipcRenderer.on('wfrPty:data',       (_e, p) => cb(p)),
     onLayerDone:  (cb)    => ipcRenderer.on('wfrPty:layerDone',  (_e, p) => cb(p)),
     onTokenStats: (cb)    => ipcRenderer.on('wfrPty:tokenStats', (_e, p) => cb(p)),

@@ -858,8 +858,16 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     const layer = this._layers.find(l => l.id === this._selectedId);
     const cwd   = (layer ? this._getCwd(layer) : null) || this._project?.project_path;
     if (!cwd) return;
-    const executable = this._modelConfig?.executable || 'claude';
-    window.db.terminal.openExternal({ command: executable, cwd });
+
+    const exe      = this._modelConfig?.executable || '';
+    const isPython = exe.toLowerCase().endsWith('.py');
+
+    if (isPython) {
+      const message = layer ? this._buildLayerUserPrompt(layer) : '';
+      window.app.wfrPty.openInTerminal({ scriptPath: exe, project: cwd, message });
+    } else {
+      window.db.terminal.openExternal({ command: exe || 'claude', cwd });
+    }
   }
 
   // ── Git diff panel ───────────────────────────────────────────────────────
