@@ -398,6 +398,20 @@
 .wf-icon-btn:hover { background: var(--surface-hover); color: var(--text-secondary); }
 .wf-run-btn:hover  { color: var(--accent); }
 .wf-del-btn:hover  { color: #dc2626; }
+.wf-copy-btn:hover { color: var(--accent); }
+
+@keyframes wf-copy-pop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1);   opacity: 1; }
+}
+.wf-copy-btn--copied {
+  color: #16a34a !important;
+  background: rgba(22, 163, 74, 0.12) !important;
+}
+.wf-copy-btn--copied svg {
+  animation: wf-copy-pop 0.22s ease forwards;
+}
 
 /* ── Layer inline edit form ──────────────────────────────────────── */
 .wf-layer-edit-form {

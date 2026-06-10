@@ -351,8 +351,13 @@ export class ProjectHomePage {
     const rows = this._layerStats || [];
     if (!rows.length) return '';
 
-    const cnt = (count, cls, label) => count > 0
-      ? `<span class="ph-lr-cnt ph-lr-cnt--${cls}" style="flex:${count}" title="${count} ${label}">${count} ${label}</span>`
+    const seg = (count, cls, label) => count > 0
+      ? `<div class="ph-lr-seg ph-lr-seg--${cls}" style="flex:${count}" title="${count} ${label}"></div>`
+      : '';
+
+
+    const badge = (count, cls, label, showLabel = false) => count > 0
+      ? `<span class="ph-lr-badge ph-lr-badge--${cls}" title="${label}">${count}${showLabel ? ` ${label}` : ''}</span>`
       : '';
 
     const rowsHtml = rows.map(r => {
@@ -363,23 +368,45 @@ export class ProjectHomePage {
       const running     = r.running      ?? 0;
       const open        = r.open         ?? 0;
       const allDone     = total > 0 && executed === total;
+      const pct         = total > 0 ? Math.round((executed / total) * 100) : 0;
 
-      const doneIcon = allDone
-        ? `<svg class="ph-lr-done-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> `
+      const accentCls = allDone          ? 'ph-lr-row--done'
+                      : failed > 0       ? 'ph-lr-row--err'
+                      : needsReview > 0  ? 'ph-lr-row--warn'
+                      : running > 0      ? 'ph-lr-row--running'
+                      : executed > 0     ? 'ph-lr-row--done'
+                      : 'ph-lr-row--open';
+
+      const nameIcon = allDone
+        ? `<svg class="ph-lr-done-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
         : '';
 
-      return `
-        <div class="ph-lr-row ${allDone ? 'ph-lr-row--done' : ''}">
-          <div class="ph-lr-name">${doneIcon}${escHtml(r.name)}</div>
-          <div class="ph-lr-counts">
-            ${cnt(executed,    'done',    'Executed')}
-            ${cnt(open,        'open',    'Open')}
-            ${cnt(running,     'running', 'Running')}
-            ${cnt(needsReview, 'review',  'Review')}
-            ${cnt(failed,      'failed',  'Failed')}
-            ${total === 0 ? '<span class="ph-lr-cnt ph-lr-cnt--empty">No items</span>' : ''}
+      const barHtml = total > 0 ? `
+        <div class="ph-lr-bar-wrap">
+          <div class="ph-lr-bar">
+            ${seg(executed,    'done',    'Executed')}
+            ${seg(running,     'running', 'Running')}
+            ${seg(needsReview, 'review',  'Review')}
+            ${seg(failed,      'failed',  'Failed')}
+            ${seg(open,        'open',    'Open')}
           </div>
-          <div class="ph-lr-total">${total} total</div>
+        </div>` : '<div class="ph-lr-bar-wrap"><div class="ph-lr-bar ph-lr-bar--empty"></div></div>';
+
+      const badgesHtml = total === 0
+        ? '<span class="ph-lr-badge ph-lr-badge--empty">No items</span>'
+        : [
+            badge(executed,    'done',   'Done',   false),
+            badge(open,        'open',   'Open',   false),
+            badge(needsReview, 'review', 'Review', true),
+            badge(failed,      'failed', 'Failed', true),
+          ].join('');
+
+      return `
+        <div class="ph-lr-row ${accentCls}">
+          <div class="ph-lr-name">${nameIcon}${escHtml(r.name)}</div>
+          ${barHtml}
+          <div class="ph-lr-pct">${total > 0 ? pct + '%' : '—'}</div>
+          <div class="ph-lr-badges">${badgesHtml}</div>
         </div>`;
     }).join('');
 

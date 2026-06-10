@@ -486,11 +486,11 @@ export class WorkflowsPage {
       <div class="wf-layers-toolbar">
         <button class="wf-run-all-btn" id="wfBtnRunAll"
           ${!this._layers.length ? 'disabled' : ''}
-          title="Run all layers in a separate window">
+          title="Open the layer runner window">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
             <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
           </svg>
-          Run All →
+          Run Layers →
         </button>
         <button class="is-add-btn" id="wfBtnAddLayer" title="Add layer" style="margin-left:auto">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -557,6 +557,12 @@ export class WorkflowsPage {
           </div>
         </div>
         <div class="wf-layer-actions">
+          <button class="wf-icon-btn wf-copy-btn" data-lid="${l.id}" title="Copy Purpose / Inputs / Outputs / Prompt">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <rect x="5" y="4" width="8" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M3 11V2.5A1.5 1.5 0 0 1 4.5 1H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </button>
           <button class="wf-icon-btn wf-run-btn" data-lid="${l.id}" title="Run this layer">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
               <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
@@ -1320,6 +1326,34 @@ ${base}`;
       });
       list.querySelectorAll('.wf-del-btn').forEach(btn => {
         btn.addEventListener('click', e => { e.stopPropagation(); this._deleteLayer(+btn.dataset.lid); });
+      });
+      list.querySelectorAll('.wf-copy-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const layer = this._layers.find(l => l.id === +btn.dataset.lid);
+          if (!layer) return;
+          const fmtArr = v => { try { const a = JSON.parse(v); return Array.isArray(a) ? a.join('\n') : v; } catch { return v || ''; } };
+          const text = [
+            `Purpose:\n${layer.purpose || ''}`,
+            `Inputs:\n${fmtArr(layer.inputs)}`,
+            `Outputs:\n${fmtArr(layer.outputs)}`,
+            `Prompt:\n${layer.prompt || ''}`,
+          ].join('\n\n');
+          const clipIcon = btn.innerHTML;
+          navigator.clipboard.writeText(text).then(() => {
+            btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <polyline points="2 8 6 12 14 4" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`;
+            btn.classList.add('wf-copy-btn--copied');
+            btn.title = 'Copied!';
+            setTimeout(() => {
+              btn.innerHTML = clipIcon;
+              btn.classList.remove('wf-copy-btn--copied');
+              btn.title = 'Copy Purpose / Inputs / Outputs / Prompt';
+            }, 1500);
+          });
+        });
       });
       list.querySelectorAll('.wf-collapse-btn').forEach(btn => {
         btn.addEventListener('click', e => {

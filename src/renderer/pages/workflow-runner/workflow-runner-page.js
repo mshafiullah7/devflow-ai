@@ -43,6 +43,7 @@ export class WorkflowRunnerPage {
     this._statuses      = {};
     this._selectedId    = null;
     this._running       = false;
+    this._chainSessions = false;
     this._startTimes    = {};
     this._timerInt      = null;
     this._screenDesign  = null;
@@ -54,10 +55,20 @@ export class WorkflowRunnerPage {
     this._fitAddon = null;
     this._resizeObs = null;
     this._onWinResize = null;
+
+    // token stats for the current layer run
+    this._layerTokenStats = null;
+
+    // git diff panel
+    this._gitPanelVisible  = true;
+    this._gitFiles         = [];
+    this._gitPollInterval  = null;
+    this._gitExpandedFiles = new Set();
   }
 
   mount() {
     injectCss('pages/workflow-runner/workflow-runner-page.css');
+    injectCss('components/git/git-diff.css');
     applyStoredTheme();
     this._renderLoading();
     window.app.workflowWindow.onInit((data) => this._init(data));
@@ -67,7 +78,8 @@ export class WorkflowRunnerPage {
     window.app.workflowChat.offAll();
     window.app.wfrPty.offAll();
     window.app.wfrPty.kill();
-    if (this._timerInt)    clearInterval(this._timerInt);
+    if (this._timerInt)       clearInterval(this._timerInt);
+    if (this._gitPollInterval) clearInterval(this._gitPollInterval);
     if (this._resizeObs)   this._resizeObs.disconnect();
     if (this._onWinResize) window.removeEventListener('resize', this._onWinResize);
     if (this._term) { this._term.dispose(); this._term = null; }
@@ -109,6 +121,7 @@ export class WorkflowRunnerPage {
 
     this._render();
     this._initTerminal();
+    this._startGitPolling();
 
     if (startLayerId) {
       const target = this._layers.find(l => l.id === startLayerId);
@@ -233,6 +246,47 @@ export class WorkflowRunnerPage {
     }
   }
 
+  // ── Usage snapshot ───────────────────────────────────────────────────────
+
+  async _writeUsageSnapshot(label, layer) {
+    if (!this._term || this._modelConfig?.type !== 'cli') return;
+    const exe = this._modelConfig?.executable || 'claude';
+    const cwd = this._getCwd(layer);
+    try {
+      const { output } = await window.app.wfrPty.runUsage({ exe, cwd });
+      if (!output) return;
+      const title  = label === 'before' ? 'Usage before layer' : 'Usage after layer';
+      const border = '─'.repeat(40);
+      this._term.writeln(`\r\n${ANSI.dim}${border}`);
+      this._term.writeln(`  ${title}`);
+      this._term.writeln(border);
+      output.split('\n').forEach(l => this._term.writeln(l.replace(/\r$/, '')));
+      this._term.writeln(`${border}${ANSI.reset}`);
+    } catch (_) {}
+  }
+
+  async _checkUsage() {
+    if (!this._term) return;
+    const exe = this._modelConfig?.executable || 'claude';
+    const cwd = this._project?.project_path || null;
+    this._term.writeln(`\r\n${ANSI.dim}Fetching /usage…${ANSI.reset}`);
+    try {
+      const { output } = await window.app.wfrPty.runUsage({ exe, cwd });
+      const border = '─'.repeat(40);
+      this._term.writeln(`\r\n${ANSI.dim}${border}`);
+      this._term.writeln('  claude /usage');
+      this._term.writeln(border);
+      if (output) {
+        output.split('\n').forEach(l => this._term.writeln(l.replace(/\r$/, '')));
+      } else {
+        this._term.writeln('  (no output returned)');
+      }
+      this._term.writeln(`${border}${ANSI.reset}`);
+    } catch (err) {
+      this._term.writeln(`${ANSI.red}Failed to run /usage: ${err?.message || err}${ANSI.reset}`);
+    }
+  }
+
   // ── Run helpers ──────────────────────────────────────────────────────────
 
   _getCwd(layer) {
@@ -271,8 +325,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   }
 
   _buildLayerUserPrompt(layer) {
-    return layer.prompt ||
-      `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`;
+    return `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}\n\nInstructions:\n${layer.prompt}`;
   }
 
   // ── Run selected layer ───────────────────────────────────────────────────
@@ -300,7 +353,8 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     for (const layer of this._layers) {
       if (!this._running) break;
       if (this._statuses[layer.id] !== 'open') continue;
-      await this._runLayer(layer, { continueSession: sessionStarted });
+      await this._runLayer(layer, { continueSession: this._chainSessions && sessionStarted });
+      if (this._statuses[layer.id] === 'failed') break;
       sessionStarted = true;
     }
     this._running = false;
@@ -317,7 +371,8 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       const idx   = this._layers.indexOf(layer);
       const total = this._layers.length;
 
-      // Reset token stats display for this layer run
+      // Reset token stats for this layer run
+      this._layerTokenStats = null;
       const statsEl = this.container.querySelector('#wfrTokenStats');
       if (statsEl) statsEl.hidden = true;
 
@@ -344,15 +399,39 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
         if (this._term) this._term.write(doneBanner(layer.layer || 'Layer', elapsed, !error));
         if (error)      this._term.write(`\r\n${ANSI.red}Error: ${error}${ANSI.reset}\r\n`);
+        if (this._term && this._layerTokenStats) {
+          const { input = 0, output = 0, cacheRead, costUsd } = this._layerTokenStats;
+          const parts = [
+            `↑ ${input.toLocaleString()} in`,
+            `↓ ${output.toLocaleString()} out`,
+          ];
+          if (cacheRead) parts.push(`${cacheRead.toLocaleString()} cached`);
+          if (costUsd != null) parts.push(`$${costUsd.toFixed(4)}`);
+          this._term.write(`${ANSI.dim}Tokens: ${parts.join('  ·  ')}${ANSI.reset}\r\n`);
+        }
 
         await window.db.layers.updateStatus({ id: layer.id, status: newStatus });
         this._refreshLayerList();
+        this._refreshGitPanel();
+
+        // Show /usage snapshot after the layer completes (CLI path only)
+        if (this._modelConfig?.type === 'cli') await this._writeUsageSnapshot('after', layer);
+
         resolve();
       };
+
+      // Fail immediately if no prompt is defined
+      if (!layer.prompt?.trim()) {
+        await finish('No prompt defined — add a prompt to this layer before running');
+        return;
+      }
 
       // ── CLI path: use PTY ──────────────────────────────────────────────
       if (this._modelConfig?.type === 'cli') {
         if (!this._term) { await finish('Terminal not initialised'); return; }
+
+        // Show /usage snapshot before the layer runs
+        await this._writeUsageSnapshot('before', layer);
 
         window.app.wfrPty.onLayerDone(({ layerId, error }) => {
           if (layerId === layer.id) finish(error);
@@ -401,6 +480,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   // ── Token stats ──────────────────────────────────────────────────────────
 
   _updateTokenStats({ input, output, cacheRead, costUsd, thinkingTokens }) {
+    if (input != null) this._layerTokenStats = { input, output, cacheRead, costUsd };
     const el = this.container.querySelector('#wfrTokenStats');
     if (!el) return;
     el.hidden = false;
@@ -523,6 +603,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     if (this._term) this._term.write(`\r\n${ANSI.yellow}⊘ Stopped${ANSI.reset}\r\n`);
     this._refreshLayerList();
     this._updateToolbar();
+    this._refreshGitPanel();
   }
 
   // ── Selection ────────────────────────────────────────────────────────────
@@ -532,6 +613,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     this._refreshLayerList();
     this._updateLayerHeader();
     this._updateToolbar();
+    this._refreshGitPanel();
   }
 
   _updateLayerHeader() {
@@ -555,12 +637,10 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     const runAll      = this.container.querySelector('#wfrBtnRunAll');
     const runSelected = this.container.querySelector('#wfrBtnRunSelected');
     const stop        = this.container.querySelector('#wfrBtnStop');
-    const lbl         = this.container.querySelector('#wfrRunLabel');
     const hasOpen     = this._layers.some(l => this._statuses[l.id] === 'open');
     if (runAll)      { runAll.hidden = this._running; runAll.disabled = !hasOpen; }
     if (runSelected) { runSelected.hidden = this._running; runSelected.disabled = !this._selectedId; }
     if (stop)        stop.hidden = !this._running;
-    if (lbl)         { lbl.hidden = this._running; lbl.textContent = 'Run complete'; }
   }
 
   _refreshLayerList() {
@@ -610,15 +690,26 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   }
 
   _render() {
-    const wf   = this._workflow;
-    const name = wf ? escHtml(wf.feature || 'Workflow') : 'Workflow';
+    const wf     = this._workflow;
+    const name   = wf ? escHtml(wf.feature || 'Workflow') : 'Workflow';
+    const wfId   = wf?.id   || '';
+    const wfName = wf?.feature || 'Workflow';
 
     this.container.innerHTML = `
       <div class="wfr-page">
         <header class="wfr-header">
           <span class="wfr-header__title">${name} — Run Layers</span>
           <div class="wfr-header__actions">
-            <span class="wfr-header__status" id="wfrRunLabel" hidden></span>
+            <button class="wfr-cli-btn" id="wfrBtnUsage" title="Check current claude /usage">Usage</button>
+            <button class="wfr-chain-btn" id="wfrBtnChain" title="When ON: layers share one session (-c flag). When OFF: each layer starts fresh." aria-pressed="false">
+              Chain Sessions: <span id="wfrChainLabel">OFF</span>
+            </button>
+            <button class="wfr-cli-btn" id="wfrBtnCli" title="Open CLI in PowerShell at layer path">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4l4 4-4 4M8 12h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              CLI
+            </button>
             <button class="wfr-run-selected-btn" id="wfrBtnRunSelected" disabled>
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
@@ -671,6 +762,42 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
             </div>
             <div class="wfr-terminal-wrap" id="wfrTerminal"></div>
           </section>
+
+          <!-- Resize divider -->
+          <div class="wfr-resize-divider" id="wfrResizeDivider"></div>
+
+          <!-- Right: git diff panel -->
+          <aside class="wfr-git-panel" id="wfrGitPanel">
+            <div class="wfr-git-panel__header">
+              <span class="wfr-git-panel__title">Git Changes</span>
+              <span class="wfr-git-panel__badge" id="wfrGitBadge" hidden></span>
+              <div class="wfr-git-panel__actions">
+                <button class="wfr-git-panel__icon-btn" id="wfrBtnGitExpandAll" title="Expand all">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button class="wfr-git-panel__icon-btn" id="wfrBtnGitCollapseAll" title="Collapse all">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button class="wfr-git-panel__refresh" id="wfrBtnGitRefresh" title="Refresh">↺</button>
+              </div>
+            </div>
+            <div class="wfr-git-commit-bar">
+              <input class="wfr-git-commit-msg" id="wfrGitCommitMsg" type="text" spellcheck="false" placeholder="Commit message…" value="#${escHtml(wfId)} - ${escHtml(wfName)}">
+              <button class="wfr-git-commit-btn" id="wfrBtnGitCommit" disabled>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Commit
+              </button>
+            </div>
+            <div class="wfr-git-panel__body" id="wfrGitAccordion">
+              <div class="git-diff-empty">No changes yet.</div>
+            </div>
+          </aside>
         </div>
       </div>`;
 
@@ -687,7 +814,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         const firstOpen = this._layers.find(l => l.id === this._selectedId && this._statuses[l.id] === 'open')
           || this._layers.find(l => this._statuses[l.id] === 'open');
         if (!firstOpen) return;
-        this.container.querySelector('#wfrRunLabel').hidden = true;
         this._selectLayer(firstOpen.id);
         this._runAll();
       });
@@ -697,6 +823,361 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
     this.container.querySelectorAll('.wfr-layer-row').forEach(row => {
       row.addEventListener('click', () => this._selectLayer(+row.dataset.id));
+    });
+
+    this.container.querySelector('#wfrBtnUsage')
+      ?.addEventListener('click', () => this._checkUsage());
+
+    this.container.querySelector('#wfrBtnChain')
+      ?.addEventListener('click', () => {
+        this._chainSessions = !this._chainSessions;
+        const btn   = this.container.querySelector('#wfrBtnChain');
+        const label = this.container.querySelector('#wfrChainLabel');
+        if (btn)   btn.setAttribute('aria-pressed', String(this._chainSessions));
+        if (label) label.textContent = this._chainSessions ? 'ON' : 'OFF';
+      });
+
+    this.container.querySelector('#wfrBtnCli')
+      ?.addEventListener('click', () => this._openCli());
+
+    this.container.querySelector('#wfrBtnGitRefresh')
+      ?.addEventListener('click', () => this._refreshGitPanel());
+    this.container.querySelector('#wfrBtnGitExpandAll')
+      ?.addEventListener('click', () => this._expandCollapseAll(true));
+    this.container.querySelector('#wfrBtnGitCollapseAll')
+      ?.addEventListener('click', () => this._expandCollapseAll(false));
+    this.container.querySelector('#wfrBtnGitCommit')
+      ?.addEventListener('click', () => this._commitChanges());
+
+    this._initResizeDivider();
+  }
+
+  // ── CLI launcher ─────────────────────────────────────────────────────────
+
+  _openCli() {
+    const layer = this._layers.find(l => l.id === this._selectedId);
+    const cwd   = (layer ? this._getCwd(layer) : null) || this._project?.project_path;
+    if (!cwd) return;
+    const executable = this._modelConfig?.executable || 'claude';
+    window.db.terminal.openExternal({ command: executable, cwd });
+  }
+
+  // ── Git diff panel ───────────────────────────────────────────────────────
+
+  _toggleGitPanel() {
+    this._gitPanelVisible = !this._gitPanelVisible;
+    const panel = this.container.querySelector('#wfrGitPanel');
+    const btn   = this.container.querySelector('#wfrBtnGitToggle');
+    if (panel) panel.hidden = !this._gitPanelVisible;
+    if (btn)   btn.classList.toggle('wfr-git-toggle-btn--active', this._gitPanelVisible);
+  }
+
+  _getGitCwd() {
+    const layer = this._layers.find(l => l.id === this._selectedId);
+    return (layer ? this._getCwd(layer) : null) || this._project?.project_path || null;
+  }
+
+  _parseGitStatus(output) {
+    return output.split('\n')
+      .filter(l => /^[ MADRCU?!]{2} .+/.test(l))
+      .map(line => {
+        const xy   = line.substring(0, 2);
+        const file = line.substring(3).trim().replace(/^"(.*)"$/, '$1');
+        let statusType;
+        if (xy.includes('?'))      statusType = 'U';
+        else if (xy.includes('A')) statusType = 'A';
+        else if (xy.includes('D')) statusType = 'D';
+        else if (xy.includes('R')) statusType = 'R';
+        else                       statusType = 'M';
+        return { xy, statusType, file };
+      });
+  }
+
+  _renderDiffBody(diffText) {
+    const esc = escHtml;
+    if (!diffText || !diffText.trim()) {
+      return '<div class="git-diff-empty">No diff available.</div>';
+    }
+    let html = '<table class="git-diff-table"><tbody>';
+    let oldLine = 0, newLine = 0;
+    for (const raw of diffText.split('\n')) {
+      if (/^(diff --git|index |--- |\+\+\+ |Binary |new file|deleted file|old mode|new mode|rename )/.test(raw)) continue;
+      if (raw.startsWith('@@')) {
+        const m = raw.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)/);
+        if (m) {
+          oldLine = parseInt(m[1]);
+          newLine = parseInt(m[2]);
+          const hunkHeader = raw.match(/@@ [^@]+ @@/)?.[0] || raw;
+          const ctx = m[3] ? esc(m[3].trim()) : '';
+          html += `<tr class="gd-row gd-row--hunk">
+            <td class="gd-ln"></td><td class="gd-ln"></td>
+            <td class="gd-code">${esc(hunkHeader)}${ctx ? ` <span class="gd-hunk-ctx">${ctx}</span>` : ''}</td>
+          </tr>`;
+        }
+        continue;
+      }
+      if (raw.startsWith('-')) {
+        html += `<tr class="gd-row gd-row--del">
+          <td class="gd-ln gd-ln--del">${oldLine++}</td><td class="gd-ln"></td>
+          <td class="gd-code gd-code--del"><span class="gd-sign">&#x2212;</span>${esc(raw.slice(1))}</td>
+        </tr>`;
+      } else if (raw.startsWith('+')) {
+        html += `<tr class="gd-row gd-row--add">
+          <td class="gd-ln"></td><td class="gd-ln gd-ln--add">${newLine++}</td>
+          <td class="gd-code gd-code--add"><span class="gd-sign">+</span>${esc(raw.slice(1))}</td>
+        </tr>`;
+      } else if (raw.startsWith(' ')) {
+        html += `<tr class="gd-row gd-row--ctx">
+          <td class="gd-ln">${oldLine++}</td><td class="gd-ln">${newLine++}</td>
+          <td class="gd-code">${esc(raw.slice(1))}</td>
+        </tr>`;
+      } else if (raw.startsWith('\\')) {
+        html += `<tr class="gd-row gd-row--meta">
+          <td class="gd-ln"></td><td class="gd-ln"></td>
+          <td class="gd-code gd-code--meta">${esc(raw)}</td>
+        </tr>`;
+      }
+    }
+    html += '</tbody></table>';
+    return html;
+  }
+
+  async _refreshGitPanel() {
+    const cwd       = this._getGitCwd();
+    const wrap      = this.container.querySelector('#wfrGitAccordion');
+    const badge     = this.container.querySelector('#wfrGitBadge');
+    const commitBtn = this.container.querySelector('#wfrBtnGitCommit');
+    if (!cwd || !wrap) return;
+    try {
+      const r = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd });
+      const files = this._parseGitStatus(r.stdout || '');
+
+      // If the file list is identical to what's already rendered, only update
+      // the badge and commit button — avoid a full DOM rebuild that would
+      // collapse expanded diffs and disrupt the user's view.
+      const noChange = files.length === this._gitFiles.length &&
+        files.every((f, i) => f.file === this._gitFiles[i]?.file && f.statusType === this._gitFiles[i]?.statusType);
+
+      if (noChange && wrap.querySelector('.git-accordion__item')) {
+        if (badge) { badge.textContent = String(files.length); badge.hidden = files.length === 0; }
+        if (commitBtn && !commitBtn.classList.contains('wfr-git-commit-btn--busy')) {
+          commitBtn.disabled = files.length === 0;
+        }
+        return;
+      }
+
+      this._gitFiles = files;
+      if (badge) { badge.textContent = String(files.length); badge.hidden = files.length === 0; }
+      if (commitBtn && !commitBtn.classList.contains('wfr-git-commit-btn--busy')) {
+        commitBtn.disabled = files.length === 0;
+      }
+      await this._renderGitAccordion(files, cwd);
+    } catch {
+      if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Not a git repository.</div>';
+    }
+  }
+
+  async _renderGitAccordion(files, cwd) {
+    const wrap = this.container.querySelector('#wfrGitAccordion');
+    if (!wrap) return;
+    if (files.length === 0) {
+      wrap.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
+      return;
+    }
+
+    wrap.innerHTML = files.map((f, i) => {
+      const expanded = this._gitExpandedFiles.has(f.file);
+      return `
+        <div class="git-accordion__item${expanded ? '' : ' git-accordion__item--collapsed'}" data-idx="${i}">
+          <button class="git-accordion__header" data-idx="${i}" aria-expanded="${expanded}" data-file="${escHtml(f.file)}">
+            <span class="git-diff-file__status git-diff-file__status--${f.statusType}">${f.statusType}</span>
+            <span class="git-accordion__filename">${escHtml(f.file)}</span>
+            <svg class="git-accordion__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="git-accordion__body" id="wfrGdBody${i}" data-loaded="false">
+            ${expanded ? '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>' : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    wrap.querySelectorAll('.git-accordion__header').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx      = parseInt(btn.dataset.idx);
+        const file     = btn.dataset.file;
+        const body     = wrap.querySelector(`#wfrGdBody${idx}`);
+        const item     = wrap.querySelector(`.git-accordion__item[data-idx="${idx}"]`);
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+
+        btn.setAttribute('aria-expanded', String(!expanded));
+        item.classList.toggle('git-accordion__item--collapsed', expanded);
+
+        if (!expanded) {
+          this._gitExpandedFiles.add(file);
+          if (body && body.dataset.loaded !== 'true') {
+            body.innerHTML = '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>';
+            const fileInfo = files[idx];
+            if (fileInfo) this._loadGitDiffInto(fileInfo, idx, cwd);
+          }
+        } else {
+          this._gitExpandedFiles.delete(file);
+        }
+      });
+    });
+
+    // Reload diffs for files that were already expanded
+    const toLoad = files
+      .map((f, i) => ({ f, i }))
+      .filter(({ f }) => this._gitExpandedFiles.has(f.file));
+    if (toLoad.length > 0) {
+      await Promise.all(toLoad.map(({ f, i }) => this._loadGitDiffInto(f, i, cwd)));
+    }
+  }
+
+  async _loadGitDiffInto(fileInfo, idx, cwd) {
+    const body = this.container.querySelector(`#wfrGdBody${idx}`);
+    if (!body) return;
+    try {
+      let diffText = '';
+      if (fileInfo.statusType === 'U') {
+        const r = await window.db.terminal.exec({
+          command: `Get-Content -Raw -Encoding UTF8 "${fileInfo.file}" 2>&1`,
+          cwd,
+        });
+        const content    = (r.stdout || '').replace(/\r\n/g, '\n');
+        const addedLines = content.split('\n').map(l => `+${l}`).join('\n');
+        diffText = `@@ -0,0 +1 @@\n${addedLines}`;
+      } else {
+        const r1 = await window.db.terminal.exec({
+          command: `git diff HEAD -- "${fileInfo.file}" 2>&1`,
+          cwd,
+        });
+        diffText = (r1.stdout || '').trim();
+        if (!diffText) {
+          const r2 = await window.db.terminal.exec({
+            command: `git diff --cached -- "${fileInfo.file}" 2>&1`,
+            cwd,
+          });
+          diffText = (r2.stdout || '').trim();
+        }
+      }
+      body.innerHTML = this._renderDiffBody(diffText);
+      body.dataset.loaded = 'true';
+    } catch {
+      body.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
+    }
+  }
+
+  _expandCollapseAll(expand) {
+    const cwd  = this._getGitCwd();
+    const wrap = this.container.querySelector('#wfrGitAccordion');
+    if (!wrap || !cwd) return;
+    wrap.querySelectorAll('.git-accordion__item').forEach((item, idx) => {
+      const btn  = item.querySelector('.git-accordion__header');
+      const body = item.querySelector('.git-accordion__body');
+      const file = btn?.dataset.file;
+      if (!btn || !body || !file) return;
+      btn.setAttribute('aria-expanded', String(expand));
+      item.classList.toggle('git-accordion__item--collapsed', !expand);
+      if (expand) {
+        this._gitExpandedFiles.add(file);
+        if (body.dataset.loaded !== 'true') {
+          body.innerHTML = '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>';
+          const fileInfo = this._gitFiles[idx];
+          if (fileInfo) this._loadGitDiffInto(fileInfo, idx, cwd);
+        }
+      } else {
+        this._gitExpandedFiles.delete(file);
+      }
+    });
+  }
+
+  _startGitPolling() {
+    this._stopGitPolling();
+    this._refreshGitPanel();
+    this._gitPollInterval = setInterval(() => this._refreshGitPanel(), 5000);
+  }
+
+  _stopGitPolling() {
+    if (this._gitPollInterval) {
+      clearInterval(this._gitPollInterval);
+      this._gitPollInterval = null;
+    }
+  }
+
+  async _commitChanges() {
+    const msgEl = this.container.querySelector('#wfrGitCommitMsg');
+    const btn   = this.container.querySelector('#wfrBtnGitCommit');
+    const cwd   = this._getGitCwd();
+    if (!cwd || !msgEl) return;
+
+    const msg = msgEl.value.trim();
+    if (!msg || this._gitFiles.length === 0) return;
+
+    btn?.classList.add('wfr-git-commit-btn--busy');
+    if (btn) btn.disabled = true;
+
+    try {
+      const safeMsg = msg.replace(/'/g, "''");
+      const r = await window.db.terminal.exec({
+        command: `git add -A 2>&1; git commit -m '${safeMsg}' 2>&1`,
+        cwd,
+      });
+      if (r.exitCode === 0 || (r.stdout || '').includes('master') || (r.stdout || '').includes('main') || (r.stdout || '').includes('HEAD')) {
+        this._gitExpandedFiles.clear();
+        await this._refreshGitPanel();
+      } else {
+        await this._refreshGitPanel();
+      }
+    } catch {
+      await this._refreshGitPanel();
+    } finally {
+      btn?.classList.remove('wfr-git-commit-btn--busy');
+    }
+  }
+
+  _initResizeDivider() {
+    const divider  = this.container.querySelector('#wfrResizeDivider');
+    const terminal = this.container.querySelector('.wfr-output-panel');
+    const gitPanel = this.container.querySelector('#wfrGitPanel');
+    if (!divider || !terminal || !gitPanel) return;
+
+    let dragging = false;
+    let startX   = 0;
+    let startTermW = 0;
+    let startGitW  = 0;
+
+    const onMouseMove = (e) => {
+      if (!dragging) return;
+      const delta   = e.clientX - startX;
+      const newGitW = Math.max(350, startGitW - delta);
+      const newTermW = Math.max(200, startTermW + (startGitW - newGitW));
+      // Use flex-grow ratios so both panels scale when the window resizes.
+      // flex-basis 0px lets all available space be distributed by grow ratio.
+      terminal.style.flex = `${newTermW} 1 0px`;
+      gitPanel.style.flex = `${newGitW} 1 0px`;
+    };
+
+    const onMouseUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.cursor     = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup',   onMouseUp);
+    };
+
+    divider.addEventListener('mousedown', (e) => {
+      dragging   = true;
+      startX     = e.clientX;
+      startTermW = terminal.getBoundingClientRect().width;
+      startGitW  = gitPanel.getBoundingClientRect().width;
+      document.body.style.cursor     = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup',   onMouseUp);
+      e.preventDefault();
     });
   }
 }

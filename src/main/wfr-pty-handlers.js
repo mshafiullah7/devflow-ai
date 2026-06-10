@@ -62,11 +62,8 @@ function formatStreamLine(line) {
       return null;
     case 'tool_result':
       return null;
-    default: {
-      // Show a brief dimmed preview of unrecognised event types (truncated)
-      const preview = clean.length > 160 ? clean.slice(0, 160) + '…' : clean;
-      return `\x1b[2m${preview}\x1b[0m\r\n`;
-    }
+    default:
+      return null;
   }
 }
 
@@ -124,6 +121,34 @@ function registerWfrPtyHandlers() {
 
   // Kill any running layer PTY
   safeHandle('wfrPty:kill', () => { killPty(); });
+
+  // Run `claude /usage` (or any configured exe) and return its stdout
+  safeHandle('wfrPty:runUsage', (_e, { exe, cwd: rawCwd }) => {
+    return new Promise((resolve) => {
+      const { exec } = require('node:child_process');
+      const resolvedExe = resolveExe(exe || 'claude');
+      const spawnCwd = (rawCwd && fs.existsSync(rawCwd)) ? rawCwd : os.homedir();
+      exec(
+        `"${resolvedExe}" --print /usage`,
+        {
+          cwd: spawnCwd,
+          timeout: 15000,
+          encoding: 'utf8',
+          env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+        },
+        (err, stdout, stderr) => {
+          const raw = (stdout || stderr || err?.message || '').trim();
+          // Strip all ANSI escape sequences so xterm doesn't misinterpret them
+          const clean = raw
+            .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+            .replace(/\x1B\][^\x07]*\x07/g, '')
+            .replace(/\x1B[()][AB012]/g, '')
+            .replace(/\r/g, '');
+          resolve({ output: clean });
+        }
+      );
+    });
+  });
 
   // ---------------------------------------------------------------------------
   // Spawn a new PTY to execute one workflow layer.
@@ -196,7 +221,6 @@ function registerWfrPtyHandlers() {
         ...(continueSession ? ['-c'] : []),
         '--dangerously-skip-permissions',
         '--print',
-        '--verbose',
         '--output-format', 'stream-json',
         '--model', modelName,
         ...(useArg ? [fullPrompt] : []),
