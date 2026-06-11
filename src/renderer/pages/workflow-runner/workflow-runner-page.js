@@ -43,7 +43,6 @@ export class WorkflowRunnerPage {
     this._statuses      = {};
     this._selectedId    = null;
     this._running       = false;
-    this._chainSessions = false;
     this._startTimes    = {};
     this._timerInt      = null;
     this._screenDesign  = null;
@@ -55,9 +54,6 @@ export class WorkflowRunnerPage {
     this._fitAddon = null;
     this._resizeObs = null;
     this._onWinResize = null;
-
-    // token stats for the current layer run
-    this._layerTokenStats = null;
 
     // git diff panel
     this._gitPanelVisible  = true;
@@ -187,7 +183,6 @@ export class WorkflowRunnerPage {
 
     // Register IPC data listener NOW — before any layer runs — so no PTY output is missed
     window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
-    window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
     window.app.wfrPty.onLayerDone(({ layerId, error }) => {
       if (layerId === 'shell' && this._term && !this._switchingShell) {
         this._term.writeln(`\r\n${ANSI.red}Shell exited.${ANSI.reset}`);
@@ -265,47 +260,6 @@ export class WorkflowRunnerPage {
     }
   }
 
-  // ── Usage snapshot ───────────────────────────────────────────────────────
-
-  async _writeUsageSnapshot(label, layer) {
-    if (!this._term || this._modelConfig?.type !== 'cli') return;
-    const exe = this._modelConfig?.executable || 'claude';
-    const cwd = this._getCwd(layer);
-    try {
-      const { output } = await window.app.wfrPty.runUsage({ exe, cwd });
-      if (!output) return;
-      const title  = label === 'before' ? 'Usage before layer' : 'Usage after layer';
-      const border = '─'.repeat(40);
-      this._term.writeln(`\r\n${ANSI.dim}${border}`);
-      this._term.writeln(`  ${title}`);
-      this._term.writeln(border);
-      output.split('\n').forEach(l => this._term.writeln(l.replace(/\r$/, '')));
-      this._term.writeln(`${border}${ANSI.reset}`);
-    } catch (_) {}
-  }
-
-  async _checkUsage() {
-    if (!this._term) return;
-    const exe = this._modelConfig?.executable || 'claude';
-    const cwd = this._project?.project_path || null;
-    this._term.writeln(`\r\n${ANSI.dim}Fetching /usage…${ANSI.reset}`);
-    try {
-      const { output } = await window.app.wfrPty.runUsage({ exe, cwd });
-      const border = '─'.repeat(40);
-      this._term.writeln(`\r\n${ANSI.dim}${border}`);
-      this._term.writeln('  claude /usage');
-      this._term.writeln(border);
-      if (output) {
-        output.split('\n').forEach(l => this._term.writeln(l.replace(/\r$/, '')));
-      } else {
-        this._term.writeln('  (no output returned)');
-      }
-      this._term.writeln(`${border}${ANSI.reset}`);
-    } catch (err) {
-      this._term.writeln(`${ANSI.red}Failed to run /usage: ${err?.message || err}${ANSI.reset}`);
-    }
-  }
-
   // ── Run helpers ──────────────────────────────────────────────────────────
 
   _getCwd(layer) {
@@ -368,13 +322,11 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     if (this._workflow) {
       await window.db.workflows.updateStatus({ id: this._workflow.id, status: 'in_progress' });
     }
-    let sessionStarted = false;
     for (const layer of this._layers) {
       if (!this._running) break;
       if (this._statuses[layer.id] !== 'open') continue;
-      await this._runLayer(layer, { continueSession: this._chainSessions && sessionStarted });
+      await this._runLayer(layer);
       if (this._statuses[layer.id] === 'failed') break;
-      sessionStarted = true;
     }
     this._running = false;
     this._updateToolbar();
@@ -385,15 +337,10 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
   // ── Core layer runner ────────────────────────────────────────────────────
 
-  _runLayer(layer, { continueSession = false } = {}) {
+  _runLayer(layer) {
     return new Promise(async (resolve) => {
       const idx   = this._layers.indexOf(layer);
       const total = this._layers.length;
-
-      // Reset token stats for this layer run
-      this._layerTokenStats = null;
-      const statsEl = this.container.querySelector('#wfrTokenStats');
-      if (statsEl) statsEl.hidden = true;
 
       this._statuses[layer.id] = 'running';
       this._startTimes[layer.id] = Date.now();
@@ -412,7 +359,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         window.app.wfrPty.offAll();
         // Re-attach PTY listeners (offAll removes them; re-add for next layer)
         window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
-        window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
         window.app.wfrPty.onLayerDone(({ layerId, error }) => {
           if (layerId === 'shell' && this._term && !this._switchingShell) {
             this._term.writeln(`\r\n${ANSI.red}Shell exited.${ANSI.reset}`);
@@ -426,23 +372,10 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
         if (this._term) this._term.write(doneBanner(layer.layer || 'Layer', elapsed, !error));
         if (error)      this._term.write(`\r\n${ANSI.red}Error: ${error}${ANSI.reset}\r\n`);
-        if (this._term && this._layerTokenStats) {
-          const { input = 0, output = 0, cacheRead, costUsd } = this._layerTokenStats;
-          const parts = [
-            `↑ ${input.toLocaleString()} in`,
-            `↓ ${output.toLocaleString()} out`,
-          ];
-          if (cacheRead) parts.push(`${cacheRead.toLocaleString()} cached`);
-          if (costUsd != null) parts.push(`$${costUsd.toFixed(4)}`);
-          this._term.write(`${ANSI.dim}Tokens: ${parts.join('  ·  ')}${ANSI.reset}\r\n`);
-        }
 
         await window.db.layers.updateStatus({ id: layer.id, status: newStatus });
         this._refreshLayerList();
         this._refreshGitPanel();
-
-        // Show /usage snapshot after the layer completes (CLI path only)
-        if (this._modelConfig?.type === 'cli') await this._writeUsageSnapshot('after', layer);
 
         // Re-spawn interactive shell so terminal stays active (CLI path only)
         if (this._modelConfig?.type === 'cli') this._spawnShell();
@@ -460,9 +393,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       if (this._modelConfig?.type === 'cli') {
         if (!this._term) { await finish('Terminal not initialised'); return; }
 
-        // Show /usage snapshot before the layer runs
-        await this._writeUsageSnapshot('before', layer);
-
         window.app.wfrPty.onLayerDone(({ layerId, error }) => {
           if (layerId === layer.id) finish(error);
         });
@@ -479,7 +409,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
           cwd:             this._getCwd(layer) || undefined,
           cols:            this._term.cols,
           rows:            this._term.rows,
-          continueSession,
         });
         this._switchingShell = false;
 
@@ -507,55 +436,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         cwd:          this._getCwd(layer),
       });
     });
-  }
-
-  // ── Token stats ──────────────────────────────────────────────────────────
-
-  _updateTokenStats({ input, output, cacheRead, costUsd, thinkingTokens }) {
-    if (input != null) this._layerTokenStats = { input, output, cacheRead, costUsd };
-    const el = this.container.querySelector('#wfrTokenStats');
-    if (!el) return;
-    el.hidden = false;
-
-    const thinkEl = this.container.querySelector('#wfrTokThinking');
-
-    // Live thinking progress — just update the thinking indicator
-    if (thinkingTokens != null && input == null) {
-      if (thinkEl) {
-        thinkEl.textContent = `thinking… ${thinkingTokens.toLocaleString()} tok`;
-        thinkEl.hidden = false;
-      }
-      return;
-    }
-
-    // Final result tokens — replace thinking indicator with final counts
-    if (thinkEl) thinkEl.hidden = true;
-
-    const inEl    = this.container.querySelector('#wfrTokIn');
-    const outEl   = this.container.querySelector('#wfrTokOut');
-    const cacheEl = this.container.querySelector('#wfrTokCache');
-    const costEl  = this.container.querySelector('#wfrTokCost');
-    const sep1    = this.container.querySelector('#wfrTokSep1');
-    const sep2    = this.container.querySelector('#wfrTokSep2');
-
-    if (inEl)  { inEl.textContent  = `↑ ${(input  ?? 0).toLocaleString()} in`;  inEl.hidden  = false; }
-    if (outEl) { outEl.textContent = `↓ ${(output ?? 0).toLocaleString()} out`; outEl.hidden = false; }
-    if (sep1)    sep1.hidden = false;
-
-    if (cacheEl) {
-      if (cacheRead) {
-        cacheEl.textContent = `${cacheRead.toLocaleString()} cached`;
-        cacheEl.hidden = false;
-        if (sep2) sep2.hidden = false;
-      } else {
-        cacheEl.hidden = true;
-        if (sep2) sep2.hidden = true;
-      }
-    }
-    if (costEl) {
-      if (costUsd != null) { costEl.textContent = `$${costUsd.toFixed(4)}`; costEl.hidden = false; }
-      else costEl.hidden = true;
-    }
   }
 
   // ── Timer ────────────────────────────────────────────────────────────────
@@ -618,26 +498,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     el.hidden = false;
   }
 
-  // ── Stop ─────────────────────────────────────────────────────────────────
-
-  _stop() {
-    this._running = false;
-    window.app.wfrPty.kill();
-    window.app.workflowChat.cancel();
-    window.app.workflowChat.offAll();
-    window.app.wfrPty.offAll();
-    window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
-    window.app.wfrPty.onTokenStats((stats) => this._updateTokenStats(stats));
-    if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
-    this._layers.forEach(l => {
-      if (this._statuses[l.id] === 'running') this._statuses[l.id] = 'open';
-    });
-    if (this._term) this._term.write(`\r\n${ANSI.yellow}⊘ Stopped${ANSI.reset}\r\n`);
-    this._refreshLayerList();
-    this._updateToolbar();
-    this._refreshGitPanel();
-  }
-
   // ── Selection ────────────────────────────────────────────────────────────
 
   _selectLayer(id) {
@@ -673,11 +533,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   _updateToolbar() {
     const runAll      = this.container.querySelector('#wfrBtnRunAll');
     const runSelected = this.container.querySelector('#wfrBtnRunSelected');
-    const stop        = this.container.querySelector('#wfrBtnStop');
     const hasOpen     = this._layers.some(l => this._statuses[l.id] === 'open');
     if (runAll)      { runAll.hidden = this._running; runAll.disabled = !hasOpen; }
     if (runSelected) { runSelected.hidden = this._running; runSelected.disabled = !this._selectedId; }
-    if (stop)        stop.hidden = !this._running;
   }
 
   _refreshLayerList() {
@@ -740,16 +598,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         <header class="wfr-header">
           <span class="wfr-header__title">${name} — Run Layers</span>
           <div class="wfr-header__actions">
-            <button class="wfr-cli-btn" id="wfrBtnUsage" title="Check current claude /usage">Usage</button>
-            <button class="wfr-chain-btn" id="wfrBtnChain" title="When ON: layers share one session (-c flag). When OFF: each layer starts fresh." aria-pressed="false">
-              Chain Sessions: <span id="wfrChainLabel">OFF</span>
-            </button>
-            <button class="wfr-cli-btn" id="wfrBtnCli" title="Open CLI in PowerShell at layer path">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4l4 4-4 4M8 12h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              CLI
-            </button>
             <button class="wfr-run-selected-btn" id="wfrBtnRunSelected" disabled>
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
@@ -762,7 +610,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
               </svg>
               Run All
             </button>
-            <button class="wfr-stop-btn" id="wfrBtnStop" hidden>■ Stop</button>
           </div>
         </header>
 
@@ -784,16 +631,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
                   ${escHtml(this._layers[0]?.layer || '')}
                 </span>
                 <span class="wfr-elapsed" id="wfrElapsed"></span>
-                <div class="wfr-token-stats" id="wfrTokenStats" hidden>
-                  <span class="wfr-token-label">Tokens</span>
-                  <span class="wfr-token-thinking" id="wfrTokThinking" hidden></span>
-                  <span class="wfr-token-stat" id="wfrTokIn" hidden></span>
-                  <span class="wfr-token-sep" id="wfrTokSep1" hidden>·</span>
-                  <span class="wfr-token-stat" id="wfrTokOut" hidden></span>
-                  <span class="wfr-token-sep wfr-token-sep--cache" id="wfrTokSep2" hidden>·</span>
-                  <span class="wfr-token-stat wfr-token-cache" id="wfrTokCache" hidden></span>
-                  <span class="wfr-token-cost" id="wfrTokCost" hidden></span>
-                </div>
               </div>
               <div class="wfr-output-cwd" id="wfrOutputCwd" hidden>
                 <span class="wfr-output-cwd__label">cwd</span>
@@ -855,27 +692,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         this._runAll();
       });
 
-    this.container.querySelector('#wfrBtnStop')
-      ?.addEventListener('click', () => this._stop());
-
     this.container.querySelectorAll('.wfr-layer-row').forEach(row => {
       row.addEventListener('click', () => this._selectLayer(+row.dataset.id));
     });
-
-    this.container.querySelector('#wfrBtnUsage')
-      ?.addEventListener('click', () => this._checkUsage());
-
-    this.container.querySelector('#wfrBtnChain')
-      ?.addEventListener('click', () => {
-        this._chainSessions = !this._chainSessions;
-        const btn   = this.container.querySelector('#wfrBtnChain');
-        const label = this.container.querySelector('#wfrChainLabel');
-        if (btn)   btn.setAttribute('aria-pressed', String(this._chainSessions));
-        if (label) label.textContent = this._chainSessions ? 'ON' : 'OFF';
-      });
-
-    this.container.querySelector('#wfrBtnCli')
-      ?.addEventListener('click', () => this._openCli());
 
     this.container.querySelector('#wfrBtnGitRefresh')
       ?.addEventListener('click', () => this._refreshGitPanel());
@@ -886,24 +705,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     this.container.querySelector('#wfrBtnGitCommit')
       ?.addEventListener('click', () => this._commitChanges());
 
-  }
-
-  // ── CLI launcher ─────────────────────────────────────────────────────────
-
-  _openCli() {
-    const layer = this._layers.find(l => l.id === this._selectedId);
-    const cwd   = (layer ? this._getCwd(layer) : null) || this._project?.project_path;
-    if (!cwd) return;
-
-    const exe      = this._modelConfig?.executable || '';
-    const isPython = exe.toLowerCase().endsWith('.py');
-
-    if (isPython) {
-      const message = layer ? this._buildLayerUserPrompt(layer) : '';
-      window.app.wfrPty.openInTerminal({ scriptPath: exe, project: cwd, message });
-    } else {
-      window.db.terminal.openExternal({ command: exe || 'claude', cwd });
-    }
   }
 
   // ── Git diff panel ───────────────────────────────────────────────────────
