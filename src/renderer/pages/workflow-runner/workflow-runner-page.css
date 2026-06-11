@@ -222,6 +222,37 @@
   white-space: nowrap;
 }
 
+.wfr-layer-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s, background 0.1s;
+  flex-shrink: 0;
+}
+.wfr-layer-row:hover .wfr-layer-copy-btn { opacity: 1; }
+.wfr-layer-copy-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+.wfr-layer-copy-btn svg { display: block; }
+.wfr-layer-copy-btn .wfr-layer-copy-tick { display: none; }
+.wfr-layer-copy-btn--copied svg { display: none; }
+.wfr-layer-copy-btn--copied .wfr-layer-copy-tick { display: block; }
+
+.wfr-layer-copy-tick {
+  font-size: 11px;
+  color: var(--accent, #4ec9b0);
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* Status chips */
 .wfr-status-chip {
   font-size: 10px;

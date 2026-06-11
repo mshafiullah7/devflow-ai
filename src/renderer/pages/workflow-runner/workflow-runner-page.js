@@ -554,6 +554,22 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     list.querySelectorAll('.wfr-layer-row').forEach(row => {
       row.addEventListener('click', () => this._selectLayer(+row.dataset.id));
     });
+    list.querySelectorAll('.wfr-layer-copy-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const layer = this._layers.find(l => l.id === +btn.dataset.copyId);
+        if (!layer) return;
+        const parts = [];
+        if (layer.purpose)  parts.push(`Purpose:\n${layer.purpose}`);
+        if (layer.inputs)   parts.push(`Inputs:\n${layer.inputs}`);
+        if (layer.outputs)  parts.push(`Outputs:\n${layer.outputs}`);
+        if (layer.prompt)   parts.push(`Prompt:\n${layer.prompt}`);
+        navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
+          btn.classList.add('wfr-layer-copy-btn--copied');
+          setTimeout(() => btn.classList.remove('wfr-layer-copy-btn--copied'), 1500);
+        }).catch(() => {});
+      });
+    });
   }
 
   _layerListHtml() {
@@ -570,6 +586,13 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
             <span class="wfr-layer-right">
               ${elapsed ? `<span class="wfr-layer-time">${elapsed}</span>` : ''}
               <span class="wfr-layer-seq">${idx + 1}</span>
+              <button class="wfr-layer-copy-btn" data-copy-id="${l.id}" title="Copy layer content">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <rect x="5" y="5" width="8" height="9" rx="1.2" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M3 11V3a1 1 0 011-1h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <span class="wfr-layer-copy-tick">✓</span>
+              </button>
             </span>
           </div>
           ${l.purpose ? `<div class="wfr-layer-purpose">${escHtml(l.purpose)}</div>` : ''}
