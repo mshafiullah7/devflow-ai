@@ -12,6 +12,8 @@ let _tmpFile         = null;   // kept only for Python-agent stdin; not used for
 let _jsonLineBuf     = '';     // accumulates partial PTY lines for stream-json parsing
 let _sentinelCallback = null;  // set while waiting for ##WFR_DONE:## from the shell
 let _shellLineBuf    = '';     // line buffer used during sentinel detection
+let _claudeActive     = false;
+let _currentLayerId   = null;
 
 // ---------------------------------------------------------------------------
 // Parse one line of Claude CLI --output-format stream-json output and return
@@ -85,6 +87,7 @@ function formatStreamLine(line) {
 function killPty() {
   _sentinelCallback = null;
   _shellLineBuf     = '';
+  _claudeActive     = false;
   if (_pty) {
     try { _pty.kill(); } catch (_) {}
     _pty = null;
@@ -169,27 +172,33 @@ function registerWfrPtyHandlers() {
     }
 
     _pty.onData((data) => {
+      send('wfrPty:data', data);
+
       if (_sentinelCallback) {
-        // Buffer incoming data and scan line-by-line for the completion sentinel.
-        // Lines that contain the sentinel are consumed (not forwarded to xterm).
         _shellLineBuf += data;
-        const lines = _shellLineBuf.split('\n');
-        _shellLineBuf = lines.pop(); // keep the trailing incomplete line
-        let out = '';
-        for (const line of lines) {
-          const m = line.match(/##WFR_DONE:(\d+):(\d+)##/);
-          if (m) {
-            const cb = _sentinelCallback;
-            _sentinelCallback = null;
-            _shellLineBuf     = '';
-            cb(parseInt(m[1], 10), parseInt(m[2], 10));
-          } else {
-            out += line + '\n';
-          }
+        
+        // Strip ANSI escape codes and clean up whitespace
+        const clean = _shellLineBuf
+          .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+          .replace(/\x1B\][^\x07]*\x07/g, '')
+          .replace(/\r/g, '')
+          .trim();
+
+        // Check if the output ends with the Claude prompt or standard shell prompts
+        const isClaudePrompt = clean.endsWith('User >') || clean.endsWith('User:');
+        const isPsPrompt     = /PS\s+.*>\s*$/i.test(clean);
+        const isUnixPrompt   = !isWin && /[\$%#]\s*$/.test(clean);
+
+        if (isClaudePrompt || isPsPrompt || isUnixPrompt) {
+          _claudeActive = isClaudePrompt;
+          
+          const cb = _sentinelCallback;
+          _sentinelCallback = null;
+          _shellLineBuf = '';
+          
+          // Trigger the callback to let the runner know the layer is done
+          cb(_currentLayerId, 0);
         }
-        if (out) send('wfrPty:data', out);
-      } else {
-        send('wfrPty:data', data);
       }
     });
 
@@ -197,6 +206,13 @@ function registerWfrPtyHandlers() {
     _pty.onExit(({ exitCode }) => {
       if (_pty === myPty) {
         _pty = null;
+        _claudeActive = false;
+      }
+      if (_sentinelCallback) {
+        const cb = _sentinelCallback;
+        _sentinelCallback = null;
+        _shellLineBuf = '';
+        cb(_currentLayerId || 0, exitCode);
       }
       send('wfrPty:layerDone', {
         layerId: 'shell',
@@ -294,19 +310,8 @@ function registerWfrPtyHandlers() {
       return { ok: false, error: err.message };
     }
 
-    // Escape single quotes inside the path for safe single-quoting in the shell
-    const escapedPath = isWin
-      ? tmpFile.replace(/'/g, "''")           // PowerShell: '' inside single quotes
-      : tmpFile.replace(/'/g, "'\\''");        // bash: end-quote, escaped quote, re-open
-
-    const permFlag = skipPermissions ? '--dangerously-skip-permissions ' : '';
-    const coreCmd  = `${exe} ${permFlag}--model ${modelName} '@${escapedPath}'`;
-
-    // Append sentinel so the shell announces completion with the exit code
-    const printCmd = isWin ? `Get-Content '${escapedPath}'` : `cat '${escapedPath}'`;
-    const fullCmd = isWin
-      ? `${printCmd}; ${coreCmd}; Write-Host "##WFR_DONE:${layerId}:$LASTEXITCODE##"`
-      : `${printCmd}; ${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
+    _currentLayerId = layerId;
+    _shellLineBuf   = '';
 
     // Register callback BEFORE writing so no output is missed
     _sentinelCallback = (foundLayerId, exitCode) => {
@@ -316,6 +321,25 @@ function registerWfrPtyHandlers() {
         error:   exitCode !== 0 ? `Exited with code ${exitCode}` : null,
       });
     };
+
+    if (_claudeActive) {
+      // Claude is already running in interactive mode in this shell PTY!
+      // We don't launch it again; we just paste the file path directly to the running session!
+      _pty.write(`@${tmpFile}\r`);
+      return { ok: true, command: `[Pasting into active Claude session] @${tmpFile}` };
+    }
+
+    // Escape single quotes inside the path for safe single-quoting in the shell
+    const escapedPath = isWin
+      ? tmpFile.replace(/'/g, "''")           // PowerShell: '' inside single quotes
+      : tmpFile.replace(/'/g, "'\\''");        // bash: end-quote, escaped quote, re-open
+
+    const permFlag = skipPermissions ? '--dangerously-skip-permissions ' : '';
+    const coreCmd  = `${exe} ${permFlag}--model ${modelName} '@${escapedPath}'`;
+
+    // Print command, then run it
+    const printCmd = isWin ? `Get-Content '${escapedPath}'` : `cat '${escapedPath}'`;
+    const fullCmd  = `${printCmd}; ${coreCmd}`;
 
     // Send command into the live shell
     _pty.write(fullCmd + '\r');
