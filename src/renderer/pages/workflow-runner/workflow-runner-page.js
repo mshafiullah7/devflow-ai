@@ -143,6 +143,8 @@ export class WorkflowRunnerPage {
 
   _initTerminal() {
     const el = this.container.querySelector('#wfrTerminal');
+    this._lastCols = 0;
+    this._lastRows = 0;
 
     // Bail out with a visible error so we know what went wrong
     if (!el) { console.error('wfr: #wfrTerminal element not found'); return; }
@@ -259,12 +261,24 @@ export class WorkflowRunnerPage {
     if (!this._fitAddon || !this._term) return;
     try {
       this._fitAddon.fit();
-      window.app.wfrPty.resize({ cols: this._term.cols, rows: this._term.rows });
+      const cols = this._term.cols;
+      const rows = this._term.rows;
+      if (cols === this._lastCols && rows === this._lastRows) return;
+      this._lastCols = cols;
+      this._lastRows = rows;
+      window.app.wfrPty.resize({ cols, rows });
     } catch (_) {
       requestAnimationFrame(() => {
         try {
           this._fitAddon?.fit();
-          if (this._term) window.app.wfrPty.resize({ cols: this._term.cols, rows: this._term.rows });
+          if (this._term) {
+            const cols = this._term.cols;
+            const rows = this._term.rows;
+            if (cols === this._lastCols && rows === this._lastRows) return;
+            this._lastCols = cols;
+            this._lastRows = rows;
+            window.app.wfrPty.resize({ cols, rows });
+          }
         } catch (_2) {}
       });
     }

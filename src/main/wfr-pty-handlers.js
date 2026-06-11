@@ -16,6 +16,7 @@ let _claudeActive        = false;
 let _batchSessionActive  = false; // true after first non-interactive layer runs; enables -c for subsequent layers
 let _currentLayerId      = null;
 let _lastCommandTime     = 0;
+let _flushTimeout        = null;
 
 // ---------------------------------------------------------------------------
 // Parse one line of Claude CLI --output-format stream-json output and return
@@ -91,6 +92,10 @@ function killPty() {
   _shellLineBuf     = '';
   _claudeActive        = false;
   _batchSessionActive  = false;
+  if (_flushTimeout) {
+    clearTimeout(_flushTimeout);
+    _flushTimeout = null;
+  }
   if (_pty) {
     try { _pty.kill(); } catch (_) {}
     _pty = null;
@@ -191,42 +196,82 @@ function registerWfrPtyHandlers() {
     }
 
     _pty.onData((data) => {
-      // Always scan line-by-line for ##WFR_DONE## — decoupled from _sentinelCallback
-      // so a premature callback clear never causes a missed completion.
-      _shellLineBuf += data;
-      const lines = _shellLineBuf.split('\n');
-      _shellLineBuf = lines.pop(); // keep trailing incomplete line
-      let out = '';
-      for (const line of lines) {
-        const m = line.match(/##WFR_DONE:(\d+):(\d+)##/);
-        if (m) {
-          const layerId  = parseInt(m[1], 10);
-          const exitCode = parseInt(m[2], 10);
-          if (_sentinelCallback) {
-            const cb = _sentinelCallback;
-            _sentinelCallback = null;
-            cb(layerId, exitCode);
-          } else {
-            // Callback was cleared early — fire layerDone directly from the sentinel text
-            send('wfrPty:layerDone', {
-              layerId,
-              error: exitCode !== 0 ? `Exited with code ${exitCode}` : null,
-            });
-          }
-          // Sentinel line is always consumed, never forwarded to xterm
-        } else {
-          out += line + '\n';
-        }
+      if (_flushTimeout) {
+        clearTimeout(_flushTimeout);
+        _flushTimeout = null;
       }
-      if (out) send('wfrPty:data', out);
+      _shellLineBuf += data;
+
+      // Check for complete sentinel
+      const m = _shellLineBuf.match(/##WFR_DONE:(\d+):(\d+)##/);
+      if (m) {
+        const fullSentinel = m[0];
+        const layerId = parseInt(m[1], 10);
+        const exitCode = parseInt(m[2], 10);
+
+        const idx = _shellLineBuf.indexOf(fullSentinel);
+        const before = _shellLineBuf.slice(0, idx);
+        const after = _shellLineBuf.slice(idx + fullSentinel.length);
+
+        if (before) send('wfrPty:data', before);
+
+        if (_sentinelCallback) {
+          const cb = _sentinelCallback;
+          _sentinelCallback = null;
+          cb(layerId, exitCode);
+        } else {
+          send('wfrPty:layerDone', {
+            layerId,
+            error: exitCode !== 0 ? `Exited with code ${exitCode}` : null,
+          });
+        }
+
+        _shellLineBuf = after;
+        if (_shellLineBuf) {
+          send('wfrPty:data', _shellLineBuf);
+          _shellLineBuf = '';
+        }
+        return;
+      }
+
+      // Check for partial sentinel prefix
+      let sendLen = _shellLineBuf.length;
+      const hashIdx = _shellLineBuf.lastIndexOf('##');
+      if (hashIdx !== -1) {
+        const sub = _shellLineBuf.slice(hashIdx);
+        const isPrefix = /^##(?:W(?:F(?:R(?:_(?:D(?:O(?:N(?:E(?::(?:\d+(?::(?:\d+#?)?)?)?)?)?)?)?)?)?)?)?)?$/.test(sub);
+        if (isPrefix) {
+          sendLen = hashIdx;
+        }
+      } else if (_shellLineBuf.endsWith('#')) {
+        sendLen = _shellLineBuf.length - 1;
+      }
+
+      if (sendLen > 0) {
+        const toSend = _shellLineBuf.slice(0, sendLen);
+        send('wfrPty:data', toSend);
+        _shellLineBuf = _shellLineBuf.slice(sendLen);
+      }
+
+      // If we have remaining buffered data (potential partial sentinel), set a timeout to flush it
+      if (_shellLineBuf) {
+        _flushTimeout = setTimeout(() => {
+          if (_shellLineBuf) {
+            send('wfrPty:data', _shellLineBuf);
+            _shellLineBuf = '';
+          }
+        }, 50);
+      }
     });
 
     const myPty = _pty;
     _pty.onExit(({ exitCode }) => {
-      if (_pty === myPty) {
-        _pty = null;
-        _claudeActive = false;
+      if (_pty !== myPty) {
+        // Old/replaced PTY process, do not send shell exited events
+        return;
       }
+      _pty = null;
+      _claudeActive = false;
       if (_sentinelCallback) {
         const cb = _sentinelCallback;
         _sentinelCallback = null;
@@ -500,15 +545,17 @@ function registerWfrPtyHandlers() {
 
     const myPty = _pty;
     _pty.onExit(({ exitCode }) => {
+      if (_pty !== myPty) {
+        // Old/replaced PTY process, ignore exit events
+        return;
+      }
       // Flush any remaining buffered content
       if (_jsonLineBuf.trim() && !isPython) {
         const out = formatStreamLine(_jsonLineBuf);
         if (out) send('wfrPty:data', out);
         _jsonLineBuf = '';
       }
-      if (_pty === myPty) {
-        _pty = null;
-      }
+      _pty = null;
       if (_tmpFile) { try { fs.unlinkSync(_tmpFile); } catch (_) {} _tmpFile = null; }
       send('wfrPty:layerDone', {
         layerId,
