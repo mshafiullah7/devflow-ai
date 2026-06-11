@@ -181,6 +181,15 @@ export class WorkflowRunnerPage {
     this._term.loadAddon(this._fitAddon);
     this._term.open(el);
 
+    // Right-click: paste clipboard text into PTY
+    el.addEventListener('contextmenu', async (e) => {
+      e.preventDefault();
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) window.app.wfrPty.write(text);
+      } catch (_) {}
+    });
+
     // Register IPC data listener NOW — before any layer runs — so no PTY output is missed
     window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
     window.app.wfrPty.onLayerDone(({ layerId, error }) => {
