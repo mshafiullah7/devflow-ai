@@ -13,7 +13,9 @@ let _jsonLineBuf     = '';     // accumulates partial PTY lines for stream-json 
 let _sentinelCallback = null;  // set while waiting for ##WFR_DONE:## from the shell
 let _shellLineBuf    = '';     // line buffer used during sentinel detection
 let _claudeActive     = false;
+let _claudeSessionActive = false;
 let _currentLayerId   = null;
+let _lastCommandTime  = 0;
 
 // ---------------------------------------------------------------------------
 // Parse one line of Claude CLI --output-format stream-json output and return
@@ -88,6 +90,7 @@ function killPty() {
   _sentinelCallback = null;
   _shellLineBuf     = '';
   _claudeActive     = false;
+  _claudeSessionActive = false;
   if (_pty) {
     try { _pty.kill(); } catch (_) {}
     _pty = null;
@@ -172,33 +175,27 @@ function registerWfrPtyHandlers() {
     }
 
     _pty.onData((data) => {
-      send('wfrPty:data', data);
-
       if (_sentinelCallback) {
+        // Buffer line-by-line and scan for the ##WFR_DONE## sentinel.
+        // Sentinel lines are consumed; everything else is forwarded to xterm.
         _shellLineBuf += data;
-        
-        // Strip ANSI escape codes and clean up whitespace
-        const clean = _shellLineBuf
-          .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
-          .replace(/\x1B\][^\x07]*\x07/g, '')
-          .replace(/\r/g, '')
-          .trim();
-
-        // Check if the output ends with the Claude prompt or standard shell prompts
-        const isClaudePrompt = clean.endsWith('User >') || clean.endsWith('User:');
-        const isPsPrompt     = /PS\s+.*>\s*$/i.test(clean);
-        const isUnixPrompt   = !isWin && /[\$%#]\s*$/.test(clean);
-
-        if (isClaudePrompt || isPsPrompt || isUnixPrompt) {
-          _claudeActive = isClaudePrompt;
-          
-          const cb = _sentinelCallback;
-          _sentinelCallback = null;
-          _shellLineBuf = '';
-          
-          // Trigger the callback to let the runner know the layer is done
-          cb(_currentLayerId, 0);
+        const lines = _shellLineBuf.split('\n');
+        _shellLineBuf = lines.pop(); // keep trailing incomplete line
+        let out = '';
+        for (const line of lines) {
+          const m = line.match(/##WFR_DONE:(\d+):(\d+)##/);
+          if (m) {
+            const cb = _sentinelCallback;
+            _sentinelCallback = null;
+            _shellLineBuf     = '';
+            cb(parseInt(m[1], 10), parseInt(m[2], 10));
+          } else {
+            out += line + '\n';
+          }
         }
+        if (out) send('wfrPty:data', out);
+      } else {
+        send('wfrPty:data', data);
       }
     });
 
@@ -312,6 +309,7 @@ function registerWfrPtyHandlers() {
 
     _currentLayerId = layerId;
     _shellLineBuf   = '';
+    _lastCommandTime = Date.now();
 
     // Register callback BEFORE writing so no output is missed
     _sentinelCallback = (foundLayerId, exitCode) => {
@@ -335,11 +333,16 @@ function registerWfrPtyHandlers() {
       : tmpFile.replace(/'/g, "'\\''");        // bash: end-quote, escaped quote, re-open
 
     const permFlag = skipPermissions ? '--dangerously-skip-permissions ' : '';
-    const coreCmd  = `${exe} ${permFlag}--model ${modelName} '@${escapedPath}'`;
+    const continueFlag = _claudeSessionActive ? '-c ' : '';
+    const coreCmd  = `${exe} ${permFlag}${continueFlag}--model ${modelName} '@${escapedPath}'`;
 
-    // Print command, then run it
+    _claudeSessionActive = true;
+
+    // Print file content, run Claude, then write sentinel so completion is detected
     const printCmd = isWin ? `Get-Content '${escapedPath}'` : `cat '${escapedPath}'`;
-    const fullCmd  = `${printCmd}; ${coreCmd}`;
+    const fullCmd  = isWin
+      ? `${printCmd}; ${coreCmd}; Write-Host "##WFR_DONE:${layerId}:$LASTEXITCODE##"`
+      : `${printCmd}; ${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
 
     // Send command into the live shell
     _pty.write(fullCmd + '\r');
