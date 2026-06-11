@@ -319,6 +319,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     const layer = this._layers.find(l => l.id === this._selectedId);
     if (!layer || this._running) return;
     this._running = true;
+    this._runningAll = false;
     this._updateToolbar();
     await this._runLayer(layer);
     this._running = false;
@@ -330,6 +331,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
   async _runAll() {
     this._running = true;
+    this._runningAll = true;
     this._updateToolbar();
     if (this._workflow) {
       await window.db.workflows.updateStatus({ id: this._workflow.id, status: 'in_progress' });
@@ -415,7 +417,8 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
           systemPrompt:    this._buildLayerSystemContext() || undefined,
           model:           this._modelConfig,
           cwd:             this._getCwd(layer) || undefined,
-          skipPermissions: this._skipPermissions,
+          skipPermissions: this._skipPermissions || this._runningAll,
+          interactive:     !this._runningAll,
         });
 
         if (!result?.ok) {
@@ -548,8 +551,8 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     const runAll      = this.container.querySelector('#wfrBtnRunAll');
     const runSelected = this.container.querySelector('#wfrBtnRunSelected');
     const hasOpen     = this._layers.some(l => this._statuses[l.id] === 'open');
-    if (runAll)      { runAll.hidden = this._running; runAll.disabled = !hasOpen; }
-    if (runSelected) { runSelected.hidden = this._running; runSelected.disabled = !this._selectedId; }
+    if (runAll)      { runAll.hidden = false; runAll.disabled = this._running || !hasOpen; }
+    if (runSelected) { runSelected.hidden = false; runSelected.disabled = this._running || !this._selectedId; }
   }
 
   _refreshLayerList() {

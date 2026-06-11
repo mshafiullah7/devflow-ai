@@ -12,10 +12,10 @@ let _tmpFile         = null;   // kept only for Python-agent stdin; not used for
 let _jsonLineBuf     = '';     // accumulates partial PTY lines for stream-json parsing
 let _sentinelCallback = null;  // set while waiting for ##WFR_DONE:## from the shell
 let _shellLineBuf    = '';     // line buffer used during sentinel detection
-let _claudeActive     = false;
-let _claudeSessionActive = false;
-let _currentLayerId   = null;
-let _lastCommandTime  = 0;
+let _claudeActive        = false;
+let _batchSessionActive  = false; // true after first non-interactive layer runs; enables -c for subsequent layers
+let _currentLayerId      = null;
+let _lastCommandTime     = 0;
 
 // ---------------------------------------------------------------------------
 // Parse one line of Claude CLI --output-format stream-json output and return
@@ -89,8 +89,8 @@ function formatStreamLine(line) {
 function killPty() {
   _sentinelCallback = null;
   _shellLineBuf     = '';
-  _claudeActive     = false;
-  _claudeSessionActive = false;
+  _claudeActive        = false;
+  _batchSessionActive  = false;
   if (_pty) {
     try { _pty.kill(); } catch (_) {}
     _pty = null;
@@ -103,6 +103,22 @@ function killPty() {
 
 function send(ch, data) {
   if (_wc && !_wc.isDestroyed()) _wc.send(ch, data);
+}
+
+function cleanOldTempFiles() {
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  const now = Date.now();
+  try {
+    const entries = fs.readdirSync(os.tmpdir());
+    for (const name of entries) {
+      if (!/^wfr-layer-/.test(name)) continue;
+      const full = path.join(os.tmpdir(), name);
+      try {
+        const { mtimeMs } = fs.statSync(full);
+        if (now - mtimeMs > TWO_HOURS) fs.unlinkSync(full);
+      } catch (_) {}
+    }
+  } catch (_) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -175,28 +191,34 @@ function registerWfrPtyHandlers() {
     }
 
     _pty.onData((data) => {
-      if (_sentinelCallback) {
-        // Buffer line-by-line and scan for the ##WFR_DONE## sentinel.
-        // Sentinel lines are consumed; everything else is forwarded to xterm.
-        _shellLineBuf += data;
-        const lines = _shellLineBuf.split('\n');
-        _shellLineBuf = lines.pop(); // keep trailing incomplete line
-        let out = '';
-        for (const line of lines) {
-          const m = line.match(/##WFR_DONE:(\d+):(\d+)##/);
-          if (m) {
+      // Always scan line-by-line for ##WFR_DONE## — decoupled from _sentinelCallback
+      // so a premature callback clear never causes a missed completion.
+      _shellLineBuf += data;
+      const lines = _shellLineBuf.split('\n');
+      _shellLineBuf = lines.pop(); // keep trailing incomplete line
+      let out = '';
+      for (const line of lines) {
+        const m = line.match(/##WFR_DONE:(\d+):(\d+)##/);
+        if (m) {
+          const layerId  = parseInt(m[1], 10);
+          const exitCode = parseInt(m[2], 10);
+          if (_sentinelCallback) {
             const cb = _sentinelCallback;
             _sentinelCallback = null;
-            _shellLineBuf     = '';
-            cb(parseInt(m[1], 10), parseInt(m[2], 10));
+            cb(layerId, exitCode);
           } else {
-            out += line + '\n';
+            // Callback was cleared early — fire layerDone directly from the sentinel text
+            send('wfrPty:layerDone', {
+              layerId,
+              error: exitCode !== 0 ? `Exited with code ${exitCode}` : null,
+            });
           }
+          // Sentinel line is always consumed, never forwarded to xterm
+        } else {
+          out += line + '\n';
         }
-        if (out) send('wfrPty:data', out);
-      } else {
-        send('wfrPty:data', data);
       }
+      if (out) send('wfrPty:data', out);
     });
 
     const myPty = _pty;
@@ -288,9 +310,11 @@ function registerWfrPtyHandlers() {
   // A sentinel marker (##WFR_DONE:layerId:exitCode##) is appended to the shell
   // command so completion can be detected without killing the shell.
   // ---------------------------------------------------------------------------
-  safeHandle('wfrPty:runInShell', (event, { layerId, prompt, systemPrompt, model, cwd, skipPermissions }) => {
+  safeHandle('wfrPty:runInShell', (event, { layerId, prompt, systemPrompt, model, cwd, skipPermissions, interactive }) => {
     if (!_pty) return { ok: false, error: 'No shell running — terminal not initialised' };
     _wc = event.sender;
+
+    cleanOldTempFiles();
 
     const exe       = model?.executable || 'claude';
     const modelName = model?.model_name || 'claude-haiku-4-5';
@@ -313,7 +337,6 @@ function registerWfrPtyHandlers() {
 
     // Register callback BEFORE writing so no output is missed
     _sentinelCallback = (foundLayerId, exitCode) => {
-      try { fs.unlinkSync(tmpFile); } catch (_) {}
       send('wfrPty:layerDone', {
         layerId: foundLayerId,
         error:   exitCode !== 0 ? `Exited with code ${exitCode}` : null,
@@ -332,17 +355,16 @@ function registerWfrPtyHandlers() {
       ? tmpFile.replace(/'/g, "''")           // PowerShell: '' inside single quotes
       : tmpFile.replace(/'/g, "'\\''");        // bash: end-quote, escaped quote, re-open
 
-    const permFlag = skipPermissions ? '--dangerously-skip-permissions ' : '';
-    const continueFlag = _claudeSessionActive ? '-c ' : '';
-    const coreCmd  = `${exe} ${permFlag}${continueFlag}--model ${modelName} '@${escapedPath}'`;
+    const permFlag     = skipPermissions ? '--dangerously-skip-permissions ' : '';
+    const printFlag    = interactive === false ? '--print ' : '';
+    const continueFlag = (interactive === false && _batchSessionActive) ? '-c ' : '';
+    const coreCmd      = `${exe} ${permFlag}${printFlag}${continueFlag}--model ${modelName} '@${escapedPath}'`;
 
-    _claudeSessionActive = true;
+    if (interactive === false) _batchSessionActive = true;
 
-    // Print file content, run Claude, then write sentinel so completion is detected
-    const printCmd = isWin ? `Get-Content '${escapedPath}'` : `cat '${escapedPath}'`;
     const fullCmd  = isWin
-      ? `${printCmd}; ${coreCmd}; Write-Host "##WFR_DONE:${layerId}:$LASTEXITCODE##"`
-      : `${printCmd}; ${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
+      ? `${coreCmd}; Write-Host "##WFR_DONE:${layerId}:$LASTEXITCODE##"`
+      : `${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
 
     // Send command into the live shell
     _pty.write(fullCmd + '\r');
