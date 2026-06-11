@@ -28,12 +28,12 @@
   --glow-shadow:    none;
 
   /* Console */
-  --console-bg:      #f4f3ef;
-  --console-text:    #4a4740;
-  --console-output:  #1a1916;
-  --console-prompt:  #1e3a5f;
-  --console-input:   #1a1916;
-  --console-caret:   #1e3a5f;
+  --console-bg:      #2b2d2e;
+  --console-text:    #94a3b8;
+  --console-output:  #d4d4d4;
+  --console-prompt:  #6ee7b7;
+  --console-input:   #e2e8f0;
+  --console-caret:   #6ee7b7;
 
   /* Component-specific tokens */
   --form-focus-shadow:  0 0 0 3px rgba(30,58,95,0.20);

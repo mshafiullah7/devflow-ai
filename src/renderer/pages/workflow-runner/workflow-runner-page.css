@@ -37,6 +37,25 @@
   gap: 8px;
   -webkit-app-region: no-drag;
 }
+.wfr-perm-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 5px);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  white-space: nowrap;
+}
+.wfr-perm-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.wfr-perm-btn--on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 .wfr-run-selected-btn {
   display: flex;
   align-items: center;

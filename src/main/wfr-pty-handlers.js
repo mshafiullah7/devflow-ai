@@ -6,10 +6,12 @@ const os   = require('node:os');
 const fs   = require('node:fs');
 const path = require('node:path');
 
-let _pty        = null;
-let _wc         = null;
-let _tmpFile    = null;   // kept only for Python-agent stdin; not used for claude CLI
-let _jsonLineBuf = '';    // accumulates partial PTY lines for stream-json parsing
+let _pty             = null;
+let _wc              = null;
+let _tmpFile         = null;   // kept only for Python-agent stdin; not used for claude CLI
+let _jsonLineBuf     = '';     // accumulates partial PTY lines for stream-json parsing
+let _sentinelCallback = null;  // set while waiting for ##WFR_DONE:## from the shell
+let _shellLineBuf    = '';     // line buffer used during sentinel detection
 
 // ---------------------------------------------------------------------------
 // Parse one line of Claude CLI --output-format stream-json output and return
@@ -81,6 +83,8 @@ function formatStreamLine(line) {
 }
 
 function killPty() {
+  _sentinelCallback = null;
+  _shellLineBuf     = '';
   if (_pty) {
     try { _pty.kill(); } catch (_) {}
     _pty = null;
@@ -142,7 +146,9 @@ function registerWfrPtyHandlers() {
 
     const isWin = os.platform() === 'win32';
     const spawnExe = isWin ? 'powershell.exe' : (process.env.SHELL || '/bin/bash');
-    const spawnArgs = isWin ? ['-NoLogo'] : [];
+    const spawnArgs = isWin
+      ? ['-NoLogo', '-NoExit', '-Command', 'Remove-Module PSReadLine -ErrorAction SilentlyContinue']
+      : [];
     const spawnCwd = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
 
     try {
@@ -163,7 +169,28 @@ function registerWfrPtyHandlers() {
     }
 
     _pty.onData((data) => {
-      send('wfrPty:data', data);
+      if (_sentinelCallback) {
+        // Buffer incoming data and scan line-by-line for the completion sentinel.
+        // Lines that contain the sentinel are consumed (not forwarded to xterm).
+        _shellLineBuf += data;
+        const lines = _shellLineBuf.split('\n');
+        _shellLineBuf = lines.pop(); // keep the trailing incomplete line
+        let out = '';
+        for (const line of lines) {
+          const m = line.match(/##WFR_DONE:(\d+):(\d+)##/);
+          if (m) {
+            const cb = _sentinelCallback;
+            _sentinelCallback = null;
+            _shellLineBuf     = '';
+            cb(parseInt(m[1], 10), parseInt(m[2], 10));
+          } else {
+            out += line + '\n';
+          }
+        }
+        if (out) send('wfrPty:data', out);
+      } else {
+        send('wfrPty:data', data);
+      }
     });
 
     const myPty = _pty;
@@ -243,6 +270,60 @@ function registerWfrPtyHandlers() {
   });
 
   // ---------------------------------------------------------------------------
+  // Run a workflow layer by sending a command into the already-running shell PTY.
+  // The prompt is written to a temp file and passed via the CLI's @filepath syntax.
+  // A sentinel marker (##WFR_DONE:layerId:exitCode##) is appended to the shell
+  // command so completion can be detected without killing the shell.
+  // ---------------------------------------------------------------------------
+  safeHandle('wfrPty:runInShell', (event, { layerId, prompt, systemPrompt, model, cwd, skipPermissions }) => {
+    if (!_pty) return { ok: false, error: 'No shell running — terminal not initialised' };
+    _wc = event.sender;
+
+    const exe       = model?.executable || 'claude';
+    const modelName = model?.model_name || 'claude-haiku-4-5';
+    const isWin     = os.platform() === 'win32';
+    const spawnCwd  = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
+
+    // Combine system context + user prompt into the temp file
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${prompt}` : (prompt || '');
+    const ts         = Date.now();
+    const tmpFile    = path.join(os.tmpdir(), `wfr-layer-${layerId}-${ts}.txt`);
+    try {
+      fs.writeFileSync(tmpFile, fullPrompt, 'utf8');
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+
+    // Escape single quotes inside the path for safe single-quoting in the shell
+    const escapedPath = isWin
+      ? tmpFile.replace(/'/g, "''")           // PowerShell: '' inside single quotes
+      : tmpFile.replace(/'/g, "'\\''");        // bash: end-quote, escaped quote, re-open
+
+    const permFlag = skipPermissions ? '--dangerously-skip-permissions ' : '';
+    const coreCmd  = `${exe} ${permFlag}--model ${modelName} '@${escapedPath}'`;
+
+    // Append sentinel so the shell announces completion with the exit code
+    const printCmd = isWin ? `Get-Content '${escapedPath}'` : `cat '${escapedPath}'`;
+    const fullCmd = isWin
+      ? `${printCmd}; ${coreCmd}; Write-Host "##WFR_DONE:${layerId}:$LASTEXITCODE##"`
+      : `${printCmd}; ${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
+
+    // Register callback BEFORE writing so no output is missed
+    _sentinelCallback = (foundLayerId, exitCode) => {
+      try { fs.unlinkSync(tmpFile); } catch (_) {}
+      send('wfrPty:layerDone', {
+        layerId: foundLayerId,
+        error:   exitCode !== 0 ? `Exited with code ${exitCode}` : null,
+      });
+    };
+
+    // Send command into the live shell
+    _pty.write(fullCmd + '\r');
+
+    return { ok: true, command: coreCmd };
+  });
+
+  // ---------------------------------------------------------------------------
   // Spawn a new PTY to execute one workflow layer.
   //
   // ROOT CAUSE OF "no streaming" — Windows ConPTY only attaches to the DIRECTLY
@@ -269,7 +350,7 @@ function registerWfrPtyHandlers() {
   // This avoids the TUI progress display that --verbose produces, which clears the
   // screen using ANSI escape sequences and hides intermediate work from the user.
   // ---------------------------------------------------------------------------
-  safeHandle('wfrPty:runLayer', (event, { layerId, prompt, systemPrompt, model, cwd, cols, rows, continueSession }) => {
+  safeHandle('wfrPty:runLayer', (event, { layerId, prompt, systemPrompt, model, cwd, cols, rows, continueSession, skipPermissions }) => {
     killPty();
     _wc = event.sender;
 
@@ -311,8 +392,7 @@ function registerWfrPtyHandlers() {
 
       spawnExe  = resolveExe(exeRaw);
       spawnArgs = [
-        ...(continueSession ? ['-c'] : []),
-        '--dangerously-skip-permissions',
+        ...(skipPermissions ? ['--dangerously-skip-permissions'] : []),
         '--print',
         '--verbose',
         '--output-format', 'stream-json',

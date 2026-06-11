@@ -303,6 +303,7 @@ contextBridge.exposeInMainWorld('app', {
     resize:         (data) => ipcRenderer.invoke('wfrPty:resize', data),
     kill:           ()     => ipcRenderer.invoke('wfrPty:kill'),
     runLayer:       (data) => ipcRenderer.invoke('wfrPty:runLayer', data),
+    runInShell:     (data) => ipcRenderer.invoke('wfrPty:runInShell', data),
     runUsage:       (data) => ipcRenderer.invoke('wfrPty:runUsage', data),
     openInTerminal: (data) => ipcRenderer.invoke('wfrPty:openInTerminal', data),
     onData:       (cb)    => ipcRenderer.on('wfrPty:data',       (_e, p) => cb(p)),

@@ -42,8 +42,9 @@ export class WorkflowRunnerPage {
     this._modelConfig   = null;
     this._statuses      = {};
     this._selectedId    = null;
-    this._running       = false;
-    this._startTimes    = {};
+    this._running          = false;
+    this._skipPermissions  = false;
+    this._startTimes       = {};
     this._timerInt      = null;
     this._screenDesign  = null;
     this._screenFilePath = null;
@@ -281,8 +282,10 @@ export class WorkflowRunnerPage {
   _buildLayerSystemContext() {
     if (!this._screenDesign) return null;
     const isUiShell    = this._workflow?.workflow_type === 'ui_shell';
+    if (!isUiShell) return null;
+
     const dartFilePath = this._screenDesign.dart_file_path;
-    if (!isUiShell && dartFilePath) {
+    if (dartFilePath) {
       return `## Existing Dart UI File: "${this._screenDesign.title || 'Screen'}"
 Path: ${dartFilePath}
 
@@ -386,9 +389,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         this._refreshLayerList();
         this._refreshGitPanel();
 
-        // Re-spawn interactive shell so terminal stays active (CLI path only)
-        if (this._modelConfig?.type === 'cli') this._spawnShell();
-
         resolve();
       };
 
@@ -398,7 +398,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         return;
       }
 
-      // ── CLI path: use PTY ──────────────────────────────────────────────
+      // ── CLI path: run command inside the live shell ────────────────────
       if (this._modelConfig?.type === 'cli') {
         if (!this._term) { await finish('Terminal not initialised'); return; }
 
@@ -406,22 +406,27 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
           if (layerId === layer.id) finish(error);
         });
 
-        // Fit first so cols/rows reflect the actual rendered terminal size
         this._fitTerminal();
+        this._term.focus();
 
-        this._switchingShell = true;
-        const result = await window.app.wfrPty.runLayer({
+        const result = await window.app.wfrPty.runInShell({
           layerId:         layer.id,
           prompt:          this._buildLayerUserPrompt(layer),
           systemPrompt:    this._buildLayerSystemContext() || undefined,
           model:           this._modelConfig,
           cwd:             this._getCwd(layer) || undefined,
-          cols:            this._term.cols,
-          rows:            this._term.rows,
+          skipPermissions: this._skipPermissions,
         });
-        this._switchingShell = false;
 
-        if (!result?.ok) await finish(result?.error || 'Failed to start PTY');
+        if (!result?.ok) {
+          await finish(result?.error || 'Failed to run in shell');
+          return;
+        }
+
+        // Show the command being sent to the shell
+        if (result.command) {
+          this._term.write(`${ANSI.dim}▶  ${result.command}${ANSI.reset}\r\n`);
+        }
         return;
       }
 
@@ -630,6 +635,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         <header class="wfr-header">
           <span class="wfr-header__title">${name} — Run Layers</span>
           <div class="wfr-header__actions">
+            <button class="wfr-perm-btn" id="wfrBtnSkipPerms" aria-pressed="false" title="When ON: skips all tool permission prompts (--dangerously-skip-permissions). When OFF: Claude asks before each tool use.">
+              Skip Permissions: <span id="wfrSkipPermsLabel">OFF</span>
+            </button>
             <button class="wfr-run-selected-btn" id="wfrBtnRunSelected" disabled>
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
@@ -722,6 +730,16 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         if (!firstOpen) return;
         this._selectLayer(firstOpen.id);
         this._runAll();
+      });
+
+    this.container.querySelector('#wfrBtnSkipPerms')
+      ?.addEventListener('click', () => {
+        this._skipPermissions = !this._skipPermissions;
+        const btn   = this.container.querySelector('#wfrBtnSkipPerms');
+        const label = this.container.querySelector('#wfrSkipPermsLabel');
+        if (btn)   btn.setAttribute('aria-pressed', String(this._skipPermissions));
+        if (btn)   btn.classList.toggle('wfr-perm-btn--on', this._skipPermissions);
+        if (label) label.textContent = this._skipPermissions ? 'ON' : 'OFF';
       });
 
     this.container.querySelectorAll('.wfr-layer-row').forEach(row => {
