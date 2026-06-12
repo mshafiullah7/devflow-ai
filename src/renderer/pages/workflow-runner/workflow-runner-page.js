@@ -296,11 +296,11 @@ export class WorkflowRunnerPage {
 
   _buildLayerSystemContext() {
     if (!this._screenDesign) return null;
-    const isUiShell    = this._workflow?.workflow_type === 'ui_shell';
-    if (!isUiShell) return null;
+    const isUiShell = this._workflow?.workflow_type === 'ui_shell';
 
-    const dartFilePath = this._screenDesign.dart_file_path;
-    if (dartFilePath) {
+    if (!isUiShell) {
+      const dartFilePath = this._screenDesign.dart_file_path;
+      if (!dartFilePath) return null;
       return `## Existing Dart UI File: "${this._screenDesign.title || 'Screen'}"
 Path: ${dartFilePath}
 
@@ -310,6 +310,7 @@ Do NOT recreate or replace its layout, colors, padding, or widget structure.
 Wire Up layers: import the state class and replace // TODO: wire-{action} comments with real state calls.
 All other layers: derive data field names and contracts from what the Dart file displays.`;
     }
+
     const screenRef = this._screenFilePath
       ? `See file: ${this._screenFilePath}`
       : this._screenDesign.html_content;
@@ -651,6 +652,11 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     this.container.innerHTML = `
       <div class="wfr-page">
         <header class="wfr-header">
+          <button class="wfr-back-btn" id="wfrBtnClose" aria-label="Close window">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </button>
           <span class="wfr-header__title">${name} — Run Layers</span>
           <div class="wfr-header__actions">
             <button class="wfr-perm-btn" id="wfrBtnSkipPerms" aria-pressed="false" title="When ON: skips all tool permission prompts (--dangerously-skip-permissions). When OFF: Claude asks before each tool use.">
@@ -737,6 +743,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   }
 
   _bindEvents() {
+    this.container.querySelector('#wfrBtnClose')
+      ?.addEventListener('click', () => window.close());
+
     this.container.querySelector('#wfrBtnRunSelected')
       ?.addEventListener('click', () => this._runSelected());
 

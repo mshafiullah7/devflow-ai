@@ -1,5 +1,6 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme }   from '../../shared/theme-manager.js';
+import { ModelPicker }        from '../../components/model-picker/model-picker.js';
 
 // ── Helpers ───────────────────────────────────────────────────────
 // pattern: 'dot-test' → name.test.ext  (JS/TS default)
@@ -99,6 +100,7 @@ export class TestGenerationPage {
     this._currentIdx  = null;
     this._timerInt    = null;
     this._startTime   = null;
+    this._picker      = null;
   }
 
   mount() {
@@ -109,8 +111,13 @@ export class TestGenerationPage {
     window.app.testGenerationWindow.onInit(data => this._onInit(data));
   }
 
+  unmount() {
+    this._picker?.unmount();
+    this._clearTimer();
+  }
+
   // ─── Init ──────────────────────────────────────────────────────
-  _onInit(data) {
+  async _onInit(data) {
     this._mode       = data.mode || 'unit';
     this._layer      = data.layer;
     this._testFolder = data.testFolder || '';
@@ -141,6 +148,14 @@ export class TestGenerationPage {
 
     this.container.innerHTML = this._template();
     this._bindEvents();
+
+    this._picker?.unmount();
+    this._picker = new ModelPicker({
+      anchor:    this.container.querySelector('#tgwModelPicker'),
+      onSelect:  model => { this._modelCfg = model; },
+      initialId: data.modelCfg?.id ?? null,
+    });
+    await this._picker.reload();
   }
 
   // ─── Templates ─────────────────────────────────────────────────
@@ -168,6 +183,7 @@ export class TestGenerationPage {
             <div class="tgw-title">${modeLabel} Tests · ${escHtml(name)}</div>
             <div class="tgw-subtitle">${escHtml(this._testFolder)}</div>
           </div>
+          <div id="tgwModelPicker" style="-webkit-app-region:no-drag;"></div>
           <div class="tgw-header-actions">
             <button class="tgw-btn tgw-btn--outline" id="tgwBtnRunSelected"
               ${this._selectedIdx === null ? 'disabled' : ''}>▶ Run Selected</button>

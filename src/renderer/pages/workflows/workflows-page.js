@@ -224,14 +224,6 @@ export class WorkflowsPage {
             <p class="project-page__desc">Workflows</p>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
-            <button class="gw-open-btn" id="wfBtnAiEdit" title="AI Edit — run design changes in layer folder">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
-              AI Edit
-            </button>
             <button class="gw-open-btn" id="wfBtnGenerate" title="Generate workflows with AI">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -1232,9 +1224,6 @@ ${base}`;
     this.container.querySelector('#wfBtnAdd')
       ?.addEventListener('click', () => this._addWorkflow());
 
-    this.container.querySelector('#wfBtnAiEdit')
-      ?.addEventListener('click', () => this._openAiEditModal());
-
     this.container.querySelector('#wfBtnGenerate')
       ?.addEventListener('click', () => {
         window.app.openGenerateWorkflowsWindow({
@@ -1454,37 +1443,4 @@ ${base}`;
     });
   }
 
-  // ----------------------------------------------------------------
-  // AI Edit — opens a detached window
-  // ----------------------------------------------------------------
-  async _openAiEditModal() {
-    const layer = this._viewingId
-      ? this._layers.find(l => l.id === this._viewingId)
-      : this._layers[0];
-
-    if (!layer) {
-      await Dialog.alert('No layer selected. Expand a layer in the list first.');
-      return;
-    }
-
-    if (!this._aiModelConfig) {
-      await Dialog.alert('No AI model configured. Select a model in the header before running.');
-      return;
-    }
-
-    const projectLayer = layer.project_layer_id
-      ? this._projectLayers.find(pl => pl.id === layer.project_layer_id)
-      : null;
-    const cwd = projectLayer?.folder_path || this._project?.project_path || null;
-
-    window.app.openWorkflowAiEditWindow({
-      projectId:   this._projectId,
-      layerId:     layer.id,
-      layerName:   layer.layer,
-      layerPrompt: layer.prompt ||
-        `Execute workflow layer: ${layer.layer}\n\nPurpose: ${layer.purpose || ''}\nInputs: ${layer.inputs || ''}\nExpected outputs: ${layer.outputs || ''}`,
-      cwd,
-      modelConfig: this._aiModelConfig,
-    });
-  }
 }

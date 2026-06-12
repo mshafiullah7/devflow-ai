@@ -355,12 +355,11 @@ export class ProjectHomePage {
       ? `<div class="ph-lr-seg ph-lr-seg--${cls}" style="flex:${count}" title="${count} ${label}"></div>`
       : '';
 
-
-    const badge = (count, cls, label, showLabel = false) => count > 0
-      ? `<span class="ph-lr-badge ph-lr-badge--${cls}" title="${label}">${count}${showLabel ? ` ${label}` : ''}</span>`
+    const pill = (count, cls, label) => count > 0
+      ? `<span class="ph-wf-pill ph-wf-pill--${cls}">${label} <b>${count}</b></span>`
       : '';
 
-    const rowsHtml = rows.map(r => {
+    const cardsHtml = rows.map(r => {
       const total       = r.total        ?? 0;
       const executed    = r.executed     ?? 0;
       const failed      = r.failed       ?? 0;
@@ -370,49 +369,41 @@ export class ProjectHomePage {
       const allDone     = total > 0 && executed === total;
       const pct         = total > 0 ? Math.round((executed / total) * 100) : 0;
 
-      const accentCls = allDone          ? 'ph-lr-row--done'
-                      : failed > 0       ? 'ph-lr-row--err'
-                      : needsReview > 0  ? 'ph-lr-row--warn'
-                      : running > 0      ? 'ph-lr-row--running'
-                      : executed > 0     ? 'ph-lr-row--done'
-                      : 'ph-lr-row--open';
-
-      const nameIcon = allDone
-        ? `<svg class="ph-lr-done-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
-        : '';
+      const boxCls = allDone    ? 'ph-lr-card--done'
+                   : failed > 0 ? 'ph-stat-box--danger'
+                   : 'ph-stat-box--accent';
 
       const barHtml = total > 0 ? `
-        <div class="ph-lr-bar-wrap">
-          <div class="ph-lr-bar">
-            ${seg(executed,    'done',    'Executed')}
-            ${seg(running,     'running', 'Running')}
-            ${seg(needsReview, 'review',  'Review')}
-            ${seg(failed,      'failed',  'Failed')}
-            ${seg(open,        'open',    'Open')}
-          </div>
-        </div>` : '<div class="ph-lr-bar-wrap"><div class="ph-lr-bar ph-lr-bar--empty"></div></div>';
+        <div class="ph-lr-bar" style="margin-top:10px">
+          ${seg(executed,    'done',    'Executed')}
+          ${seg(running,     'running', 'Running')}
+          ${seg(needsReview, 'review',  'Review')}
+          ${seg(failed,      'failed',  'Failed')}
+          ${seg(open,        'open',    'Open')}
+        </div>` : `<div class="ph-lr-bar ph-lr-bar--empty" style="margin-top:10px"></div>`;
 
-      const badgesHtml = total === 0
-        ? '<span class="ph-lr-badge ph-lr-badge--empty">No items</span>'
+      const pillsHtml = !total
+        ? '<span class="ph-wf-pill ph-wf-pill--open">No layers yet</span>'
         : [
-            badge(executed,    'done',   'Done',   false),
-            badge(open,        'open',   'Open',   false),
-            badge(needsReview, 'review', 'Review', true),
-            badge(failed,      'failed', 'Failed', true),
+            pill(executed,    'done',   'Done'),
+            pill(open,        'open',   'Open'),
+            pill(running,     'inprog', 'Running'),
+            pill(needsReview, 'review', 'Review'),
+            pill(failed,      'failed', 'Failed'),
           ].join('');
 
       return `
-        <div class="ph-lr-row ${accentCls}">
-          <div class="ph-lr-name">${nameIcon}${escHtml(r.name)}</div>
+        <div class="ph-stat-box ${boxCls}">
+          <div class="ph-stat-box__value">${total > 0 ? pct + '%' : '—'}</div>
+          <div class="ph-stat-box__label">${escHtml(r.name)}</div>
           ${barHtml}
-          <div class="ph-lr-pct">${total > 0 ? pct + '%' : '—'}</div>
-          <div class="ph-lr-badges">${badgesHtml}</div>
+          <div class="ph-stat-box__status-pills">${pillsHtml}</div>
         </div>`;
     }).join('');
 
     return `
       <div class="ph-section-label">Layer Progress</div>
-      <div class="ph-lr-list">${rowsHtml}</div>`;
+      <div class="ph-stats-strip">${cardsHtml}</div>`;
   }
 
   // ----------------------------------------------------------------

@@ -19,9 +19,29 @@
   padding: 0 16px;
   height: 44px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-header);
   flex-shrink: 0;
   -webkit-app-region: drag;
+}
+
+.gw-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 5px);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+  -webkit-app-region: no-drag;
+}
+.gw-back-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .gw-header__icon {
