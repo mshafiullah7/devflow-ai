@@ -168,10 +168,22 @@ function registerWfrPtyHandlers() {
 
   // Spawn a raw interactive shell
   safeHandle('wfrPty:spawnShell', (event, { cwd, cols, rows }) => {
-    killPty();
     _wc = event.sender;
 
     const isWin = os.platform() === 'win32';
+    if (_pty) {
+      // Reuse existing PTY and change directory to avoid conhost.exe flashing on selection change
+      const spawnCwd = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
+      const cdCmd = isWin 
+        ? `Set-Location "${spawnCwd}"; Clear-Host` 
+        : `cd "${spawnCwd}" && clear`;
+      _pty.write(cdCmd + '\r');
+      return { ok: true, reused: true };
+    }
+
+    killPty();
+    _wc = event.sender;
+
     const spawnExe = isWin ? 'powershell.exe' : (process.env.SHELL || '/bin/bash');
     const spawnArgs = isWin
       ? ['-NoLogo', '-NoExit', '-Command', 'Remove-Module PSReadLine -ErrorAction SilentlyContinue']

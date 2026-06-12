@@ -246,6 +246,7 @@ export class WorkflowRunnerPage {
 
   async _spawnShell() {
     if (!this._term) return;
+    if (this._modelConfig?.type !== 'cli') return; // Only spawn/reuse PTY shell for local CLI models
     this._switchingShell = true;
     const layer = this._layers.find(l => l.id === this._selectedId);
     const cwd = layer ? this._getCwd(layer) : (this._project?.project_path || null);
