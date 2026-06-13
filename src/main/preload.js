@@ -181,6 +181,7 @@ contextBridge.exposeInMainWorld('db', {
     get: (pageKey)              => invoke('db:model_mapping:get', pageKey),
     set: (pageKey, modelConfigId) => invoke('db:model_mapping:set', pageKey, modelConfigId),
   },
+  aiQuery: (sql) => invoke('db:ai-query', { sql }),
   savedThemes: {
     list:   ()     => invoke('db:saved_themes:list'),
     create: (data) => invoke('db:saved_themes:create', data),

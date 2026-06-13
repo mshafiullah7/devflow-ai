@@ -1135,6 +1135,29 @@ function registerDbHandlers() {
       }
     } catch {}
   });
+
+  // ----------------------------------------------------------------
+  // AI Chat — read-only SELECT queries (project-scoped)
+  // ----------------------------------------------------------------
+  safeHandle('db:ai-query', (_e, { sql }) => {
+    const trimmed = (sql || '').trim();
+
+    if (!/^SELECT\b/i.test(trimmed)) {
+      throw new Error('Only SELECT statements are permitted');
+    }
+
+    const blocked = /\b(DROP|DELETE|UPDATE|INSERT|ALTER|CREATE|TRUNCATE|REPLACE|ATTACH|DETACH|PRAGMA)\b/i;
+    if (blocked.test(trimmed)) {
+      throw new Error('Statement contains disallowed keywords');
+    }
+
+    try {
+      const rows = db.prepare(trimmed).all();
+      return rows.slice(0, 100);
+    } catch (err) {
+      throw new Error(`Query failed: ${err.message}`);
+    }
+  });
 }
 
 module.exports = { registerDbHandlers };
