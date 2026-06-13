@@ -45,6 +45,12 @@ function inferDefaultTestFolder(layer) {
 }
 
 
+function stripAnsi(str) {
+  return str
+    .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+    .replace(/\x1B\][^\x07]*\x07/g, '');
+}
+
 function buildFileTree(files) {
   const root = { name: '', path: '', type: 'dir', children: {} };
   for (const filePath of files) {
@@ -76,6 +82,9 @@ export class TestGeneratorPage {
     this._modelCfg    = null;
     this._picker      = null;
 
+    // Mode
+    this._mode             = 'generate'; // 'generate' | 'execute'
+
     // Unit test state
     this._unitFiles        = [];
     this._unitSelected     = new Set();
@@ -92,6 +101,13 @@ export class TestGeneratorPage {
     this._genCurrentIdx    = null;
     this._genTimerInt      = null;
     this._genStartTime     = null;
+
+    // Execute tab state
+    this._execCommands     = [];
+    this._execCmd          = null;
+    this._execRunning      = false;
+    this._execOutput       = '';
+    this._execResult       = null; // { failed, passed } | null
   }
 
   async mount() {
@@ -148,6 +164,8 @@ export class TestGeneratorPage {
       window.app.testGenChat.cancel();
       window.app.testGenChat.offAll();
     }
+    if (this._execRunning) window.db.testRunner.kill();
+    window.db.testRunner.removeListeners();
     window.app.testGenerationWindow.offFileSaved();
     removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
@@ -169,6 +187,10 @@ export class TestGeneratorPage {
             <h1 class="tg-title">${escHtml(name)}</h1>
             <p class="tg-subtitle">Unit Test Generator</p>
           </div>
+          <div class="tg-header-toggle" style="-webkit-app-region:no-drag;">
+            <button class="tg-mode-btn ${this._mode === 'generate' ? 'tg-mode-btn--active' : ''}" id="tgModeGenerate">Generate</button>
+            <button class="tg-mode-btn ${this._mode === 'execute'  ? 'tg-mode-btn--active' : ''}" id="tgModeExecute">Execute</button>
+          </div>
           <div id="tgModelPicker" style="-webkit-app-region:no-drag;"></div>
           <button class="project-page__git-btn" id="tgBtnGit" title="Git changes" style="-webkit-app-region:no-drag;">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
@@ -188,7 +210,6 @@ export class TestGeneratorPage {
             <div class="tg-sidebar__list" id="tgSidebar">${this._sidebarHtml()}</div>
           </aside>
           <div class="tg-main-wrap">
-            <div class="tg-main__header">Source Files</div>
             <div class="tg-main" id="tgMain">
               ${this._mainHtml()}
             </div>
@@ -232,11 +253,272 @@ export class TestGeneratorPage {
               <path d="M9 3h6M9 3v9l-4 6h14l-4-6V3"/>
             </svg>
           </span>
-          <span>Select a layer from the left panel to begin generating tests.</span>
+          <span>Select a layer from the left panel to begin.</span>
         </div>`;
     }
+    return this._mode === 'execute' ? this._execSectionHtml() : this._unitSectionHtml();
+  }
 
-    return this._unitSectionHtml();
+  _genRightHtml() {
+    const selectedCount = this._unitSelected.size;
+    return `
+      <div class="tg-gen-header">
+        <div class="tg-gen-controls">
+          <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgGenRunAll">▶ Run</button>
+          <button class="tg-btn tg-btn--sm tg-btn--stop"    id="tgGenStop" hidden>■ Stop</button>
+        </div>
+      </div>
+      <div class="tg-gen-items" id="tgGenItems">${this._genFilesHtml()}</div>
+      <div class="tg-gen-output">
+        <div class="tg-gen-output-hd">
+          <span class="tg-gen-output-name" id="tgGenCurFile">—</span>
+          <span class="tg-gen-elapsed"     id="tgGenElapsed"></span>
+        </div>
+        <div class="tg-gen-code-wrap" id="tgGenCodeWrap">
+          <pre class="tg-gen-code" id="tgGenCode"></pre>
+        </div>
+      </div>
+      <div class="tg-gen-footer">
+        <span class="tg-gen-status" id="tgGenStatus">${selectedCount > 0 ? `${selectedCount} file${selectedCount !== 1 ? 's' : ''} ready` : 'Select files from the tree'}</span>
+        <span class="tg-gen-pill"   id="tgGenPill"></span>
+      </div>`;
+  }
+
+  // ─── Execute tab ──────────────────────────────────────────────
+  _execRightHtml() {
+    const hasCmd   = this._execCommands.length > 0;
+    const loading  = this._activeLayer && !this._execCommands.length && !this._execOutput;
+    const selCount = this._unitSelected.size;
+    const overLimit = selCount > 20;
+    const canRunSel = selCount > 0 && !overLimit && hasCmd && !this._execRunning && !!this._unitTestFolder.trim();
+
+    const cmdOptions = this._execCommands.map(c =>
+      `<option value="${escHtml(c.id)}" ${this._execCmd?.id === c.id ? 'selected' : ''}>${escHtml(c.label)}</option>`
+    ).join('');
+
+    const fw = this._execCmd?.framework ?? this._execCommands[0]?.framework ?? '';
+
+    return `
+      <div class="tg-exec" id="tgExecSection">
+        <div class="tg-exec-bar">
+          ${fw ? `<span class="tg-exec-fw">${escHtml(fw)}</span>` : ''}
+          <select class="tg-exec-cmd-sel" id="tgExecCmdSel" ${!hasCmd || this._execRunning ? 'disabled' : ''}>
+            ${hasCmd ? cmdOptions : `<option>${loading ? 'Detecting…' : 'No unit test command detected'}</option>`}
+          </select>
+          <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgExecRun"
+            ${!hasCmd || this._execRunning ? 'disabled' : ''}>▶ Run All</button>
+          <button class="tg-btn tg-btn--sm" id="tgExecRunSel"
+            ${!canRunSel ? 'disabled' : ''}
+            title="${overLimit ? `Max 20 files — ${selCount} selected` : selCount === 0 ? 'Select files from the tree' : ''}">
+            ▶ Run Selected${selCount > 0 ? ` (${selCount})` : ''}
+          </button>
+          <button class="tg-btn tg-btn--sm tg-btn--stop" id="tgExecStop"
+            ${this._execRunning ? '' : 'hidden'}>■ Stop</button>
+        </div>
+        ${overLimit ? `<div class="tg-exec-limit-msg">Max 20 files for targeted run — ${selCount} selected. Deselect some or use Run All.</div>` : ''}
+        <div class="tg-exec-output-wrap" id="tgExecOutputWrap">
+          <pre class="tg-exec-output" id="tgExecOutput"></pre>
+        </div>
+        ${this._execBannerHtml()}
+      </div>`;
+  }
+
+  _execBannerHtml() {
+    if (!this._execResult) return '';
+    if (this._execResult.failed === 0) {
+      return `
+        <div class="tg-exec-banner tg-exec-banner--pass">
+          <span>✓ All tests passed${this._execResult.passed ? ` (${this._execResult.passed})` : ''}</span>
+        </div>`;
+    }
+    return `
+      <div class="tg-exec-banner tg-exec-banner--fail">
+        <span>${this._execResult.failed} test${this._execResult.failed !== 1 ? 's' : ''} failed</span>
+        <div class="tg-exec-banner__actions">
+          <button class="tg-btn tg-btn--sm tg-btn--danger" id="tgExecCreateIssue">Create Issue</button>
+          <button class="tg-btn tg-btn--sm" id="tgExecDismissBanner">Dismiss</button>
+        </div>
+      </div>`;
+  }
+
+  _switchMode(mode) {
+    if (this._mode === mode) return;
+    this._mode = mode;
+    this.container.querySelector('#tgModeGenerate')?.classList.toggle('tg-mode-btn--active', mode === 'generate');
+    this.container.querySelector('#tgModeExecute')?.classList.toggle('tg-mode-btn--active',  mode === 'execute');
+    const right = this.container.querySelector('#tgSplitRight');
+    if (!right) return;
+    right.innerHTML = mode === 'execute' ? this._execRightHtml() : this._genRightHtml();
+    if (mode === 'generate') {
+      this._genSyncRight();
+    } else {
+      this._execRestoreOutput();
+      if (this._activeLayer && !this._execCommands.length) this._loadExecCommands();
+    }
+  }
+
+  _execRestoreOutput() {
+    const out  = this.container.querySelector('#tgExecOutput');
+    const wrap = this.container.querySelector('#tgExecOutputWrap');
+    if (out && this._execOutput) out.textContent = this._execOutput;
+    if (wrap && this._execOutput)  wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  async _loadExecCommands() {
+    if (!this._activeLayer?.folder_path) return;
+    this._execCommands = await window.db.testRunner.detect(this._activeLayer.folder_path);
+    this._execCmd      = this._execCommands[0] ?? null;
+    if (this._mode === 'execute') {
+      const right = this.container.querySelector('#tgSplitRight');
+      if (right) {
+        right.innerHTML = this._execRightHtml();
+        this._execRestoreOutput();
+      }
+    }
+  }
+
+  async _execStart(selectedOnly = false) {
+    if (this._execRunning || !this._execCmd || !this._activeLayer?.folder_path) return;
+    const command = selectedOnly ? this._buildSelectedFilesCmd() : this._execCmd.cmd;
+    if (!command) return;
+    this._execOutput = '';
+    this._execResult = null;
+    this._execSetRunning(true);
+    const out = this.container.querySelector('#tgExecOutput');
+    if (out) out.textContent = '';
+    window.db.testRunner.removeListeners();
+    window.db.testRunner.onData(({ text }) => this._execAppend(text));
+    window.db.testRunner.onDone(({ exitCode }) => this._execDone(exitCode));
+    await window.db.testRunner.run({ command, cwd: this._activeLayer.folder_path });
+  }
+
+  _buildSelectedFilesCmd() {
+    const testPaths = [...this._unitSelected]
+      .map(f => this._computeTestPath(f))
+      .filter(Boolean)
+      .map(p => `"${p.replace(/\\/g, '/')}"`);
+    if (!testPaths.length) return null;
+    const files = testPaths.join(' ');
+    const fw    = this._execCmd.framework ?? '';
+    const base  = this._execCmd.cmd;
+    if (fw === 'Flutter') return `flutter test ${files}`;
+    if (fw === '.NET') {
+      const names  = testPaths.map(p => p.replace(/"/g, '').split('/').pop().replace(/\.[^.]+$/, ''));
+      const filter = names.map(n => `FullyQualifiedName~${n}`).join('|');
+      return `${base} --filter "${filter}"`;
+    }
+    // Jest / Node / Angular — append paths after existing flags
+    return `${base} ${files}`;
+  }
+
+  _execStop() {
+    if (!this._execRunning) return;
+    window.db.testRunner.kill();
+    window.db.testRunner.removeListeners();
+    this._execSetRunning(false);
+  }
+
+  _execUpdateSelBtn() {
+    if (this._mode !== 'execute') return;
+    const btn = this.container.querySelector('#tgExecRunSel');
+    if (!btn) return;
+    const n        = this._unitSelected.size;
+    const over     = n > 20;
+    const canRun   = n > 0 && !over && !!this._execCmd && !this._execRunning && !!this._unitTestFolder.trim();
+    btn.disabled   = !canRun;
+    btn.hidden     = false;
+    btn.textContent = `▶ Run Selected${n > 0 ? ` (${n})` : ''}`;
+    btn.title       = over ? `Max 20 files — ${n} selected` : n === 0 ? 'Select files from the tree' : '';
+
+    const section = this.container.querySelector('#tgExecSection');
+    if (!section) return;
+    const msg = section.querySelector('.tg-exec-limit-msg');
+    if (over && !msg) {
+      section.querySelector('.tg-exec-output-wrap')
+        ?.insertAdjacentHTML('beforebegin', `<div class="tg-exec-limit-msg">Max 20 files for targeted run — ${n} selected. Deselect some or use Run All.</div>`);
+    } else if (!over && msg) {
+      msg.remove();
+    } else if (over && msg) {
+      msg.textContent = `Max 20 files for targeted run — ${n} selected. Deselect some or use Run All.`;
+    }
+  }
+
+  _execSetRunning(running) {
+    this._execRunning = running;
+    const run    = this.container.querySelector('#tgExecRun');
+    const runSel = this.container.querySelector('#tgExecRunSel');
+    const stop   = this.container.querySelector('#tgExecStop');
+    const sel    = this.container.querySelector('#tgExecCmdSel');
+    if (run)    { run.hidden    = running; run.disabled    = running; }
+    if (runSel) { runSel.hidden = running; runSel.disabled = running; }
+    if (stop)     stop.hidden   = !running;
+    if (sel)      sel.disabled  = running;
+  }
+
+  _execAppend(text) {
+    const clean = stripAnsi(text);
+    this._execOutput += clean;
+    const out  = this.container.querySelector('#tgExecOutput');
+    const wrap = this.container.querySelector('#tgExecOutputWrap');
+    if (out)  out.textContent += clean;
+    if (wrap) wrap.scrollTop   = wrap.scrollHeight;
+  }
+
+  _execDone(exitCode) {
+    window.db.testRunner.removeListeners();
+    this._execSetRunning(false);
+    const parsed      = this._parseTestResult(this._execOutput);
+    this._execResult  = parsed ?? { failed: exitCode !== 0 ? 1 : 0, passed: 0 };
+    const section = this.container.querySelector('#tgExecSection');
+    if (section) {
+      section.querySelector('.tg-exec-banner')?.remove();
+      section.insertAdjacentHTML('beforeend', this._execBannerHtml());
+    }
+  }
+
+  _parseTestResult(output) {
+    // Jest: "Tests: 2 failed, 8 passed, 10 total"
+    const jest = output.match(/Tests:\s+(?:(\d+)\s+failed[^,\n]*,?\s*)?(?:(\d+)\s+passed)/i);
+    if (jest) return { failed: parseInt(jest[1] || 0), passed: parseInt(jest[2] || 0) };
+    // Flutter: "+8 -2: ..."
+    const flutter = output.match(/\+(\d+)\s+-(\d+):/);
+    if (flutter) return { failed: parseInt(flutter[2]), passed: parseInt(flutter[1]) };
+    // .NET: "Failed: 2, Passed: 8"
+    const dotnet = output.match(/Failed:\s*(\d+).*?Passed:\s*(\d+)/is);
+    if (dotnet) return { failed: parseInt(dotnet[1]), passed: parseInt(dotnet[2]) };
+    // Angular/Karma: "X SUCCESS" or "FAILED"
+    const karma = output.match(/Executed (\d+) of \d+ (SUCCESS|FAILED)/i);
+    if (karma) return { failed: karma[2] === 'FAILED' ? 1 : 0, passed: parseInt(karma[1]) };
+    return null;
+  }
+
+  _extractFailureSummary(output) {
+    const lines = output.split('\n');
+    return lines.slice(Math.max(0, lines.length - 60)).join('\n').trim();
+  }
+
+  async _execCreateIssue() {
+    if (!this._execResult || this._execResult.failed === 0) return;
+    const btn = this.container.querySelector('#tgExecCreateIssue');
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+    await window.db.issues.create({
+      project_id:  this._projectId,
+      layer_id:    this._activeLayer?.id ?? null,
+      title:       `Test failures — ${this._activeLayer?.name ?? 'Layer'}`,
+      description: this._extractFailureSummary(this._execOutput),
+      severity:    'high',
+      status:      'open',
+    });
+    const banner = this.container.querySelector('.tg-exec-banner');
+    if (banner) {
+      banner.className  = 'tg-exec-banner tg-exec-banner--pass';
+      banner.innerHTML  = '<span>✓ Issue created</span>';
+    }
+  }
+
+  _execDismissBanner() {
+    this._execResult = null;
+    this.container.querySelector('.tg-exec-banner')?.remove();
   }
 
   _unitSectionHtml() {
@@ -248,7 +530,7 @@ export class TestGeneratorPage {
     return `
       <div class="tg-split" id="tgUnitSection">
 
-        <!-- LEFT: file tree + folder picker -->
+        <!-- LEFT: always visible -->
         <div class="tg-split-left">
           <div class="tg-file-picker-toolbar">
             <button class="tg-btn tg-btn--sm" id="tgUnitSelectAll">All</button>
@@ -266,29 +548,9 @@ export class TestGeneratorPage {
           <p class="${folderHintClass}" id="tgFolderHint">${folderHintText}</p>
         </div>
 
-        <!-- RIGHT: selected files + live code output -->
-        <div class="tg-split-right">
-          <div class="tg-gen-header">
-            <div class="tg-gen-controls">
-              <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgGenRunAll">▶ Run</button>
-              <button class="tg-btn tg-btn--sm tg-btn--stop"    id="tgGenStop" hidden>■ Stop</button>
-              <button class="tg-btn tg-btn--sm"                 id="tgExecuteTests">Execute Tests</button>
-            </div>
-          </div>
-          <div class="tg-gen-items" id="tgGenItems">${this._genFilesHtml()}</div>
-          <div class="tg-gen-output">
-            <div class="tg-gen-output-hd">
-              <span class="tg-gen-output-name" id="tgGenCurFile">—</span>
-              <span class="tg-gen-elapsed"     id="tgGenElapsed"></span>
-            </div>
-            <div class="tg-gen-code-wrap" id="tgGenCodeWrap">
-              <pre class="tg-gen-code" id="tgGenCode"></pre>
-            </div>
-          </div>
-          <div class="tg-gen-footer">
-            <span class="tg-gen-status" id="tgGenStatus">${selectedCount > 0 ? `${selectedCount} file${selectedCount !== 1 ? 's' : ''} ready` : 'Select files from the tree'}</span>
-            <span class="tg-gen-pill"   id="tgGenPill"></span>
-          </div>
+        <!-- RIGHT: swaps on mode toggle -->
+        <div class="tg-split-right" id="tgSplitRight">
+          ${this._mode === 'execute' ? this._execRightHtml() : this._genRightHtml()}
         </div>
 
       </div>`;
@@ -461,12 +723,17 @@ export class TestGeneratorPage {
     // Delegate all main-panel events to the stable container (attached once only)
     this.container.addEventListener('change', e => {
       if (!e.target.closest('#tgMain')) return;
+      if (e.target.id === 'tgExecCmdSel') {
+        this._execCmd = this._execCommands.find(c => c.id === e.target.value) ?? null;
+        return;
+      }
       if (e.target.dataset.file !== undefined) {
         const f = e.target.dataset.file;
         e.target.checked ? this._unitSelected.add(f) : this._unitSelected.delete(f);
         this._updateAncestorFolderCheckboxes(f);
         this._updateUnitFileCount();
         this._syncGenerateBtns();
+        this._execUpdateSelBtn();
         return;
       }
       if (e.target.dataset.folder !== undefined) {
@@ -477,10 +744,15 @@ export class TestGeneratorPage {
         this._updateAncestorFolderCheckboxes(fp);
         this._updateUnitFileCount();
         this._syncGenerateBtns();
+        this._execUpdateSelBtn();
       }
     });
 
     this.container.addEventListener('click', e => {
+      // Header toggle — not inside #tgMain so must come first
+      if (e.target.id === 'tgModeGenerate')      { this._switchMode('generate');   return; }
+      if (e.target.id === 'tgModeExecute')        { this._switchMode('execute');    return; }
+
       if (!e.target.closest('#tgMain')) return;
       const dirRow = e.target.closest('.tg-tree-row--dir');
       if (dirRow && !e.target.matches('input')) {
@@ -507,10 +779,14 @@ export class TestGeneratorPage {
         this._rerenderFileList();
         return;
       }
-      if (e.target.id === 'tgGenRunAll')        { this._genRunAll();        return; }
-      if (e.target.id === 'tgGenStop')          { this._genStop();          return; }
-      if (e.target.id === 'tgExecuteTests')     { this._executeTests();     return; }
-      if (e.target.id === 'tgBrowseTestFolder') { this._browseTestFolder(); return; }
+      if (e.target.id === 'tgGenRunAll')         { this._genRunAll();              return; }
+      if (e.target.id === 'tgGenStop')           { this._genStop();                return; }
+      if (e.target.id === 'tgExecRun')           { this._execStart(false);         return; }
+      if (e.target.id === 'tgExecRunSel')        { this._execStart(true);          return; }
+      if (e.target.id === 'tgExecStop')          { this._execStop();               return; }
+      if (e.target.id === 'tgExecCreateIssue')   { this._execCreateIssue();        return; }
+      if (e.target.id === 'tgExecDismissBanner') { this._execDismissBanner();      return; }
+      if (e.target.id === 'tgBrowseTestFolder')  { this._browseTestFolder();       return; }
     });
 
     this.container.addEventListener('input', e => {
@@ -596,6 +872,10 @@ export class TestGeneratorPage {
     this._unitSelected     = new Set();
     this._expandedDirs     = new Set();
     this._treeAllExpanded  = true;
+    this._execCommands     = [];
+    this._execCmd          = null;
+    this._execOutput       = '';
+    this._execResult       = null;
 
     const savedFolder      = localStorage.getItem(`devflow_testfolder_${layer.id}`);
     this._unitTestFolder   = savedFolder || inferDefaultTestFolder(layer);
@@ -610,6 +890,7 @@ export class TestGeneratorPage {
 
     this.container.querySelector('#tgMain').innerHTML = this._mainHtml();
     this._applyIndeterminateStates();
+    this._loadExecCommands();
   }
 
   // ─── File list helpers ────────────────────────────────────────
@@ -620,8 +901,15 @@ export class TestGeneratorPage {
       this._applyIndeterminateStates();
     }
     this._updateUnitFileCount();
-    if (!this._genRunning) this._genProgress = [];
-    this._genSyncRight();
+    if (this._mode === 'execute') {
+      if (!this._execRunning) {
+        const right = this.container.querySelector('#tgSplitRight');
+        if (right) { right.innerHTML = this._execRightHtml(); this._execRestoreOutput(); }
+      }
+    } else {
+      if (!this._genRunning) this._genProgress = [];
+      this._genSyncRight();
+    }
   }
 
   _updateUnitFileCount() {
@@ -893,15 +1181,6 @@ Output ONLY the test file content. No explanation text. Start directly with impo
   _genFmt(ms) {
     const s = Math.floor(ms / 1000);
     return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
-  }
-
-  async _executeTests() {
-    if (!this._activeLayer) return;
-    await window.app.openTestRunnerWindow({
-      projectId: this._projectId,
-      layer:     this._activeLayer,
-      modelCfg:  this._modelCfg,
-    });
   }
 
   async _browseTestFolder() {

@@ -22,6 +22,7 @@
   background: var(--surface-header);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
+  position: relative;
 }
 
 .project-home__back {

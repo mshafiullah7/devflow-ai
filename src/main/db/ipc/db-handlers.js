@@ -438,21 +438,6 @@ function registerDbHandlers() {
       const hasJest       = !!allDeps['jest'] || !!allDeps['@jest/core'];
       const fwLabel       = isAngular ? 'Angular' : 'Node';
 
-      // Cypress
-      if (hasCypress) {
-        if (scripts['e2e'])      commands.push({ id: 'e2e',      label: 'npm run e2e',      cmd: 'npm run e2e',      framework: `${fwLabel} / Cypress` });
-        if (scripts['cy:run'])   commands.push({ id: 'cy-run',   label: 'npm run cy:run',   cmd: 'npm run cy:run',   framework: `${fwLabel} / Cypress` });
-        if (scripts['test:e2e']) commands.push({ id: 'test-e2e', label: 'npm run test:e2e', cmd: 'npm run test:e2e', framework: `${fwLabel} / Cypress` });
-        if (!scripts['e2e'] && !scripts['cy:run'] && !scripts['test:e2e'])
-          commands.push({ id: 'cypress-run', label: 'npx cypress run', cmd: 'npx cypress run', framework: `${fwLabel} / Cypress` });
-      }
-
-      // Playwright
-      if (hasPlaywright) {
-        if (scripts['test:e2e']) commands.push({ id: 'pw-e2e',    label: 'npm run test:e2e',    cmd: 'npm run test:e2e',    framework: 'Playwright' });
-        else                     commands.push({ id: 'playwright', label: 'npx playwright test', cmd: 'npx playwright test', framework: 'Playwright' });
-      }
-
       // Unit tests
       if (scripts['test']) {
         const fw     = isAngular ? 'Angular / Karma' : hasJest ? 'Jest' : fwLabel;
