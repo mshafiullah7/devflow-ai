@@ -185,7 +185,7 @@ export class TestGeneratorPage {
           </button>
           <div class="tg-title-group">
             <h1 class="tg-title">${escHtml(name)}</h1>
-            <p class="tg-subtitle">Unit Test Generator</p>
+            <p class="tg-subtitle">Unit Tests</p>
           </div>
           <div class="tg-header-toggle" style="-webkit-app-region:no-drag;">
             <button class="tg-mode-btn ${this._mode === 'generate' ? 'tg-mode-btn--active' : ''}" id="tgModeGenerate">Generate</button>

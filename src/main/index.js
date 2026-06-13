@@ -12,6 +12,7 @@ const { openGenerateWorkflowsWindow } = require('./generate-workflows-window');
 const { openTestGenerationWindow }    = require('./test-generation-window');
 const { openWorkflowAiEditWindow }    = require('./workflow-ai-edit-window');
 const { openTestRunnerWindow }        = require('./test-runner-window');
+const { openUnitTestsWindow }         = require('./unit-tests-window');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
 const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
 const { sendMessage: telegramSend } = require('./telegram');
@@ -86,6 +87,11 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:openTestRunnerWindow', (_e, data) => {
     openTestRunnerWindow(data);
+    return { ok: true };
+  });
+
+  ipcMain.handle('app:openUnitTestsWindow', (_e, projectId) => {
+    openUnitTestsWindow(projectId);
     return { ok: true };
   });
 

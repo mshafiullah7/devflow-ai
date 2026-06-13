@@ -162,6 +162,21 @@
   color: var(--danger) !important;
   border-color: var(--danger) !important;
 }
+.ph-nav-item--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.ph-nav-item__badge--soon {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 1px 5px;
+}
 
 /* ------------------------------------------------------------------ */
 /* Main content                                                         */
