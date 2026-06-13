@@ -328,14 +328,20 @@ export class WorkflowsPage {
     for (const [pageId, workflows] of grouped) {
       const page = (this._pages || []).find(p => p.id === pageId);
       const pageTitle = page?.title || 'Page';
+      const allDone = workflows.every(w => (w.status || 'open') === 'completed');
       parts.push(`
-        <div class="wf-group-header">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-          </svg>
-          <span>${escHtml(pageTitle)}</span>
-        </div>
-        <div class="wf-group-items">${workflows.map(itemHtml).join('')}</div>`);
+        <div class="wf-group${allDone ? ' wf-group--collapsed' : ''}">
+          <div class="wf-group-header">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+            </svg>
+            <span>${escHtml(pageTitle)}</span>
+            <svg class="wf-group-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="wf-group-items">${workflows.map(itemHtml).join('')}</div>
+        </div>`);
     }
     for (const w of ungrouped) {
       parts.push(itemHtml(w));
@@ -343,6 +349,11 @@ export class WorkflowsPage {
 
     el.innerHTML = parts.join('');
 
+    el.querySelectorAll('.wf-group-header').forEach(header => {
+      header.addEventListener('click', () => {
+        header.closest('.wf-group').classList.toggle('wf-group--collapsed');
+      });
+    });
     el.querySelectorAll('[data-wf]').forEach(item => {
       item.addEventListener('click', () => this._selectWorkflow(+item.dataset.wf));
     });

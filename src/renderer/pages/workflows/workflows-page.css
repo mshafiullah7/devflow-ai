@@ -907,6 +907,19 @@
 }
 .wf-group-header:first-child { margin-top: 0; }
 .wf-group-header svg { opacity: 0.6; flex-shrink: 0; }
+.wf-group-header {
+  cursor: pointer;
+  user-select: none;
+}
+.wf-group-header:hover { background: var(--surface-hover); border-radius: 4px; }
+.wf-group-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+.wf-group--collapsed .wf-group-chevron { transform: rotate(-90deg); }
+.wf-group--collapsed .wf-group-items { display: none; }
 .wf-group-items .eus-src-item { padding-left: 18px; }
 
 .wf-label-required  { color: var(--accent); }
