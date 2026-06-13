@@ -257,6 +257,20 @@
 
 .ph-lr-card--done .ph-stat-box__value { color: #16a34a; }
 
+/* Stat-box progress bars */
+.ph-stat-bar {
+  height: 5px;
+  background: var(--surface-hover);
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  margin-top: 10px;
+}
+.ph-stat-bar--danger-bg { background: rgba(220,38,38,.15); }
+.ph-stat-bar__seg { height: 100%; }
+.ph-stat-bar__seg--done   { background: #16a34a; }
+.ph-stat-bar__seg--inprog { background: var(--accent); }
+
 /* ------------------------------------------------------------------ */
 /* Layer Progress — row list                                           */
 /* ------------------------------------------------------------------ */
@@ -315,9 +329,9 @@
 }
 
 .ph-lr-bar {
-  height: 8px;
+  height: 5px;
   background: var(--surface-hover);
-  border-radius: 4px;
+  border-radius: 3px;
   overflow: hidden;
   display: flex;
 }

@@ -25,6 +25,15 @@ function inferExtensions(setupInstructions) {
   return FILE_EXTENSIONS.default;
 }
 
+function stripCodeFences(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('```')) return trimmed;
+  const firstNewline = trimmed.indexOf('\n');
+  if (firstNewline === -1) return trimmed;
+  const inner = trimmed.slice(firstNewline + 1);
+  return inner.endsWith('```') ? inner.slice(0, -3).trimEnd() : inner;
+}
+
 function inferDefaultTestFolder(layer) {
   const s = (layer.setup_instructions || '').toLowerCase();
   const isNonJs = s.includes('.net') || s.includes('c#') || s.includes('dotnet')
@@ -75,6 +84,14 @@ export class TestGeneratorPage {
     this._unitTestFolder   = '';
     this._testedFiles      = new Set();
 
+    // Inline generation state
+    this._genProgress      = [];
+    this._genSelIdx        = null;
+    this._genRunning       = false;
+    this._genAborted       = false;
+    this._genCurrentIdx    = null;
+    this._genTimerInt      = null;
+    this._genStartTime     = null;
   }
 
   async mount() {
@@ -126,6 +143,11 @@ export class TestGeneratorPage {
 
   unmount() {
     this._git?.stopPoll();
+    this._genClearTimer();
+    if (this._genRunning) {
+      window.app.testGenChat.cancel();
+      window.app.testGenChat.offAll();
+    }
     window.app.testGenerationWindow.offFileSaved();
     removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
@@ -218,46 +240,87 @@ export class TestGeneratorPage {
   }
 
   _unitSectionHtml() {
-    const fileListContent = this._unitFilesListHtml();
     const selectedCount   = this._unitSelected.size;
     const totalCount      = this._unitFiles.length;
-    const canGenerate     = selectedCount > 0 && !!this._modelCfg;
     const folderHintClass = this._unitTestFolder ? 'tg-folder-hint' : 'tg-folder-hint tg-folder-hint--warn';
-    const folderHintText  = this._unitTestFolder ? '' : 'No test folder set — click Browse or type a path.';
+    const folderHintText  = this._unitTestFolder ? '' : 'No test folder — click Browse or type a path.';
 
     return `
-      <div class="tg-section" id="tgUnitSection">
+      <div class="tg-split" id="tgUnitSection">
 
-        <div class="tg-file-picker-wrap">
+        <!-- LEFT: file tree + folder picker -->
+        <div class="tg-split-left">
           <div class="tg-file-picker-toolbar">
-            <button class="tg-btn tg-btn--sm" id="tgUnitSelectAll">Select All</button>
+            <button class="tg-btn tg-btn--sm" id="tgUnitSelectAll">All</button>
             <button class="tg-btn tg-btn--sm" id="tgUnitClear">Clear</button>
-            <button class="tg-btn tg-btn--sm" id="tgUnitToggleTree">${this._treeAllExpanded ? 'Collapse All' : 'Expand All'}</button>
-            <span class="tg-file-count" id="tgUnitFileCount">${selectedCount} / ${totalCount} selected</span>
+            <button class="tg-btn tg-btn--sm" id="tgUnitToggleTree">${this._treeAllExpanded ? 'Collapse' : 'Expand'}</button>
+            <span class="tg-file-count" id="tgUnitFileCount">${selectedCount} / ${totalCount}</span>
           </div>
-          <div class="tg-file-list" id="tgUnitFileList">${fileListContent}</div>
+          <div class="tg-file-list" id="tgUnitFileList">${this._unitFilesListHtml()}</div>
+          <div class="tg-folder-strip">
+            <input class="tg-filename-input" id="tgUnitTestFolder"
+                   value="${escHtml(this._unitTestFolder)}"
+                   placeholder="Test output folder…" spellcheck="false"/>
+            <button class="tg-btn tg-btn--sm" id="tgBrowseTestFolder">Browse…</button>
+          </div>
+          <p class="${folderHintClass}" id="tgFolderHint">${folderHintText}</p>
         </div>
 
-        <p class="tg-sub-label">Test Output Folder</p>
-        <div class="tg-folder-row">
-          <input class="tg-filename-input tg-folder-input" id="tgUnitTestFolder"
-                 value="${escHtml(this._unitTestFolder)}"
-                 placeholder="Browse or type an absolute folder path…" spellcheck="false"/>
-          <button class="tg-btn tg-btn--sm" id="tgBrowseTestFolder">Browse…</button>
+        <!-- RIGHT: selected files + live code output -->
+        <div class="tg-split-right">
+          <div class="tg-gen-header">
+            <div class="tg-gen-controls">
+              <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgGenRunAll">▶ Run</button>
+              <button class="tg-btn tg-btn--sm tg-btn--stop"    id="tgGenStop" hidden>■ Stop</button>
+              <button class="tg-btn tg-btn--sm"                 id="tgExecuteTests">Execute Tests</button>
+            </div>
+          </div>
+          <div class="tg-gen-items" id="tgGenItems">${this._genFilesHtml()}</div>
+          <div class="tg-gen-output">
+            <div class="tg-gen-output-hd">
+              <span class="tg-gen-output-name" id="tgGenCurFile">—</span>
+              <span class="tg-gen-elapsed"     id="tgGenElapsed"></span>
+            </div>
+            <div class="tg-gen-code-wrap" id="tgGenCodeWrap">
+              <pre class="tg-gen-code" id="tgGenCode"></pre>
+            </div>
+          </div>
+          <div class="tg-gen-footer">
+            <span class="tg-gen-status" id="tgGenStatus">${selectedCount > 0 ? `${selectedCount} file${selectedCount !== 1 ? 's' : ''} ready` : 'Select files from the tree'}</span>
+            <span class="tg-gen-pill"   id="tgGenPill"></span>
+          </div>
         </div>
-        <p class="${folderHintClass}" id="tgFolderHint">${folderHintText}</p>
 
-        <div class="tg-generate-bar">
-          <button class="tg-btn tg-btn--primary" id="tgUnitGenerate" ${canGenerate ? '' : 'disabled'}
-            title="${!this._modelCfg ? 'Select a model first' : selectedCount === 0 ? 'Select at least one file' : ''}">
-            Generate Unit Tests
-          </button>
-          <button class="tg-btn tg-btn--secondary" id="tgExecuteTests"
-            title="Run tests for this layer">
-            Execute Unit Tests
-          </button>
-        </div>
       </div>`;
+  }
+
+  _genFilesHtml() {
+    // During / after generation: show progress with status chips
+    if (this._genProgress.length > 0) {
+      const CHIP = { pending: 'Pending', generating: 'Generating', saved: 'Saved', error: 'Error' };
+      return this._genProgress.map((item, i) => {
+        const active = i === this._genSelIdx ? 'tg-gen-item--active' : '';
+        return `
+          <div class="tg-gen-item tg-gen-item--${item.status} ${active}" data-gen-idx="${i}">
+            <span class="tg-gen-chip tg-gen-chip--${item.status}">${CHIP[item.status] ?? item.status}</span>
+            <span class="tg-gen-item-name" title="${escHtml(item.relPath)}">${escHtml(item.label)}</span>
+          </div>`;
+      }).join('');
+    }
+
+    // Idle: mirror current selection
+    if (!this._unitSelected.size) {
+      return `<div class="tg-gen-empty">Select files from the tree to begin</div>`;
+    }
+    return [...this._unitSelected].map((relPath, i) => {
+      const label  = relPath.replace(/\\/g, '/').split('/').pop();
+      const active = i === this._genSelIdx ? 'tg-gen-item--active' : '';
+      return `
+        <div class="tg-gen-item ${active}" data-gen-idx="${i}">
+          <span class="tg-gen-chip tg-gen-chip--pending">Ready</span>
+          <span class="tg-gen-item-name" title="${escHtml(relPath)}">${escHtml(label)}</span>
+        </div>`;
+    }).join('');
   }
 
   _unitFilesListHtml() {
@@ -440,11 +503,12 @@ export class TestGeneratorPage {
         this._expandedDirs = this._treeAllExpanded
           ? this._getAllDirPaths(this._unitFiles.slice(0, 200))
           : new Set();
-        e.target.textContent = this._treeAllExpanded ? 'Collapse All' : 'Expand All';
+        e.target.textContent = this._treeAllExpanded ? 'Collapse' : 'Expand';
         this._rerenderFileList();
         return;
       }
-      if (e.target.id === 'tgUnitGenerate')     { this._generateUnit();     return; }
+      if (e.target.id === 'tgGenRunAll')        { this._genRunAll();        return; }
+      if (e.target.id === 'tgGenStop')          { this._genStop();          return; }
       if (e.target.id === 'tgExecuteTests')     { this._executeTests();     return; }
       if (e.target.id === 'tgBrowseTestFolder') { this._browseTestFolder(); return; }
     });
@@ -556,52 +620,279 @@ export class TestGeneratorPage {
       this._applyIndeterminateStates();
     }
     this._updateUnitFileCount();
-    this._syncGenerateBtns();
+    if (!this._genRunning) this._genProgress = [];
+    this._genSyncRight();
   }
 
   _updateUnitFileCount() {
     const el = this.container.querySelector('#tgUnitFileCount');
-    if (el) el.textContent = `${this._unitSelected.size} / ${Math.min(this._unitFiles.length, 200)} selected`;
+    if (el) el.textContent = `${this._unitSelected.size} / ${Math.min(this._unitFiles.length, 200)}`;
   }
 
-  _syncGenerateBtns() {
-    const unitBtn = this.container.querySelector('#tgUnitGenerate');
-    if (unitBtn) {
-      const can = this._unitSelected.size > 0 && !!this._modelCfg;
-      unitBtn.disabled = !can;
-      if (!this._modelCfg) unitBtn.title = 'Select a model first';
-      else if (this._unitSelected.size === 0) unitBtn.title = 'Select at least one file';
-      else unitBtn.title = '';
+  // ─── Right-panel sync ─────────────────────────────────────────
+  _genSyncRight() {
+    this._genRefreshFiles();
+    this._genSyncControls();
+    const statusEl = this.container.querySelector('#tgGenStatus');
+    if (statusEl && !this._genRunning && !this._genProgress.length) {
+      const n = this._unitSelected.size;
+      statusEl.textContent = n > 0 ? `${n} file${n !== 1 ? 's' : ''} ready` : 'Select files from the tree';
+      statusEl.className   = 'tg-gen-status';
     }
   }
 
-  // ─── AI generation — opens a dedicated window ────────────────
-  async _generateUnit() {
-    if (!this._activeLayer) return;
+  _genSyncControls() {
+    if (this._genRunning) return; // toolbar managed by run/stop methods
+    const can    = this._unitSelected.size > 0 && !!this._modelCfg && !!this._unitTestFolder.trim();
+    const runAll = this.container.querySelector('#tgGenRunAll');
+    const stop   = this.container.querySelector('#tgGenStop');
+    if (runAll) runAll.disabled = !can;
+    if (stop)   stop.hidden     = true;
+    if (!this._modelCfg && runAll) runAll.title = 'Select a model first';
+    else if (!this._unitTestFolder.trim() && runAll) runAll.title = 'Set a test output folder first';
+    else if (!this._unitSelected.size && runAll) runAll.title = 'Select at least one file';
+    else if (runAll) runAll.title = '';
+  }
 
-    const testFolder = this._unitTestFolder.trim();
-    if (!testFolder) {
-      const hint = this.container.querySelector('#tgFolderHint');
-      if (hint) {
-        hint.className   = 'tg-folder-hint tg-folder-hint--error';
-        hint.textContent = 'Set a test output folder before generating.';
-        setTimeout(() => {
-          hint.className   = 'tg-folder-hint tg-folder-hint--warn';
-          hint.textContent = 'No test folder set — click Browse or type a path.';
-        }, 4000);
-      }
-      return;
+  // kept for model-picker callback compat
+  _syncGenerateBtns() { this._genSyncControls(); }
+
+  // ─── Run logic ────────────────────────────────────────────────
+  _buildGenProgress() {
+    this._genProgress = [...this._unitSelected].map(relPath => ({
+      label:  relPath.replace(/\\/g, '/').split('/').pop(),
+      relPath,
+      status: 'pending', outPath: '', errMsg: '',
+    }));
+    this._genSelIdx = this._genProgress.length > 0 ? 0 : null;
+  }
+
+  _setRunningUI(running) {
+    this._genRunning = running;
+    const runAll = this.container.querySelector('#tgGenRunAll');
+    const runSel = this.container.querySelector('#tgGenRunSel');
+    const stop   = this.container.querySelector('#tgGenStop');
+    const tree   = this.container.querySelector('#tgUnitFileList');
+    if (running) {
+      if (runAll) { runAll.hidden = true;  runAll.disabled = true; }
+      if (stop)     stop.hidden  = false;
+      if (tree)     tree.style.pointerEvents = 'none';
+    } else {
+      if (runAll) { runAll.hidden = false; }
+      if (stop)     stop.hidden  = true;
+      if (tree)     tree.style.pointerEvents = '';
+      this._genSyncControls();
     }
+  }
 
-    if (!this._unitSelected.size) return;
+  async _genRunAll() {
+    if (this._genRunning || !this._unitSelected.size) return;
+    if (!this._unitTestFolder.trim()) { this._showFolderError(); return; }
+    this._buildGenProgress();
+    this._genAborted = false;
+    this._setRunningUI(true);
+    this._genRefreshFiles();
+    for (let i = 0; i < this._genProgress.length; i++) {
+      if (this._genAborted) break;
+      if (this._genProgress[i].status !== 'pending') continue;
+      await this._genRunItem(i);
+    }
+    this._genCurrentIdx = null;
+    this._genClearTimer();
+    this._setRunningUI(false);
+    this._genShowDone();
+  }
 
-    await window.app.openTestGenerationWindow({
-      mode:       'unit',
-      layer:      this._activeLayer,
-      files:      [...this._unitSelected],
-      testFolder,
-      modelCfg:   this._modelCfg,
+  async _genRunSelected() {
+    if (this._genRunning) return;
+    if (!this._unitTestFolder.trim()) { this._showFolderError(); return; }
+    // Build progress if not already built, or if selection changed
+    if (!this._genProgress.length) this._buildGenProgress();
+    const idx  = this._genSelIdx ?? 0;
+    const item = this._genProgress[idx];
+    if (!item || item.status === 'saved') return;
+    if (item.status === 'error') item.status = 'pending';
+    this._genAborted = false;
+    this._setRunningUI(true);
+    this._genRefreshFiles();
+    await this._genRunItem(idx);
+    this._genCurrentIdx = null;
+    this._genClearTimer();
+    this._setRunningUI(false);
+    this._genShowDone();
+  }
+
+  _showFolderError() {
+    const hint = this.container.querySelector('#tgFolderHint');
+    if (hint) {
+      hint.className   = 'tg-folder-hint tg-folder-hint--error';
+      hint.textContent = 'Set a test output folder before generating.';
+      setTimeout(() => {
+        hint.className   = 'tg-folder-hint tg-folder-hint--warn';
+        hint.textContent = 'No test folder — click Browse or type a path.';
+      }, 3500);
+    }
+  }
+
+  async _genRunItem(i) {
+    this._genCurrentIdx = i;
+    this._genSetStatus(i, 'generating');
+    this._genUpdateCurFile(this._genProgress[i].label);
+    this._genUpdateStatus(`Generating ${i + 1} of ${this._genProgress.length}…`);
+    this._genStartTimer();
+
+    const codeEl = this.container.querySelector('#tgGenCode');
+    if (codeEl) codeEl.textContent = '';
+
+    try {
+      const item    = this._genProgress[i];
+      const absPath = `${this._activeLayer.folder_path}/${item.relPath}`;
+      let src = await window.shell.readFile(absPath);
+      if (src === null) { this._genSetStatus(i, 'error', '', 'Could not read file'); return; }
+      if (src.length > 8000) src = src.slice(0, 8000) + '\n// [truncated]';
+
+      const prompt  = this._buildUnitPrompt(item.relPath, src);
+      const outPath = this._computeTestPath(item.relPath);
+      if (!outPath) { this._genSetStatus(i, 'error', '', 'No test folder set'); return; }
+
+      const raw  = await this._streamGenItem(prompt);
+      const code = stripCodeFences(raw);
+
+      if (this._genAborted) { this._genSetStatus(i, 'pending'); return; }
+
+      const ok = await window.shell.writeFile(outPath, code);
+      if (ok) window.shell.notifyTestFileSaved();
+      this._genSetStatus(i, ok ? 'saved' : 'error', outPath, ok ? '' : 'Write failed');
+    } catch (err) {
+      this._genSetStatus(i, this._genAborted ? 'pending' : 'error', '', err.message || 'Failed');
+    }
+    this._genClearTimer();
+  }
+
+  _genStop() {
+    if (!this._genRunning) return;
+    this._genAborted = true;
+    window.app.testGenChat.cancel();
+    window.app.testGenChat.offAll();
+    this._genProgress.forEach(p => { if (p.status === 'generating') p.status = 'pending'; });
+    this._genCurrentIdx = null;
+    this._genClearTimer();
+    this._setRunningUI(false);
+    this._genRefreshFiles();
+    this._genUpdateCurFile(null);
+    this._genUpdateStatus('Cancelled.');
+  }
+
+  _streamGenItem(prompt) {
+    return new Promise((resolve, reject) => {
+      let code = '';
+      window.app.testGenChat.offAll();
+      window.app.testGenChat.onToken(({ text }) => {
+        code += text;
+        const pre  = this.container.querySelector('#tgGenCode');
+        const wrap = this.container.querySelector('#tgGenCodeWrap');
+        if (pre)  pre.textContent = code;
+        if (wrap) wrap.scrollTop  = wrap.scrollHeight;
+      });
+      window.app.testGenChat.onDone(({ error }) => {
+        window.app.testGenChat.offAll();
+        if (error) reject(new Error(error));
+        else resolve(code);
+      });
+      window.app.testGenChat.generate({ prompt, model: this._modelCfg });
     });
+  }
+
+  _buildUnitPrompt(relPath, content) {
+    const l = this._activeLayer;
+    return `You are an expert software engineer writing unit tests.
+
+## Tech Stack & Layer Context
+${l.setup_instructions || '(no setup instructions provided)'}
+
+## Layer: ${l.name}
+Folder: ${l.folder_path}
+
+## Source File: ${relPath}
+${content}
+
+## Task
+Generate comprehensive unit tests using the testing framework implied by the tech stack above.
+- Cover: happy paths, edge cases, error conditions, boundary values
+- Use describe() blocks to group related tests
+- Each test should have a clear descriptive name
+- Mock external dependencies (DB, HTTP, filesystem) where appropriate
+- Do not test implementation details — test observable behaviour and contracts
+
+Output ONLY the test file content. No explanation text. Start directly with import or require statements.`;
+  }
+
+  // ─── Generate view DOM helpers ────────────────────────────────
+  _genSetStatus(i, status, outPath = '', errMsg = '') {
+    if (!this._genProgress[i]) return;
+    this._genProgress[i] = { ...this._genProgress[i], status, outPath, errMsg };
+    this._genRefreshFiles();
+  }
+
+  _genRefreshFiles() {
+    const el = this.container.querySelector('#tgGenItems');
+    if (el) el.innerHTML = this._genFilesHtml();
+    const saved = this._genProgress.filter(p => p.status === 'saved').length;
+    const pill  = this.container.querySelector('#tgGenPill');
+    if (pill) pill.textContent = this._genProgress.length ? `${saved} / ${this._genProgress.length}` : '';
+  }
+
+  _genUpdateCurFile(label) {
+    const el = this.container.querySelector('#tgGenCurFile');
+    if (el) el.textContent = label || '—';
+    if (!label) {
+      const elapsed = this.container.querySelector('#tgGenElapsed');
+      if (elapsed) elapsed.textContent = '';
+    }
+  }
+
+  _genUpdateStatus(text, variant = '') {
+    const el = this.container.querySelector('#tgGenStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.className   = `tg-gen-status${variant ? ' tg-gen-status--' + variant : ''}`;
+  }
+
+  _genShowDone() {
+    const total  = this._genProgress.length;
+    const saved  = this._genProgress.filter(p => p.status === 'saved').length;
+    const errors = this._genProgress.filter(p => p.status === 'error').length;
+    const pill   = this.container.querySelector('#tgGenPill');
+    if (pill) {
+      pill.textContent = `${saved} / ${total}`;
+      if (!errors && saved > 0) pill.classList.add('tg-gen-pill--done');
+    }
+    if (this._genAborted) {
+      this._genUpdateStatus('Cancelled.', 'error');
+    } else if (errors > 0) {
+      this._genUpdateStatus(`Done — ${saved} saved, ${errors} error${errors > 1 ? 's' : ''}.`, 'error');
+    } else {
+      this._genUpdateStatus(`All ${saved} test file${saved !== 1 ? 's' : ''} saved.`, 'done');
+    }
+  }
+
+  _genStartTimer() {
+    this._genClearTimer();
+    this._genStartTime = Date.now();
+    this._genTimerInt  = setInterval(() => {
+      const el = this.container.querySelector('#tgGenElapsed');
+      if (el && this._genStartTime) el.textContent = this._genFmt(Date.now() - this._genStartTime);
+    }, 500);
+  }
+
+  _genClearTimer() {
+    if (this._genTimerInt) { clearInterval(this._genTimerInt); this._genTimerInt = null; }
+    this._genStartTime = null;
+  }
+
+  _genFmt(ms) {
+    const s = Math.floor(ms / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
   }
 
   async _executeTests() {

@@ -81,26 +81,46 @@ export class ProjectHomePage {
     const wfOpen      = workflows.filter(w => !w.status || w.status === 'open').length;
     const wfInProg    = workflows.filter(w => w.status === 'in_progress').length;
     const wfCompleted = workflows.filter(w => w.status === 'completed').length;
+    const wfTotal     = workflows.length;
+
+    const wfCompPct   = wfTotal ? Math.round((wfCompleted / wfTotal) * 100) : 0;
+    const wfInProgPct = wfTotal ? Math.round((wfInProg    / wfTotal) * 100) : 0;
 
     const wfPills = `
       <div class="ph-stat-box__status-pills">
         ${wfOpen      > 0 ? `<span class="ph-wf-pill ph-wf-pill--open">Open <b>${wfOpen}</b></span>`           : ''}
         ${wfInProg    > 0 ? `<span class="ph-wf-pill ph-wf-pill--inprog">In Progress <b>${wfInProg}</b></span>` : ''}
         ${wfCompleted > 0 ? `<span class="ph-wf-pill ph-wf-pill--done">Completed <b>${wfCompleted}</b></span>` : ''}
-        ${!workflows.length ? `<span class="ph-wf-pill ph-wf-pill--open">No workflows yet</span>` : ''}
+        ${!wfTotal ? `<span class="ph-wf-pill ph-wf-pill--open">No workflows yet</span>` : ''}
+      </div>`;
+
+    const wfBar = `
+      <div class="ph-stat-bar">
+        <div class="ph-stat-bar__seg ph-stat-bar__seg--done"   style="width:${wfCompPct}%"></div>
+        <div class="ph-stat-bar__seg ph-stat-bar__seg--inprog" style="width:${wfInProgPct}%"></div>
+      </div>`;
+
+    const closedIssues    = totalIssues - openIssues;
+    const issueClosedPct  = totalIssues ? Math.round((closedIssues / totalIssues) * 100) : 100;
+
+    const issueBar = `
+      <div class="ph-stat-bar ${openIssues > 0 ? 'ph-stat-bar--danger-bg' : ''}">
+        <div class="ph-stat-bar__seg ph-stat-bar__seg--done" style="width:${issueClosedPct}%"></div>
       </div>`;
 
     return `
       <div class="ph-stats-strip">
         <div class="ph-stat-box ph-stat-box--accent">
-          <div class="ph-stat-box__value">${workflows.length}</div>
+          <div class="ph-stat-box__value">${wfTotal}</div>
           <div class="ph-stat-box__label">Workflows</div>
           ${wfPills}
+          ${wfBar}
         </div>
         <div class="ph-stat-box ${openIssues > 0 ? 'ph-stat-box--danger' : ''}">
           <div class="ph-stat-box__value">${openIssues}</div>
           <div class="ph-stat-box__label">Open Issues</div>
           <div class="ph-stat-box__total">of ${totalIssues} total</div>
+          ${issueBar}
         </div>
       </div>`;
   }
@@ -148,7 +168,7 @@ export class ProjectHomePage {
     const mockups     = this._mockups  || [];
     const documents   = this._documents || [];
     const failed      = this._testRunHistory[0]?.failed ?? 0;
-    const issueTotal  = this._issueCount?.total ?? 0;
+    const issueOpen   = this._issueCount?.open  ?? 0;
 
     return `
       <div class="project-home">
@@ -267,7 +287,7 @@ export class ProjectHomePage {
                 </svg>
               </span>
               <span class="ph-nav-item__label">Issues</span>
-              <span class="ph-nav-item__count ${issueTotal > 0 ? 'ph-nav-item__count--danger' : ''}">${issueTotal}</span>
+              ${issueOpen > 0 ? `<span class="ph-nav-item__count ph-nav-item__count--danger">${issueOpen}</span>` : ''}
             </button>
 
             <button class="ph-nav-item" id="navTestsIssuesQueue">
@@ -396,8 +416,8 @@ export class ProjectHomePage {
         <div class="ph-stat-box ${boxCls}">
           <div class="ph-stat-box__value">${total > 0 ? pct + '%' : '—'}</div>
           <div class="ph-stat-box__label">${escHtml(r.name)}</div>
-          ${barHtml}
           <div class="ph-stat-box__status-pills">${pillsHtml}</div>
+          ${barHtml}
         </div>`;
     }).join('');
 
