@@ -698,53 +698,45 @@
 .aic-qs--done      { color: var(--text-secondary); }
 .aic-qs--error     { color: #f87171; border-color: rgba(248,113,113,0.3); }
 
-/* Summary tags row */
-.aic-ctx-summary {
+/* Query log — shows SQL statements executed per turn */
+.aic-query-log {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex-direction: column;
+  gap: 6px;
   margin-bottom: 8px;
-  min-height: 0;
 }
 
-.aic-ctx-tag {
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
+.aic-query-entry {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.aic-ctx-tag--issues {
-  background: color-mix(in srgb, #f87171 12%, transparent);
-  color: #f87171;
-  border: 1px solid color-mix(in srgb, #f87171 25%, transparent);
+.aic-query-entry__sql {
+  background: var(--bg-primary);
+  padding: 6px 10px;
 }
-[data-theme="light"] .aic-ctx-tag--issues { color: #dc2626; background: #fee2e2; border-color: #fca5a5; }
 
-.aic-ctx-tag--workflows {
-  background: color-mix(in srgb, #60a5fa 12%, transparent);
-  color: #60a5fa;
-  border: 1px solid color-mix(in srgb, #60a5fa 25%, transparent);
+.aic-query-entry__sql pre {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
-[data-theme="light"] .aic-ctx-tag--workflows { color: #2563eb; background: #dbeafe; border-color: #93c5fd; }
 
-.aic-ctx-tag--layers {
-  background: color-mix(in srgb, #a78bfa 12%, transparent);
-  color: #a78bfa;
-  border: 1px solid color-mix(in srgb, #a78bfa 25%, transparent);
-}
-[data-theme="light"] .aic-ctx-tag--layers { color: #7c3aed; background: #ede9fe; border-color: #c4b5fd; }
-
-.aic-ctx-tag--docs {
-  background: color-mix(in srgb, #34d399 12%, transparent);
-  color: #34d399;
-  border: 1px solid color-mix(in srgb, #34d399 25%, transparent);
-}
-[data-theme="light"] .aic-ctx-tag--docs { color: #059669; background: #d1fae5; border-color: #6ee7b7; }
-
-.aic-ctx-empty {
-  font-size: 10.5px;
+.aic-query-entry__meta {
+  font-size: 10px;
+  padding: 3px 10px;
+  background: var(--bg-secondary);
   color: var(--text-tertiary);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.aic-query-entry__meta--error {
+  color: #f87171;
 }
 
 /* Collapsible formatted context preview */

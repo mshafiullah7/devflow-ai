@@ -32,6 +32,7 @@ export class AiConsolePage {
     this._streamingText = '';
     this._messages      = [];
     this._project       = null;
+    this._loopAborted   = false;
   }
 
   get _selectedModel() { return this._picker?.selectedModel ?? null; }
@@ -95,102 +96,120 @@ export class AiConsolePage {
   }
 
   // ----------------------------------------------------------------
-  // Intent routing — maps question keywords to data categories
+  // Minimal schema prompt — key columns + enums only, no internals
   // ----------------------------------------------------------------
-  _routeQuestion(question) {
-    const q = question.toLowerCase();
-    const tables = new Set();
-    if (/\b(issue|bug|error|problem|fix|broken|fail|crash|defect|ticket|resolve|severity|critical|blocker|regression)\b/.test(q))
-      tables.add('issues');
-    if (/\b(workflow|feature|flow|story|requirement|use.?case|scenario|ui|ux|screen|frontend)\b/.test(q))
-      tables.add('workflows');
-    if (/\b(layer|architect|backend|service|api|module|tech|stack|infrastructure|setup|folder|repo|codebase)\b/.test(q))
-      tables.add('layers');
-    if (/\b(document|doc|spec|readme|guide|note|overview|summary|plan|roadmap)\b/.test(q))
-      tables.add('documents');
-    return tables.size > 0 ? [...tables] : ['issues', 'workflows', 'layers', 'documents'];
-  }
-
-  // ----------------------------------------------------------------
-  // Fetch data — all queries stay on-device, model never sees schema
-  // ----------------------------------------------------------------
-  async _fetchData(tables) {
+  _buildSchemaPrompt() {
     const pid  = this.projectId;
-    const data = {};
-    await Promise.all([
-      tables.includes('issues')    && window.db.issues.list({ project_id: pid }).then(r         => { data.issues    = r || []; }),
-      tables.includes('workflows') && window.db.workflows.list(pid).then(r                      => { data.workflows = (r || []).filter(w => w.is_active !== 0); }),
-      tables.includes('layers')    && window.db.projectLayers.list(pid).then(r                  => { data.layers    = r || []; }),
-      tables.includes('documents') && window.db.documents.list(pid).then(r                      => { data.documents = r || []; }),
-    ].filter(Boolean));
-    return data;
+    const name = this._project?.name || 'this project';
+    return `You are a data assistant for the project "${name}".
+
+Available tables (always filter with project_id = ${pid}):
+
+  issues            (title, severity, status, description, steps_to_reproduce, expected_behavior, actual_behavior)
+                     severity : critical | high | medium | low
+                     status   : open | in_progress | resolved | closed
+
+  workflows         (feature, description, status)
+                     status   : open | in_progress | completed
+
+  project_layers    (name, description, folder_path)
+
+  project_documents (title, content)
+
+When you need data reply with ONLY a SQL block — no other text:
+\`\`\`sql
+SELECT ...
+\`\`\`
+You may query up to 3 times. After receiving data give your final answer in plain text.`;
   }
 
   // ----------------------------------------------------------------
-  // Format fetched data as clean readable text — this is what the
-  // model receives. No table names, no column names, no IDs.
+  // Extract first ```sql … ``` block from a model response
   // ----------------------------------------------------------------
-  _formatContext(data) {
-    const { issues = [], workflows = [], layers = [], documents = [] } = data;
-    const projectName = this._project?.name || '';
-    const sep = '══════════════════════════════════════';
-    const parts = [];
-
-    if (issues.length) {
-      const lines = issues.map(i => {
-        let s = `• [${(i.severity || 'medium').toUpperCase()}] ${i.title}`;
-        s += `\n  Status: ${i.status || 'open'}`;
-        if (i.description)        s += `\n  Description: ${i.description}`;
-        if (i.steps_to_reproduce) s += `\n  Steps: ${i.steps_to_reproduce}`;
-        if (i.expected_behavior)  s += `\n  Expected: ${i.expected_behavior}`;
-        if (i.actual_behavior)    s += `\n  Actual: ${i.actual_behavior}`;
-        return s;
-      });
-      parts.push(`ISSUES (${issues.length}):\n\n${lines.join('\n\n')}`);
-    }
-
-    if (workflows.length) {
-      const lines = workflows.map(w => {
-        let s = `• ${w.feature}`;
-        s += `\n  Status: ${w.status || 'open'} | Type: ${w.workflow_type || 'feature'}`;
-        if (w.description) s += `\n  Description: ${w.description}`;
-        return s;
-      });
-      parts.push(`WORKFLOWS (${workflows.length}):\n\n${lines.join('\n\n')}`);
-    }
-
-    if (layers.length) {
-      const lines = layers.map(l => {
-        let s = `• ${l.name}`;
-        if (l.description)  s += `\n  Description: ${l.description}`;
-        if (l.folder_path)  s += `\n  Path: ${l.folder_path}`;
-        return s;
-      });
-      parts.push(`PROJECT LAYERS (${layers.length}):\n\n${lines.join('\n\n')}`);
-    }
-
-    if (documents.length) {
-      const lines = documents.map(d => {
-        let s = `• ${d.title}`;
-        if (d.content) s += `\n${d.content.split('\n').slice(0, 20).map(l => `  ${l}`).join('\n')}`;
-        return s;
-      });
-      parts.push(`DOCUMENTS (${documents.length}):\n\n${lines.join('\n\n---\n\n')}`);
-    }
-
-    if (!parts.length) return '';
-
-    return `PROJECT: ${projectName}\n\n` +
-      `You are an AI assistant. Answer using only the data below. Do not invent details.\n\n` +
-      `${sep}\n\n` +
-      parts.join(`\n\n${sep}\n\n`);
+  _extractSql(text) {
+    const m = text.match(/```sql\s*([\s\S]+?)```/i);
+    return m ? m[1].trim() : null;
   }
 
   // ----------------------------------------------------------------
-  // Smart Context panel — show status + formatted context preview
+  // Silent model call — collects full response without streaming
   // ----------------------------------------------------------------
-  _setCtxStatus(state, text) {
-    const el = this.container.querySelector('#aicCtxStatus');
+  _callSilent(messages) {
+    return new Promise((resolve, reject) => {
+      let collected = '';
+      window.app.chat.offAll();
+      window.app.chat.onToken(p => { collected += stripAnsi(p.text || ''); });
+      window.app.chat.onDone(p => {
+        const raw = stripAnsi(p.raw || collected).trim();
+        if (p.error && !raw) reject(new Error(p.error));
+        else resolve(raw);
+      });
+      window.app.chat.generate({ messages, model: this._selectedModel });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // SQL loop — up to 3 silent rounds, then stream final answer
+  // ----------------------------------------------------------------
+  async _runSqlLoop(messages) {
+    const MAX = 3;
+    this._resetQueryLog();
+
+    for (let round = 0; round < MAX; round++) {
+      if (this._loopAborted) return false;
+
+      this._setQueryStatus('searching', `Round ${round + 1} — waiting for model…`);
+
+      let response;
+      try { response = await this._callSilent(messages); }
+      catch (err) { this._setQueryStatus('error', `Model error: ${err.message}`); return false; }
+
+      if (this._loopAborted) return false;
+
+      const sql = this._extractSql(response);
+
+      if (!sql) {
+        // Model answered directly — render as final answer
+        this._setQueryStatus('done', `Done — ${round === 0 ? 'answered without querying' : `${round} quer${round === 1 ? 'y' : 'ies'} run`}`);
+        this._finalizeStream(response || '[No response]');
+        this._setGenerating(false);
+        if (response) this._messages.push({ role: 'assistant', content: response });
+        this._showInspectorPanel('#aicResponseWrap', '#aicResponseText', response);
+        return true;
+      }
+
+      // Execute query on-device
+      let rows = [], queryError;
+      try { rows = await window.db.aiQuery(sql); }
+      catch (err) { queryError = err.message; rows = []; }
+
+      this._appendQueryEntry(sql, rows, queryError);
+
+      const resultMsg = queryError
+        ? `Query error: ${queryError}`
+        : `Query result (${rows.length} row${rows.length !== 1 ? 's' : ''}):\n${JSON.stringify(rows, null, 2)}`;
+
+      messages.push({ role: 'assistant', content: response });
+      messages.push({ role: 'user',      content: resultMsg });
+    }
+
+    if (this._loopAborted) return false;
+
+    this._setQueryStatus('done', `${MAX} queries run — generating answer…`);
+    return false;
+  }
+
+  // ----------------------------------------------------------------
+  // Query log panel
+  // ----------------------------------------------------------------
+  _resetQueryLog() {
+    const log = this.container.querySelector('#aicQueryLog');
+    if (log) log.innerHTML = '';
+    this._setQueryStatus('idle', 'Querying project data…');
+  }
+
+  _setQueryStatus(state, text) {
+    const el = this.container.querySelector('#aicQueryStatus');
     if (!el) return;
     el.className = `aic-query-status aic-qs--${state}`;
     el.innerHTML = state === 'searching'
@@ -198,35 +217,17 @@ export class AiConsolePage {
       : escHtml(text);
   }
 
-  _renderCtxPanel(data, formattedText) {
-    // Summary tags
-    const summary = this.container.querySelector('#aicCtxSummary');
-    if (summary) {
-      const tags = [
-        data.issues?.length    && `<span class="aic-ctx-tag aic-ctx-tag--issues">Issues <b>${data.issues.length}</b></span>`,
-        data.workflows?.length && `<span class="aic-ctx-tag aic-ctx-tag--workflows">Workflows <b>${data.workflows.length}</b></span>`,
-        data.layers?.length    && `<span class="aic-ctx-tag aic-ctx-tag--layers">Layers <b>${data.layers.length}</b></span>`,
-        data.documents?.length && `<span class="aic-ctx-tag aic-ctx-tag--docs">Documents <b>${data.documents.length}</b></span>`,
-      ].filter(Boolean);
-      summary.innerHTML = tags.length ? tags.join('') : '<span class="aic-ctx-empty">No matching data found</span>';
-    }
-
-    // Formatted context preview
-    const wrap = this.container.querySelector('#aicCtxPreviewWrap');
-    const pre  = this.container.querySelector('#aicCtxPreviewText');
-    if (wrap && pre) {
-      if (formattedText) {
-        pre.textContent       = formattedText;
-        wrap.style.display    = 'block';
-        // Collapse on each new message
-        pre.style.display     = 'none';
-        wrap.dataset.expanded = 'false';
-        const chevron = wrap.querySelector('.aic-ctx-chevron');
-        if (chevron) chevron.style.transform = '';
-      } else {
-        wrap.style.display = 'none';
-      }
-    }
+  _appendQueryEntry(sql, rows, error) {
+    const log = this.container.querySelector('#aicQueryLog');
+    if (!log) return;
+    const entry = document.createElement('div');
+    entry.className = 'aic-query-entry';
+    entry.innerHTML = `
+      <div class="aic-query-entry__sql"><pre>${escapeHtml(sql)}</pre></div>
+      <div class="aic-query-entry__meta ${error ? 'aic-query-entry__meta--error' : ''}">
+        ${error ? `Error: ${escapeHtml(error)}` : `${rows.length} row${rows.length !== 1 ? 's' : ''} returned`}
+      </div>`;
+    log.appendChild(entry);
   }
 
   // ----------------------------------------------------------------
@@ -262,24 +263,13 @@ export class AiConsolePage {
             <div class="aic-panel-header">
               <span class="aic-panel-header__title">Smart Context</span>
             </div>
-            <p class="aic-context__desc">Project data is fetched on-device and sent to the model as readable text. No schema is exposed.</p>
+            <p class="aic-context__desc">Model writes SELECT queries; data is fetched on-device and returned to the model. Minimal schema only — no internal columns exposed.</p>
 
-            <div id="aicCtxStatus" class="aic-query-status aic-qs--idle">
-              Send a message — I'll fetch your project data automatically.
+            <div id="aicQueryStatus" class="aic-query-status aic-qs--idle">
+              Send a message — queries will appear here.
             </div>
 
-            <div id="aicCtxSummary" class="aic-ctx-summary"></div>
-
-            <!-- Formatted context preview -->
-            <div id="aicCtxPreviewWrap" class="aic-ctx-preview-wrap" style="display:none">
-              <button class="aic-ctx-preview-toggle" id="aicCtxPreviewToggle">
-                <svg class="aic-ctx-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-                <span>Context sent to model</span>
-              </button>
-              <pre id="aicCtxPreviewText" class="aic-ctx-preview-pre" style="display:none"></pre>
-            </div>
+            <div id="aicQueryLog" class="aic-query-log"></div>
 
             <!-- Request sent to API -->
             <div id="aicRequestWrap" class="aic-ctx-preview-wrap" style="display:none">
@@ -505,9 +495,8 @@ export class AiConsolePage {
       });
     };
 
-    bindToggle('#aicCtxPreviewToggle', '#aicCtxPreviewWrap', '#aicCtxPreviewText');
-    bindToggle('#aicRequestToggle',    '#aicRequestWrap',    '#aicRequestText');
-    bindToggle('#aicResponseToggle',   '#aicResponseWrap',   '#aicResponseText');
+    bindToggle('#aicRequestToggle',  '#aicRequestWrap',  '#aicRequestText');
+    bindToggle('#aicResponseToggle', '#aicResponseWrap', '#aicResponseText');
 
     // Prompt disclosure toggle — event delegation on thread
     this.container.querySelector('#aicThread').addEventListener('click', (e) => {
@@ -558,7 +547,8 @@ export class AiConsolePage {
   }
 
   // ----------------------------------------------------------------
-  // Send — fetch → format → display context → stream answer
+  // Send — SQL loop (schema prompt → model writes SQL → execute →
+  //         repeat up to 3×) then stream final answer
   // ----------------------------------------------------------------
   async _handleSend() {
     const ta       = this.container.querySelector('#aicInput');
@@ -570,56 +560,49 @@ export class AiConsolePage {
       return;
     }
 
+    this._loopAborted = false;
     this._setGenerating(true);
     if (ta) { ta.value = ''; ta.style.height = ''; }
 
     this._appendBubble({ role: 'user', text: userText });
     this._startStreaming();
+    this._clearInspectorPanels();
 
-    // 1. Detect intent — on-device, no model call
-    this._setCtxStatus('searching', 'Fetching project data…');
-    const tables = this._routeQuestion(userText);
+    // Build a per-turn message list: system schema + conversation history + new question
+    const schemaPrompt = this._buildSchemaPrompt();
+    const loopMessages = [
+      { role: 'user', content: schemaPrompt },
+      ...this._messages,
+      { role: 'user', content: userText },
+    ];
 
-    // 2. Fetch data — schema stays on-device
-    let data = {};
-    try {
-      data = await this._fetchData(tables);
-    } catch (err) {
-      console.error('[AI Chat] fetch error:', err);
-    }
+    // Show the initial request (schema + question) in the inspector
+    this._showInspectorPanel('#aicRequestWrap', '#aicRequestText',
+      `--- SCHEMA PROMPT ---\n${schemaPrompt}\n\n--- USER QUESTION ---\n${userText}`);
 
-    // 3. Format as readable text — what the model will receive
-    const formattedContext = this._formatContext(data);
+    // Track the user turn for conversation history
+    this._messages.push({ role: 'user', content: userText });
 
-    // 4. Display the formatted context in the Smart Context panel
-    const hasData = !!formattedContext;
-    this._setCtxStatus('done', hasData ? 'Context ready — sent to model' : 'No matching data — sending question only');
-    this._renderCtxPanel(data, formattedContext);
+    // Run SQL loop; returns true if it already rendered the answer
+    const handled = await this._runSqlLoop(loopMessages);
+    if (handled || this._loopAborted) return;
 
-    // 5. Build prompt: formatted context + user question (no schema, no SQL)
-    const userContent = hasData
-      ? `${formattedContext}\n\n---\n\nQuestion: ${userText}`
-      : userText;
-
-    this._messages.push({ role: 'user', content: userContent });
-
-    // 6. Show the full request payload for inspection
-    this._showInspectorPanel('#aicRequestWrap', '#aicRequestText', userContent);
-
-    // 6. Stream the answer
+    // SQL loop exhausted rounds without answering directly — stream final answer
     window.app.chat.offAll();
     window.app.chat.onToken(p => this._onToken(p));
     window.app.chat.onDone(p  => this._onDone(p));
-    window.app.chat.generate({ messages: this._messages, model: this._selectedModel });
+    window.app.chat.generate({ messages: loopMessages, model: this._selectedModel });
   }
 
   // ----------------------------------------------------------------
   // Stop
   // ----------------------------------------------------------------
   _handleStop() {
+    this._loopAborted = true;
     window.app.chat.cancel();
     this._finalizeStream(this._streamingText.trim() || '[stopped]');
     this._setGenerating(false);
+    this._setQueryStatus('idle', 'Stopped.');
   }
 
   // ----------------------------------------------------------------
@@ -628,11 +611,9 @@ export class AiConsolePage {
   _handleClear() {
     if (this._isGenerating) return;
     this._messages = [];
-    this._setCtxStatus('idle', 'Send a message — I\'ll fetch your project data automatically.');
-    const summary = this.container.querySelector('#aicCtxSummary');
-    if (summary) summary.innerHTML = '';
-    const wrap = this.container.querySelector('#aicCtxPreviewWrap');
-    if (wrap) wrap.style.display = 'none';
+    this._setQueryStatus('idle', 'Send a message — queries will appear here.');
+    const log = this.container.querySelector('#aicQueryLog');
+    if (log) log.innerHTML = '';
     this._clearInspectorPanels();
     this._renderWelcome();
   }
