@@ -474,7 +474,7 @@ export class IssuesPage {
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                     <path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                   </svg>
-                  Add to Queue
+                  Add to Tasks Queue
                 </button>
               </div>
             </div>

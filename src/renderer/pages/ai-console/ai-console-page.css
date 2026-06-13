@@ -1,6 +1,34 @@
 /* ================================================================
    AI Console page
 ================================================================ */
+
+/* ----------------------------------------------------------------
+   Panel headers — matches .gc-panel-header from Git Changes
+---------------------------------------------------------------- */
+.aic-panel-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 34px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-header);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.aic-panel-header__title {
+  white-space: nowrap;
+}
+
+.aic-context .aic-panel-header {
+  width: 450px;
+}
 .aic-page {
   display: flex;
   flex-direction: column;
@@ -87,35 +115,6 @@
   min-width: 0;
 }
 
-/* ----------------------------------------------------------------
-   Draggable divider
----------------------------------------------------------------- */
-.aic-divider {
-  width: 5px;
-  flex-shrink: 0;
-  background: var(--border);
-  cursor: col-resize;
-  position: relative;
-  transition: background 0.15s;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.aic-divider:hover,
-.aic-divider--dragging {
-  background: var(--accent);
-}
-
-.aic-divider::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 1px;
-  height: 32px;
-  border-left: 2px dotted rgba(255,255,255,0.3);
-}
 
 /* Thread */
 .aic-thread {
@@ -424,15 +423,25 @@
    Context panel (right sidebar)
 ---------------------------------------------------------------- */
 .aic-context {
-  flex: 0 0 350px;
-  min-width: 200px;
+  flex: 0 0 450px;
+  width: 450px;
   display: flex;
   flex-direction: column;
-  padding: 16px 14px 20px;
+  padding: 0 0 20px;
   overflow-y: auto;
   gap: 0;
+  border-right: 1px solid var(--border);
   /* Reserve space for scrollbar so content never shifts */
   scrollbar-gutter: stable;
+}
+
+.aic-context > :not(.aic-panel-header) {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.aic-context > .aic-context__desc {
+  margin-top: 14px;
 }
 
 .aic-context__heading {

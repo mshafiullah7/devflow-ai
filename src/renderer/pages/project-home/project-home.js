@@ -311,7 +311,7 @@ export class ProjectHomePage {
                   <line x1="3" y1="18" x2="3.01" y2="18"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Tests &amp; Issues Queue</span>
+              <span class="ph-nav-item__label">Tasks Queue</span>
               ${this._queuePendingCount > 0 ? `<span class="ph-nav-item__count ph-nav-item__count--danger">${this._queuePendingCount}</span>` : ''}
             </button>
 

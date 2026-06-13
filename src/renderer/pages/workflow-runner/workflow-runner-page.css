@@ -344,12 +344,12 @@
 
 /* Output panel */
 .wfr-output-panel {
-  width: 690px;
-  flex-shrink: 0;
-  flex-grow: 0;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  position: relative; /* stacking context for absolute git overlay */
 }
 
 .wfr-output-header {
@@ -450,18 +450,62 @@
 .wfr-token-cost     { color: var(--text-muted); margin-left: 3px; }
 .wfr-token-thinking { font-size: 11px; color: var(--text-muted); font-style: italic; }
 
+/* ── Git toggle button (header) ─────────────────────────────────────── */
+.wfr-git-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 5px);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+.wfr-git-toggle-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.wfr-git-toggle-btn--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.wfr-git-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.wfr-git-badge[hidden] { display: none; }
+
 /* ------------------------------------------------------------------ */
-/* Git Diff Panel (right sidebar)                                       */
+/* Git Diff Panel (absolute overlay, 50vw from right)                   */
 /* ------------------------------------------------------------------ */
 .wfr-git-panel {
-  flex: 1;
-  min-width: 350px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50vw;
+  z-index: 10;
   border-left: 1px solid var(--border);
   background: var(--surface);
   display: flex;
   flex-direction: column;
-  min-height: 0;
   overflow: hidden;
+  box-shadow: -4px 0 16px rgba(0,0,0,0.25);
 }
 .wfr-git-panel[hidden] { display: none; }
 
@@ -469,9 +513,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 12px 7px;
-  min-height: 26px;
-  box-sizing: border-box;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
 }
@@ -483,13 +526,19 @@
   letter-spacing: 0.05em;
 }
 .wfr-git-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
   background: var(--accent);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 10px;
 }
+.wfr-git-panel__badge[hidden] { display: none; }
 .wfr-git-panel__actions {
   margin-left: auto;
   display: flex;
@@ -524,71 +573,54 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Accordion (copied from git-changes-page.css)                        */
+/* Accordion                                                            */
 /* ------------------------------------------------------------------ */
 .git-accordion__item { border-bottom: 1px solid var(--border); }
-.git-accordion__item:first-child { border-top: none; }
 
 .git-accordion__header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
-  padding: 9px 14px;
-  background: linear-gradient(rgba(99,102,241,.18),rgba(99,102,241,.18)) var(--bg);
+  padding: 8px 12px;
   border: none;
-  border-top: 2px solid rgba(99,102,241,.55);
-  border-bottom: 1px solid rgba(99,102,241,.25);
-  cursor: pointer;
+  background: transparent;
   text-align: left;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-family: 'Consolas','Cascadia Code','Fira Code',monospace;
-  transition: background .12s, color .12s;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  box-shadow: 0 2px 6px rgba(0,0,0,.25);
-}
-.git-accordion__header:hover {
-  background: linear-gradient(rgba(99,102,241,.30),rgba(99,102,241,.30)) var(--bg);
+  cursor: pointer;
   color: var(--text-primary);
+  font-size: 12px;
+  transition: background 0.1s;
 }
+.git-accordion__header:hover { background: var(--surface-hover); }
 
 .git-accordion__filename {
   flex: 1;
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-  color: #c7d2fe;
-  letter-spacing: .01em;
+  min-width: 0;
+  color: var(--text-secondary);
 }
 
 .git-accordion__chevron {
   flex-shrink: 0;
   color: var(--text-muted);
-  transition: transform .18s ease;
+  transition: transform 0.15s;
 }
-.git-accordion__header[aria-expanded="false"] .git-accordion__chevron {
+.git-accordion__item--collapsed .git-accordion__chevron {
   transform: rotate(-90deg);
 }
 
-.git-accordion__body { overflow: hidden; }
+.git-accordion__body {
+  overflow: hidden;
+  overflow-x: auto;
+  max-height: 400px;
+  background: var(--bg);
+}
 .git-accordion__item--collapsed .git-accordion__body { display: none; }
 .git-accordion__body .git-diff-table { width: 100%; }
-
-[data-theme="light"] .git-accordion__header {
-  background: linear-gradient(rgba(99,102,241,.10),rgba(99,102,241,.10)) var(--bg);
-  border-top-color: rgba(99,102,241,.45);
-  border-bottom-color: rgba(99,102,241,.18);
-  box-shadow: 0 2px 4px rgba(0,0,0,.08);
-}
-[data-theme="light"] .git-accordion__header:hover {
-  background: linear-gradient(rgba(99,102,241,.20),rgba(99,102,241,.20)) var(--bg);
-}
-[data-theme="light"] .git-accordion__filename { color: #3730a3; }
 
 
 /* ------------------------------------------------------------------ */

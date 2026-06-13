@@ -18,8 +18,12 @@ export class GitChangesPage {
     this._activeGitRoot    = null;
     this._activeLayerPrefix = null;
     this._consoleRunning   = false;
+    this._consoleOpen      = false;
+    this._layersOpen       = false;
     this._qcmdModal        = null;
     this._pendingCommits   = 0;
+    this._selectedFileIdx  = -1;
+    this._fileStats        = {};
   }
 
   // ----------------------------------------------------------------
@@ -43,6 +47,8 @@ export class GitChangesPage {
     this._qcmdModal.mount();
 
     this._bindEvents();
+    this._updateLayersBadge();
+    this._updateFilesLayerPath();
 
     await this._loadLayerCounts();
 
@@ -78,21 +84,21 @@ export class GitChangesPage {
             <h1 class="git-page__title">${name}</h1>
             <p class="git-page__subtitle">Git Changes</p>
           </div>
-          <div class="git-page__center">
-            <div class="git-page__status-label" id="gitStatusLabel">Loading…</div>
-          </div>
-          <button class="git-page__refresh" id="gitPageVSCode" title="Open layer in VS Code"
+          <div class="git-page__center"></div>
+          <button class="git-page__refresh git-page__refresh--labeled" id="gitPageVSCode" title="Open layer in VS Code"
             ${this._project?.project_path ? '' : 'disabled'}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M16 2H8a2 2 0 00-2 2v16a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2z"/>
               <path d="M9 9l3 3-3 3"/>
             </svg>
+            <span>VS Code</span>
           </button>
-          <button class="git-page__refresh" id="gitPageTerminal" title="Open layer in Terminal"
-            ${this._project?.project_path ? '' : 'disabled'}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="4 17 10 11 4 5"/>
-              <line x1="12" y1="19" x2="20" y2="19"/>
+          <button class="git-page__refresh" id="gitPageQcmd" title="Quick Commands">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
           <button class="git-page__refresh" id="gitPageRefresh" title="Refresh (Ctrl+R)">
@@ -103,94 +109,124 @@ export class GitChangesPage {
                 stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <button class="git-page__refresh" id="gitPageQcmd" title="Quick Commands">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <button class="git-page__layers-toggle" id="gitPageLayersToggle" title="Toggle Layers">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="2" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+              <rect x="1" y="9" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
             </svg>
+            Layers
+            <span class="git-page__layers-toggle-badge" id="gitLayersToggleBadge" hidden></span>
+          </button>
+          <button class="git-page__console-toggle" id="gitPageConsoleToggle" title="Toggle Console">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 17 10 11 4 5"/>
+              <line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            Console
+            <span class="git-page__console-toggle-badge" id="gitConsoleToggleBadge" hidden></span>
           </button>
         </header>
 
         <div class="git-page__body">
-          <aside class="gc-layer-sidebar" id="gcLayerSidebar"></aside>
-          <div class="git-page__accordion-wrap" id="gitAccordionWrap">
-            <div class="git-diff-loading">Loading changes…</div>
+          <div class="gc-layer-panel" id="gcLayerPanel">
+            <div class="gc-panel-header">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+                <rect x="1" y="9" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+              </svg>
+              Layers
+            </div>
+            <aside class="gc-layer-sidebar" id="gcLayerSidebar"></aside>
           </div>
-
-          <div class="git-page__console-divider" id="gitConsoleDivider"></div>
-
-          <div class="git-page__console" id="gitConsole">
-            <div class="git-page__console-header">
-              <span class="git-page__console-title">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/>
-                  <path d="M4 6l3 3-3 3M8 12h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Console
-              </span>
-              <div class="git-page__console-actions">
-                <button class="git-page__console-btn" id="gitConsoleKill" title="Stop" disabled>
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                    <rect x="2" y="2" width="8" height="8" rx="1" fill="currentColor"/>
-                  </svg>
-                </button>
-                <button class="git-page__console-btn git-page__console-btn--text" id="gitConsoleClear" title="Clear (Ctrl+L)">Clear</button>
+          <div class="git-page__files-panel">
+            <div class="gc-panel-header">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                <path d="M9 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+              Files
+              <span class="gc-panel-header__layer-path" id="gitFilesLayerPath"></span>
+            </div>
+            <div class="git-page__split" id="gitSplit">
+              <div class="git-page__file-list" id="gitFileList">
+                <div class="git-diff-loading">Loading changes…</div>
+              </div>
+              <div class="git-page__diff-pane" id="gitDiffPane">
+                <div class="git-diff-pane__hint">Select a file to view its diff.</div>
               </div>
             </div>
-            <div class="git-page__console-output" id="gitConsoleOutput">
-              <span class="git-page__console-hint">Run git commands or any shell command here.</span>
+          </div>
+        </div>
+
+        <div class="git-page__console" id="gitConsole">
+          <div class="git-page__console-header">
+            <span class="git-page__console-title">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M4 6l3 3-3 3M8 12h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Console
+            </span>
+            <div class="git-page__console-actions">
+              <button class="git-page__console-btn" id="gitConsoleKill" title="Stop" disabled>
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  <rect x="2" y="2" width="8" height="8" rx="1" fill="currentColor"/>
+                </svg>
+              </button>
+              <button class="git-page__console-btn git-page__console-btn--text" id="gitConsoleClear" title="Clear (Ctrl+L)">Clear</button>
             </div>
-            <div class="git-page__console-compose">
-              <span class="git-page__console-prompt">$</span>
-              <input class="git-page__console-input" id="gitConsoleInput"
-                placeholder="git status, git log --oneline, …"
-                autocomplete="off" spellcheck="false"/>
-              <button class="git-page__console-run" id="gitConsoleRun">Run</button>
-              <div class="git-page__qcmd-picker" id="gitQcmdPicker">
-                <button class="git-page__qcmd-picker-btn" id="gitQcmdPickerBtn" title="Quick Commands">
-                  <svg width="11" height="11" viewBox="0 0 20 20" fill="none">
-                    <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-                    <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-                    <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-                    <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  </svg>
-                </button>
-                <div class="git-page__qcmd-menu" id="gitQcmdMenu" hidden></div>
-              </div>
+          </div>
+          <div class="git-page__console-output" id="gitConsoleOutput">
+            <span class="git-page__console-hint">Run git commands or any shell command here.</span>
+          </div>
+          <div class="git-page__console-compose">
+            <span class="git-page__console-prompt">$</span>
+            <input class="git-page__console-input" id="gitConsoleInput"
+              placeholder="git status, git log --oneline, …"
+              autocomplete="off" spellcheck="false"/>
+            <button class="git-page__console-run" id="gitConsoleRun">Run</button>
+            <div class="git-page__qcmd-picker" id="gitQcmdPicker">
+              <button class="git-page__qcmd-picker-btn" id="gitQcmdPickerBtn" title="Quick Commands">
+                <svg width="11" height="11" viewBox="0 0 20 20" fill="none">
+                  <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+                  <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+                  <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <div class="git-page__qcmd-menu" id="gitQcmdMenu" hidden></div>
             </div>
-            <div class="git-page__quick-actions">
-              <button class="git-page__qa-btn git-page__qa-btn--commit" id="gitQaCommit" title="git add -A && git commit -m &quot;…&quot;">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
-                  <path d="M8 1v4M8 11v4M1 8h4M11 8h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-                Commit
-                <span class="git-page__commit-badge" id="gitCommitBadge" hidden></span>
-              </button>
-              <button class="git-page__qa-btn git-page__qa-btn--push" id="gitQaPush" title="git push">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 11V3M4 6l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-                Push
-                <span class="git-page__push-badge" id="gitPushBadge" hidden></span>
-              </button>
-              <button class="git-page__qa-btn" id="gitQaStatus" title="git status">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>
-                  <path d="M8 7v4M8 5v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-                Status
-              </button>
-              <button class="git-page__qa-btn" id="gitQaLog" title="git log --oneline -10">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-                Log
-              </button>
-            </div>
+          </div>
+          <div class="git-page__quick-actions">
+            <button class="git-page__qa-btn git-page__qa-btn--commit" id="gitQaCommit" title="git add -A && git commit -m &quot;…&quot;">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M8 1v4M8 11v4M1 8h4M11 8h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              Commit
+              <span class="git-page__commit-badge" id="gitCommitBadge" hidden></span>
+            </button>
+            <button class="git-page__qa-btn git-page__qa-btn--push" id="gitQaPush" title="git push">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M8 11V3M4 6l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              Push
+              <span class="git-page__push-badge" id="gitPushBadge" hidden></span>
+            </button>
+            <button class="git-page__qa-btn" id="gitQaStatus" title="git status">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M8 7v4M8 5v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              Status
+            </button>
+            <button class="git-page__qa-btn" id="gitQaLog" title="git log --oneline -10">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              Log
+            </button>
           </div>
         </div>
       </div>
@@ -213,16 +249,11 @@ export class GitChangesPage {
         window.db.terminal.exec({ command: 'code .', cwd: path });
       });
 
-    this.container.querySelector('#gitPageTerminal')
-      .addEventListener('click', () => {
-        const layer = this._layers.find(l => l.id === this._activeLayerId);
-        const path  = layer?.folder_path || this._project?.project_path;
-        if (!path) return;
-        window.db.terminal.exec({
-          command: `Start-Process powershell.exe -ArgumentList '-NoExit','-NoLogo' -WorkingDirectory '.'`,
-          cwd: path,
-        });
-      });
+    this.container.querySelector('#gitPageLayersToggle')
+      .addEventListener('click', () => this._toggleLayers());
+
+    this.container.querySelector('#gitPageConsoleToggle')
+      .addEventListener('click', () => this._toggleConsole());
 
     this.container.querySelector('#gitPageRefresh')
       .addEventListener('click', async () => {
@@ -241,7 +272,6 @@ export class GitChangesPage {
       });
 
     this._bindConsole();
-    this._bindConsoleDivider();
 
     document.addEventListener('keydown', (e) => {
       if (e.target.matches('input, textarea, select, [contenteditable]')) return;
@@ -462,35 +492,44 @@ export class GitChangesPage {
   }
 
   // ----------------------------------------------------------------
-  // Resizable divider between accordion and console
+  // Console toggle
   // ----------------------------------------------------------------
-  _bindConsoleDivider() {
-    const divider     = this.container.querySelector('#gitConsoleDivider');
-    const consoleEl   = this.container.querySelector('#gitConsole');
-    const accordionWrap = this.container.querySelector('#gitAccordionWrap');
-    if (!divider || !consoleEl || !accordionWrap) return;
+  _toggleConsole() {
+    this._consoleOpen = !this._consoleOpen;
+    const panel  = this.container.querySelector('#gitConsole');
+    const toggle = this.container.querySelector('#gitPageConsoleToggle');
+    panel?.classList.toggle('git-page__console--open', this._consoleOpen);
+    toggle?.classList.toggle('git-page__console-toggle--active', this._consoleOpen);
+    if (this._consoleOpen) {
+      this.container.querySelector('#gitConsoleInput')?.focus();
+    }
+  }
 
-    const onMouseMove = e => {
-      const bodyRect = this.container.querySelector('.git-page__body').getBoundingClientRect();
-      let w = bodyRect.right - e.clientX;
-      w = Math.max(220, Math.min(w, bodyRect.width - 300));
-      consoleEl.style.flex = `0 0 ${w}px`;
-    };
-    const onMouseUp = () => {
-      divider.classList.remove('git-page__console-divider--dragging');
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    divider.addEventListener('mousedown', e => {
-      e.preventDefault();
-      divider.classList.add('git-page__console-divider--dragging');
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-    });
+  // ----------------------------------------------------------------
+  // Layers panel toggle
+  // ----------------------------------------------------------------
+  _toggleLayers() {
+    this._layersOpen = !this._layersOpen;
+    const panel  = this.container.querySelector('#gcLayerPanel');
+    const toggle = this.container.querySelector('#gitPageLayersToggle');
+    panel?.classList.toggle('gc-layer-panel--open', this._layersOpen);
+    toggle?.classList.toggle('git-page__layers-toggle--active', this._layersOpen);
+  }
+
+  _updateLayersBadge() {
+    const badge = this.container.querySelector('#gitLayersToggleBadge');
+    if (!badge) return;
+    const count = this._layers.length;
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
+  }
+
+  _updateConsoleBadge() {
+    const badge = this.container.querySelector('#gitConsoleToggleBadge');
+    if (!badge) return;
+    const count = this._files.length;
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
   }
 
   // ----------------------------------------------------------------
@@ -558,8 +597,18 @@ export class GitChangesPage {
     const consoleOut = this.container.querySelector('#gitConsoleOutput');
     if (consoleOut) consoleOut.innerHTML = '';
 
+    this._updateFilesLayerPath();
     await this._loadStatus();
-    if (this._activeCwd) this._consoleRun('git status');
+  }
+
+  _updateFilesLayerPath() {
+    const el = this.container.querySelector('#gitFilesLayerPath');
+    if (!el) return;
+    const layer = this._layers.find(l => l.id === this._activeLayerId);
+    const path  = layer?.folder_path || this._project?.project_path || '';
+    el.textContent = path;
+    el.title       = path;
+    el.hidden      = !path;
   }
 
   async _getLayerPrefix(folderPath) {
@@ -641,29 +690,26 @@ export class GitChangesPage {
   // Git status
   // ----------------------------------------------------------------
   async _loadStatus() {
-    // Always run from the git root so file paths are correct for git diff
-    const gitRoot = this._activeGitRoot || this._activeCwd || this._project?.project_path || '';
-    const label   = this.container.querySelector('#gitStatusLabel');
-    const wrap    = this.container.querySelector('#gitAccordionWrap');
+    const gitRoot  = this._activeGitRoot || this._activeCwd || this._project?.project_path || '';
+    const fileList = this.container.querySelector('#gitFileList');
+    const diffPane = this.container.querySelector('#gitDiffPane');
+
+    const setFileListMsg = html => { if (fileList) fileList.innerHTML = html; };
+    const clearDiffPane  = ()   => { if (diffPane) diffPane.innerHTML = '<div class="git-diff-pane__hint">Select a file to view its diff.</div>'; };
 
     if (!gitRoot) {
-      if (label) label.textContent = 'No folder selected';
-      if (wrap) wrap.innerHTML = `
-        <div class="git-page__empty">
-          <p>No project folder selected.</p>
-          <p>Select a folder from the header to enable Git tracking.</p>
-        </div>`;
+      setFileListMsg('<div class="git-page__empty"><p>No project folder selected.</p></div>');
+      clearDiffPane();
       return;
     }
 
-    if (wrap) wrap.innerHTML = '<div class="git-diff-loading">Loading changes…</div>';
+    setFileListMsg('<div class="git-diff-loading">Loading changes…</div>');
 
     try {
       const result = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd: gitRoot });
 
       let files = this._parseGitStatus(result.stdout || '');
 
-      // Filter to the active layer's subdirectory using the git-relative prefix
       if (this._activeLayerPrefix) {
         const prefix = this._activeLayerPrefix;
         files = files.filter(f => {
@@ -672,112 +718,146 @@ export class GitChangesPage {
         });
       }
 
-      this._allFiles = files;
-      this._files    = files;
-
-      if (label) {
-        label.textContent = this._files.length === 0
-          ? ''
-          : `${this._files.length} changed file${this._files.length !== 1 ? 's' : ''}`;
-      }
+      this._allFiles        = files;
+      this._files           = files;
+      this._selectedFileIdx = -1;
 
       this._renderLayerSidebar();
       this._updateCommitBadge();
+      this._updateConsoleBadge();
 
       if (this._files.length === 0) {
-        if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
+        setFileListMsg('<div class="git-diff-empty">Working tree is clean.</div>');
+        clearDiffPane();
         this._loadPendingCommits();
         return;
       }
 
-      await this._renderAccordion();
+      await this._loadNumstat(gitRoot);
+      this._renderFileList();
+      this._selectFile(0);
       this._loadPendingCommits();
     } catch {
       if (label) label.textContent = 'Not a git repository';
-      if (wrap) wrap.innerHTML = `
-        <div class="git-page__empty">
-          <p>Not a git repository.</p>
-          <p>Initialise git in the selected folder to track changes.</p>
-        </div>`;
+      setFileListMsg('<div class="git-page__empty"><p>Not a git repository.</p></div>');
+      clearDiffPane();
     }
   }
 
   // ----------------------------------------------------------------
-  // Accordion rendering
+  // Numstat — additions/deletions per file
   // ----------------------------------------------------------------
-  async _renderAccordion() {
-    const wrap = this.container.querySelector('#gitAccordionWrap');
-    if (!wrap) return;
-
-    // Build skeleton first so user sees file list immediately
-    wrap.innerHTML = this._files.map((f, i) => `
-      <div class="git-accordion__item" data-idx="${i}">
-        <button class="git-accordion__header" data-idx="${i}" aria-expanded="true">
-          <span class="git-diff-file__status git-diff-file__status--${f.statusType}">${f.statusType}</span>
-          <span class="git-accordion__filename">${escHtml(f.file)}</span>
-          <svg class="git-accordion__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <div class="git-accordion__body" id="gitAccBody${i}">
-          <div class="git-diff-loading">Loading diff…</div>
-        </div>
-      </div>
-    `).join('');
-
-    // Bind toggle clicks
-    wrap.querySelectorAll('.git-accordion__header').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx  = btn.dataset.idx;
-        const body = wrap.querySelector(`#gitAccBody${idx}`);
-        const item = wrap.querySelector(`.git-accordion__item[data-idx="${idx}"]`);
-        const expanded = btn.getAttribute('aria-expanded') === 'true';
-        btn.setAttribute('aria-expanded', String(!expanded));
-        item.classList.toggle('git-accordion__item--collapsed', expanded);
-      });
-    });
-
-    // Load all diffs in parallel
-    await Promise.all(this._files.map((f, i) => this._loadDiffInto(f, i)));
+  async _loadNumstat(gitRoot) {
+    this._fileStats = {};
+    if (!gitRoot) return;
+    const parse = out => {
+      for (const line of (out || '').split('\n').filter(Boolean)) {
+        const m = line.match(/^(\d+|-)\t(\d+|-)\t(.+)$/);
+        if (!m) continue;
+        const file    = m[3].trim();
+        const added   = m[1] === '-' ? 0 : parseInt(m[1], 10);
+        const deleted = m[2] === '-' ? 0 : parseInt(m[2], 10);
+        if (!this._fileStats[file]) this._fileStats[file] = { added: 0, deleted: 0 };
+        this._fileStats[file].added   += added;
+        this._fileStats[file].deleted += deleted;
+      }
+    };
+    try {
+      const [r1, r2] = await Promise.all([
+        window.db.terminal.exec({ command: 'git diff HEAD --numstat 2>&1',   cwd: gitRoot }),
+        window.db.terminal.exec({ command: 'git diff --cached --numstat 2>&1', cwd: gitRoot }),
+      ]);
+      parse(r1.stdout);
+      parse(r2.stdout);
+    } catch { /* ignore */ }
   }
 
   // ----------------------------------------------------------------
-  // Diff loading into an accordion body
+  // File list (left pane)
   // ----------------------------------------------------------------
-  async _loadDiffInto(fileInfo, idx) {
-    const body = this.container.querySelector(`#gitAccBody${idx}`);
-    if (!body) return;
+  _renderFileList() {
+    const el = this.container.querySelector('#gitFileList');
+    if (!el) return;
 
-    const cwd = this._activeGitRoot || this._activeCwd || this._project?.project_path || '';
+    el.innerHTML = this._files.map((f, i) => {
+      const stats  = this._fileStats[f.file] || { added: 0, deleted: 0 };
+      const dir    = this._dirname(f.file);
+      const base   = this._basename(f.file);
+      const active = i === this._selectedFileIdx;
+      return `
+        <div class="git-file-item ${active ? 'git-file-item--active' : ''}" data-idx="${i}" title="${escHtml(f.file)}">
+          <div class="git-file-item__row">
+            <span class="git-diff-file__status git-diff-file__status--${f.statusType}">${f.statusType}</span>
+            <span class="git-file-item__name">${escHtml(base)}</span>
+          </div>
+          <div class="git-file-item__meta">
+            ${dir ? `<span class="git-file-item__dir">${escHtml(dir)}</span>` : ''}
+            <span class="git-file-item__stats">
+              ${stats.added   > 0 ? `<span class="git-file-item__added">+${stats.added}</span>`   : ''}
+              ${stats.deleted > 0 ? `<span class="git-file-item__deleted">-${stats.deleted}</span>` : ''}
+            </span>
+          </div>
+        </div>`;
+    }).join('');
+
+    el.querySelectorAll('.git-file-item').forEach(item => {
+      item.addEventListener('click', () => this._selectFile(parseInt(item.dataset.idx, 10)));
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // File selection — loads diff into the right pane
+  // ----------------------------------------------------------------
+  async _selectFile(idx) {
+    this._selectedFileIdx = idx;
+
+    this.container.querySelectorAll('.git-file-item').forEach((el, i) =>
+      el.classList.toggle('git-file-item--active', i === idx));
+
+    const pane    = this.container.querySelector('#gitDiffPane');
+    const fileInfo = this._files[idx];
+    if (!pane || !fileInfo) return;
+
+    const stats  = this._fileStats[fileInfo.file] || { added: 0, deleted: 0 };
+    const addedEl   = stats.added   > 0 ? `<span class="git-file-stat__added">+${stats.added}</span>`   : '';
+    const deletedEl = stats.deleted > 0 ? `<span class="git-file-stat__deleted">-${stats.deleted}</span>` : '';
+
+    pane.innerHTML = `
+      <div class="git-diff-pane__titlebar">
+        <span class="git-diff-file__status git-diff-file__status--${fileInfo.statusType}">${fileInfo.statusType}</span>
+        <span class="git-diff-pane__filepath">${escHtml(fileInfo.file)}</span>
+        <span class="git-diff-pane__filestats">${addedEl}${deletedEl}</span>
+      </div>
+      <div class="git-diff-pane__body" id="gitDiffPaneBody">
+        <div class="git-diff-loading">Loading diff…</div>
+      </div>`;
+
+    const body = pane.querySelector('#gitDiffPaneBody');
+    const cwd  = this._activeGitRoot || this._activeCwd || this._project?.project_path || '';
     try {
       let diffText = '';
       if (fileInfo.statusType === 'U') {
         const r = await window.db.terminal.exec({
-          command: `Get-Content -Raw -Encoding UTF8 "${fileInfo.file}" 2>&1`,
-          cwd,
+          command: `Get-Content -Raw -Encoding UTF8 "${fileInfo.file}" 2>&1`, cwd,
         });
-        const content    = (r.stdout || '').replace(/\r\n/g, '\n');
-        const addedLines = content.split('\n').map(l => `+${l}`).join('\n');
-        diffText = `@@ -0,0 +1 @@\n${addedLines}`;
+        const content = (r.stdout || '').replace(/\r\n/g, '\n');
+        diffText = `@@ -0,0 +1 @@\n${content.split('\n').map(l => `+${l}`).join('\n')}`;
       } else {
-        const r1 = await window.db.terminal.exec({
-          command: `git diff HEAD -- "${fileInfo.file}" 2>&1`,
-          cwd,
-        });
+        const r1 = await window.db.terminal.exec({ command: `git diff HEAD -- "${fileInfo.file}" 2>&1`, cwd });
         diffText = (r1.stdout || '').trim();
         if (!diffText) {
-          const r2 = await window.db.terminal.exec({
-            command: `git diff --cached -- "${fileInfo.file}" 2>&1`,
-            cwd,
-          });
+          const r2 = await window.db.terminal.exec({ command: `git diff --cached -- "${fileInfo.file}" 2>&1`, cwd });
           diffText = (r2.stdout || '').trim();
         }
       }
-      body.innerHTML = this._renderDiffBody(diffText);
+      if (body) body.innerHTML = this._renderDiffBody(diffText);
     } catch {
-      body.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
+      if (body) body.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
     }
   }
+
+  _basename(path) { return path.replace(/\\/g, '/').split('/').pop(); }
+  _dirname(path)  { const p = path.replace(/\\/g, '/'); const i = p.lastIndexOf('/'); return i >= 0 ? p.slice(0, i + 1) : ''; }
 
   // ----------------------------------------------------------------
   // .gitignore helpers

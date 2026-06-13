@@ -57,7 +57,7 @@ export class WorkflowRunnerPage {
     this._onWinResize = null;
 
     // git diff panel
-    this._gitPanelVisible  = true;
+    this._gitPanelVisible  = false;
     this._gitFiles         = [];
     this._gitPollInterval  = null;
     this._gitExpandedFiles = new Set();
@@ -674,6 +674,16 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
               </svg>
               Run All
             </button>
+            <button class="wfr-git-toggle-btn" id="wfrBtnGitToggle" title="Toggle Git Changes">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <circle cx="11" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M5 5.5v5a1.5 1.5 0 001.5 1.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M11 5.5V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              Git <span class="wfr-git-badge" id="wfrGitBadge" hidden></span>
+            </button>
           </div>
         </header>
 
@@ -687,7 +697,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
             <div id="wfrSummary" hidden></div>
           </aside>
 
-          <!-- Right: terminal panel -->
+          <!-- Right: terminal panel + git overlay -->
           <section class="wfr-output-panel">
             <div class="wfr-output-header">
               <div class="wfr-output-header__top">
@@ -702,40 +712,41 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
               </div>
             </div>
             <div class="wfr-terminal-wrap" id="wfrTerminal"></div>
-          </section>
 
-          <!-- Right: git diff panel -->
-          <aside class="wfr-git-panel" id="wfrGitPanel">
-            <div class="wfr-git-panel__header">
-              <span class="wfr-git-panel__title">Git Changes</span>
-              <span class="wfr-git-panel__badge" id="wfrGitBadge" hidden></span>
-              <div class="wfr-git-panel__actions">
-                <button class="wfr-git-panel__icon-btn" id="wfrBtnGitExpandAll" title="Expand all">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-                <button class="wfr-git-panel__icon-btn" id="wfrBtnGitCollapseAll" title="Collapse all">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-                <button class="wfr-git-panel__refresh" id="wfrBtnGitRefresh" title="Refresh">↺</button>
+            <!-- Git diff overlay — absolute, slides in from the right -->
+            <aside class="wfr-git-panel" id="wfrGitPanel" hidden>
+              <div class="wfr-git-panel__header">
+                <span class="wfr-git-panel__title">Git Changes</span>
+                <span class="wfr-git-panel__badge" id="wfrGitPanelBadge" hidden></span>
+                <div class="wfr-git-panel__actions">
+                  <button class="wfr-git-panel__icon-btn" id="wfrBtnGitExpandAll" title="Expand all">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="wfr-git-panel__icon-btn" id="wfrBtnGitCollapseAll" title="Collapse all">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="wfr-git-panel__refresh" id="wfrBtnGitRefresh" title="Refresh">↺</button>
+                  <button class="wfr-git-panel__icon-btn" id="wfrBtnGitClose" title="Close">✕</button>
+                </div>
               </div>
-            </div>
-            <div class="wfr-git-commit-bar">
-              <input class="wfr-git-commit-msg" id="wfrGitCommitMsg" type="text" spellcheck="false" placeholder="Commit message…" value="#${escHtml(wfId)} - ${escHtml(wfName)}">
-              <button class="wfr-git-commit-btn" id="wfrBtnGitCommit" disabled>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Commit
-              </button>
-            </div>
-            <div class="wfr-git-panel__body" id="wfrGitAccordion">
-              <div class="git-diff-empty">No changes yet.</div>
-            </div>
-          </aside>
+              <div class="wfr-git-commit-bar">
+                <input class="wfr-git-commit-msg" id="wfrGitCommitMsg" type="text" spellcheck="false" placeholder="Commit message…" value="#${escHtml(wfId)} - ${escHtml(wfName)}">
+                <button class="wfr-git-commit-btn" id="wfrBtnGitCommit" disabled>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Commit
+                </button>
+              </div>
+              <div class="wfr-git-panel__body" id="wfrGitAccordion">
+                <div class="git-diff-empty">No changes yet.</div>
+              </div>
+            </aside>
+          </section>
         </div>
       </div>`;
 
@@ -773,6 +784,16 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       row.addEventListener('click', () => this._selectLayer(+row.dataset.id));
     });
 
+    this.container.querySelector('#wfrBtnGitToggle')
+      ?.addEventListener('click', () => this._toggleGitPanel());
+
+    this.container.querySelector('#wfrBtnGitClose')
+      ?.addEventListener('click', () => {
+        this._gitPanelVisible = false;
+        this.container.querySelector('#wfrGitPanel')?.setAttribute('hidden', '');
+        this.container.querySelector('#wfrBtnGitToggle')?.classList.remove('wfr-git-toggle-btn--active');
+      });
+
     this.container.querySelector('#wfrBtnGitRefresh')
       ?.addEventListener('click', () => this._refreshGitPanel());
     this.container.querySelector('#wfrBtnGitExpandAll')
@@ -781,7 +802,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       ?.addEventListener('click', () => this._expandCollapseAll(false));
     this.container.querySelector('#wfrBtnGitCommit')
       ?.addEventListener('click', () => this._commitChanges());
-
   }
 
   // ── Git diff panel ───────────────────────────────────────────────────────
@@ -790,8 +810,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     this._gitPanelVisible = !this._gitPanelVisible;
     const panel = this.container.querySelector('#wfrGitPanel');
     const btn   = this.container.querySelector('#wfrBtnGitToggle');
-    if (panel) panel.hidden = !this._gitPanelVisible;
+    if (panel) panel.toggleAttribute('hidden', !this._gitPanelVisible);
     if (btn)   btn.classList.toggle('wfr-git-toggle-btn--active', this._gitPanelVisible);
+    if (this._gitPanelVisible) this._refreshGitPanel();
   }
 
   _getGitCwd() {
@@ -865,35 +886,36 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   }
 
   async _refreshGitPanel() {
-    const cwd       = this._getGitCwd();
-    const wrap      = this.container.querySelector('#wfrGitAccordion');
-    const badge     = this.container.querySelector('#wfrGitBadge');
-    const commitBtn = this.container.querySelector('#wfrBtnGitCommit');
+    const cwd        = this._getGitCwd();
+    const wrap       = this.container.querySelector('#wfrGitAccordion');
+    const headerBadge = this.container.querySelector('#wfrGitBadge');
+    const panelBadge  = this.container.querySelector('#wfrGitPanelBadge');
+    const commitBtn   = this.container.querySelector('#wfrBtnGitCommit');
     if (!cwd || !wrap) return;
+
+    const _updateBadges = (count) => {
+      if (headerBadge) { headerBadge.textContent = String(count); headerBadge.hidden = count === 0; }
+      if (panelBadge)  { panelBadge.textContent  = String(count); panelBadge.hidden  = count === 0; }
+      if (commitBtn && !commitBtn.classList.contains('wfr-git-commit-btn--busy')) {
+        commitBtn.disabled = count === 0;
+      }
+    };
+
     try {
       const r = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd });
       const files = this._parseGitStatus(r.stdout || '');
 
-      // If the file list is identical to what's already rendered, only update
-      // the badge and commit button — avoid a full DOM rebuild that would
-      // collapse expanded diffs and disrupt the user's view.
       const noChange = files.length === this._gitFiles.length &&
         files.every((f, i) => f.file === this._gitFiles[i]?.file && f.statusType === this._gitFiles[i]?.statusType);
 
       if (noChange && wrap.querySelector('.git-accordion__item')) {
-        if (badge) { badge.textContent = String(files.length); badge.hidden = files.length === 0; }
-        if (commitBtn && !commitBtn.classList.contains('wfr-git-commit-btn--busy')) {
-          commitBtn.disabled = files.length === 0;
-        }
+        _updateBadges(files.length);
         return;
       }
 
       this._gitFiles = files;
-      if (badge) { badge.textContent = String(files.length); badge.hidden = files.length === 0; }
-      if (commitBtn && !commitBtn.classList.contains('wfr-git-commit-btn--busy')) {
-        commitBtn.disabled = files.length === 0;
-      }
-      await this._renderGitAccordion(files, cwd);
+      _updateBadges(files.length);
+      if (this._gitPanelVisible) await this._renderGitAccordion(files, cwd);
     } catch {
       if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Not a git repository.</div>';
     }

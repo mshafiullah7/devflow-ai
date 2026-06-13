@@ -287,7 +287,9 @@ export class AiConsolePage {
 
           <!-- Context panel (left) -->
           <aside class="aic-context" id="aicContext">
-            <div class="aic-context__heading">Smart Context</div>
+            <div class="aic-panel-header">
+              <span class="aic-panel-header__title">Smart Context</span>
+            </div>
             <p class="aic-context__desc">Context is fetched automatically from your project data based on each question. All data is scoped to this project.</p>
 
             <div id="aicAutoCtxStatus" class="aic-auto-ctx-status">
@@ -332,11 +334,11 @@ export class AiConsolePage {
             </div>
           </aside>
 
-          <!-- Draggable divider -->
-          <div class="aic-divider" id="aicDivider"></div>
-
           <!-- Chat column (right) -->
           <div class="aic-chat" id="aicChat">
+            <div class="aic-panel-header">
+              <span class="aic-panel-header__title">Chat</span>
+            </div>
 
             <!-- Thread -->
             <div class="aic-thread" id="aicThread">
@@ -547,8 +549,6 @@ export class AiConsolePage {
       if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
     });
 
-    // Draggable divider
-    this._initDividerDrag();
 
     // Auto-resize textarea
     const ta = q('#aicInput');
@@ -560,38 +560,6 @@ export class AiConsolePage {
     }
   }
 
-  _initDividerDrag() {
-    const divider     = this.container.querySelector('#aicDivider');
-    const contextPane = this.container.querySelector('#aicContext');
-    const bodyEl      = this.container.querySelector('.aic-body');
-    if (!divider || !contextPane || !bodyEl) return;
-
-    divider.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const startX     = e.clientX;
-      const startWidth = contextPane.getBoundingClientRect().width;
-      const totalWidth = bodyEl.getBoundingClientRect().width;
-      const minW = 200, maxW = totalWidth - 400;
-
-      document.body.style.cursor     = 'col-resize';
-      document.body.style.userSelect = 'none';
-      divider.classList.add('aic-divider--dragging');
-
-      const onMove = (mv) => {
-        const newWidth = Math.min(Math.max(startWidth + (mv.clientX - startX), minW), maxW);
-        contextPane.style.flex = `0 0 ${newWidth}px`;
-      };
-      const onUp = () => {
-        document.body.style.cursor     = '';
-        document.body.style.userSelect = '';
-        divider.classList.remove('aic-divider--dragging');
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup',   onUp);
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup',   onUp);
-    });
-  }
 
   // ----------------------------------------------------------------
   // Send — routes question, fetches context, streams response

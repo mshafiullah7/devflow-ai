@@ -1,6 +1,15 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
-import { ModelPicker }                 from '../../components/model-picker/model-picker.js';
+import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
+
+const ANSI = {
+  reset:  '\x1b[0m',
+  bold:   '\x1b[1m',
+  cyan:   '\x1b[36m',
+  green:  '\x1b[32m',
+  red:    '\x1b[31m',
+  dim:    '\x1b[2m',
+};
 
 const STATUS_ICONS = {
   pending: `<svg class="pq-icon" width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/></svg>`,
@@ -19,21 +28,39 @@ export class PromptQueuePage {
     this._project    = null;
     this._queue      = [];
     this._selectedId = null;
-    this._outputBuf  = {};
     this._isRunning  = false;
     this._runAll     = false;
     this._modelCfg   = null;
-    this._messages         = {};   // { [itemId]: [{role, content, created_at}] }
-    this._runTimer         = null;
-    this._runStartTime     = null;
-    // Planning state
-    this._awaitingApproval = false;
-    this._pendingPlan      = null;   // { item, plan } while waiting for user approval
-    this._activePlan       = null;   // plan being executed (for step progress bar)
+
+    // xterm terminal
+    this._term        = null;
+    this._fitAddon    = null;
+    this._resizeObs   = null;
+    this._onWinResize = null;
+    this._lastCols    = 0;
+    this._lastRows    = 0;
+
+    // Run state
+    this._activeItemId = null;
+    this._termBuf      = {};    // { [itemId]: string } — raw output for persistence
+
+    // Elapsed timer per item
+    this._startTimes = {};      // { [itemId]: Date.now() }
+    this._timerInt   = null;
+
+    // Skip permissions toggle
+    this._skipPermissions = false;
+
+    // Git panel
+    this._gitPanelVisible  = false;
+    this._gitFiles         = [];
+    this._gitPollInterval  = null;
+    this._gitExpandedFiles = new Set();
   }
 
   async mount() {
     injectCss('pages/prompt-queue/prompt-queue-page.css');
+    injectCss('components/git/git-diff.css');
     applyStoredTheme();
 
     let _mapping;
@@ -52,6 +79,8 @@ export class PromptQueuePage {
     });
     await this._picker.reload();
 
+    this._initTerminal();
+    this._startGitPolling();
     this._renderList();
     this._bindEvents();
 
@@ -60,38 +89,171 @@ export class PromptQueuePage {
 
   unmount() {
     removeCss('pages/prompt-queue/prompt-queue-page.css');
+    removeCss('components/git/git-diff.css');
     this._picker?.unmount();
-    if (this._isRunning) window.db.promptQueue.kill();
-    window.db.promptQueue.removeListeners();
-    this._stopRunTimer();
+    if (this._isRunning) window.app.wfrPty.kill();
+    window.app.wfrPty.offAll();
+    this._stopElapsedTimer();
+    this._stopGitPolling();
+    if (this._resizeObs)   { this._resizeObs.disconnect(); this._resizeObs = null; }
+    if (this._onWinResize) { window.removeEventListener('resize', this._onWinResize); this._onWinResize = null; }
+    if (this._term)        { this._term.dispose(); this._term = null; }
     this._runAll    = false;
     this._isRunning = false;
   }
 
-  // ----------------------------------------------------------------
-  // Run timer helpers
-  // ----------------------------------------------------------------
-  _startRunTimer() {
-    this._stopRunTimer();
-    this._runStartTime = Date.now();
-    this._runTimer = setInterval(() => {
-      const el = this.container.querySelector('#pqLiveTimer');
-      if (el) el.textContent = this._formatElapsed();
-    }, 1000);
+  // ── Terminal ─────────────────────────────────────────────────────────
+
+  _initTerminal() {
+    const el = this.container.querySelector('#pqTerminal');
+    this._lastCols = 0;
+    this._lastRows = 0;
+
+    if (!el) { console.error('pq: #pqTerminal not found'); return; }
+    if (!window.Terminal) {
+      el.style.cssText = 'display:flex;align-items:center;justify-content:center;color:#888;font-family:monospace;font-size:12px;';
+      el.textContent = 'xterm.js failed to load — check DevTools console';
+      return;
+    }
+
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+    this._fitAddon = new window.FitAddon.FitAddon();
+    this._term = new window.Terminal({
+      fontFamily:      'Consolas, "Cascadia Code", "Courier New", monospace',
+      fontSize:        12,
+      lineHeight:      1.4,
+      theme: {
+        background:          css('--console-bg')     || '#0d0d0d',
+        foreground:          css('--console-output') || '#d4d4d4',
+        cursor:              css('--console-caret')  || '#c0c0c0',
+        selectionBackground: 'rgba(255,255,255,0.18)',
+        black:   '#1e1e1e', brightBlack:   '#555',
+        red:     '#f44747', brightRed:     '#f44747',
+        green:   '#6a9955', brightGreen:   '#b5cea8',
+        yellow:  '#dcdcaa', brightYellow:  '#dcdcaa',
+        blue:    '#569cd6', brightBlue:    '#9cdcfe',
+        magenta: '#c586c0', brightMagenta: '#c586c0',
+        cyan:    '#4ec9b0', brightCyan:    '#4ec9b0',
+        white:   '#d4d4d4', brightWhite:   '#ffffff',
+      },
+      scrollback:      5000,
+      convertEol:      false,
+      cursorBlink:     true,
+      allowProposedApi: true,
+    });
+    this._term.loadAddon(this._fitAddon);
+    this._term.open(el);
+
+    // Right-click: paste clipboard into PTY
+    el.addEventListener('contextmenu', async (e) => {
+      e.preventDefault();
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) window.app.wfrPty.write(text);
+      } catch (_) {}
+    });
+
+    // Ctrl+C: copy selection; fall through to PTY only when nothing selected
+    this._term.attachCustomKeyEventHandler((ev) => {
+      if (ev.type !== 'keydown') return true;
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'c' && !ev.shiftKey) {
+        const sel = this._term.getSelection();
+        if (sel) { navigator.clipboard.writeText(sel).catch(() => {}); return false; }
+      }
+      return true;
+    });
+
+    // Forward keystrokes → PTY stdin; detect "exit\r" to close the window
+    let _inputBuf = '';
+    this._term.onData(data => {
+      window.app.wfrPty.write(data);
+      if (data === '\r' || data === '\n') {
+        if (_inputBuf.trim() === 'exit') window.close();
+        _inputBuf = '';
+      } else if (data === '\x7f' || data === '\b') {
+        _inputBuf = _inputBuf.slice(0, -1);
+      } else if (data >= ' ') {
+        _inputBuf += data;
+      }
+    });
+
+    // Permanent PTY data listener — writes to terminal AND buffers during active runs
+    this._reattachPtyListeners();
+
+    // Resize observer + window resize fallback
+    this._resizeObs = new ResizeObserver(() => this._fitTerminal());
+    this._resizeObs.observe(el);
+    this._onWinResize = () => this._fitTerminal();
+    window.addEventListener('resize', this._onWinResize);
+
+    // Deferred fit — two rAFs so xterm's renderer has measured cell sizes
+    const doFit = () => {
+      try {
+        this._fitAddon.fit();
+        this._spawnShell();
+      } catch (_) {
+        setTimeout(() => {
+          try { this._fitAddon.fit(); } catch (_2) {}
+          this._spawnShell();
+        }, 80);
+      }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(doFit));
   }
 
-  _stopRunTimer() {
-    if (this._runTimer) { clearInterval(this._runTimer); this._runTimer = null; }
+  _reattachPtyListeners() {
+    window.app.wfrPty.onData(data => {
+      if (this._term) this._term.write(data);
+      if (this._activeItemId != null) {
+        this._termBuf[this._activeItemId] = (this._termBuf[this._activeItemId] || '') + data;
+      }
+    });
   }
 
-  _formatElapsed() {
-    const secs = Math.floor((Date.now() - (this._runStartTime || Date.now())) / 1000);
-    return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  async _spawnShell() {
+    if (!this._term) return;
+    if (this._modelCfg?.type !== 'cli') return;
+
+    // Resolve CWD from the currently selected item's layer path,
+    // falling back to project root if no item is selected or layer has no folder.
+    let cwd = this._project?.project_path || null;
+    if (this._selectedId) {
+      const item = this._queue.find(q => q.id === this._selectedId);
+      if (item) {
+        const resolved = await this._resolveItemCwd(item);
+        if (!resolved.error && resolved.cwd) cwd = resolved.cwd;
+      }
+    }
+
+    await window.app.wfrPty.spawnShell({ cwd, cols: this._term.cols, rows: this._term.rows });
   }
 
-  // ----------------------------------------------------------------
-  // Template
-  // ----------------------------------------------------------------
+  _fitTerminal() {
+    if (!this._fitAddon || !this._term) return;
+    try {
+      this._fitAddon.fit();
+      const { cols, rows } = this._term;
+      if (cols === this._lastCols && rows === this._lastRows) return;
+      this._lastCols = cols; this._lastRows = rows;
+      window.app.wfrPty.resize({ cols, rows });
+    } catch (_) {
+      requestAnimationFrame(() => {
+        try {
+          this._fitAddon?.fit();
+          if (this._term) {
+            const { cols, rows } = this._term;
+            if (cols === this._lastCols && rows === this._lastRows) return;
+            this._lastCols = cols; this._lastRows = rows;
+            window.app.wfrPty.resize({ cols, rows });
+          }
+        } catch (_2) {}
+      });
+    }
+  }
+
+  // ── Template ─────────────────────────────────────────────────────────
+
   _template() {
     return `
       <div class="pq-page">
@@ -101,7 +263,7 @@ export class PromptQueuePage {
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <span class="pq-header__title">Tests &amp; Issues Queue</span>
+          <span class="pq-header__title">Tasks Queue</span>
 
           <div class="project-page__model-group pq-header__model" style="-webkit-app-region:no-drag;">
             <div id="pqModelPicker"></div>
@@ -113,6 +275,22 @@ export class PromptQueuePage {
               </svg>
             </button>
           </div>
+
+          <button class="pq-perm-btn" id="pqBtnSkipPerms" aria-pressed="false"
+            title="Skip Permissions: when ON passes --dangerously-skip-permissions to Claude.&#10;Note: shares PTY with Workflow Runner — do not run both simultaneously.">
+            Skip Perms: <span id="pqSkipPermsLabel">OFF</span>
+          </button>
+
+          <button class="pq-git-toggle-btn" id="pqBtnGitToggle" title="Toggle Git Changes">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <circle cx="11" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M5 5.5v5a1.5 1.5 0 001.5 1.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M11 5.5V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            Git <span class="pq-git-badge" id="pqGitBadge" hidden></span>
+          </button>
         </header>
 
         <div class="pq-toolbar">
@@ -134,17 +312,56 @@ export class PromptQueuePage {
 
         <div class="pq-layout">
           <div class="pq-list-panel" id="pqListPanel"></div>
+
           <div class="pq-detail-panel" id="pqDetailPanel">
-            <div class="pq-detail-empty">Select an item to view details</div>
+            <!-- Thin info bar: shown only for pending/skipped items -->
+            <div class="pq-term-strip" id="pqTermStrip" hidden></div>
+
+            <!-- xterm.js terminal — always present, fills remaining height -->
+            <div class="pq-terminal-wrap" id="pqTerminal"></div>
+
+            <!-- Git diff panel — absolute overlay from the right -->
+            <div class="pq-git-panel" id="pqGitPanel" hidden>
+              <div class="pq-git-panel__header">
+                <span class="pq-git-panel__title">Git Changes</span>
+                <span class="pq-git-panel__badge" id="pqGitPanelBadge" hidden></span>
+                <div class="pq-git-panel__actions">
+                  <button class="pq-git-panel__icon-btn" id="pqBtnGitExpandAll" title="Expand all">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="pq-git-panel__icon-btn" id="pqBtnGitCollapseAll" title="Collapse all">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="pq-git-panel__icon-btn" id="pqBtnGitRefresh" title="Refresh">↺</button>
+                  <button class="pq-git-panel__icon-btn" id="pqBtnGitClose" title="Close">✕</button>
+                </div>
+              </div>
+              <div class="pq-git-commit-bar">
+                <input class="pq-git-commit-msg" id="pqGitCommitMsg" type="text"
+                  spellcheck="false" placeholder="Commit message…">
+                <button class="pq-git-commit-btn" id="pqBtnGitCommit" disabled>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Commit
+                </button>
+              </div>
+              <div class="pq-git-panel__body" id="pqGitAccordion">
+                <div class="git-diff-empty">No changes yet.</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     `;
   }
 
-  // ----------------------------------------------------------------
-  // List rendering
-  // ----------------------------------------------------------------
+  // ── List rendering ───────────────────────────────────────────────────
+
   _renderList() {
     const panel = this.container.querySelector('#pqListPanel');
     if (!panel) return;
@@ -172,7 +389,7 @@ export class PromptQueuePage {
         item.status = 'pending';
         this._refreshItemEl(id);
         this._updateSummary();
-        if (this._selectedId === id) this._renderDetail(item);
+        if (this._selectedId === id) { this._updateStrip(item); this._showItemBanner(item); }
       });
       el.querySelector('.pq-item__skip')?.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -183,7 +400,7 @@ export class PromptQueuePage {
         item.status = 'skipped';
         this._refreshItemEl(id);
         this._updateSummary();
-        if (this._selectedId === id) this._renderDetail(item);
+        if (this._selectedId === id) this._updateStrip(item);
       });
       el.querySelector('.pq-item__delete')?.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -191,15 +408,14 @@ export class PromptQueuePage {
         if (this._isRunning && this._selectedId === id) return;
         await window.db.promptQueue.delete(id);
         this._queue = this._queue.filter(q => q.id !== id);
-        delete this._messages[id];
         el.remove();
         if (this._queue.length === 0) {
           panel.innerHTML = `<div class="pq-list-empty">No prompts queued yet.<br>Use the queue button on prompts in User Stories.</div>`;
         }
         if (this._selectedId === id) {
           this._selectedId = null;
-          const detailPanel = this.container.querySelector('#pqDetailPanel');
-          if (detailPanel) detailPanel.innerHTML = `<div class="pq-detail-empty">Select an item to view details</div>`;
+          this.container.querySelector('#pqTermStrip')?.setAttribute('hidden', '');
+          if (this._term) { this._term.reset(); this._term.writeln(`${ANSI.dim}(no item selected)${ANSI.reset}`); }
         }
         this._updateSummary();
       });
@@ -220,8 +436,12 @@ export class PromptQueuePage {
     const canSkip    = item.status === 'pending';
     const canRetry   = item.status === 'failed';
     const canDel     = item.status !== 'running';
+    const isRunning  = item.status === 'running';
     const layerBadge = item.layer_name
       ? `<span class="pq-item__layer-badge" title="Layer: ${escHtml(item.layer_name)}">${escHtml(item.layer_name)}</span>`
+      : '';
+    const elapsedText = isRunning && this._startTimes[item.id]
+      ? this._fmt(Date.now() - this._startTimes[item.id])
       : '';
 
     return `
@@ -232,6 +452,7 @@ export class PromptQueuePage {
           <div class="pq-item__snippet">${escHtml(snippet)}</div>
         </div>
         <div class="pq-item__actions">
+          <span class="pq-item__elapsed">${elapsedText}</span>
           ${canRetry ? `<button class="pq-item__retry" title="Re-enable for re-run">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M13.5 2.5A6.5 6.5 0 1 0 14 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10 2.5h3.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>` : ''}
@@ -268,7 +489,7 @@ export class PromptQueuePage {
       i.status = 'pending';
       this._refreshItemEl(id);
       this._updateSummary();
-      if (this._selectedId === id) this._renderDetail(i);
+      if (this._selectedId === id) { this._updateStrip(i); this._showItemBanner(i); }
     });
     newEl.querySelector('.pq-item__skip')?.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -278,212 +499,124 @@ export class PromptQueuePage {
       i.status = 'skipped';
       this._refreshItemEl(id);
       this._updateSummary();
-      if (this._selectedId === id) this._renderDetail(i);
+      if (this._selectedId === id) this._updateStrip(i);
     });
     newEl.querySelector('.pq-item__delete')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (this._isRunning && this._selectedId === id) return;
       await window.db.promptQueue.delete(id);
       this._queue = this._queue.filter(q => q.id !== id);
-      delete this._messages[id];
       newEl.remove();
       if (this._selectedId === id) {
         this._selectedId = null;
-        const detailPanel = this.container.querySelector('#pqDetailPanel');
-        if (detailPanel) detailPanel.innerHTML = `<div class="pq-detail-empty">Select an item to view details</div>`;
+        this.container.querySelector('#pqTermStrip')?.setAttribute('hidden', '');
+        if (this._term) { this._term.reset(); this._term.writeln(`${ANSI.dim}(no item selected)${ANSI.reset}`); }
       }
       this._updateSummary();
     });
   }
 
-  async _selectItem(item) {
+  _selectItem(item) {
     this._selectedId = item.id;
     const panel = this.container.querySelector('#pqListPanel');
     panel?.querySelectorAll('.pq-item').forEach(el => el.classList.remove('pq-item--selected'));
     panel?.querySelector(`[data-id="${item.id}"]`)?.classList.add('pq-item--selected');
 
-    if (!this._isRunning || this._selectedId !== item.id) {
-      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
-    }
+    this._updateStrip(item);
+    this._updateCommitMsg(item);
 
-    this._renderDetail(item);
+    if (item.status === 'done' || item.status === 'failed') {
+      this._replayOutput(item);
+    } else if (item.status === 'pending' || item.status === 'skipped') {
+      this._cdToItemPath(item);
+    }
+    // Running: terminal already shows live output — do nothing
   }
 
-  // ----------------------------------------------------------------
-  // Build the "runs in" cwd badge shown in the detail panel.
-  // Returns an HTML string — empty string if nothing useful to show.
-  // ----------------------------------------------------------------
-  async _buildCwdBadge(item) {
+  async _cdToItemPath(item) {
+    if (this._activeItemId != null) return; // don't interrupt a live run
+    if (!this._term) return;
     const { cwd, error } = await this._resolveItemCwd(item);
-    if (error) {
-      return `<div class="pq-cwd-row pq-cwd-row--error">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="6.5" stroke="#ef4444" stroke-width="1.4"/>
-          <path d="M8 5v3.5M8 10.5v.5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <span>${escHtml(error)}</span>
-      </div>`;
-    }
-    if (!cwd) return '';
-    const layerLabel = item.layer_name ? ` <span class="pq-cwd-layer">[${escHtml(item.layer_name)}]</span>` : '';
-    return `<div class="pq-cwd-row">
-      <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
-        <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-          stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-      </svg>
-      <span class="pq-cwd-path" title="${escHtml(cwd)}">${escHtml(cwd)}</span>${layerLabel}
-    </div>`;
+    if (error || !cwd) return;
+    // Change directory in the running shell — no kill/respawn
+    window.app.wfrPty.write(`cd "${cwd}"\r`);
   }
 
-  // ----------------------------------------------------------------
-  // Detail panel
-  // ----------------------------------------------------------------
-  async _renderDetail(item) {
-    const panel = this.container.querySelector('#pqDetailPanel');
-    if (!panel) return;
+  // ── Strip + terminal helpers ─────────────────────────────────────────
 
-    if (item.status === 'pending' || item.status === 'skipped') {
-      // Resolve cwd to display it before the user runs
-      const cwdDisplay = await this._buildCwdBadge(item);
-      panel.innerHTML = `
-        <div class="pq-detail">
-          <div class="pq-detail__meta">
-            <span class="pq-detail__status pq-detail__status--${item.status}">${item.status}</span>
-            ${item.story_title ? `<span class="pq-detail__story">${escHtml(item.story_title)}</span>` : ''}
-            ${item.tag ? `<span class="pq-detail__tag">${escHtml(item.tag)}</span>` : ''}
-            ${item.model_label ? `<span class="pq-detail__model">${escHtml(item.model_label)}</span>` : ''}
-          </div>
-          ${cwdDisplay}
-          <div class="pq-detail__prompt-wrap">
-            <div class="pq-detail__prompt">${this._renderMarkdown(item.prompt_text || '')}</div>
-          </div>
-          ${item.status === 'pending' ? `
-          <div class="pq-detail__run-bar">
-            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunThis">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
-              Run This
-            </button>
-          </div>` : ''}
-        </div>`;
-      panel.querySelector('#pqBtnRunThis')?.addEventListener('click', () => {
-        if (!this._isRunning) this._runItem(item);
-      });
+  _updateStrip(item) {
+    const strip = this.container.querySelector('#pqTermStrip');
+    if (!strip) return;
+
+    const isPending = item.status === 'pending';
+    const isSkipped = item.status === 'skipped';
+    strip.hidden = !(isPending || isSkipped);
+    if (!isPending && !isSkipped) return;
+
+    strip.innerHTML = `
+      <div class="pq-strip__meta">
+        <span class="pq-detail__status pq-detail__status--${item.status}">${item.status}</span>
+        ${item.story_title ? `<span class="pq-strip__title">${escHtml(item.story_title)}</span>` : ''}
+        ${item.tag ? `<span class="pq-strip__tag">${escHtml(item.tag)}</span>` : ''}
+      </div>
+      ${isPending ? `<button class="pq-toolbar__btn pq-toolbar__btn--primary pq-strip__run-btn" id="pqBtnRunThis">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
+        Run This
+      </button>` : ''}`;
+
+    strip.querySelector('#pqBtnRunThis')?.addEventListener('click', () => {
+      if (!this._isRunning) this._runItem(item);
+    });
+  }
+
+  _showItemBanner(item) {
+    if (!this._term) return;
+    this._term.reset();
+    const label = item.story_title || item.tag || `#${item.id}`;
+    this._term.writeln(`${ANSI.dim}── ${label} ──${ANSI.reset}`);
+    this._term.writeln(`${ANSI.dim}Status: ${item.status}. Click "Run This" to execute.${ANSI.reset}`);
+  }
+
+  _replayOutput(item) {
+    if (!this._term) return;
+    this._term.reset();
+    const label = item.story_title || item.tag || `#${item.id}`;
+    const color = item.status === 'done' ? ANSI.green : ANSI.red;
+    this._term.writeln(`${ANSI.dim}── Output for: ${ANSI.reset}${color}${label}${ANSI.reset}${ANSI.dim} ──${ANSI.reset}`);
+    if (item.output) {
+      this._term.write(item.output);
     } else {
-      // running / done / failed — show conversation thread + follow-up bar
-      const msgs = this._messages[item.id] || [];
-      const isRunning = item.status === 'running';
-      const isFailed  = item.status === 'failed';
-
-      panel.innerHTML = `
-        <div class="pq-detail pq-detail--convo">
-          <div class="pq-detail__meta">
-            <span class="pq-detail__status pq-detail__status--${item.status}">${item.status}</span>
-            ${item.story_title ? `<span class="pq-detail__story">${escHtml(item.story_title)}</span>` : ''}
-            ${item.tag ? `<span class="pq-detail__tag">${escHtml(item.tag)}</span>` : ''}
-            ${item.ran_at ? `<span class="pq-detail__time">${new Date(item.ran_at + (item.ran_at.endsWith('Z') ? '' : 'Z')).toLocaleString()}</span>` : ''}
-            ${item.commit_sha ? `<span class="pq-detail__commit" title="${escHtml(item.commit_sha)}"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v4M8 11v4M1 8h4M11 8h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>${escHtml(item.commit_sha.slice(0, 7))}</span>` : ''}
-          </div>
-          ${isRunning && this._activePlan ? `
-          <div class="pq-step-tracker" id="pqStepTracker"></div>` : ''}
-          <div class="pq-convo" id="pqConvo">
-            ${this._renderConvoHtml(msgs)}
-            ${isRunning ? `<div class="pq-turn pq-turn--assistant" id="pqLiveTurn">
-              <span class="pq-turn__label">Assistant</span>
-              <div class="pq-turn__bubble pq-turn__bubble--live">
-                <div class="pq-live-status">
-                  <span class="pq-live-dots"><span></span><span></span><span></span></span>
-                  <span class="pq-live-timer" id="pqLiveTimer">${this._formatElapsed()}</span>
-                </div>
-                <pre class="pq-live-output" id="pqLiveBubble">${escHtml(this._outputBuf[item.id] || '')}</pre>
-              </div>
-            </div>` : ''}
-          </div>
-          ${!isRunning ? `
-          <div class="pq-followup" id="pqFollowUp">
-            ${isFailed ? `
-            <button class="pq-followup__rerun" id="pqBtnReEnable" title="Reset and re-run the original prompt">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M13.5 2.5A6.5 6.5 0 1 0 14 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M10 2.5h3.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Re-run
-            </button>` : ''}
-            <textarea
-              id="pqFollowUpInput"
-              class="pq-followup__input"
-              placeholder="Send a follow-up… (Enter to send, Shift+Enter for newline)"
-              rows="1"
-            ></textarea>
-            <button class="pq-followup__send" id="pqFollowUpSend" title="Send (Enter)">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.6"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>` : ''}
-        </div>`;
-
-      // Scroll to bottom of convo
-      const convo = panel.querySelector('#pqConvo');
-      if (convo) convo.scrollTop = convo.scrollHeight;
-
-      // Re-enable & Run (failed tasks) — resets to pending and re-runs the original prompt
-      panel.querySelector('#pqBtnReEnable')?.addEventListener('click', async () => {
-        if (this._isRunning) return;
-        await window.db.promptQueueMessages.clear(item.id);
-        this._messages[item.id] = [];
-        await window.db.promptQueue.update({ id: item.id, status: 'pending' });
-        item.status = 'pending';
-        this._refreshItemEl(item.id);
-        this._updateSummary();
-        this._runItem(item);
-      });
-
-      // Follow-up input bar
-      const followUpInput = panel.querySelector('#pqFollowUpInput');
-      const followUpSend  = panel.querySelector('#pqFollowUpSend');
-      if (followUpInput && followUpSend) {
-        // Auto-grow textarea height with content
-        followUpInput.addEventListener('input', () => {
-          followUpInput.style.height = 'auto';
-          followUpInput.style.height = Math.min(followUpInput.scrollHeight, 140) + 'px';
-        });
-
-        const doSend = () => {
-          const text = followUpInput.value.trim();
-          if (!text || this._isRunning) return;
-          followUpInput.value = '';
-          followUpInput.style.height = 'auto';
-          this._sendFollowUp(item, text);
-        };
-
-        // Enter = send, Shift+Enter = newline
-        followUpInput.addEventListener('keydown', e => {
-          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
-        });
-        followUpSend.addEventListener('click', doSend);
-      }
+      this._term.writeln(`${ANSI.dim}(no output recorded)${ANSI.reset}`);
     }
   }
 
-  // ----------------------------------------------------------------
-  // Follow-up — continue an existing conversation after first run
-  // ----------------------------------------------------------------
-  async _sendFollowUp(item, text) {
+  _writeItemBanner(item) {
+    if (!this._term) return;
+    const label = item.story_title || item.tag || `#${item.id}`;
+    const line  = '─'.repeat(Math.max(label.length + 4, 40));
+    this._term.write(`\r\n${ANSI.bold}${ANSI.cyan}${line}\r\n  ${label}\r\n${line}${ANSI.reset}\r\n`);
+  }
+
+  // ── Run logic ────────────────────────────────────────────────────────
+
+  async _runItem(item, { interactive = true, skipPermissions = null } = {}) {
     if (this._isRunning) return;
 
-    const { cwd: resolvedCwd, error: cwdError } = await this._resolveItemCwd(item);
-    if (cwdError) return;
-    item._resolvedCwd = resolvedCwd;
+    const { cwd, error: cwdError } = await this._resolveItemCwd(item);
+    if (cwdError) {
+      if (this._term) {
+        this._term.reset();
+        this._term.writeln(`${ANSI.red}CWD Error: ${cwdError}${ANSI.reset}`);
+      }
+      return;
+    }
 
-    // Optimistically add new user turn to local message list
-    const newUserMsg = { role: 'user', content: text, created_at: new Date().toISOString() };
-    this._messages[item.id] = [...(this._messages[item.id] || []), newUserMsg];
-    item._pendingUserContent = text;
+    const effectiveSkipPerms = skipPermissions ?? this._skipPermissions;
 
-    // Switch item back to running
-    this._isRunning = true;
-    this._outputBuf[item.id] = '';
+    this._isRunning    = true;
+    this._activeItemId = item.id;
+    this._termBuf[item.id] = '';
+
     item.status = 'running';
     const ranAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
     item.ran_at = ranAt;
@@ -492,388 +625,57 @@ export class PromptQueuePage {
     this._refreshItemEl(item.id);
     this._updateSummary();
     this._updateToolbarRunState(true);
-    this._startRunTimer();
-    if (this._selectedId === item.id) this._renderDetail(item);
+    this._updateStrip(item); // hides strip (status = running)
 
-    // Send only the new follow-up message — no prior conversation context
-    const history = [{ role: 'user', content: text }];
+    this._startTimes[item.id] = Date.now();
+    this._startElapsedTimer(item.id);
 
-    // Wire listeners — skip plan phase for follow-ups, go straight to execution
-    window.db.promptQueue.removeListeners();
-    window.db.promptQueue.onData(({ text: chunk }) => this._appendOutput(item.id, chunk));
-    window.db.promptQueue.onStep(stepInfo => this._updateStepProgress(stepInfo));
+    this._term?.reset();
+    this._writeItemBanner(item);
 
-    window.db.promptQueue.onDone(async ({ exitCode }) => {
-      window.db.promptQueue.removeListeners();
-      this._stopRunTimer();
-      this._activePlan = null;
+    // Register per-run layerDone listener
+    window.app.wfrPty.onLayerDone(async ({ layerId, error: runError }) => {
+      if (layerId !== String(item.id)) return;
 
-      const succeeded = exitCode === 0;
-      item.status    = succeeded ? 'done' : 'failed';
-      item.exit_code = exitCode;
-      item.output    = this._outputBuf[item.id] || '';
+      // Detach all listeners, re-attach permanent onData
+      window.app.wfrPty.offAll();
+      this._reattachPtyListeners();
 
-      if (succeeded) {
-        const sha = await this._commitAfterRun(item);
-        if (sha) item.commit_sha = sha;
-      }
+      this._stopElapsedTimer();
+      const elapsed   = this._fmt(Date.now() - this._startTimes[item.id]);
+      const succeeded = !runError;
 
-      // Persist only the new turn — prior turns are already in DB
-      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent });
-      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
-      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
-      this._isRunning = false;
+      item.status = succeeded ? 'done' : 'failed';
+      item.output = this._termBuf[item.id] || '';
+
+      const icon  = succeeded ? `${ANSI.green}✔` : `${ANSI.red}✗`;
+      const label = item.story_title || item.tag || `#${item.id}`;
+      this._term?.write(`\r\n${icon}  ${label} — ${succeeded ? 'done' : 'failed'} in ${elapsed}${ANSI.reset}\r\n`);
+      if (runError) this._term?.write(`${ANSI.red}Error: ${runError}${ANSI.reset}\r\n`);
 
       await window.db.promptQueue.update({
-        id:         item.id,
-        status:     item.status,
-        output:     item.output,
-        exit_code:  exitCode,
-        commit_sha: item.commit_sha ?? null,
+        id:     item.id,
+        status: item.status,
+        output: item.output,
       });
 
-      this._refreshItemEl(item.id);
-      this._updateSummary();
-      this._updateToolbarRunState(false);
-      if (this._selectedId === item.id) this._renderDetail(item);
-    });
-
-    const cfg = this._modelCfg || {};
-    window.db.promptQueue.run({
-      messages:    history,
-      modelConfig: cfg,
-      cwd:         item._resolvedCwd,
-      itemLabel:   item.tag || item.story_title || `#${item.id}`,
-      projectName: this._project?.name || '',
-    });
-  }
-
-  _renderConvoHtml(msgs) {
-    if (!msgs.length) return '';
-    return msgs.map(m => {
-      const isUser = m.role === 'user';
-      const bubble = `<div class="pq-turn__bubble">${this._renderMarkdown(m.content)}</div>`;
-      return `
-        <div class="pq-turn pq-turn--${isUser ? 'user' : 'assistant'}">
-          <span class="pq-turn__label">${isUser ? 'You' : 'Assistant'}</span>
-          ${bubble}
-        </div>`;
-    }).join('');
-  }
-
-  _appendOutput(id, text) {
-    this._outputBuf[id] = (this._outputBuf[id] || '') + text;
-    if (this._selectedId === id) {
-      const el = this.container.querySelector('#pqLiveBubble');
-      if (el) {
-        el.textContent += text;
-        const convo = this.container.querySelector('#pqConvo');
-        if (convo) convo.scrollTop = convo.scrollHeight;
-      }
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // Plan card — shown after plan phase, waiting for user approval
-  // ----------------------------------------------------------------
-  _showPlanCard(item, plan) {
-    const panel = this.container.querySelector('#pqDetailPanel');
-    if (!panel) return;
-
-    const steps = plan.steps || [];
-    const stepsHtml = steps.map(s => `
-      <div class="pq-plan-step">
-        <div class="pq-plan-step__num">${s.id}</div>
-        <div class="pq-plan-step__body">
-          <div class="pq-plan-step__title">${escHtml(s.title)}</div>
-          <div class="pq-plan-step__desc">${escHtml(s.description || '')}</div>
-          ${s.files && s.files.length ? `
-            <div class="pq-plan-step__files">
-              ${s.files.map(f => `<code class="pq-plan-step__file">${escHtml(f)}</code>`).join('')}
-            </div>` : ''}
-        </div>
-      </div>`).join('');
-
-    panel.innerHTML = `
-      <div class="pq-detail pq-detail--plan">
-        <div class="pq-plan-card">
-          <div class="pq-plan-card__header">
-            <div class="pq-plan-card__badge">AI Plan</div>
-            <div class="pq-plan-card__task">${escHtml(plan.task || item.prompt_text)}</div>
-            ${plan.estimated_turns ? `<div class="pq-plan-card__meta">~${plan.estimated_turns} tool calls estimated</div>` : ''}
-          </div>
-
-          <div class="pq-plan-card__steps">
-            ${stepsHtml}
-          </div>
-
-          <div class="pq-plan-card__actions">
-            <button class="pq-plan-btn pq-plan-btn--approve" id="pqBtnApprovePlan">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M2.5 8.5l3.5 3.5 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Approve &amp; Run
-            </button>
-            <button class="pq-plan-btn pq-plan-btn--cancel" id="pqBtnRejectPlan">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>`;
-
-    panel.querySelector('#pqBtnApprovePlan').addEventListener('click', () => {
-      this._approvePlan(item, plan);
-    });
-    panel.querySelector('#pqBtnRejectPlan').addEventListener('click', () => {
-      this._rejectPlan(item);
-    });
-  }
-
-  // User clicked Approve — execute the plan
-  async _approvePlan(item, plan) {
-    this._awaitingApproval = false;
-    this._pendingPlan      = null;
-    this._activePlan       = plan;
-    this._outputBuf[item.id] = '';
-
-    // Re-wire listeners for the execution phase
-    window.db.promptQueue.removeListeners();
-    window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
-    window.db.promptQueue.onStep((stepInfo) => this._updateStepProgress(stepInfo));
-
-    window.db.promptQueue.onDone(async ({ exitCode }) => {
-      window.db.promptQueue.removeListeners();
-      this._stopRunTimer();
-      this._activePlan = null;
-
-      const succeeded = exitCode === 0;
-      item.status    = succeeded ? 'done' : 'failed';
-      item.exit_code = exitCode;
-      item.output    = this._outputBuf[item.id] || '';
-
-      // Auto-commit all changes made during the run and capture the SHA
-      if (succeeded) {
-        const sha = await this._commitAfterRun(item);
-        if (sha) item.commit_sha = sha;
-      }
-
-      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent || item.prompt_text });
-      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
-      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
-      this._isRunning = false;
-
-      await window.db.promptQueue.update({ id: item.id, status: item.status, output: item.output, exit_code: exitCode, commit_sha: item.commit_sha ?? null });
-
-      // prompt_id linkage removed in v2 architecture
+      this._activeItemId = null;
+      this._isRunning    = false;
 
       this._refreshItemEl(item.id);
       this._updateSummary();
       this._updateToolbarRunState(false);
-      if (this._selectedId === item.id) this._renderDetail(item);
+      if (this._selectedId === item.id) this._updateStrip(item);
+      this._refreshGitPanel();
 
-      if (this._runAll && succeeded) {
-        const next = this._queue.find(q => q.status === 'pending');
-        if (next) { setTimeout(() => this._runItem(next), 200); }
-        else { this._runAll = false; this._updateToolbarRunAllState(false); }
-      } else if (this._runAll) {
-        this._runAll = false;
-        this._updateToolbarRunAllState(false);
-      }
-    });
-
-    // Switch detail panel to live output + step tracker
-    this._renderDetail(item);
-    this._startRunTimer();
-
-    // Kick off execution with the approved plan.
-    // item._resolvedCwd was set by _resolveItemCwd() in _runItem() at the start
-    // of this same run, so it is already validated and up-to-date.
-    const cfg = this._modelCfg || {};
-    window.db.promptQueue.approvePlan({
-      plan:        JSON.stringify(plan),
-      messages:    [{ role: 'user', content: item.prompt_text }],
-      modelConfig: cfg,
-      cwd:         item._resolvedCwd,
-      itemLabel:   item.tag || item.story_title || `#${item.id}`,
-      projectName: this._project?.name || '',
-    });
-  }
-
-  // User clicked Cancel — reset item to pending
-  async _rejectPlan(item) {
-    this._awaitingApproval = false;
-    this._pendingPlan      = null;
-    this._isRunning        = false;
-    this._activePlan       = null;
-    window.db.promptQueue.removeListeners();
-    this._stopRunTimer();
-
-    item.status = 'pending';
-    await window.db.promptQueue.update({ id: item.id, status: 'pending' });
-    this._refreshItemEl(item.id);
-    this._updateSummary();
-    this._updateToolbarRunState(false);
-    if (this._selectedId === item.id) this._renderDetail(item);
-  }
-
-  // ----------------------------------------------------------------
-  // Step progress bar (during approved-plan execution)
-  // ----------------------------------------------------------------
-  _updateStepProgress({ stepNum, total, title, state }) {
-    const tracker = this.container.querySelector('#pqStepTracker');
-    if (!tracker) return;
-
-    // If step tracker isn't built yet (first step marker), build it
-    if (!tracker.children.length && this._activePlan) {
-      const steps = this._activePlan.steps || [];
-      tracker.innerHTML = steps.map(s => `
-        <div class="pq-step-pill pq-step-pill--pending" data-step="${s.id}" title="${escHtml(s.title)}">
-          <span class="pq-step-pill__num">${s.id}</span>
-          <span class="pq-step-pill__label">${escHtml(s.title)}</span>
-        </div>`).join('');
-    }
-
-    const pill = tracker.querySelector(`[data-step="${stepNum}"]`);
-    if (!pill) return;
-    pill.className = `pq-step-pill pq-step-pill--${state}`;
-  }
-
-  // ----------------------------------------------------------------
-  // Resolve the working directory for a queue item.
-  // Always fetches the layer's folder_path fresh from the DB so stale
-  // in-memory data never causes a run in the wrong directory.
-  // Returns { cwd, error } — if error is set, execution should be aborted.
-  // ----------------------------------------------------------------
-  async _resolveItemCwd(item) {
-    if (item.layer_id) {
-      const layer = await window.db.projectLayers.get(item.layer_id);
-      if (layer?.folder_path?.trim()) {
-        return { cwd: layer.folder_path.trim(), error: null };
-      }
-      // Layer exists but has no folder path configured
-      const layerName = layer?.name || item.layer_name || `#${item.layer_id}`;
-      return {
-        cwd:   null,
-        error: `Layer "${layerName}" has no folder path set.\nConfigure it in Layers before running this task.`,
-      };
-    }
-    // No layer attached — fall back to project path
-    const cwd = this._project?.project_path?.trim() || null;
-    if (!cwd) {
-      return { cwd: null, error: 'No project folder selected. Open the project folder first.' };
-    }
-    return { cwd, error: null };
-  }
-
-  // ----------------------------------------------------------------
-  // Run logic
-  // ----------------------------------------------------------------
-  async _runItem(item) {
-    if (this._isRunning) return;
-
-    // Resolve cwd BEFORE locking _isRunning so a bad config doesn't
-    // leave the toolbar stuck in the running state.
-    const { cwd: resolvedCwd, error: cwdError } = await this._resolveItemCwd(item);
-    if (cwdError) {
-      const panel = this.container.querySelector('#pqDetailPanel');
-      if (panel) panel.innerHTML = `
-        <div class="pq-detail">
-          <div class="pq-cwd-error">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="6.5" stroke="#ef4444" stroke-width="1.4"/>
-              <path d="M8 5v3.5M8 10.5v.5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <span>${escHtml(cwdError)}</span>
-          </div>
-        </div>`;
-      return;
-    }
-
-    // Store for _approvePlan to reuse (same run, fresh path already validated)
-    item._resolvedCwd = resolvedCwd;
-
-    this._isRunning = true;
-    this._outputBuf[item.id] = '';
-
-    // Clear prior messages and optimistically show the user prompt immediately
-    await window.db.promptQueueMessages.clear(item.id);
-    this._messages[item.id] = [{ role: 'user', content: item.prompt_text, created_at: new Date().toISOString() }];
-
-    item._pendingUserContent = item.prompt_text;
-    item.status = 'running';
-    const ranAt  = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    item.ran_at  = ranAt;
-    await window.db.promptQueue.update({ id: item.id, status: 'running', ran_at: ranAt });
-
-    this._refreshItemEl(item.id);
-    this._updateSummary();
-    this._updateToolbarRunState(true);
-    this._startRunTimer();
-    if (this._selectedId === item.id) this._renderDetail(item);
-
-    window.db.promptQueue.removeListeners();
-    window.db.promptQueue.onData(({ text }) => this._appendOutput(item.id, text));
-
-    // Planning: when the plan arrives, pause and show the approval card
-    window.db.promptQueue.onPlan(({ plan }) => {
-      this._awaitingApproval = true;
-      this._pendingPlan      = { item, plan };
-    });
-
-    // Step progress during approved-plan execution
-    window.db.promptQueue.onStep((stepInfo) => this._updateStepProgress(stepInfo));
-
-    window.db.promptQueue.onDone(async ({ exitCode }) => {
-      // ── Plan phase done — show approval card instead of finalising ──────
-      if (this._awaitingApproval && this._pendingPlan) {
-        window.db.promptQueue.removeListeners();
-        this._stopRunTimer();
-        this._showPlanCard(this._pendingPlan.item, this._pendingPlan.plan);
-        return;
-      }
-
-      // ── Normal execution done ────────────────────────────────────────────
-      window.db.promptQueue.removeListeners();
-      this._stopRunTimer();
-      this._activePlan = null;
-
-      const succeeded = exitCode === 0;
-      item.status     = succeeded ? 'done' : 'failed';
-      item.exit_code  = exitCode;
-      item.output     = this._outputBuf[item.id] || '';
-
-      // Auto-commit all changes made during the run and capture the SHA
-      if (succeeded) {
-        const sha = await this._commitAfterRun(item);
-        if (sha) item.commit_sha = sha;
-      }
-
-      // Persist the conversation turn — set _isRunning false only after saves
-      // so the follow-up bar cannot appear with a stale empty history
-      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'user',      content: item._pendingUserContent || item.prompt_text });
-      await window.db.promptQueueMessages.add({ queue_item_id: item.id, role: 'assistant', content: item.output });
-      this._messages[item.id] = await window.db.promptQueueMessages.list(item.id);
-      this._isRunning = false;
-
-      await window.db.promptQueue.update({
-        id:         item.id,
-        status:     item.status,
-        output:     item.output,
-        exit_code:  exitCode,
-        commit_sha: item.commit_sha ?? null,
-      });
-
-      // prompt_id linkage removed in v2 architecture
-
-      this._refreshItemEl(item.id);
-      this._updateSummary();
-      this._updateToolbarRunState(false);
-      if (this._selectedId === item.id) this._renderDetail(item);
-
+      // Run All: advance to next pending item
       if (this._runAll && succeeded) {
         const next = this._queue.find(q => q.status === 'pending');
         if (next) {
-          setTimeout(() => this._runItem(next), 200);
+          setTimeout(() => {
+            this._selectItem(next);
+            this._runItem(next, { interactive: false, skipPermissions: true });
+          }, 200);
         } else {
           this._runAll = false;
           this._updateToolbarRunAllState(false);
@@ -884,15 +686,113 @@ export class PromptQueuePage {
       }
     });
 
-    const cfg = this._modelCfg || {};
-    window.db.promptQueue.run({
-      messages:    [{ role: 'user', content: item.prompt_text }],
-      modelConfig: cfg,
-      cwd:         item._resolvedCwd,   // set by _resolveItemCwd above
-      itemLabel:   item.tag || item.story_title || `#${item.id}`,
-      projectName: this._project?.name || '',
+    this._fitTerminal();
+    this._term?.focus();
+
+    const result = await window.app.wfrPty.runInShell({
+      layerId:         String(item.id),
+      prompt:          item.prompt_text,
+      model:           this._modelCfg,
+      cwd,
+      skipPermissions: effectiveSkipPerms,
+      interactive,
     });
+
+    if (!result?.ok) {
+      window.app.wfrPty.offAll();
+      this._reattachPtyListeners();
+      this._stopElapsedTimer();
+      this._term?.write(`${ANSI.red}Failed to start: ${result?.error || 'unknown'}${ANSI.reset}\r\n`);
+      item.status    = 'failed';
+      this._isRunning    = false;
+      this._activeItemId = null;
+      await window.db.promptQueue.update({ id: item.id, status: 'failed' });
+      this._refreshItemEl(item.id);
+      this._updateSummary();
+      this._updateToolbarRunState(false);
+      if (this._selectedId === item.id) this._updateStrip(item);
+    }
   }
+
+  // ── Elapsed timer ────────────────────────────────────────────────────
+
+  _startElapsedTimer(itemId) {
+    this._stopElapsedTimer();
+    this._timerInt = setInterval(() => {
+      const start = this._startTimes[itemId];
+      if (!start) return;
+      const el = this.container.querySelector(`[data-id="${itemId}"] .pq-item__elapsed`);
+      if (el) el.textContent = this._fmt(Date.now() - start);
+    }, 500);
+  }
+
+  _stopElapsedTimer() {
+    if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
+  }
+
+  _fmt(ms) {
+    const s = Math.floor(ms / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+  }
+
+  // ── Resolve CWD ──────────────────────────────────────────────────────
+
+  async _resolveItemCwd(item) {
+    if (item.layer_id) {
+      const layer = await window.db.projectLayers.get(item.layer_id);
+      if (layer?.folder_path?.trim()) {
+        return { cwd: layer.folder_path.trim(), error: null };
+      }
+      const layerName = layer?.name || item.layer_name || `#${item.layer_id}`;
+      return {
+        cwd:   null,
+        error: `Layer "${layerName}" has no folder path set.\nConfigure it in Layers before running this task.`,
+      };
+    }
+    const cwd = this._project?.project_path?.trim() || null;
+    if (!cwd) return { cwd: null, error: 'No project folder selected. Open the project folder first.' };
+    return { cwd, error: null };
+  }
+
+  // ── Commit ───────────────────────────────────────────────────────────
+
+  _updateCommitMsg(item) {
+    const input = this.container.querySelector('#pqGitCommitMsg');
+    if (!input) return;
+    const title = item.story_title || item.tag || 'Task';
+    input.value = `#${item.id} - ${title}`;
+  }
+
+  async _commitChanges() {
+    const msgEl = this.container.querySelector('#pqGitCommitMsg');
+    const btn   = this.container.querySelector('#pqBtnGitCommit');
+    const cwd   = this._getGitCwd();
+    if (!cwd || !msgEl) return;
+
+    const msg = msgEl.value.trim();
+    if (!msg || this._gitFiles.length === 0) return;
+
+    btn?.classList.add('pq-git-commit-btn--busy');
+    if (btn) btn.disabled = true;
+
+    try {
+      const safeMsg = msg.replace(/'/g, "''");
+      const r = await window.db.terminal.exec({
+        command: `git add -A 2>&1; git commit -m '${safeMsg}' 2>&1`,
+        cwd,
+      });
+      if (r.exitCode === 0 || (r.stdout || '').includes('master') || (r.stdout || '').includes('main') || (r.stdout || '').includes('HEAD')) {
+        this._gitExpandedFiles.clear();
+      }
+      await this._refreshGitPanel();
+    } catch {
+      await this._refreshGitPanel();
+    } finally {
+      btn?.classList.remove('pq-git-commit-btn--busy');
+    }
+  }
+
+  // ── Toolbar helpers ──────────────────────────────────────────────────
 
   _updateToolbarRunState(running) {
     const stop   = this.container.querySelector('#pqBtnStop');
@@ -909,7 +809,7 @@ export class PromptQueuePage {
   }
 
   _updateSummary() {
-    const el      = this.container.querySelector('#pqSummary');
+    const el = this.container.querySelector('#pqSummary');
     if (!el) return;
     const pending = this._queue.filter(q => q.status === 'pending').length;
     const done    = this._queue.filter(q => q.status === 'done').length;
@@ -919,139 +819,220 @@ export class PromptQueuePage {
     el.textContent = parts.join(' · ');
   }
 
-  // ----------------------------------------------------------------
-  // Git commit after successful run
-  // ----------------------------------------------------------------
-  async _commitAfterRun(item) {
-    if (!this._project?.project_path) return null;
-    const cwd = this._project.project_path;
+  // ── Git panel ────────────────────────────────────────────────────────
+
+  _getGitCwd() {
+    return this._project?.project_path || null;
+  }
+
+  _parseGitStatus(output) {
+    return output.split('\n')
+      .filter(l => /^[ MADRCU?!]{2} .+/.test(l))
+      .map(line => {
+        const xy   = line.substring(0, 2);
+        const file = line.substring(3).trim().replace(/^"(.*)"$/, '$1');
+        let statusType;
+        if (xy.includes('?'))      statusType = 'U';
+        else if (xy.includes('A')) statusType = 'A';
+        else if (xy.includes('D')) statusType = 'D';
+        else if (xy.includes('R')) statusType = 'R';
+        else                       statusType = 'M';
+        return { xy, statusType, file };
+      });
+  }
+
+  _renderDiffBody(diffText) {
+    const esc = escHtml;
+    if (!diffText || !diffText.trim()) return '<div class="git-diff-empty">No diff available.</div>';
+    let html = '<table class="git-diff-table"><tbody>';
+    let oldLine = 0, newLine = 0;
+    for (const raw of diffText.split('\n')) {
+      if (/^(diff --git|index |--- |\+\+\+ |Binary |new file|deleted file|old mode|new mode|rename )/.test(raw)) continue;
+      if (raw.startsWith('@@')) {
+        const m = raw.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)/);
+        if (m) {
+          oldLine = parseInt(m[1]); newLine = parseInt(m[2]);
+          const hunkHeader = raw.match(/@@ [^@]+ @@/)?.[0] || raw;
+          const ctx = m[3] ? esc(m[3].trim()) : '';
+          html += `<tr class="gd-row gd-row--hunk"><td class="gd-ln"></td><td class="gd-ln"></td><td class="gd-code">${esc(hunkHeader)}${ctx ? ` <span class="gd-hunk-ctx">${ctx}</span>` : ''}</td></tr>`;
+        }
+        continue;
+      }
+      if (raw.startsWith('-')) {
+        html += `<tr class="gd-row gd-row--del"><td class="gd-ln gd-ln--del">${oldLine++}</td><td class="gd-ln"></td><td class="gd-code gd-code--del"><span class="gd-sign">&#x2212;</span>${esc(raw.slice(1))}</td></tr>`;
+      } else if (raw.startsWith('+')) {
+        html += `<tr class="gd-row gd-row--add"><td class="gd-ln"></td><td class="gd-ln gd-ln--add">${newLine++}</td><td class="gd-code gd-code--add"><span class="gd-sign">+</span>${esc(raw.slice(1))}</td></tr>`;
+      } else if (raw.startsWith(' ')) {
+        html += `<tr class="gd-row gd-row--ctx"><td class="gd-ln">${oldLine++}</td><td class="gd-ln">${newLine++}</td><td class="gd-code">${esc(raw.slice(1))}</td></tr>`;
+      } else if (raw.startsWith('\\')) {
+        html += `<tr class="gd-row gd-row--meta"><td class="gd-ln"></td><td class="gd-ln"></td><td class="gd-code gd-code--meta">${esc(raw)}</td></tr>`;
+      }
+    }
+    html += '</tbody></table>';
+    return html;
+  }
+
+  async _refreshGitPanel() {
+    const cwd         = this._getGitCwd();
+    const wrap        = this.container.querySelector('#pqGitAccordion');
+    const headerBadge = this.container.querySelector('#pqGitBadge');
+    const panelBadge  = this.container.querySelector('#pqGitPanelBadge');
+    const commitBtn   = this.container.querySelector('#pqBtnGitCommit');
+    if (!cwd || !wrap) return;
+
+    const _updateBadges = (count) => {
+      if (headerBadge) { headerBadge.textContent = String(count); headerBadge.hidden = count === 0; }
+      if (panelBadge)  { panelBadge.textContent  = String(count); panelBadge.hidden  = count === 0; }
+      if (commitBtn && !commitBtn.classList.contains('pq-git-commit-btn--busy')) {
+        commitBtn.disabled = count === 0;
+      }
+    };
+
     try {
-      // Snapshot HEAD before committing so we can detect if a new commit was made
-      const before    = await window.db.terminal.exec({ command: 'git rev-parse HEAD 2>&1', cwd });
-      const beforeSha = before?.stdout?.trim();
+      const r     = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd });
+      const files = this._parseGitStatus(r.stdout || '');
 
-      // Build commit message from item context
-      const tag     = item.tag ? `[${item.tag}] ` : '';
-      const title   = (item.story_title || `Queue #${item.id}`).replace(/'/g, "''");
-      const message = `DevFlow: ${tag}${title}`;
+      const noChange = files.length === this._gitFiles.length &&
+        files.every((f, i) => f.file === this._gitFiles[i]?.file && f.statusType === this._gitFiles[i]?.statusType);
 
-      // Stage all changes and commit
-      await window.db.terminal.exec({ command: 'git add -A', cwd });
-      await window.db.terminal.exec({ command: `git commit -m '${message}'`, cwd });
+      if (noChange && wrap.querySelector('.git-accordion__item')) {
+        _updateBadges(files.length);
+        return;
+      }
 
-      // Read HEAD after commit
-      const after    = await window.db.terminal.exec({ command: 'git rev-parse HEAD 2>&1', cwd });
-      const afterSha = after?.stdout?.trim();
-
-      // Only return a SHA if a new commit was actually created
-      return (afterSha && afterSha !== beforeSha) ? afterSha : null;
+      this._gitFiles = files;
+      _updateBadges(files.length);
+      if (this._gitPanelVisible) await this._renderGitAccordion(files, cwd);
     } catch {
-      return null; // not a git repo, git not installed, or nothing to commit — fail silently
+      if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Not a git repository.</div>';
     }
   }
 
-  // ----------------------------------------------------------------
-  // Markdown renderer
-  // ----------------------------------------------------------------
-  _renderMarkdown(text) {
-    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const lines = text.split('\n');
-    const out = [];
-    let inCode = false, codeLines = [], inUl = false, inOl = false, lastBlock = '';
-    let inTable = false, tableLines = [];
-    let inSvg = false, svgLines = [];
-
-    const closeList = () => {
-      if (inUl) { out.push('</ul>'); inUl = false; lastBlock = 'list'; }
-      if (inOl) { out.push('</ol>'); inOl = false; lastBlock = 'list'; }
-    };
-    const flushTable = () => {
-      if (!inTable) return;
-      inTable = false;
-      if (tableLines.length < 2) {
-        tableLines.forEach(l => out.push(`<p>${this._inlineMarkdown(esc(l))}</p>`));
-        tableLines = []; lastBlock = 'p'; return;
-      }
-      const parseRow = r => r.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-      const isSep = r => /^\|?[\s\-|:]+\|?$/.test(r) && r.includes('-');
-      const sepIdx = tableLines.findIndex(isSep);
-      const headRows = sepIdx > 0 ? tableLines.slice(0, sepIdx) : [];
-      const bodyRows = tableLines.slice(sepIdx + 1);
-      let html = '<table class="md-table">';
-      if (headRows.length) {
-        html += '<thead>';
-        headRows.forEach(r => { html += '<tr>' + parseRow(r).map(c => `<th>${this._inlineMarkdown(esc(c))}</th>`).join('') + '</tr>'; });
-        html += '</thead>';
-      }
-      if (bodyRows.length) {
-        html += '<tbody>';
-        bodyRows.forEach(r => { html += '<tr>' + parseRow(r).map(c => `<td>${this._inlineMarkdown(esc(c))}</td>`).join('') + '</tr>'; });
-        html += '</tbody>';
-      }
-      html += '</table>';
-      out.push(html); tableLines = []; lastBlock = 'table';
-    };
-
-    for (const line of lines) {
-      if (!inCode && !inSvg && line.trimStart().toLowerCase().startsWith('<svg')) {
-        closeList(); inSvg = true; svgLines = [line];
-        if (line.includes('</svg>')) { out.push(`<div class="md-svg">${svgLines.join('\n')}</div>`); svgLines = []; inSvg = false; lastBlock = 'svg'; }
-        continue;
-      }
-      if (inSvg) {
-        svgLines.push(line);
-        if (line.includes('</svg>')) { out.push(`<div class="md-svg">${svgLines.join('\n')}</div>`); svgLines = []; inSvg = false; lastBlock = 'svg'; }
-        continue;
-      }
-      if (line.trimStart().startsWith('```')) {
-        closeList();
-        if (inCode) { out.push(`<pre><code>${codeLines.join('\n')}</code></pre>`); codeLines = []; inCode = false; lastBlock = 'code'; }
-        else { inCode = true; }
-        continue;
-      }
-      if (inCode) { codeLines.push(esc(line)); continue; }
-      const hm = line.match(/^(#{1,6})\s+(.*)/);
-      if (hm) { closeList(); out.push(`<h${hm[1].length}>${esc(hm[2])}</h${hm[1].length}>`); lastBlock = 'heading'; continue; }
-      if (/^[-*_]{3,}\s*$/.test(line)) { closeList(); out.push('<hr>'); lastBlock = 'hr'; continue; }
-      const ulm = line.match(/^[-*+]\s+(.*)/);
-      if (ulm) { if (inOl) { out.push('</ol>'); inOl = false; } if (!inUl) { out.push('<ul>'); inUl = true; } out.push(`<li>${this._inlineMarkdown(esc(ulm[1]))}</li>`); lastBlock = 'list'; continue; }
-      const olm = line.match(/^\d+\.\s+(.*)/);
-      if (olm) { if (inUl) { out.push('</ul>'); inUl = false; } if (!inOl) { out.push('<ol>'); inOl = true; } out.push(`<li>${this._inlineMarkdown(esc(olm[1]))}</li>`); lastBlock = 'list'; continue; }
-      const bqm = line.match(/^>\s?(.*)/);
-      if (bqm) { closeList(); out.push(`<blockquote>${this._inlineMarkdown(esc(bqm[1]))}</blockquote>`); lastBlock = 'blockquote'; continue; }
-      if (line.trim().startsWith('|')) { closeList(); inTable = true; tableLines.push(line.trim()); continue; }
-      if (inTable) flushTable();
-      if (line.trim() === '') { closeList(); if (lastBlock === 'p') { out.push('<br>'); lastBlock = 'br'; } continue; }
-      closeList();
-      out.push(`<p>${this._inlineMarkdown(esc(line))}</p>`); lastBlock = 'p';
+  async _renderGitAccordion(files, cwd) {
+    const wrap = this.container.querySelector('#pqGitAccordion');
+    if (!wrap) return;
+    if (files.length === 0) {
+      wrap.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
+      return;
     }
-    closeList();
-    if (inTable) flushTable();
-    if (inCode) out.push(`<pre><code>${codeLines.join('\n')}</code></pre>`);
-    return out.join('');
+
+    wrap.innerHTML = files.map((f, i) => {
+      const expanded = this._gitExpandedFiles.has(f.file);
+      return `
+        <div class="git-accordion__item${expanded ? '' : ' git-accordion__item--collapsed'}" data-idx="${i}">
+          <button class="git-accordion__header" data-idx="${i}" aria-expanded="${expanded}" data-file="${escHtml(f.file)}">
+            <span class="git-diff-file__status git-diff-file__status--${f.statusType}">${f.statusType}</span>
+            <span class="git-accordion__filename">${escHtml(f.file)}</span>
+            <svg class="git-accordion__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="git-accordion__body" id="pqGdBody${i}" data-loaded="false">
+            ${expanded ? '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>' : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    wrap.querySelectorAll('.git-accordion__header').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx      = parseInt(btn.dataset.idx);
+        const file     = btn.dataset.file;
+        const body     = wrap.querySelector(`#pqGdBody${idx}`);
+        const item     = wrap.querySelector(`.git-accordion__item[data-idx="${idx}"]`);
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+
+        btn.setAttribute('aria-expanded', String(!expanded));
+        item.classList.toggle('git-accordion__item--collapsed', expanded);
+
+        if (!expanded) {
+          this._gitExpandedFiles.add(file);
+          if (body && body.dataset.loaded !== 'true') {
+            body.innerHTML = '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>';
+            const fileInfo = files[idx];
+            if (fileInfo) this._loadGitDiffInto(fileInfo, idx, cwd);
+          }
+        } else {
+          this._gitExpandedFiles.delete(file);
+        }
+      });
+    });
+
+    const toLoad = files.map((f, i) => ({ f, i })).filter(({ f }) => this._gitExpandedFiles.has(f.file));
+    if (toLoad.length > 0) {
+      await Promise.all(toLoad.map(({ f, i }) => this._loadGitDiffInto(f, i, cwd)));
+    }
   }
 
-  _inlineMarkdown(s) {
-    return s
-      .replace(/`([^`]+)`/g,          '<code>$1</code>')
-      .replace(/\*\*\*(.+?)\*\*\*/g,  '<strong><em>$1</em></strong>')
-      .replace(/\*\*(.+?)\*\*/g,      '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g,          '<em>$1</em>')
-      .replace(/~~(.+?)~~/g,          '<del>$1</del>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  async _loadGitDiffInto(fileInfo, idx, cwd) {
+    const body = this.container.querySelector(`#pqGdBody${idx}`);
+    if (!body) return;
+    try {
+      let diffText = '';
+      if (fileInfo.statusType === 'U') {
+        const r = await window.db.terminal.exec({
+          command: `Get-Content -Raw -Encoding UTF8 "${fileInfo.file}" 2>&1`,
+          cwd,
+        });
+        const content    = (r.stdout || '').replace(/\r\n/g, '\n');
+        const addedLines = content.split('\n').map(l => `+${l}`).join('\n');
+        diffText = `@@ -0,0 +1 @@\n${addedLines}`;
+      } else {
+        const r1 = await window.db.terminal.exec({ command: `git diff HEAD -- "${fileInfo.file}" 2>&1`, cwd });
+        diffText = (r1.stdout || '').trim();
+        if (!diffText) {
+          const r2 = await window.db.terminal.exec({ command: `git diff --cached -- "${fileInfo.file}" 2>&1`, cwd });
+          diffText = (r2.stdout || '').trim();
+        }
+      }
+      body.innerHTML = this._renderDiffBody(diffText);
+      body.dataset.loaded = 'true';
+    } catch {
+      body.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
+    }
   }
 
+  _expandCollapseAll(expand) {
+    const cwd  = this._getGitCwd();
+    const wrap = this.container.querySelector('#pqGitAccordion');
+    if (!wrap || !cwd) return;
+    wrap.querySelectorAll('.git-accordion__item').forEach((item, idx) => {
+      const btn  = item.querySelector('.git-accordion__header');
+      const body = item.querySelector('.git-accordion__body');
+      const file = btn?.dataset.file;
+      if (!btn || !body || !file) return;
+      btn.setAttribute('aria-expanded', String(expand));
+      item.classList.toggle('git-accordion__item--collapsed', !expand);
+      if (expand) {
+        this._gitExpandedFiles.add(file);
+        if (body.dataset.loaded !== 'true') {
+          body.innerHTML = '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>';
+          const fileInfo = this._gitFiles[idx];
+          if (fileInfo) this._loadGitDiffInto(fileInfo, idx, cwd);
+        }
+      } else {
+        this._gitExpandedFiles.delete(file);
+      }
+    });
+  }
 
-  // ----------------------------------------------------------------
-  // Model dropdown
-  // ----------------------------------------------------------------
+  _startGitPolling() {
+    this._stopGitPolling();
+    this._refreshGitPanel();
+    this._gitPollInterval = setInterval(() => this._refreshGitPanel(), 5000);
+  }
+
+  _stopGitPolling() {
+    if (this._gitPollInterval) { clearInterval(this._gitPollInterval); this._gitPollInterval = null; }
+  }
+
+  // ── Model dropdown ───────────────────────────────────────────────────
+
   async _reloadModelDropdown() {
     if (this._picker) await this._picker.reload();
   }
 
-  // ----------------------------------------------------------------
-  // Events
-  // ----------------------------------------------------------------
+  // ── Events ───────────────────────────────────────────────────────────
+
   _bindEvents() {
     this.container.querySelector('#pqBtnBack')
       .addEventListener('click', () => this.router.navigate(this._from, { projectId: this.projectId }));
@@ -1059,8 +1040,47 @@ export class PromptQueuePage {
     this.container.querySelector('#pqBtnModelConfigs')
       .addEventListener('click', () => this.router.navigate('settings', { from: 'prompt-queue', fromParams: { projectId: this.projectId } }));
 
+    // Skip Permissions toggle
+    this.container.querySelector('#pqBtnSkipPerms')
+      ?.addEventListener('click', () => {
+        this._skipPermissions = !this._skipPermissions;
+        const btn   = this.container.querySelector('#pqBtnSkipPerms');
+        const label = this.container.querySelector('#pqSkipPermsLabel');
+        if (btn)   btn.setAttribute('aria-pressed', String(this._skipPermissions));
+        if (btn)   btn.classList.toggle('pq-perm-btn--on', this._skipPermissions);
+        if (label) label.textContent = this._skipPermissions ? 'ON' : 'OFF';
+      });
 
+    // Git panel toggle
+    this.container.querySelector('#pqBtnGitToggle')
+      ?.addEventListener('click', () => {
+        this._gitPanelVisible = !this._gitPanelVisible;
+        const panel = this.container.querySelector('#pqGitPanel');
+        panel?.toggleAttribute('hidden', !this._gitPanelVisible);
+        this.container.querySelector('#pqBtnGitToggle')
+          ?.classList.toggle('pq-git-toggle-btn--active', this._gitPanelVisible);
+        if (this._gitPanelVisible) this._refreshGitPanel();
+      });
 
+    this.container.querySelector('#pqBtnGitClose')
+      ?.addEventListener('click', () => {
+        this._gitPanelVisible = false;
+        this.container.querySelector('#pqGitPanel')?.setAttribute('hidden', '');
+        this.container.querySelector('#pqBtnGitToggle')
+          ?.classList.remove('pq-git-toggle-btn--active');
+      });
+
+    this.container.querySelector('#pqBtnGitCommit')
+      ?.addEventListener('click', () => this._commitChanges());
+
+    this.container.querySelector('#pqBtnGitRefresh')
+      ?.addEventListener('click', () => this._refreshGitPanel());
+    this.container.querySelector('#pqBtnGitExpandAll')
+      ?.addEventListener('click', () => this._expandCollapseAll(true));
+    this.container.querySelector('#pqBtnGitCollapseAll')
+      ?.addEventListener('click', () => this._expandCollapseAll(false));
+
+    // Run All — non-interactive batch, always skips permissions
     this.container.querySelector('#pqBtnRunAll')
       .addEventListener('click', () => {
         if (this._isRunning) return;
@@ -1069,34 +1089,35 @@ export class PromptQueuePage {
         this._runAll = true;
         this._updateToolbarRunAllState(true);
         this._selectItem(next);
-        this._runItem(next);
+        this._runItem(next, { interactive: false, skipPermissions: true });
       });
 
+    // Stop
     this.container.querySelector('#pqBtnStop')
       .addEventListener('click', () => {
         this._runAll = false;
-        window.db.promptQueue.kill();
+        window.app.wfrPty.kill();
         this._updateToolbarRunState(false);
         this._updateToolbarRunAllState(false);
       });
 
+    // Clear Done
     this.container.querySelector('#pqBtnClearDone')
       .addEventListener('click', async () => {
         await window.db.promptQueue.clearDone(this.projectId);
-        const removed = this._queue.filter(q => ['done', 'failed', 'skipped'].includes(q.status));
-        removed.forEach(q => delete this._messages[q.id]);
         this._queue = this._queue.filter(q => !['done', 'failed', 'skipped'].includes(q.status));
         if (this._selectedId) {
           const stillExists = this._queue.find(q => q.id === this._selectedId);
           if (!stillExists) {
             this._selectedId = null;
-            const detailPanel = this.container.querySelector('#pqDetailPanel');
-            if (detailPanel) detailPanel.innerHTML = `<div class="pq-detail-empty">Select an item to view details</div>`;
+            this.container.querySelector('#pqTermStrip')?.setAttribute('hidden', '');
+            if (this._term) { this._term.reset(); this._term.writeln(`${ANSI.dim}(no item selected)${ANSI.reset}`); }
           }
         }
         this._renderList();
       });
 
+    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       if (e.target.matches('input, textarea, select, [contenteditable]')) return;
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'Enter') {
