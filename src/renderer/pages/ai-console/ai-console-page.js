@@ -110,7 +110,7 @@ Available tables (always filter with project_id = ${pid}):
                      status   : open | in_progress | resolved | closed
 
   workflows         (feature, description, status)
-                     status   : open | in_progress | completed
+                     status   : open | in_progress | completed | differed
 
   project_layers    (name, description, folder_path)
 

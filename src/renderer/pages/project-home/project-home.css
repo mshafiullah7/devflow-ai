@@ -265,9 +265,10 @@
   white-space: nowrap;
 }
 .ph-wf-pill b { font-weight: 700; }
-.ph-wf-pill--open   { background: var(--surface-hover); color: var(--text-muted); }
-.ph-wf-pill--inprog { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
-.ph-wf-pill--done   { background: rgba(34,197,94,.12); color: #16a34a; }
+.ph-wf-pill--open     { background: var(--surface-hover); color: var(--text-muted); }
+.ph-wf-pill--inprog   { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.ph-wf-pill--done     { background: rgba(34,197,94,.12); color: #16a34a; }
+.ph-wf-pill--differed { background: rgba(168,85,247,.12); color: #9333ea; }
 .ph-wf-pill--review { background: rgba(217,119,6,.12); color: #d97706; }
 .ph-wf-pill--failed { background: rgba(220,38,38,.12); color: #dc2626; }
 

@@ -328,7 +328,7 @@ export class WorkflowsPage {
     for (const [pageId, workflows] of grouped) {
       const page = (this._pages || []).find(p => p.id === pageId);
       const pageTitle = page?.title || 'Page';
-      const allDone = workflows.every(w => (w.status || 'open') === 'completed');
+      const allDone = workflows.every(w => (w.status || 'open') === 'completed' || w.status === 'differed');
       parts.push(`
         <div class="wf-group${allDone ? ' wf-group--collapsed' : ''}">
           <div class="wf-group-header">
@@ -472,6 +472,7 @@ export class WorkflowsPage {
             <option value="open"        ${currentStatus === 'open'        ? 'selected' : ''}>Open</option>
             <option value="in_progress" ${currentStatus === 'in_progress' ? 'selected' : ''}>In Progress</option>
             <option value="completed"   ${currentStatus === 'completed'   ? 'selected' : ''}>Completed</option>
+            <option value="differed"    ${currentStatus === 'differed'    ? 'selected' : ''}>Differed</option>
           </select>
         </div>
         <div class="wf-form-actions">
@@ -537,6 +538,7 @@ export class WorkflowsPage {
       open:        { label: 'Open',        cls: 'wf-wfstatus--open'     },
       in_progress: { label: 'In Progress', cls: 'wf-wfstatus--progress' },
       completed:   { label: 'Completed',   cls: 'wf-wfstatus--done'     },
+      differed:    { label: 'Differed',    cls: 'wf-wfstatus--differed' },
     };
     const s = cfg[status] || cfg.open;
     return `<span class="wf-workflow-status ${s.cls}">${s.label}</span>`;

@@ -81,6 +81,7 @@ export class ProjectHomePage {
     const wfOpen      = workflows.filter(w => !w.status || w.status === 'open').length;
     const wfInProg    = workflows.filter(w => w.status === 'in_progress').length;
     const wfCompleted = workflows.filter(w => w.status === 'completed').length;
+    const wfDiffered  = workflows.filter(w => w.status === 'differed').length;
     const wfTotal     = workflows.length;
 
     const wfCompPct   = wfTotal ? Math.round((wfCompleted / wfTotal) * 100) : 0;
@@ -88,9 +89,10 @@ export class ProjectHomePage {
 
     const wfPills = `
       <div class="ph-stat-box__status-pills">
-        ${wfOpen      > 0 ? `<span class="ph-wf-pill ph-wf-pill--open">Open <b>${wfOpen}</b></span>`           : ''}
-        ${wfInProg    > 0 ? `<span class="ph-wf-pill ph-wf-pill--inprog">In Progress <b>${wfInProg}</b></span>` : ''}
-        ${wfCompleted > 0 ? `<span class="ph-wf-pill ph-wf-pill--done">Completed <b>${wfCompleted}</b></span>` : ''}
+        ${wfOpen      > 0 ? `<span class="ph-wf-pill ph-wf-pill--open">Open <b>${wfOpen}</b></span>`             : ''}
+        ${wfInProg    > 0 ? `<span class="ph-wf-pill ph-wf-pill--inprog">In Progress <b>${wfInProg}</b></span>`   : ''}
+        ${wfCompleted > 0 ? `<span class="ph-wf-pill ph-wf-pill--done">Completed <b>${wfCompleted}</b></span>`    : ''}
+        ${wfDiffered  > 0 ? `<span class="ph-wf-pill ph-wf-pill--differed">Differed <b>${wfDiffered}</b></span>` : ''}
         ${!wfTotal ? `<span class="ph-wf-pill ph-wf-pill--open">No workflows yet</span>` : ''}
       </div>`;
 

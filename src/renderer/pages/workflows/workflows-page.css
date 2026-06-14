@@ -1021,6 +1021,7 @@
 .wf-wfstatus--open     { background: var(--surface-hover); color: var(--text-muted); }
 .wf-wfstatus--progress { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 .wf-wfstatus--done     { background: rgba(34,197,94,.12); color: #16a34a; }
+.wf-wfstatus--differed { background: rgba(168,85,247,.12); color: #9333ea; }
 
 
 /* AI Edit styles live in workflow-ai-edit-page.css */
