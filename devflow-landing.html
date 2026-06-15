@@ -50,14 +50,20 @@
 
     /* ── Logo ── */
     .logo-mark {
-      font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700;
-      font-size: 1.15rem; color: var(--teal); letter-spacing: -0.02em;
-      display: flex; align-items: center; line-height: 1;
+      font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600;
+      font-size: 1.15rem; color: var(--teal); letter-spacing: 0.02em;
+      display: flex; align-items: center; gap: 0; line-height: 1;
     }
-    .logo-flow { color: var(--orange); font-weight: 800; }
+    .logo-i-wrap { position: relative; display: inline-block; }
+    .logo-chevron {
+      position: absolute; top: -0.32em; left: 50%;
+      transform: translateX(calc(-50% - 2px));
+      width: 0.65em; height: 0.65em; fill: var(--orange); overflow: visible;
+    }
+    .logo-mark span[style*="font-weight:600"] { color: var(--teal); }
     .logo-suffix {
       font-family: 'Outfit', sans-serif; font-weight: 300;
-      color: var(--muted); font-size: 1rem; margin-left: 4px;
+      color: var(--muted); font-size: 1rem; margin-left: 3px;
     }
 
     /* ── Nav ── */
@@ -263,28 +269,6 @@
     .agent-card h4 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.88rem; font-weight: 700; margin-bottom: 0.3rem; }
     .agent-card p { font-size: 0.8rem; color: var(--muted); font-weight: 300; line-height: 1.5; }
 
-    /* ── Comparison ── */
-    .compare-section { padding: 5.5rem 1.5rem; max-width: 980px; margin: 0 auto; }
-    .compare-table {
-      width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 2.5rem;
-      border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border);
-    }
-    .compare-table thead th {
-      background: var(--teal); color: #fff; padding: 0.85rem 1rem;
-      font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; font-size: 0.82rem;
-      letter-spacing: 0.3px; text-align: left;
-    }
-    .compare-table thead th:first-child { background: #004f4d; }
-    .compare-table thead th.hl { background: #005553; }
-    .compare-table tbody tr:nth-child(even) td { background: var(--bg-alt); }
-    .compare-table tbody tr:nth-child(odd)  td { background: var(--bg); }
-    .compare-table tbody tr:hover td { background: var(--teal-light); }
-    .compare-table td { padding: 0.72rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-2); font-weight: 300; }
-    .compare-table td:first-child { font-weight: 500; color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; }
-    .compare-table td.hl { background: var(--teal-light) !important; }
-    .check   { color: var(--teal);   font-weight: 700; }
-    .cross   { color: #d1d5db;       font-weight: 600; }
-    .partial { color: var(--orange); font-weight: 600; }
 
     /* ── Effort ── */
     .effort-section { background: var(--bg-alt); border-top: 1px solid var(--border); padding: 5.5rem 1.5rem; }
@@ -331,8 +315,7 @@
       .nav-links { gap: 1rem; }
       .hero { padding: 3rem 1rem 2rem; }
       .mock-sidebar, .mock-ai { display: none; }
-      .compare-table { font-size: 0.75rem; }
-      .compare-table td, .compare-table th { padding: 0.55rem 0.6rem; }
+
     }
   </style>
 </head>
@@ -340,23 +323,24 @@
 
 <!-- ── Nav ── -->
 <nav>
-  <div class="logo-mark">Dev<span class="logo-flow">Flow</span><span class="logo-suffix">&nbsp;·ai</span></div>
+  <div class="logo-mark">
+    M<span>o</span><span class="logo-i-wrap">ı<svg class="logo-chevron" viewBox="0 0 24 24"><path d="M-20 11h32v2H-20z M14.59 7.41L19.17 12L14.59 16.59L16 18L22 12L16 6z M9.59 7.41L14.17 12L9.59 16.59L11 18L17 12L11 6z"/></svg></span>l<span style="font-weight:600">Stack</span><span class="logo-suffix">&nbsp;devflow.ai</span>
+  </div>
   <div class="nav-links">
     <a href="#phases">SDLC</a>
     <a href="#features">Features</a>
     <a href="#ai">AI</a>
-    <a href="#compare">Compare</a>
-    <a href="https://github.com/" target="_blank" class="btn-nav">GitHub →</a>
+    <a href="#download" class="btn-nav">Download →</a>
   </div>
 </nav>
 
 <!-- ── Hero ── -->
 <section class="hero">
-  <div class="badge">🚀 Local-First · Multi-Model · MIT License</div>
+  <div class="badge">🚀 Local-First · Multi-Model · Free to Download</div>
   <h1>Your entire SDLC.<br><em>One tool.</em> <strong>AI at every step.</strong></h1>
   <p>DevFlow AI is a local-first desktop workspace that covers the full development lifecycle — from writing specs and generating mockups, to running tests and committing code — with AI assistance at every phase. No subscriptions. No cloud accounts. Bring your own model.</p>
   <div class="hero-actions">
-    <a href="#" class="btn btn-primary">⬇ Download for Windows</a>
+    <a href="#download" class="btn btn-primary">⬇ Download Free</a>
     <a href="#features" class="btn btn-secondary">Explore features →</a>
   </div>
 </section>
@@ -671,106 +655,6 @@
   </div>
 </section>
 
-<!-- ── Comparison ── -->
-<section class="compare-section" id="compare">
-  <div class="section-label">Comparison</div>
-  <div class="section-title">One tool. No compromises.</div>
-  <div class="section-sub">The only tool that covers the full SDLC without cloud accounts, subscriptions, or stitching together five separate apps.</div>
-  <table class="compare-table">
-    <thead>
-      <tr>
-        <th>Capability</th>
-        <th class="hl">DevFlow AI</th>
-        <th>Notion</th>
-        <th>Linear</th>
-        <th>Cursor</th>
-        <th>Obsidian</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Full SDLC — plan to ship</td>
-        <td class="check hl">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-      </tr>
-      <tr>
-        <td>Local-first, no cloud required</td>
-        <td class="check hl">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="partial">~</td>
-        <td class="check">✓</td>
-      </tr>
-      <tr>
-        <td>Agentic code execution</td>
-        <td class="check hl">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="check">✓</td>
-        <td class="cross">—</td>
-      </tr>
-      <tr>
-        <td>Multi-model AI (5 backends)</td>
-        <td class="check hl">✓</td>
-        <td class="partial">~</td>
-        <td class="cross">—</td>
-        <td class="partial">~</td>
-        <td class="cross">—</td>
-      </tr>
-      <tr>
-        <td>Multi-repo Git UI</td>
-        <td class="check hl">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="partial">~</td>
-        <td class="cross">—</td>
-      </tr>
-      <tr>
-        <td>Built-in test runner</td>
-        <td class="check hl">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-      </tr>
-      <tr>
-        <td>Issue tracker</td>
-        <td class="check hl">✓</td>
-        <td class="check">✓</td>
-        <td class="check">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-      </tr>
-      <tr>
-        <td>AI UI mockup generation</td>
-        <td class="check hl">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-      </tr>
-      <tr>
-        <td>Batch prompt queue</td>
-        <td class="check hl">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-      </tr>
-      <tr>
-        <td>Encrypted local API key storage</td>
-        <td class="check hl">✓</td>
-        <td class="cross">—</td>
-        <td class="cross">—</td>
-        <td class="check">✓</td>
-        <td class="cross">—</td>
-      </tr>
-    </tbody>
-  </table>
-</section>
 
 <!-- ── Before & After ── -->
 <section class="effort-section">
@@ -814,25 +698,37 @@
 </section>
 
 <!-- ── CTA ── -->
-<section class="download">
+<section class="download" id="download">
   <h2>One tool for the full lifecycle.</h2>
-  <p>Free and open source. Local-first. Runs on Windows — macOS and Linux builds coming soon.</p>
+  <p>Free to download. Local-first. Available for Windows, macOS, and Linux.</p>
   <div class="download-actions">
-    <a href="#" class="btn btn-white">⬇ Download Latest Release</a>
-    <a href="https://github.com/" target="_blank" class="btn btn-outline-white">View Source on GitHub</a>
+    <a href="#" class="btn btn-white">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M0 12.402c0 5.975 3.918 11.058 9.374 12.778l-.02-8.932H6.524v-3.846h2.83V9.536c0-2.818 1.683-4.372 4.225-4.372 1.223 0 2.503.219 2.503.219v2.77H14.73c-1.388 0-1.822.864-1.822 1.75v2.099h3.1l-.496 3.846h-2.604l-.02 8.932C18.082 23.46 22 18.377 22 12.402 22 5.937 17.074 0 11 0S0 5.937 0 12.402z" opacity="0"/><path d="M17 3H7a4 4 0 00-4 4v10a4 4 0 004 4h10a4 4 0 004-4V7a4 4 0 00-4-4z" opacity="0"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" opacity="0"/><rect x="3" y="3" width="18" height="18" rx="2" opacity="0"/><path d="M21 5.25H3A.75.75 0 002.25 6v12c0 .414.336.75.75.75h18a.75.75 0 00.75-.75V6a.75.75 0 00-.75-.75zM11.03 4.5h1.94v.75h-1.94V4.5z" opacity="0"/>
+              <path d="M3 4a1 1 0 100 2 1 1 0 000-2zm3.5 0a1 1 0 100 2 1 1 0 000-2zm3.5 0h11v2H10V4zM3 9h18v11H3V9z"/></svg>
+      Windows &nbsp;<span style="opacity:0.6;font-weight:400;font-size:0.82em">.exe</span>
+    </a>
+    <a href="#" class="btn btn-white">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+      macOS &nbsp;<span style="opacity:0.6;font-weight:400;font-size:0.82em">.dmg</span>
+    </a>
+    <a href="#" class="btn btn-outline-white">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021C7.576.149 3.022 2.842 1.25 7.203.249 9.665.035 12.549.78 15.237c.749 2.691 2.5 5.025 4.966 6.538 2.466 1.513 5.44 2.081 8.321 1.62 2.881-.46 5.543-1.888 7.438-4.03 1.895-2.143 2.997-4.895 3.038-7.743.04-2.848-.986-5.629-2.81-7.819C19.909 1.593 16.377-.013 12.857 0h-.353zm-.123 1.748c2.921-.03 5.793 1.173 7.84 3.212 2.048 2.039 3.238 4.847 3.258 7.728.02 2.88-1.131 5.705-3.152 7.775-2.021 2.07-4.876 3.311-7.797 3.369-2.921.058-5.835-.985-7.938-2.887C2.535 18.842 1.25 16.065 1.195 13.15c-.055-2.914 1.12-5.836 3.106-7.942 1.985-2.107 4.816-3.39 7.737-3.443.114-.003.228-.015.343-.017z"/><path d="M12.502 3.5c-2.44 0-4.42.72-5.94 2.06C5.04 6.9 4.28 8.72 4.28 11c0 1.48.36 2.86 1.06 4.12.7 1.26 1.72 2.28 3.04 3.06 1.32.78 2.82 1.16 4.5 1.16 1.68 0 3.2-.4 4.54-1.2 1.34-.8 2.38-1.9 3.12-3.3.74-1.4 1.12-3 1.12-4.8 0-2.3-.72-4.14-2.14-5.5C18.12 3.18 15.48 3.5 12.502 3.5z" opacity="0"/></svg>
+      Linux &nbsp;<span style="opacity:0.6;font-weight:400;font-size:0.82em">.AppImage</span>
+    </a>
   </div>
+  <p style="margin-top:1.5rem; font-size:0.82rem; opacity:0.55; margin-bottom:0;">All installers are self-contained. No account, no internet connection required to run.</p>
 </section>
 
 <!-- ── Footer ── -->
 <footer>
   <div style="display:flex; align-items:center; gap:10px;">
     <div class="logo-mark" style="font-size:0.95rem">
-      Dev<span class="logo-flow">Flow</span><span class="logo-suffix">&nbsp;·ai</span>
+      M<span>o</span><span class="logo-i-wrap">ı<svg class="logo-chevron" viewBox="0 0 24 24"><path d="M-20 11h32v2H-20z M14.59 7.41L19.17 12L14.59 16.59L16 18L22 12L16 6z M9.59 7.41L14.17 12L9.59 16.59L11 18L17 12L11 6z"/></svg></span>l<span style="font-weight:600">Stack</span><span class="logo-suffix">&nbsp;devflow.ai</span>
     </div>
     <span>·</span>
-    <span>© 2026 DevFlow AI. Local-first software for developers. MIT License.</span>
+    <span>© 2026 <a href="https://moilstack.com" target="_blank">MoilStack Tech LLP</a>. All rights reserved.</span>
   </div>
-  <span>Built with Electron · SQLite · Vanilla JS · <a href="https://github.com/">GitHub</a></span>
+  <span>Built with Electron · SQLite · Vanilla JS</span>
 </footer>
 
 <style>
