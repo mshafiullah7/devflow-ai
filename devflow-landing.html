@@ -234,19 +234,22 @@
     /* ── Features ── */
     .features { background: var(--bg-alt); padding: 5.5rem 1.5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
     .features-inner { max-width: 980px; margin: 0 auto; }
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(265px, 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
-    .feature-card {
+    .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
+    .feat-phase-card {
       background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 1.5rem; transition: box-shadow 0.2s, border-color 0.2s; position: relative;
+      padding: 1.75rem; position: relative; overflow: hidden;
     }
-    .feature-card:hover { box-shadow: 0 4px 20px rgba(0,107,104,0.09); border-color: rgba(0,107,104,0.25); }
-    .phase-dot { position: absolute; top: 1.25rem; right: 1.25rem; width: 8px; height: 8px; border-radius: 50%; }
-    .feature-icon {
-      width: 42px; height: 42px; background: var(--teal-light); border-radius: 10px;
-      display: flex; align-items: center; justify-content: center; font-size: 1.15rem; margin-bottom: 1rem;
-    }
-    .feature-card h3 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
-    .feature-card p { font-size: 0.875rem; color: var(--muted); line-height: 1.55; font-weight: 300; }
+    .feat-phase-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .feat-plan::before  { background: var(--plan); }
+    .feat-build::before { background: var(--build); }
+    .feat-test::before  { background: var(--test); }
+    .feat-ops::before   { background: var(--ops); }
+    .feat-desc { font-size: 0.875rem; color: var(--muted); font-weight: 300; line-height: 1.6; margin: 0.75rem 0 1.25rem; }
+    .feat-modules { display: flex; flex-direction: column; gap: 0.6rem; }
+    .feat-module { display: flex; align-items: baseline; gap: 0.6rem; }
+    .feat-icon { font-size: 0.95rem; flex-shrink: 0; }
+    .feat-name { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.88rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+    .feat-sub { font-size: 0.8rem; color: var(--muted); font-weight: 300; }
 
     /* ── AI section ── */
     .ai-section {
@@ -327,7 +330,6 @@
     M<span>o</span><span class="logo-i-wrap">ı<svg class="logo-chevron" viewBox="0 0 24 24"><path d="M-20 11h32v2H-20z M14.59 7.41L19.17 12L14.59 16.59L16 18L22 12L16 6z M9.59 7.41L14.17 12L9.59 16.59L11 18L17 12L11 6z"/></svg></span>l<span style="font-weight:600">Stack</span><span class="logo-suffix">&nbsp;devflow.ai</span>
   </div>
   <div class="nav-links">
-    <a href="#phases">SDLC</a>
     <a href="#features">Features</a>
     <a href="#ai">AI</a>
     <a href="#download" class="btn-nav">Download →</a>
@@ -468,55 +470,6 @@
   </div>
 </div>
 
-<!-- ── SDLC Phases ── -->
-<section class="phases-section" id="phases">
-  <div class="section-label">SDLC Coverage</div>
-  <div class="section-title">Every phase. One workspace.</div>
-  <div class="section-sub">DevFlow AI maps to the complete software development lifecycle — from writing the first spec to committing the final fix. No phase gaps, no tool-hopping.</div>
-  <div class="phases-grid">
-    <div class="phase-card phase-plan">
-      <div class="phase-badge">📋 Plan</div>
-      <h3>Document &amp; Design</h3>
-      <p>Write requirements, architect your system, and generate UI mockups — all AI-assisted, all stored locally alongside your project.</p>
-      <div class="phase-modules">
-        <span class="phase-module-tag">Documents</span>
-        <span class="phase-module-tag">Layers</span>
-        <span class="phase-module-tag">Mockups</span>
-        <span class="phase-module-tag">Style Guide</span>
-      </div>
-    </div>
-    <div class="phase-card phase-build">
-      <div class="phase-badge">⚡ Build</div>
-      <h3>Code &amp; Track</h3>
-      <p>Run AI coding workflows, queue agentic tasks, track bugs per layer, and chat with your project context automatically loaded.</p>
-      <div class="phase-modules">
-        <span class="phase-module-tag">Workflows</span>
-        <span class="phase-module-tag">Prompt Queue</span>
-        <span class="phase-module-tag">AI Console</span>
-        <span class="phase-module-tag">Issues</span>
-      </div>
-    </div>
-    <div class="phase-card phase-test">
-      <div class="phase-badge">🧪 Test</div>
-      <h3>Generate &amp; Run</h3>
-      <p>AI detects your language from layer setup instructions and generates tests. Run them live with streaming output and history per layer.</p>
-      <div class="phase-modules">
-        <span class="phase-module-tag">Test Generator</span>
-        <span class="phase-module-tag">Test Runner</span>
-      </div>
-    </div>
-    <div class="phase-card phase-ops">
-      <div class="phase-badge">🚀 Ship</div>
-      <h3>Review &amp; Commit</h3>
-      <p>See git changes across all your repos in one unified panel. Stage, diff, and commit each layer without opening a terminal.</p>
-      <div class="phase-modules">
-        <span class="phase-module-tag">Git Changes</span>
-        <span class="phase-module-tag">Notifications</span>
-        <span class="phase-module-tag">Backup</span>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ── Features ── -->
 <section class="features" id="features">
@@ -524,92 +477,48 @@
     <div>
       <div class="section-label">11 Modules</div>
       <div class="section-title">Everything you need. Nothing you don't.</div>
-      <div class="section-sub">Every module is purpose-built for a specific part of the dev lifecycle. Colored dots indicate the phase each module belongs to.</div>
+      <div class="section-sub">Every module is purpose-built for a specific part of the dev lifecycle — from the first spec to the final commit.</div>
     </div>
-    <div class="features-grid">
+    <div class="feat-grid">
 
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--plan)"></div>
-        <div class="feature-icon">📄</div>
-        <h3>Documents</h3>
-        <p>Full Markdown editor with AI-assisted editing, SVG and draw.io diagram embeds, PDF export, reusable templates, and one-click revert for every AI change. Write PRDs, RFCs, and ADRs that live inside your project.</p>
+      <div class="feat-phase-card feat-plan">
+        <div class="phase-badge">📋 Plan</div>
+        <p class="feat-desc">Document your requirements, design the architecture, and generate UI screens — all before writing a line of code.</p>
+        <div class="feat-modules">
+          <div class="feat-module"><span class="feat-icon">📄</span><span class="feat-name">Documents</span><span class="feat-sub">AI Markdown editor · PDF export · draw.io</span></div>
+          <div class="feat-module"><span class="feat-icon">🏗️</span><span class="feat-name">Project Layers</span><span class="feat-sub">Define repos · wires Git, Tests &amp; Issues</span></div>
+          <div class="feat-module"><span class="feat-icon">🎨</span><span class="feat-name">UI Mockups</span><span class="feat-sub">Describe a screen · AI renders HTML/CSS</span></div>
+          <div class="feat-module"><span class="feat-icon">🖌️</span><span class="feat-name">Style Guide</span><span class="feat-sub">Design tokens · feeds Mockup generator</span></div>
+        </div>
       </div>
 
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--plan)"></div>
-        <div class="feature-icon">🏗️</div>
-        <h3>Project Layers</h3>
-        <p>Define your deployment units — Frontend, Backend API, Mobile, Database. Each layer maps to a folder path and automatically wires into Git Changes, Issues, Test Runner, and Workflows.</p>
+      <div class="feat-phase-card feat-build">
+        <div class="phase-badge" style="background:rgba(34,197,94,0.1);color:#16a34a">⚡ Build</div>
+        <p class="feat-desc">Run AI coding pipelines, queue agentic tasks that write real files, track bugs, and chat with your project loaded as context.</p>
+        <div class="feat-modules">
+          <div class="feat-module"><span class="feat-icon">⚡</span><span class="feat-name">Workflows</span><span class="feat-sub">Multi-step AI pipelines · live streaming</span></div>
+          <div class="feat-module"><span class="feat-icon">🔄</span><span class="feat-name">Prompt Queue</span><span class="feat-sub">Plan → Approve → Execute · agentic agent</span></div>
+          <div class="feat-module"><span class="feat-icon">💬</span><span class="feat-name">AI Console</span><span class="feat-sub">Project-aware chat · docs &amp; issues as context</span></div>
+          <div class="feat-module"><span class="feat-icon">🐛</span><span class="feat-name">Issues</span><span class="feat-sub">Bug tracker · AI next-step analysis</span></div>
+        </div>
       </div>
 
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--plan)"></div>
-        <div class="feature-icon">🎨</div>
-        <h3>UI Mockup Generator</h3>
-        <p>Describe a screen in plain English — AI generates production-quality HTML/CSS instantly. 30+ templates across 8 categories. Live in-app preview. Bulk queue generation with your Style Guide enforced automatically.</p>
+      <div class="feat-phase-card feat-test">
+        <div class="phase-badge" style="background:rgba(245,158,11,0.1);color:#d97706">🧪 Test</div>
+        <p class="feat-desc">AI detects your language and generates tests. Run them live with streaming output and keep a history per layer.</p>
+        <div class="feat-modules">
+          <div class="feat-module"><span class="feat-icon">🧪</span><span class="feat-name">Test Generator</span><span class="feat-sub">Auto-detects Flutter, Python, JS, Go &amp; more</span></div>
+          <div class="feat-module"><span class="feat-icon">▶️</span><span class="feat-name">Test Runner</span><span class="feat-sub">Live PTY output · 9+ frameworks parsed</span></div>
+        </div>
       </div>
 
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--plan)"></div>
-        <div class="feature-icon">🖌️</div>
-        <h3>Style Guide</h3>
-        <p>Project-wide design token editor for colors and typography. The single source of truth for your visual identity — feeds the Mockup Generator automatically so every screen stays on-brand.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--build)"></div>
-        <div class="feature-icon">⚡</div>
-        <h3>Workflows</h3>
-        <p>Build reusable multi-step AI pipelines — code review, feature implementation, documentation generation. Each step has its own prompt, inputs, and outputs. Drag-and-drop reorder, live streaming output, and success criteria tracking.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--build)"></div>
-        <div class="feature-icon">🔄</div>
-        <h3>Prompt Queue + DevFlow Agent</h3>
-        <p>Queue AI coding tasks for sequential execution. The agentic loop builds a repo map, generates a step-by-step plan you can review and edit, then executes — writing real files with real tool calls. No copy-pasting required.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--build)"></div>
-        <div class="feature-icon">💬</div>
-        <h3>AI Console</h3>
-        <p>Multi-turn project-aware chat that auto-loads your documents and open issues as context before every conversation. Streaming responses, token count estimate, full history. Ask anything about your codebase.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--build)"></div>
-        <div class="feature-icon">🐛</div>
-        <h3>Issue Tracker</h3>
-        <p>Lightweight per-project bug tracker with severity levels, status workflow (Open → In Progress → Resolved), and layer association. AI-assisted analysis suggests next steps. Batch process multiple issues with a queue.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--test)"></div>
-        <div class="feature-icon">🧪</div>
-        <h3>Test Generator</h3>
-        <p>AI reads your layer's setup instructions to detect the language and test framework — Flutter, Python/pytest, JavaScript/Jest, Go, Ruby/RSpec, C#/MSTest, and more. Generates appropriate test files without configuration.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--test)"></div>
-        <div class="feature-icon">▶️</div>
-        <h3>Test Runner</h3>
-        <p>Run your test command and stream live PTY output directly in-app. Auto-parses pass/fail/skip counts from 9+ frameworks. Full run history per layer with timestamps and duration — no external dashboard needed.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--ops)"></div>
-        <div class="feature-icon">📦</div>
-        <h3>Git Changes</h3>
-        <p>Unified git view across every project layer — multiple repos on a single screen. See changed files, inline diffs, pending commit counts. Stage, unstage, and commit each layer without ever leaving DevFlow AI.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="phase-dot" style="background:var(--ops)"></div>
-        <div class="feature-icon">⚙️</div>
-        <h3>Settings &amp; Multi-Model Config</h3>
-        <p>Add unlimited AI model configurations and assign a different model to each page. Encrypted local API key storage, SQLite database backup and restore, Telegram notifications for long-running agent jobs.</p>
+      <div class="feat-phase-card feat-ops">
+        <div class="phase-badge" style="background:rgba(232,121,249,0.1);color:#a21caf">🚀 Ship</div>
+        <p class="feat-desc">See git changes across all your repos in one panel and configure AI models, backups, and notifications.</p>
+        <div class="feat-modules">
+          <div class="feat-module"><span class="feat-icon">📦</span><span class="feat-name">Git Changes</span><span class="feat-sub">All repos unified · stage, diff &amp; commit</span></div>
+          <div class="feat-module"><span class="feat-icon">⚙️</span><span class="feat-name">Settings</span><span class="feat-sub">Per-page AI models · backup · notifications</span></div>
+        </div>
       </div>
 
     </div>
