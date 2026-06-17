@@ -95,6 +95,21 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
+  ipcMain.handle('app:openMockupPreview', (_e, { title, htmlContent }) => {
+    const os      = require('os');
+    const tmpFile = path.join(os.tmpdir(), `devflow-mockup-${Date.now()}.html`);
+    fs.writeFileSync(tmpFile, htmlContent, 'utf8');
+    const win = new BrowserWindow({
+      width:  1280,
+      height: 900,
+      title:  title ? `Mockup — ${title}` : 'Mockup Preview',
+      webPreferences: { contextIsolation: true },
+    });
+    win.loadFile(tmpFile);
+    win.on('closed', () => { try { fs.unlinkSync(tmpFile); } catch {} });
+    return { ok: true };
+  });
+
   ipcMain.handle('app:config:get', (_e, key) => getConfigValue(key));
   ipcMain.handle('app:config:set', (_e, key, value) => { setConfigValue(key, value); });
   ipcMain.handle('app:cloudsync:get', () => getCloudSyncConfig());

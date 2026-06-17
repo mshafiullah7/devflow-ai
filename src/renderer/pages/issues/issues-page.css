@@ -59,6 +59,48 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Issue list item — two-line layout                                    */
+/* ------------------------------------------------------------------ */
+.is-list-item {
+  align-items: flex-start;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+.is-list-item .is-sev-dot {
+  margin-top: 5px;
+}
+.is-item-info {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 2px !important;
+  flex: 1;
+  min-width: 0;
+}
+.is-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+}
+.is-item-title-row .eus-src-item__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.is-item-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  line-height: 1.4;
+}
+
+/* ------------------------------------------------------------------ */
 /* Severity dot (shown in issue list items)                             */
 /* ------------------------------------------------------------------ */
 .is-sev-dot {

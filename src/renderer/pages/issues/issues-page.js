@@ -331,13 +331,17 @@ export class IssuesPage {
   }
 
   _issueItemHtml(issue) {
-    const sv = SEVERITY_META[issue.severity] || SEVERITY_META.medium;
+    const sv   = SEVERITY_META[issue.severity] || SEVERITY_META.medium;
+    const desc = issue.description ? escHtml(issue.description) : '';
     return `
-      <div class="eus-src-item${issue.id === this._activeId ? ' eus-src-item--active' : ''}" data-id="${issue.id}">
+      <div class="eus-src-item is-list-item${issue.id === this._activeId ? ' eus-src-item--active' : ''}" data-id="${issue.id}">
         <span class="is-sev-dot is-sev-dot--${issue.severity || 'medium'}" title="${sv.label}"></span>
-        <div class="eus-src-item__info">
-          <span class="eus-src-item__id">#${issue.id}</span>
-          <span class="eus-src-item__title">${escHtml(issue.title)}</span>
+        <div class="eus-src-item__info is-item-info">
+          <div class="is-item-title-row">
+            <span class="eus-src-item__id">#${issue.id}</span>
+            <span class="eus-src-item__title">${escHtml(issue.title)}</span>
+          </div>
+          ${desc ? `<span class="is-item-desc">${desc}</span>` : ''}
         </div>
         <div class="eus-src-item__actions">
           <button class="eus-story-action eus-story-action--delete" title="Delete" aria-label="Delete">

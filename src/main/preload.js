@@ -293,6 +293,7 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('workflowChat:done');
     },
   },
+  openMockupPreview:  (data) => invoke('app:openMockupPreview', data),
   openWorkflowWindow: (data) => ipcRenderer.invoke('app:openWorkflowWindow', data),
   workflowWindow: {
     onInit: (cb) => ipcRenderer.on('workflow:init', (_e, p) => cb(p)),

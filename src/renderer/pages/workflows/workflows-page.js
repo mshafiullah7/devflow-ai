@@ -324,18 +324,26 @@ export class WorkflowsPage {
       }
     }
 
+    // Capture which groups the user has manually expanded before wiping the DOM
+    const expandedGroups = new Set();
+    el.querySelectorAll('.wf-group:not(.wf-group--collapsed)[data-group-id]').forEach(g => {
+      expandedGroups.add(g.dataset.groupId);
+    });
+
     const parts = [];
     for (const [pageId, workflows] of grouped) {
       const page = (this._pages || []).find(p => p.id === pageId);
       const pageTitle = page?.title || 'Page';
       const allDone = workflows.every(w => (w.status || 'open') === 'completed' || w.status === 'differed');
+      // Collapse by default only when all done AND the user hasn't explicitly expanded it
+      const collapsed = allDone && !expandedGroups.has(String(pageId));
       parts.push(`
-        <div class="wf-group${allDone ? ' wf-group--collapsed' : ''}">
+        <div class="wf-group${collapsed ? ' wf-group--collapsed' : ''}" data-group-id="${pageId}">
           <div class="wf-group-header">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
             </svg>
-            <span>${escHtml(pageTitle)}</span>
+            <button class="wf-group-page-link" data-page-id="${pageId}" title="Open mockup preview">${escHtml(pageTitle)}</button>
             <svg class="wf-group-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
               <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -350,8 +358,15 @@ export class WorkflowsPage {
     el.innerHTML = parts.join('');
 
     el.querySelectorAll('.wf-group-header').forEach(header => {
-      header.addEventListener('click', () => {
+      header.addEventListener('click', e => {
+        if (e.target.closest('.wf-group-page-link')) return;
         header.closest('.wf-group').classList.toggle('wf-group--collapsed');
+      });
+    });
+    el.querySelectorAll('.wf-group-page-link').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        this._openMockupPreview(+btn.dataset.pageId);
       });
     });
     el.querySelectorAll('[data-wf]').forEach(item => {
@@ -1417,6 +1432,20 @@ ${base}`;
         });
       });
     }
+  }
+
+  // ----------------------------------------------------------------
+  // Mockup preview window
+  // ----------------------------------------------------------------
+  async _openMockupPreview(pageId) {
+    const page = (this._pages || []).find(p => p.id === pageId);
+    if (!page) return;
+    const screen = await window.db.screenDesigns.get(pageId);
+    if (!screen?.html_content) {
+      await Dialog.alert(`No mockup has been generated for "${page.title || 'this page'}" yet.`);
+      return;
+    }
+    window.app.openMockupPreview({ title: page.title || 'Mockup', htmlContent: screen.html_content });
   }
 
   // ----------------------------------------------------------------
