@@ -1,6 +1,5 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
-import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { GitController } from '../../components/git/git-controller.js';
 
 export class ProjectHomePage {
@@ -9,7 +8,6 @@ export class ProjectHomePage {
     this.router         = router;
     this.projectId      = params.projectId;
     this._project       = null;
-    this._aiModelConfig = null;
   }
 
   async mount() {
@@ -40,18 +38,11 @@ export class ProjectHomePage {
 
     this.container.innerHTML = this._template();
 
-    this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#phModelPicker'),
-      onSelect: model => { this._aiModelConfig = model; },
-    });
-    await this._picker.reload();
-
 
     this._git = new GitController({
       getTermCwd:           () => this._project?.project_path || '',
       getLayers:            () => this._layers,
-      gitBtnId:             'phBtnGit',
-      gitBadgeId:           'phGitBadge',
+      gitBadgeId:           'navGitBadge',
       controlBtnVisibility: false,
     });
     this._git.mount();
@@ -66,7 +57,6 @@ export class ProjectHomePage {
 
   unmount() {
     removeCss('pages/project-home/project-home.css');
-    this._picker?.unmount();
     this._git?.stopPoll();
   }
 
@@ -187,20 +177,6 @@ export class ProjectHomePage {
             <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
 
-          <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
-            <div id="phModelPicker"></div>
-          </div>
-
-          <button class="project-page__git-btn" id="phBtnGit" title="Git" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <span class="project-page__git-badge project-page__git-badge--dot" id="phGitBadge" hidden></span>
-          </button>
         </header>
 
         <div class="project-home__layout">
@@ -302,22 +278,17 @@ export class ProjectHomePage {
               ${issueOpen > 0 ? `<span class="ph-nav-item__count ph-nav-item__count--danger">${issueOpen}</span>` : ''}
             </button>
 
-            <button class="ph-nav-item" id="navTestsIssuesQueue">
+            <div class="ph-sidebar-section">Tools</div>
+            <button class="ph-nav-item" id="navTerminal">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="8" y1="6" x2="21" y2="6"/>
-                  <line x1="8" y1="12" x2="21" y2="12"/>
-                  <line x1="8" y1="18" x2="21" y2="18"/>
-                  <line x1="3" y1="6" x2="3.01" y2="6"/>
-                  <line x1="3" y1="12" x2="3.01" y2="12"/>
-                  <line x1="3" y1="18" x2="3.01" y2="18"/>
+                  <polyline points="4 17 10 11 4 5"/>
+                  <line x1="12" y1="19" x2="20" y2="19"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Tasks Queue</span>
-              ${this._queuePendingCount > 0 ? `<span class="ph-nav-item__count ph-nav-item__count--danger">${this._queuePendingCount}</span>` : ''}
+              <span class="ph-nav-item__label">Terminal</span>
             </button>
 
-            <div class="ph-sidebar-section">Tools</div>
             <button class="ph-nav-item" id="navGitChanges">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
@@ -329,6 +300,7 @@ export class ProjectHomePage {
                 </svg>
               </span>
               <span class="ph-nav-item__label">Git Changes</span>
+              <span class="ph-nav-item__count ph-nav-item__count--danger" id="navGitBadge" hidden></span>
             </button>
 
             <button class="ph-nav-item" id="navAiConsole">
@@ -446,23 +418,12 @@ export class ProjectHomePage {
   }
 
   // ----------------------------------------------------------------
-  // Model dropdown
-  // ----------------------------------------------------------------
-  async _reloadModelDropdown() {
-    if (this._picker) await this._picker.reload();
-  }
-
-  // ----------------------------------------------------------------
   // Events
   // ----------------------------------------------------------------
   _bindEvents() {
     this.container.querySelector('#btnBack')
       .addEventListener('click', () => this.router.navigate('launcher'));
 
-
-    this.container.querySelector('#phBtnGit')
-      .addEventListener('click', () =>
-        this.router.navigate('git-changes', { projectId: this.projectId, from: 'project-home' }));
 
     // Sidebar navigation
     this.container.querySelector('#navWorkflows')
@@ -485,11 +446,11 @@ export class ProjectHomePage {
     this.container.querySelector('#navIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
 
-    this.container.querySelector('#navTestsIssuesQueue')
-      .addEventListener('click', () => window.app.openTaskQueueWindow(this.projectId));
-
     this.container.querySelector('#navAiConsole')
       .addEventListener('click', () => this.router.navigate('ai-console', { projectId: this.projectId }));
+
+    this.container.querySelector('#navTerminal')
+      .addEventListener('click', () => window.app.openTerminalWindow(this.projectId));
 
     this.container.querySelector('#navGitChanges')
       .addEventListener('click', () => this.router.navigate('git-changes', { projectId: this.projectId, from: 'project-home' }));

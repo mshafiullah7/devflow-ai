@@ -24,6 +24,9 @@ function applySchema(db) {
     `ALTER TABLE screen_designs ADD COLUMN dart_file_path TEXT`,
     // Workflow type: 'ui_shell' | 'feature'
     `ALTER TABLE workflows ADD COLUMN workflow_type TEXT NOT NULL DEFAULT 'feature'`,
+    // CLI model config: batch-mode extra flags and configurable skip-permissions flag
+    `ALTER TABLE model_configs ADD COLUMN batch_flags     TEXT`,
+    `ALTER TABLE model_configs ADD COLUMN skip_perms_flag TEXT`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}

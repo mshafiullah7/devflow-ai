@@ -453,6 +453,14 @@
 
 .st-form__input--short { max-width: 140px; }
 
+.st-form__textarea {
+  resize: vertical;
+  min-height: 72px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .st-input-row {
   display: flex;
   gap: 6px;

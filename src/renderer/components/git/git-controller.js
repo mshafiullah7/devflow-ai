@@ -35,33 +35,36 @@ export class GitController {
   async refreshStatus() {
     const btn   = document.getElementById(this._gitBtnId);
     const badge = document.getElementById(this._gitBadgeId);
-    if (!btn || !badge) return;
+    if (!badge) return;
+    if (!btn && this._controlBtnVisibility) return;
+    const countLines = stdout => (stdout || '').split('\n').filter(l => /^[ MADRCU?!]{2} .+/.test(l)).length;
+
     try {
-      let hasChanges = false;
+      let count = 0;
 
       if (this._getLayers) {
         const layers = this._getLayers().filter(l => l.folder_path);
-        const results = await Promise.all(layers.map(async l => {
+        const counts = await Promise.all(layers.map(async l => {
           try {
             const r = await window.db.terminal.exec({
               command: 'git status --short -uall -- . 2>&1',
               cwd: l.folder_path,
             });
-            return (r.stdout || '').split('\n').some(line => /^[ MADRCU?!]{2} .+/.test(line));
-          } catch { return false; }
+            return countLines(r.stdout);
+          } catch { return 0; }
         }));
-        hasChanges = results.some(Boolean);
+        count = counts.reduce((a, b) => a + b, 0);
       } else {
         const cwd = this._getTermCwd();
         const r   = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd });
-        hasChanges = (r.stdout || '').split('\n').some(line => /^[ MADRCU?!]{2} .+/.test(line));
+        count = countLines(r.stdout);
       }
 
-      if (this._controlBtnVisibility) btn.hidden = false;
-      badge.textContent = '';
-      badge.hidden = !hasChanges;
+      if (this._controlBtnVisibility && btn) btn.hidden = false;
+      badge.textContent = count > 0 ? String(count) : '';
+      badge.hidden = count === 0;
     } catch {
-      if (this._controlBtnVisibility) btn.hidden = true;
+      if (this._controlBtnVisibility && btn) btn.hidden = true;
       badge.hidden = true;
     }
   }

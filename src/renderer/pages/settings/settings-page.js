@@ -15,14 +15,13 @@ const KNOWN_CLI_MODELS = {
     'claude-haiku-4-5-20251001',
     'claude-sonnet-4-6',
     'claude-opus-4-5',
+    'claude-opus-4-8',
   ],
-  gemini: [
-    'gemini-2.5-flash-preview-05-20',
-    'gemini-2.5-pro-preview-05-06',
+  agy: [
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
   ],
   aider: [
     'gpt-4o',
@@ -31,6 +30,33 @@ const KNOWN_CLI_MODELS = {
     'claude-opus-4-5',
     'deepseek/deepseek-coder',
   ],
+  copilot: [
+    'gpt-4o',
+    'gpt-4.1',
+    'claude-sonnet-4-5',
+    'o3-mini',
+  ],
+};
+
+const KNOWN_CLI_FLAGS = {
+  claude:  "--model {{model}} '@{{prompt}}'",
+  agy:     "--model {{model}} -p '{{prompt}}'",
+  aider:   "--model {{model}} --message '{{prompt}}' --no-auto-commits --yes",
+  copilot: "--model {{model}} -p '{{prompt}}'",
+};
+
+const KNOWN_CLI_BATCH_FLAGS = {
+  claude:  '--print -c',
+  agy:     '',
+  aider:   '',
+  copilot: '',
+};
+
+const KNOWN_CLI_SKIP_PERMS_FLAGS = {
+  claude:  '--dangerously-skip-permissions',
+  agy:     '--dangerously-skip-permissions',
+  aider:   '',
+  copilot: '',
 };
 
 export class SettingsPage {
@@ -1170,7 +1196,7 @@ export class SettingsPage {
                 <input class="st-form__input" id="stFExecutable" type="text"
                   placeholder="claude"
                   value="${escHtml(config?.executable || '')}"/>
-                <span class="st-form__hint">Binary name available in PATH (e.g. claude, gemini, aider)</span>
+                <span class="st-form__hint">Binary name in PATH — known: claude, agy, aider, copilot</span>
               </div>
               <div class="st-form__row">
                 <label class="st-form__label">Model *</label>
@@ -1189,11 +1215,30 @@ export class SettingsPage {
                 <span class="st-form__error" id="stFCliModelError" style="display:none">Model name is required</span>
               </div>
               <div class="st-form__row">
-                <label class="st-form__label">Flags</label>
-                <input class="st-form__input" id="stFFlags" type="text"
-                  placeholder="--dangerously-skip-permissions --print"
-                  value="${escHtml(config?.flags || '')}"/>
-                <span class="st-form__hint">Flags appended when running inline in the console</span>
+                <label class="st-form__label">CLI Command</label>
+                <textarea class="st-form__input st-form__textarea" id="stFFlags"
+                  placeholder="--model {{model}} '@{{prompt}}'"
+                  rows="3"
+                  spellcheck="false">${escHtml(config?.flags || '')}</textarea>
+                <span class="st-form__hint" id="stFFlagsHint">Use <code>{{model}}</code> for model name, <code>{{prompt}}</code> for the prompt file path.</span>
+              </div>
+              <div class="st-form__row st-form__row--inline">
+                <div>
+                  <label class="st-form__label">Batch Flags</label>
+                  <input class="st-form__input" id="stFBatchFlags" type="text"
+                    placeholder="--print -c"
+                    value="${escHtml(config?.batch_flags || '')}"
+                    spellcheck="false"/>
+                  <span class="st-form__hint">Prepended only for Run All (non-interactive)</span>
+                </div>
+                <div>
+                  <label class="st-form__label">Skip Permissions Flag</label>
+                  <input class="st-form__input" id="stFSkipPermsFlag" type="text"
+                    placeholder="--dangerously-skip-permissions"
+                    value="${escHtml(config?.skip_perms_flag || '')}"
+                    spellcheck="false"/>
+                  <span class="st-form__hint">Prepended when Skip Permissions is enabled</span>
+                </div>
               </div>
             </div>
 
@@ -1395,30 +1440,58 @@ export class SettingsPage {
     const cliModelHint  = overlay.querySelector('#stFCliModelHint');
     const cliModelError = overlay.querySelector('#stFCliModelError');
     const cliFetchBtn   = overlay.querySelector('#stFBtnFetchCliModels');
+    const cliFlagsInput     = overlay.querySelector('#stFFlags');
+    const cliBatchInput     = overlay.querySelector('#stFBatchFlags');
+    const cliSkipPermsInput = overlay.querySelector('#stFSkipPermsFlag');
 
-    const updateCliModelSuggestions = (exe) => {
+    const updateCliDefaults = (exe) => {
       const name = (exe || '').toLowerCase().trim();
+
+      // Model suggestions
       if (cliModelList) cliModelList.innerHTML = '';
       if (cliFetchBtn)  cliFetchBtn.style.display = 'none';
-      if (!cliModelHint) return;
-      if (KNOWN_CLI_MODELS[name]) {
-        KNOWN_CLI_MODELS[name].forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m;
-          cliModelList.appendChild(opt);
-        });
-        cliModelHint.textContent = `${KNOWN_CLI_MODELS[name].length} known ${name} models available as suggestions`;
-      } else if (name === 'ollama') {
-        cliFetchBtn.style.display = '';
-        cliModelHint.textContent  = 'Click the refresh button to load your installed Ollama models';
-      } else {
-        cliModelHint.textContent = 'Passed as --model <value> to the CLI';
+      if (cliModelHint) {
+        if (KNOWN_CLI_MODELS[name]) {
+          KNOWN_CLI_MODELS[name].forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            cliModelList.appendChild(opt);
+          });
+          cliModelHint.textContent = `${KNOWN_CLI_MODELS[name].length} known ${name} models available as suggestions`;
+        } else if (name === 'ollama') {
+          cliFetchBtn.style.display = '';
+          cliModelHint.textContent  = 'Click the refresh button to load your installed Ollama models';
+        } else {
+          cliModelHint.textContent = 'Passed as --model <value> to the CLI';
+        }
+      }
+
+      const allKnownFlags      = Object.values(KNOWN_CLI_FLAGS);
+      const allKnownBatch      = Object.values(KNOWN_CLI_BATCH_FLAGS);
+      const allKnownSkipPerms  = Object.values(KNOWN_CLI_SKIP_PERMS_FLAGS);
+
+      // Auto-fill CLI Command — only when empty or still holds a known default
+      if (cliFlagsInput && KNOWN_CLI_FLAGS[name] !== undefined) {
+        const cur = (cliFlagsInput.value || '').trim();
+        if (!cur || allKnownFlags.includes(cur)) cliFlagsInput.value = KNOWN_CLI_FLAGS[name];
+      }
+
+      // Auto-fill Batch Flags
+      if (cliBatchInput && KNOWN_CLI_BATCH_FLAGS[name] !== undefined) {
+        const cur = (cliBatchInput.value || '').trim();
+        if (!cur || allKnownBatch.includes(cur)) cliBatchInput.value = KNOWN_CLI_BATCH_FLAGS[name];
+      }
+
+      // Auto-fill Skip Permissions Flag
+      if (cliSkipPermsInput && KNOWN_CLI_SKIP_PERMS_FLAGS[name] !== undefined) {
+        const cur = (cliSkipPermsInput.value || '').trim();
+        if (!cur || allKnownSkipPerms.includes(cur)) cliSkipPermsInput.value = KNOWN_CLI_SKIP_PERMS_FLAGS[name];
       }
     };
 
     if (cliExeInput) {
-      cliExeInput.addEventListener('input', () => updateCliModelSuggestions(cliExeInput.value));
-      updateCliModelSuggestions(config?.executable || '');
+      cliExeInput.addEventListener('input', () => updateCliDefaults(cliExeInput.value));
+      updateCliDefaults(config?.executable || '');
     }
 
     cliFetchBtn?.addEventListener('click', async () => {
@@ -1476,9 +1549,11 @@ export class SettingsPage {
           overlay.querySelector('#stFCliModel')?.focus();
           return;
         }
-        data.executable  = overlay.querySelector('#stFExecutable')?.value.trim() || null;
-        data.model_name  = cliModel;
-        data.flags       = overlay.querySelector('#stFFlags')?.value.trim() || null;
+        data.executable      = overlay.querySelector('#stFExecutable')?.value.trim() || null;
+        data.model_name      = cliModel;
+        data.flags           = overlay.querySelector('#stFFlags')?.value.trim() || null;
+        data.batch_flags     = overlay.querySelector('#stFBatchFlags')?.value.trim() || null;
+        data.skip_perms_flag = overlay.querySelector('#stFSkipPermsFlag')?.value.trim() || null;
       } else if (type === 'ollama') {
         const manual = overlay.querySelector('#stFOllamaModelManual');
         const select = overlay.querySelector('#stFOllamaModelSelect');

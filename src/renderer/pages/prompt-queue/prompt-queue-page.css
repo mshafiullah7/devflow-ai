@@ -53,8 +53,11 @@
 }
 
 .pq-header__model {
-  margin-left: auto;
   -webkit-app-region: no-drag;
+}
+
+.pq-header .pq-perm-btn {
+  margin-left: auto;
 }
 
 /* ── Skip Permissions toggle ─────────────────────────────────────────── */

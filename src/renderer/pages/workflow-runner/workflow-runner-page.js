@@ -43,7 +43,7 @@ export class WorkflowRunnerPage {
     this._statuses      = {};
     this._selectedId    = null;
     this._running          = false;
-    this._skipPermissions  = false;
+    this._skipPermissions  = true;
     this._startTimes       = {};
     this._timerInt      = null;
     this._screenDesign  = null;
@@ -659,8 +659,8 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
           </button>
           <span class="wfr-header__title">${name} — Run Layers</span>
           <div class="wfr-header__actions">
-            <button class="wfr-perm-btn" id="wfrBtnSkipPerms" aria-pressed="false" title="When ON: skips all tool permission prompts (--dangerously-skip-permissions). When OFF: Claude asks before each tool use.">
-              Skip Permissions: <span id="wfrSkipPermsLabel">OFF</span>
+            <button class="wfr-perm-btn wfr-perm-btn--on" id="wfrBtnSkipPerms" aria-pressed="true" title="When ON: skips all tool permission prompts (--dangerously-skip-permissions). When OFF: Claude asks before each tool use.">
+              Skip Permissions: <span id="wfrSkipPermsLabel">ON</span>
             </button>
             <button class="wfr-run-selected-btn" id="wfrBtnRunSelected" disabled>
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -812,7 +812,11 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     const btn   = this.container.querySelector('#wfrBtnGitToggle');
     if (panel) panel.toggleAttribute('hidden', !this._gitPanelVisible);
     if (btn)   btn.classList.toggle('wfr-git-toggle-btn--active', this._gitPanelVisible);
-    if (this._gitPanelVisible) this._refreshGitPanel();
+    if (this._gitPanelVisible) {
+      const wrap = this.container.querySelector('#wfrGitAccordion');
+      if (wrap) wrap.innerHTML = '';
+      this._refreshGitPanel();
+    }
   }
 
   _getGitCwd() {

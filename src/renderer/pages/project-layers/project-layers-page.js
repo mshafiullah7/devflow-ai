@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }      from '../../components/model-picker/model-picker.js';
-import { GitController }    from '../../components/git/git-controller.js';
 
 export class ProjectLayersPage {
   constructor(container, params, router) {
@@ -58,18 +57,6 @@ export class ProjectLayersPage {
       this._loadLayers(),
     ]);
 
-    this._git = new GitController({
-      getTermCwd:           () => this._project?.project_path || '',
-      getLayers:            () => this._layers,
-      gitBtnId:             'plBtnGit',
-      gitBadgeId:           'plGitBadge',
-      controlBtnVisibility: false,
-    });
-    this._git.mount();
-    if (this._project?.project_path) {
-      this._git.refreshStatus();
-      this._git.startPoll();
-    }
   }
 
   unmount() {
@@ -85,7 +72,6 @@ export class ProjectLayersPage {
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('pages/user-stories/user-stories.css');
     this._picker?.unmount();
-    this._git?.stopPoll();
   }
 
   // ----------------------------------------------------------------
@@ -111,16 +97,6 @@ export class ProjectLayersPage {
             <div class="project-page__model-group">
               <div id="plModelPicker"></div>
             </div>
-            <button class="project-page__git-btn" id="plBtnGit" title="Git Changes" style="-webkit-app-region:no-drag;">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              <span class="project-page__git-badge project-page__git-badge--dot" id="plGitBadge" hidden></span>
-            </button>
           </div>
         </header>
 
@@ -183,11 +159,6 @@ export class ProjectLayersPage {
         if (fn) fn();
         this.router.navigate('project-home', { projectId: this._projectId });
       });
-
-    this.container.querySelector('#plBtnGit')
-      .addEventListener('click', () =>
-        this.router.navigate('git-changes', { projectId: this._projectId, from: 'project-layers' }));
-
 
     this.container.querySelector('#plBtnGenerate')
       .addEventListener('click', () => this._openGenerateModal());

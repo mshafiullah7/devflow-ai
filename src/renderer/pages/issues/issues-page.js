@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
-import { GitController } from '../../components/git/git-controller.js';
 
 const STATUS_META = {
   open:        { label: 'Open',        cls: 'is-status--open'        },
@@ -56,20 +55,8 @@ export class IssuesPage {
     await this._picker.reload();
 
 
-    this._git = new GitController({
-      getTermCwd:           () => this._project?.project_path || '',
-      getLayers:            () => this._layers,
-      gitBtnId:             'isBtnGit',
-      gitBadgeId:           'isGitBadge',
-      controlBtnVisibility: false,
-    });
-    this._git.mount();
-
     this._bindHeaderEvents();
-    if (this._project?.project_path) {
-      this._git.refreshStatus();
-      this._git.startPoll();
-    }
+
     this._initResizable();
     await this._loadIssues();
     this._refreshQueueBadge();
@@ -83,7 +70,6 @@ export class IssuesPage {
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     this._picker?.unmount();
     removeCss('pages/user-stories/user-stories.css');
-    this._git?.stopPoll();
   }
 
   // ----------------------------------------------------------------
@@ -114,16 +100,6 @@ export class IssuesPage {
                 <path d="M3 5h14M3 10h10M3 15h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
               </svg>
               <span class="project-page__git-badge" id="isQueueBadge" hidden></span>
-            </button>
-            <button class="project-page__git-btn" id="isBtnGit" title="Git (opens User Stories)">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              <span class="project-page__git-badge project-page__git-badge--dot" id="isGitBadge" hidden></span>
             </button>
           </div>
         </header>
@@ -203,10 +179,6 @@ export class IssuesPage {
 
     this.container.querySelector('#isBtnQueue')
       .addEventListener('click', () => window.app.openTaskQueueWindow(this._projectId));
-
-    this.container.querySelector('#isBtnGit')
-      .addEventListener('click', () =>
-        this.router.navigate('git-changes', { projectId: this._projectId, from: 'issues' }));
 
     this.container.querySelector('#isBtnAdd')
       .addEventListener('click', () => this._showAddForm());

@@ -408,8 +408,15 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
   const exe       = model.executable || 'claude';
   const modelName = model.model_name || DEFAULT_CLI_MODEL;
   _logAiCall('cli', modelName, exe, messages || prompt);
-  const baseFlags = `--dangerously-skip-permissions --print --model ${modelName}`;
-  const ts        = Date.now();
+
+  // Resolve flags template — fall back to Claude defaults for configs saved before this change
+  const skipPermsFlag  = (model.skip_perms_flag != null) ? model.skip_perms_flag : '--dangerously-skip-permissions';
+  const permsPrefix    = skipPermsFlag ? skipPermsFlag + ' ' : '';
+  const flagsTemplate  = (model.flags || '').trim() || `${permsPrefix}--model ${modelName} '@{{prompt}}'`;
+  const resolvedFlags  = flagsTemplate.replace(/\{\{model\}\}/g, modelName);
+  const hasInlinePrompt = resolvedFlags.includes('{{prompt}}');
+
+  const ts = Date.now();
 
   let promptText;
   let htmlTmpFile = null;
@@ -446,11 +453,23 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
     return;
   }
 
-  const safeTmp = tmpFile.replace(/'/g, "''");
-  const psCmd = [
-    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null;',
-    `Get-Content -Path '${safeTmp}' -Raw | ${exe} ${baseFlags}`,
-  ].join('\n');
+  // {{prompt}} = temp file path; each CLI reads the prompt from the file in its own way
+  // (Claude: '@filepath', agy/copilot: -p 'filepath', aider: --message 'filepath')
+  const safeTmp    = tmpFile.replace(/'/g, "''");
+  let psCmd;
+  if (hasInlinePrompt) {
+    const finalFlags = resolvedFlags.replace('{{prompt}}', safeTmp);
+    psCmd = [
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null;',
+      `${exe} ${finalFlags}`,
+    ].join('\n');
+  } else {
+    // Stdin pipe fallback for any custom template without {{prompt}}
+    psCmd = [
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null;',
+      `Get-Content -Path '${safeTmp}' -Raw | ${exe} ${resolvedFlags}`,
+    ].join('\n');
+  }
 
   let accumulated = '';
 

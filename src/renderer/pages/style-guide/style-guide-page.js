@@ -252,15 +252,6 @@ export class StyleGuidePage {
               </svg>
             </button>
           </div>
-          <button class="project-page__git-btn" id="sgBtnGit" title="Git (opens User Stories)" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
           <span class="sg-page__badge${hasAny ? ' sg-page__badge--active' : ''}">
             ${hasAny ? 'Active — applied to all screens' : 'Not set'}
           </span>
@@ -386,9 +377,6 @@ export class StyleGuidePage {
 
     this.container.querySelector('#sgBtnModelConfigs')
       .addEventListener('click', () => this.router.navigate('settings', { from: 'style-guide', fromParams: { projectId: this._projectId } }));
-
-    this.container.querySelector('#sgBtnGit')
-      .addEventListener('click', () => this.router.navigate(this._from, { projectId: this._projectId }));
 
     /* ---- Preview state ---- */
     let activeTheme = 'dark';

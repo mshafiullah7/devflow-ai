@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker } from '../../components/model-picker/model-picker.js';
-import { GitController } from '../../components/git/git-controller.js';
 
 const FILE_EXTENSIONS = {
   flutter: ['.dart'],
@@ -132,20 +131,6 @@ export class TestGeneratorPage {
     });
     await this._picker.reload();
 
-    this._git = new GitController({
-      getTermCwd:           () => this._project?.project_path || '',
-      getLayers:            () => this._layers,
-      gitBtnId:             'tgBtnGit',
-      gitBadgeId:           'tgGitBadge',
-      controlBtnVisibility: false,
-    });
-    this._git.mount();
-
-    if (this._project?.project_path) {
-      this._git.refreshStatus();
-      this._git.startPoll();
-    }
-
     this._bindEvents();
 
     window.app.testGenerationWindow.onFileSaved(async () => {
@@ -158,7 +143,6 @@ export class TestGeneratorPage {
   }
 
   unmount() {
-    this._git?.stopPoll();
     this._genClearTimer();
     if (this._genRunning) {
       window.app.testGenChat.cancel();
@@ -192,16 +176,6 @@ export class TestGeneratorPage {
             <button class="tg-mode-btn ${this._mode === 'execute'  ? 'tg-mode-btn--active' : ''}" id="tgModeExecute">Execute</button>
           </div>
           <div id="tgModelPicker" style="-webkit-app-region:no-drag;"></div>
-          <button class="project-page__git-btn" id="tgBtnGit" title="Git changes" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <span class="project-page__git-badge project-page__git-badge--dot" id="tgGitBadge" hidden></span>
-          </button>
         </header>
 
         <div class="tg-body">
@@ -263,24 +237,21 @@ export class TestGeneratorPage {
     const selectedCount = this._unitSelected.size;
     return `
       <div class="tg-gen-header">
+        <span class="tg-gen-status" id="tgGenStatus">${selectedCount > 0 ? `${selectedCount} file${selectedCount !== 1 ? 's' : ''} ready` : 'Select files from the tree to begin'}</span>
         <div class="tg-gen-controls">
-          <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgGenRunAll">▶ Run</button>
+          <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgGenRunAll">▶ Generate Unit Tests</button>
           <button class="tg-btn tg-btn--sm tg-btn--stop"    id="tgGenStop" hidden>■ Stop</button>
         </div>
       </div>
       <div class="tg-gen-items" id="tgGenItems">${this._genFilesHtml()}</div>
       <div class="tg-gen-output">
-        <div class="tg-gen-output-hd">
-          <span class="tg-gen-output-name" id="tgGenCurFile">—</span>
+        <div class="tg-gen-output-hd" id="tgGenOutputHd" hidden>
+          <span class="tg-gen-output-name" id="tgGenCurFile"></span>
           <span class="tg-gen-elapsed"     id="tgGenElapsed"></span>
         </div>
         <div class="tg-gen-code-wrap" id="tgGenCodeWrap">
           <pre class="tg-gen-code" id="tgGenCode"></pre>
         </div>
-      </div>
-      <div class="tg-gen-footer">
-        <span class="tg-gen-status" id="tgGenStatus">${selectedCount > 0 ? `${selectedCount} file${selectedCount !== 1 ? 's' : ''} ready` : 'Select files from the tree'}</span>
-        <span class="tg-gen-pill"   id="tgGenPill"></span>
       </div>`;
   }
 
@@ -571,9 +542,7 @@ export class TestGeneratorPage {
     }
 
     // Idle: mirror current selection
-    if (!this._unitSelected.size) {
-      return `<div class="tg-gen-empty">Select files from the tree to begin</div>`;
-    }
+    if (!this._unitSelected.size) return '';
     return [...this._unitSelected].map((relPath, i) => {
       const label  = relPath.replace(/\\/g, '/').split('/').pop();
       const active = i === this._genSelIdx ? 'tg-gen-item--active' : '';
@@ -706,10 +675,6 @@ export class TestGeneratorPage {
   _bindEvents() {
     this.container.querySelector('#tgBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
-
-    this.container.querySelector('#tgBtnGit')
-      ?.addEventListener('click', () =>
-        this.router.navigate('git-changes', { projectId: this._projectId, from: 'test-generator' }));
 
     this.container.querySelector('#tgSidebar')
       ?.addEventListener('click', e => {
@@ -924,7 +889,7 @@ export class TestGeneratorPage {
     const statusEl = this.container.querySelector('#tgGenStatus');
     if (statusEl && !this._genRunning && !this._genProgress.length) {
       const n = this._unitSelected.size;
-      statusEl.textContent = n > 0 ? `${n} file${n !== 1 ? 's' : ''} ready` : 'Select files from the tree';
+      statusEl.textContent = n > 0 ? `${n} file${n !== 1 ? 's' : ''} ready` : 'Select files from the tree to begin';
       statusEl.className   = 'tg-gen-status';
     }
   }
@@ -1125,18 +1090,15 @@ Output ONLY the test file content. No explanation text. Start directly with impo
   _genRefreshFiles() {
     const el = this.container.querySelector('#tgGenItems');
     if (el) el.innerHTML = this._genFilesHtml();
-    const saved = this._genProgress.filter(p => p.status === 'saved').length;
-    const pill  = this.container.querySelector('#tgGenPill');
-    if (pill) pill.textContent = this._genProgress.length ? `${saved} / ${this._genProgress.length}` : '';
   }
 
   _genUpdateCurFile(label) {
-    const el = this.container.querySelector('#tgGenCurFile');
-    if (el) el.textContent = label || '—';
-    if (!label) {
-      const elapsed = this.container.querySelector('#tgGenElapsed');
-      if (elapsed) elapsed.textContent = '';
-    }
+    const hd      = this.container.querySelector('#tgGenOutputHd');
+    const el      = this.container.querySelector('#tgGenCurFile');
+    const elapsed = this.container.querySelector('#tgGenElapsed');
+    if (hd) hd.hidden = !label;
+    if (el) el.textContent = label || '';
+    if (!label && elapsed) elapsed.textContent = '';
   }
 
   _genUpdateStatus(text, variant = '') {
@@ -1150,11 +1112,6 @@ Output ONLY the test file content. No explanation text. Start directly with impo
     const total  = this._genProgress.length;
     const saved  = this._genProgress.filter(p => p.status === 'saved').length;
     const errors = this._genProgress.filter(p => p.status === 'error').length;
-    const pill   = this.container.querySelector('#tgGenPill');
-    if (pill) {
-      pill.textContent = `${saved} / ${total}`;
-      if (!errors && saved > 0) pill.classList.add('tg-gen-pill--done');
-    }
     if (this._genAborted) {
       this._genUpdateStatus('Cancelled.', 'error');
     } else if (errors > 0) {

@@ -1,6 +1,5 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
-import { GitController } from '../../components/git/git-controller.js';
 import { ModelPicker } from '../../components/model-picker/model-picker.js';
 import { ModelConfigsModal } from '../../components/model-configs/model-configs-modal.js';
 
@@ -127,15 +126,6 @@ export class TestRunnerWindowPage {
     });
     this._modelConfigsModal.mount();
 
-    this._git = new GitController({
-      getTermCwd:           () => this._project?.project_path || '',
-      getLayers:            () => this._layers,
-      gitBtnId:             'trBtnGit',
-      gitBadgeId:           'trGitBadge',
-      controlBtnVisibility: false,
-    });
-    this._git.mount();
-
     this._bindHeaderEvents();
 
     this._history = await window.db.testRunHistory.list(this._projectId);
@@ -148,8 +138,6 @@ export class TestRunnerWindowPage {
     }
 
     if (this._activeCwd) {
-      this._git.refreshStatus();
-      this._git.startPoll();
       await this._detectFrameworks(this._activeCwd);
     } else {
       this._showNoFolder();
@@ -162,7 +150,6 @@ export class TestRunnerWindowPage {
   unmount() {
     removeCss('pages/test-runner/test-runner-page.css');
     removeCss('pages/user-stories/user-stories.css');
-    this._git?.stopPoll();
     this._picker?.unmount();
     window.db.testRunner.removeListeners();
     window.db.promptQueue.removeListeners();
@@ -190,18 +177,6 @@ export class TestRunnerWindowPage {
           </div>
           <div class="project-page__model-group tr-header__model" style="-webkit-app-region:no-drag;">
             <div id="trModelPicker"></div>
-          </div>
-          <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
-            <button class="project-page__git-btn" id="trBtnGit" title="Git changes">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              <span class="project-page__git-badge project-page__git-badge--dot" id="trGitBadge" hidden></span>
-            </button>
           </div>
         </header>
 

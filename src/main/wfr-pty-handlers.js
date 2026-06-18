@@ -400,22 +400,47 @@ function registerWfrPtyHandlers() {
       });
     };
 
-    if (_claudeActive) {
-      // Claude is already running in interactive mode in this shell PTY!
-      // We don't launch it again; we just paste the file path directly to the running session!
-      _pty.write(`@${tmpFile}\r`);
-      return { ok: true, command: `[Pasting into active Claude session] @${tmpFile}` };
-    }
-
     // Escape single quotes inside the path for safe single-quoting in the shell
     const escapedPath = isWin
       ? tmpFile.replace(/'/g, "''")           // PowerShell: '' inside single quotes
       : tmpFile.replace(/'/g, "'\\''");        // bash: end-quote, escaped quote, re-open
 
-    const permFlag     = skipPermissions ? '--dangerously-skip-permissions ' : '';
-    const printFlag    = interactive === false ? '--print ' : '';
-    const continueFlag = (interactive === false && _batchSessionActive) ? '-c ' : '';
-    const coreCmd      = `${exe} ${permFlag}${printFlag}${continueFlag}--model ${modelName} '@${escapedPath}'`;
+    // Resolve skip-permissions prefix — use model config, fall back to claude default
+    const skipPermsFlag = (model?.skip_perms_flag != null) ? model.skip_perms_flag : '--dangerously-skip-permissions';
+    const permsPart     = (skipPermissions && skipPermsFlag) ? skipPermsFlag + ' ' : '';
+
+    let coreCmd;
+    if (model?.flags && model.flags.includes('{{prompt}}')) {
+      // Template-based: substitute {{model}} and {{prompt}} (file path) from model config
+      const resolved = model.flags
+        .replace(/\{\{model\}\}/g, modelName)
+        .replace(/\{\{prompt\}\}/g, escapedPath);
+
+      // Batch flags — use model config; empty string = no extra flags (CLI exits naturally)
+      const batchPart = (interactive === false && model?.batch_flags)
+        ? model.batch_flags + ' '
+        : '';
+
+      coreCmd = `${exe} ${permsPart}${batchPart}${resolved}`;
+    } else {
+      // Claude default path: @filepath syntax with interactive/batch handling
+      if (_claudeActive) {
+        _pty.write(`@${tmpFile}\r`);
+        return { ok: true, command: `[Pasting into active Claude session] @${tmpFile}` };
+      }
+
+      // Batch flags — use model config if set, else Claude defaults (--print -c)
+      let batchPart = '';
+      if (interactive === false) {
+        if (model?.batch_flags != null) {
+          batchPart = model.batch_flags ? model.batch_flags + ' ' : '';
+        } else {
+          batchPart = '--print ' + (_batchSessionActive ? '-c ' : '');
+        }
+      }
+
+      coreCmd = `${exe} ${permsPart}${batchPart}--model ${modelName} '@${escapedPath}'`;
+    }
 
     if (interactive === false) _batchSessionActive = true;
 

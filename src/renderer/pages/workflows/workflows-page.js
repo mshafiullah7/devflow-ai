@@ -1,7 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
-import { GitController }                 from '../../components/git/git-controller.js';
 import { Dialog }                        from '../../components/dialog/dialog.js';
 
 export class WorkflowsPage {
@@ -59,20 +58,6 @@ export class WorkflowsPage {
     });
     await this._picker.reload();
 
-    this._git = new GitController({
-      getTermCwd:           () => this._project?.project_path || '',
-      getLayers:            () => this._projectLayers,
-      gitBtnId:             'wfBtnGit',
-      gitBadgeId:           'wfGitBadge',
-      controlBtnVisibility: false,
-    });
-    this._git.mount();
-
-    if (this._project?.project_path) {
-      this._git.refreshStatus();
-      this._git.startPoll();
-    }
-
     this._bindHeaderEvents();
     this._initResizable();
     await this._loadWorkflows();
@@ -82,7 +67,6 @@ export class WorkflowsPage {
   unmount() {
     window.app.workflowEvents.offAll();
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
-    this._git?.stopPoll();
     removeCss('pages/workflows/workflows-page.css');
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
@@ -234,16 +218,6 @@ export class WorkflowsPage {
             <div class="project-page__model-group">
               <div id="wfModelPicker"></div>
             </div>
-            <button class="project-page__git-btn" id="wfBtnGit" title="Git changes">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="5" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="15" cy="5" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="5" cy="15" r="2" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M5 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M15 7c0 4-4 6-10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              <span class="project-page__git-badge project-page__git-badge--dot" id="wfGitBadge" hidden></span>
-            </button>
           </div>
         </header>
 
@@ -1259,10 +1233,6 @@ ${base}`;
           modelConfig: this._aiModelConfig,
         });
       });
-
-    this.container.querySelector('#wfBtnGit')
-      ?.addEventListener('click', () =>
-        this.router.navigate('git-changes', { projectId: this._projectId, from: 'workflows' }));
 
   }
 

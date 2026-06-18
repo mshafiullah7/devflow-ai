@@ -26,9 +26,10 @@ export class PromptQueuePage {
     this.projectId   = params.projectId;
     this._from       = params.from || 'project-home';
     this._project    = null;
-    this._queue      = [];
-    this._selectedId = null;
-    this._isRunning  = false;
+    this._queue        = [];
+    this._selectedId   = null;
+    this._selectedItem = null;
+    this._isRunning    = false;
     this._runAll     = false;
     this._modelCfg   = null;
 
@@ -49,7 +50,7 @@ export class PromptQueuePage {
     this._timerInt   = null;
 
     // Skip permissions toggle
-    this._skipPermissions = false;
+    this._skipPermissions = true;
 
     // Git panel
     this._gitPanelVisible  = false;
@@ -265,6 +266,11 @@ export class PromptQueuePage {
           </button>
           <span class="pq-header__title">Tasks Queue</span>
 
+          <button class="pq-perm-btn pq-perm-btn--on" id="pqBtnSkipPerms" aria-pressed="true"
+            title="Skip Permissions: when ON passes --dangerously-skip-permissions to Claude.&#10;Note: shares PTY with Workflow Runner — do not run both simultaneously.">
+            Skip Permissions: <span id="pqSkipPermsLabel">ON</span>
+          </button>
+
           <div class="project-page__model-group pq-header__model" style="-webkit-app-region:no-drag;">
             <div id="pqModelPicker"></div>
             <button class="project-page__model-cfg-btn" id="pqBtnModelConfigs" title="Configure AI models">
@@ -275,11 +281,6 @@ export class PromptQueuePage {
               </svg>
             </button>
           </div>
-
-          <button class="pq-perm-btn" id="pqBtnSkipPerms" aria-pressed="false"
-            title="Skip Permissions: when ON passes --dangerously-skip-permissions to Claude.&#10;Note: shares PTY with Workflow Runner — do not run both simultaneously.">
-            Skip Perms: <span id="pqSkipPermsLabel">OFF</span>
-          </button>
 
           <button class="pq-git-toggle-btn" id="pqBtnGitToggle" title="Toggle Git Changes">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -296,6 +297,10 @@ export class PromptQueuePage {
         <div class="pq-toolbar">
           <span class="pq-toolbar__summary" id="pqSummary"></span>
           <div class="pq-toolbar__actions">
+            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunThis" hidden title="Run selected item">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
+              Run Selected
+            </button>
             <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunAll" title="Run All (Ctrl+Enter)">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3l5 5-5 5V3zM9 3l5 5-5 5V3z" fill="currentColor"/></svg>
               Run All
@@ -517,7 +522,8 @@ export class PromptQueuePage {
   }
 
   _selectItem(item) {
-    this._selectedId = item.id;
+    this._selectedId   = item.id;
+    this._selectedItem = item;
     const panel = this.container.querySelector('#pqListPanel');
     panel?.querySelectorAll('.pq-item').forEach(el => el.classList.remove('pq-item--selected'));
     panel?.querySelector(`[data-id="${item.id}"]`)?.classList.add('pq-item--selected');
@@ -545,12 +551,17 @@ export class PromptQueuePage {
   // ── Strip + terminal helpers ─────────────────────────────────────────
 
   _updateStrip(item) {
-    const strip = this.container.querySelector('#pqTermStrip');
+    const strip      = this.container.querySelector('#pqTermStrip');
+    const runThisBtn = this.container.querySelector('#pqBtnRunThis');
     if (!strip) return;
 
     const isPending = item.status === 'pending';
     const isSkipped = item.status === 'skipped';
     strip.hidden = !(isPending || isSkipped);
+
+    // Show/hide toolbar Run Selected based on whether selected item is pending
+    if (runThisBtn) runThisBtn.hidden = !isPending;
+
     if (!isPending && !isSkipped) return;
 
     strip.innerHTML = `
@@ -558,15 +569,7 @@ export class PromptQueuePage {
         <span class="pq-detail__status pq-detail__status--${item.status}">${item.status}</span>
         ${item.story_title ? `<span class="pq-strip__title">${escHtml(item.story_title)}</span>` : ''}
         ${item.tag ? `<span class="pq-strip__tag">${escHtml(item.tag)}</span>` : ''}
-      </div>
-      ${isPending ? `<button class="pq-toolbar__btn pq-toolbar__btn--primary pq-strip__run-btn" id="pqBtnRunThis">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
-        Run This
-      </button>` : ''}`;
-
-    strip.querySelector('#pqBtnRunThis')?.addEventListener('click', () => {
-      if (!this._isRunning) this._runItem(item);
-    });
+      </div>`;
   }
 
   _showItemBanner(item) {
@@ -574,7 +577,7 @@ export class PromptQueuePage {
     this._term.reset();
     const label = item.story_title || item.tag || `#${item.id}`;
     this._term.writeln(`${ANSI.dim}── ${label} ──${ANSI.reset}`);
-    this._term.writeln(`${ANSI.dim}Status: ${item.status}. Click "Run This" to execute.${ANSI.reset}`);
+    this._term.writeln(`${ANSI.dim}Status: ${item.status}. Click "Run Selected" to execute.${ANSI.reset}`);
   }
 
   _replayOutput(item) {
@@ -1079,6 +1082,12 @@ export class PromptQueuePage {
       ?.addEventListener('click', () => this._expandCollapseAll(true));
     this.container.querySelector('#pqBtnGitCollapseAll')
       ?.addEventListener('click', () => this._expandCollapseAll(false));
+
+    // Run Selected — runs the currently selected pending item
+    this.container.querySelector('#pqBtnRunThis')
+      ?.addEventListener('click', () => {
+        if (!this._isRunning && this._selectedItem) this._runItem(this._selectedItem);
+      });
 
     // Run All — non-interactive batch, always skips permissions
     this.container.querySelector('#pqBtnRunAll')

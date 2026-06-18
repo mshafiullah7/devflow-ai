@@ -357,6 +357,10 @@ contextBridge.exposeInMainWorld('app', {
   unitTestsWindow: {
     onInit: (cb) => ipcRenderer.on('unitTests:init', (_e, p) => cb(p)),
   },
+  openTerminalWindow: (projectId) => ipcRenderer.invoke('app:openTerminalWindow', projectId),
+  terminalWindow: {
+    onInit: (cb) => ipcRenderer.on('terminal-win:init', (_e, p) => cb(p)),
+  },
   // Separate AI channel for the workflow AI edit window.
   wfAiEditChat: {
     generate: (data) => ipcRenderer.invoke('wfAiEditChat:generate', data),
