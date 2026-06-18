@@ -1198,3 +1198,119 @@
 .tg-gen-code-wrap::-webkit-scrollbar-track { background: transparent; }
 .tg-gen-items::-webkit-scrollbar-thumb,
 .tg-gen-code-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Flat checklist (Option 2) ───────────────────────────────── */
+.tg-flat2-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  min-width: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.tg-flat2-row:last-of-type { border-bottom: none; }
+.tg-flat2-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tg-flat2-row input[type="checkbox"] { flex-shrink: 0; accent-color: var(--accent); }
+
+.tg-flat2-name {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  max-width: 55%;
+}
+
+.tg-flat2-dir {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+/* ── Flat grouped file list ──────────────────────────────────── */
+.tg-group {
+  border-bottom: 1px solid var(--border);
+}
+.tg-group:last-of-type {
+  border-bottom: none;
+}
+
+.tg-group-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-secondary));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, var(--border));
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  user-select: none;
+}
+.tg-group-header input[type="checkbox"] {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.tg-group-icon {
+  flex-shrink: 0;
+  color: #f59e0b;
+}
+
+.tg-group-name {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tg-group-count {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 5px;
+  line-height: 16px;
+}
+
+.tg-flat-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 30px;
+  cursor: pointer;
+  min-width: 0;
+}
+.tg-flat-row:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.tg-flat-row input[type="checkbox"] {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.tg-flat-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

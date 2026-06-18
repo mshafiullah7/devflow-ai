@@ -378,10 +378,10 @@ function registerDbHandlers() {
     ).all(project_id);
   });
 
-  safeHandle('testRunHistory:create', (_e, { project_id, framework, command, passed, failed, skipped, duration, output, exit_code }) => {
+  safeHandle('testRunHistory:create', (_e, { project_id, framework, command, passed, failed, skipped, duration, output, exit_code, coverage, layer_id }) => {
     db.prepare(
-      `INSERT INTO test_run_history (project_id, framework, command, passed, failed, skipped, duration, output, exit_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO test_run_history (project_id, framework, command, passed, failed, skipped, duration, output, exit_code, coverage, layer_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       project_id,
       framework  ?? null,
@@ -391,7 +391,9 @@ function registerDbHandlers() {
       skipped    ?? null,
       duration   ?? null,
       output     ?? null,
-      exit_code  ?? 0
+      exit_code  ?? 0,
+      coverage   ?? null,
+      layer_id   ?? null
     );
     // Keep only the latest 20 runs per project
     db.prepare(
@@ -483,10 +485,10 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM issues WHERE id = ?').get(id);
   });
 
-  safeHandle('db:issues:create', (_e, { project_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status }) => {
+  safeHandle('db:issues:create', (_e, { project_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, type }) => {
     const result = db.prepare(`
-      INSERT INTO issues (project_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO issues (project_id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       project_id,
       layer_id             ?? null,
@@ -496,7 +498,8 @@ function registerDbHandlers() {
       expected_behavior    ?? null,
       actual_behavior      ?? null,
       severity ?? 'medium',
-      status   ?? 'open'
+      status   ?? 'open',
+      type     ?? 'issue'
     );
     return db.prepare(`
       SELECT i.*, pl.name AS layer_name
@@ -506,7 +509,7 @@ function registerDbHandlers() {
     `).get(result.lastInsertRowid);
   });
 
-  safeHandle('db:issues:update', (_e, { id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active }) => {
+  safeHandle('db:issues:update', (_e, { id, layer_id, title, description, steps_to_reproduce, expected_behavior, actual_behavior, severity, status, is_active, type }) => {
     db.prepare(`
       UPDATE issues
          SET layer_id           = CASE WHEN ? IS NOT NULL THEN ? ELSE layer_id END,
@@ -518,6 +521,7 @@ function registerDbHandlers() {
              severity           = coalesce(?, severity),
              status             = coalesce(?, status),
              is_active          = coalesce(?, is_active),
+             type               = CASE WHEN ? IS NOT NULL THEN ? ELSE type END,
              updated_at         = datetime('now')
        WHERE id = ?
     `).run(
@@ -530,6 +534,7 @@ function registerDbHandlers() {
       severity  ?? null,
       status    ?? null,
       is_active ?? null,
+      type      ?? null, type ?? null,
       id
     );
     return db.prepare(`
@@ -546,10 +551,11 @@ function registerDbHandlers() {
   });
 
   safeHandle('db:issues:count', (_e, project_id) => {
-    const total    = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1`).get(project_id)?.n ?? 0;
-    const open     = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'open'`).get(project_id)?.n ?? 0;
-    const resolved = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'resolved'`).get(project_id)?.n ?? 0;
-    return { total, open, resolved };
+    const total       = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1`).get(project_id)?.n ?? 0;
+    const open        = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'open'`).get(project_id)?.n ?? 0;
+    const in_progress = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'in_progress'`).get(project_id)?.n ?? 0;
+    const resolved    = db.prepare(`SELECT COUNT(*) AS n FROM issues WHERE project_id = ? AND is_active = 1 AND status = 'resolved'`).get(project_id)?.n ?? 0;
+    return { total, open, in_progress, resolved };
   });
 
   // ----------------------------------------------------------------

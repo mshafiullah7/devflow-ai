@@ -10,7 +10,7 @@ const STATUS_META = {
   wont_fix:    { label: "Won't Fix",   cls: 'is-status--wont-fix'    },
 };
 
-const SEVERITY_META = {
+const PRIORITY_META = {
   critical: { label: 'Critical', cls: 'is-severity--critical' },
   high:     { label: 'High',     cls: 'is-severity--high'     },
   medium:   { label: 'Medium',   cls: 'is-severity--medium'   },
@@ -27,9 +27,8 @@ export class IssuesPage {
     this._activeId      = null;
     this._filterStatus  = '';
     this._aiModelConfig = null;
-    this._deepItemId         = params.itemId ?? null;
-    this._collapsedStatuses  = new Set(['resolved', 'closed', 'wont_fix']);
-    this._pendingSave        = null;
+    this._deepItemId    = params.itemId ?? null;
+    this._pendingSave   = null;
     this._layers             = [];
   }
 
@@ -54,9 +53,7 @@ export class IssuesPage {
     });
     await this._picker.reload();
 
-
     this._bindHeaderEvents();
-
     this._initResizable();
     await this._loadIssues();
     this._refreshQueueBadge();
@@ -73,8 +70,7 @@ export class IssuesPage {
   }
 
   // ----------------------------------------------------------------
-  // Template — 4-panel layout
-  // Features 15% | Stories 20% | Issues List 25% | Detail flex:1
+  // Template — 2-panel layout: List | Detail
   // ----------------------------------------------------------------
   _template() {
     const name = this._project ? escHtml(this._project.name) : 'Project';
@@ -89,16 +85,17 @@ export class IssuesPage {
           </button>
           <div class="project-page__title-group">
             <h1 class="project-page__title">${name}</h1>
-            <p class="project-page__desc">Issues</p>
+            <p class="project-page__desc">Tasks &amp; Issues</p>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
             <div class="project-page__model-group">
               <div id="isModelPicker"></div>
             </div>
-            <button class="project-page__git-btn" id="isBtnQueue" title="Open Task Queue">
+            <button class="project-page__git-btn is-queue-btn--labeled" id="isBtnQueue" title="Open Queued Items">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
                 <path d="M3 5h14M3 10h10M3 15h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
               </svg>
+              <span class="is-queue-btn__label">Queued Items</span>
               <span class="project-page__git-badge" id="isQueueBadge" hidden></span>
             </button>
           </div>
@@ -106,10 +103,10 @@ export class IssuesPage {
 
         <div class="project-page__workspace">
 
-          <!-- Panel 1: Issues list -->
+          <!-- Panel 1: List -->
           <aside class="project-panel" id="isPanelIssuesList">
             <div class="project-related__section-hd">
-              <span class="project-related__section-label">Issues</span>
+              <span class="project-related__section-label">Tasks &amp; Issues</span>
               <span class="project-related__section-count" id="isIssueCount">0</span>
               <select class="is-header-select is-section-filter" id="isStatusFilter" title="Filter by status">
                 <option value="">All</option>
@@ -119,23 +116,20 @@ export class IssuesPage {
                 <option value="closed">Closed</option>
                 <option value="wont_fix">Won't Fix</option>
               </select>
-              <button class="is-add-btn" id="isBtnAdd" title="Add issue (Ctrl+N)" aria-label="Add issue">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-              </button>
+              <button class="is-add-btn is-add-btn--text" id="isBtnAddTask" title="Add task" aria-label="Add task">+ Task</button>
+              <button class="is-add-btn is-add-btn--text" id="isBtnAddIssue" title="Add issue" aria-label="Add issue">+ Issue</button>
             </div>
             <div class="project-related__section-body" id="isIssuesList">
-              <div class="project-related__empty">No issues</div>
+              <div class="project-related__empty">No items</div>
             </div>
           </aside>
 
           <div class="project-panel__resize" data-resize="is-issues"></div>
 
-          <!-- Panel 4: Issue detail — flex:1 -->
+          <!-- Panel 2: Detail -->
           <section class="project-panel project-panel--detail" id="isPanelDetail">
             <div class="project-panel__header">
-              <span class="project-panel__title">Issue Detail</span>
+              <span class="project-panel__title">Detail</span>
               <div class="project-panel__header-actions" id="isDetailHeaderActions"></div>
             </div>
             <div class="project-panel__content" id="isIssueDetail">
@@ -143,7 +137,7 @@ export class IssuesPage {
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
-                <p>Select an issue or add a new one</p>
+                <p>Select an item or add a new one</p>
               </div>
             </div>
           </section>
@@ -176,20 +170,14 @@ export class IssuesPage {
     this.container.querySelector('#isBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
 
-
     this.container.querySelector('#isBtnQueue')
       .addEventListener('click', () => window.app.openTaskQueueWindow(this._projectId));
 
-    this.container.querySelector('#isBtnAdd')
-      .addEventListener('click', () => this._showAddForm());
+    this.container.querySelector('#isBtnAddTask')
+      .addEventListener('click', () => this._showAddForm('task'));
 
-    document.addEventListener('keydown', (e) => {
-      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) {
-        e.preventDefault();
-        this.container.querySelector('#isBtnAdd')?.click();
-      }
-    });
+    this.container.querySelector('#isBtnAddIssue')
+      .addEventListener('click', () => this._showAddForm('issue'));
 
     this.container.querySelector('#isStatusFilter')
       .addEventListener('change', async (e) => {
@@ -230,68 +218,12 @@ export class IssuesPage {
     if (countEl) countEl.textContent = this._issues.length;
 
     if (this._issues.length === 0) {
-      listEl.innerHTML = `<div class="project-related__empty">No issues</div>`;
+      listEl.innerHTML = `<div class="project-related__empty">No items</div>`;
       return;
     }
 
-    // Group by status (preserving STATUS_META order)
-    const groups = {};
-    for (const key of Object.keys(STATUS_META)) groups[key] = [];
-    for (const issue of this._issues) {
-      const k = issue.status || 'open';
-      (groups[k] ?? (groups['open'] ??= [])).push(issue);
-    }
+    listEl.innerHTML = this._issues.map(issue => this._issueItemHtml(issue)).join('');
 
-    // Ensure active issue's group is never collapsed
-    if (this._activeId) {
-      const active = this._issues.find(i => i.id === this._activeId);
-      if (active) this._collapsedStatuses.delete(active.status || 'open');
-    }
-
-    const chevron = (open) => `
-      <svg class="is-acc__chevron${open ? ' is-acc__chevron--open' : ''}"
-           width="10" height="10" viewBox="0 0 12 12" fill="none">
-        <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.6"
-              stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>`;
-
-    listEl.innerHTML = Object.entries(STATUS_META).map(([status, meta]) => {
-      const items = groups[status];
-      if (!items?.length) return '';
-      const open = !this._collapsedStatuses.has(status);
-      return `
-        <div class="is-acc" data-status="${status}">
-          <button class="is-acc__hd" data-status="${status}">
-            ${chevron(open)}
-            <span class="is-acc__label">${meta.label}</span>
-            <span class="is-acc__count">${items.length}</span>
-          </button>
-          <div class="is-acc__body${open ? '' : ' is-acc__body--collapsed'}">
-            ${items.map(issue => this._issueItemHtml(issue)).join('')}
-          </div>
-        </div>`;
-    }).join('');
-
-    // Accordion toggles
-    listEl.querySelectorAll('.is-acc__hd').forEach(hd => {
-      hd.addEventListener('click', () => {
-        const status  = hd.dataset.status;
-        const body    = hd.nextElementSibling;
-        const ch      = hd.querySelector('.is-acc__chevron');
-        const open    = !this._collapsedStatuses.has(status);
-        if (open) {
-          this._collapsedStatuses.add(status);
-          body.classList.add('is-acc__body--collapsed');
-          ch.classList.remove('is-acc__chevron--open');
-        } else {
-          this._collapsedStatuses.delete(status);
-          body.classList.remove('is-acc__body--collapsed');
-          ch.classList.add('is-acc__chevron--open');
-        }
-      });
-    });
-
-    // Issue item events
     listEl.querySelectorAll('.eus-src-item').forEach(item => {
       const id = parseInt(item.dataset.id);
       item.addEventListener('click', () => this._selectIssue(id));
@@ -303,17 +235,26 @@ export class IssuesPage {
   }
 
   _issueItemHtml(issue) {
-    const sv   = SEVERITY_META[issue.severity] || SEVERITY_META.medium;
-    const desc = issue.description ? escHtml(issue.description) : '';
+    const pv        = PRIORITY_META[issue.severity] || PRIORITY_META.medium;
+    const desc      = issue.description ? escHtml(issue.description) : '';
+    const isTask    = (issue.type || 'issue') === 'task';
+    const typeCls   = isTask ? 'is-type-badge--task' : 'is-type-badge--issue';
+    const typeLabel = isTask ? 'Task' : 'Issue';
+    const status    = issue.status || 'open';
+    const statusLabel = STATUS_META[status]?.label ?? status;
     return `
       <div class="eus-src-item is-list-item${issue.id === this._activeId ? ' eus-src-item--active' : ''}" data-id="${issue.id}">
-        <span class="is-sev-dot is-sev-dot--${issue.severity || 'medium'}" title="${sv.label}"></span>
+        <span class="is-sev-dot is-sev-dot--${issue.severity || 'medium'}" title="${pv.label}"></span>
         <div class="eus-src-item__info is-item-info">
           <div class="is-item-title-row">
             <span class="eus-src-item__id">#${issue.id}</span>
+            <span class="is-type-badge ${typeCls}">${typeLabel}</span>
             <span class="eus-src-item__title">${escHtml(issue.title)}</span>
           </div>
-          ${desc ? `<span class="is-item-desc">${desc}</span>` : ''}
+          <div class="is-item-meta-row">
+            <span class="is-item-desc">${desc}</span>
+            <span class="is-status-chip is-status-chip--${status}">${statusLabel}</span>
+          </div>
         </div>
         <div class="eus-src-item__actions">
           <button class="eus-story-action eus-story-action--delete" title="Delete" aria-label="Delete">
@@ -344,7 +285,7 @@ export class IssuesPage {
   }
 
   async _deleteIssue(id) {
-    const ok = await this._showConfirm('Delete this issue?', 'Delete');
+    const ok = await this._showConfirm('Delete this item?', 'Delete');
     if (!ok) return;
     await window.db.issues.delete(id);
     if (this._activeId === id) { this._activeId = null; this._showEmptyDetail(); }
@@ -352,7 +293,7 @@ export class IssuesPage {
   }
 
   // ----------------------------------------------------------------
-  // Detail panel (Panel 4)
+  // Detail panel
   // ----------------------------------------------------------------
   _showEmptyDetail() {
     this._pendingSave = null;
@@ -363,54 +304,63 @@ export class IssuesPage {
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <p>Select an issue or add a new one</p>
+        <p>Select an item or add a new one</p>
       </div>
     `;
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '';
   }
 
-  async _showAddForm() {
+  async _showAddForm(type = 'issue') {
     await this._autoSave();
     this._activeId = null;
     this.container.querySelectorAll('#isIssuesList .eus-src-item').forEach(c => c.classList.remove('eus-src-item--active'));
-    const el       = this.container.querySelector('#isIssueDetail');
+    const el     = this.container.querySelector('#isIssueDetail');
     const layers = await window.db.projectLayers.list(this._projectId) ?? [];
-    el.innerHTML   = this._formHtml(null, layers);
+    el.innerHTML = this._formHtml(null, layers, type);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
-    if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Add Issue</button>';
-    await this._bindFormEvents(el, null);
+    const label = type === 'task' ? 'Add Task' : 'Add Issue';
+    if (headerActions) headerActions.innerHTML = `<button class="is-form__btn" id="isFormSave">${label}</button>`;
+    await this._bindFormEvents(el, null, type);
     el.querySelector('#isFormTitle')?.focus();
   }
 
   async _showEditForm(issue) {
-    const el       = this.container.querySelector('#isIssueDetail');
+    const el     = this.container.querySelector('#isIssueDetail');
     const layers = await window.db.projectLayers.list(this._projectId) ?? [];
-    el.innerHTML   = this._formHtml(issue, layers);
+    const type   = issue.type || 'issue';
+    el.innerHTML = this._formHtml(issue, layers, type);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Save Changes</button>';
-    await this._bindFormEvents(el, issue);
+    await this._bindFormEvents(el, issue, type);
   }
 
   // ----------------------------------------------------------------
   // Form
   // ----------------------------------------------------------------
-  _formHtml(issue, layers = []) {
-    const isEdit = !!issue;
+  _formHtml(issue, layers = [], type = 'issue') {
+    const isEdit    = !!issue;
+    const isTask    = type === 'task';
+    const heading   = isEdit ? (isTask ? 'Edit Task' : 'Edit Issue') : (isTask ? 'Add Task' : 'Add Issue');
+    const priorityLabel = isTask ? 'Priority' : 'Severity';
+
     const statusOptions = Object.entries(STATUS_META).map(([val, m]) =>
       `<option value="${val}"${(issue?.status ?? 'open') === val ? ' selected' : ''}>${m.label}</option>`
     ).join('');
-    const severityOptions = Object.entries(SEVERITY_META).map(([val, m]) =>
+    const severityOptions = Object.entries(PRIORITY_META).map(([val, m]) =>
       `<option value="${val}"${(issue?.severity ?? 'medium') === val ? ' selected' : ''}>${m.label}</option>`
     ).join('');
     const layerOptions = layers.map(l =>
       `<option value="${l.id}"${issue?.layer_id === l.id ? ' selected' : ''}>${escHtml(l.name)}</option>`
     ).join('');
 
+    const descLabel     = isTask ? 'Description' : 'Issue Details';
+    const descPlaceholder = isTask ? 'What needs to be done?' : 'What is the issue about?';
+
     return `
       <div class="is-form">
         <div class="is-form__header">
-          <h2 class="is-form__heading">${isEdit ? 'Edit Issue' : 'Add Issue'}</h2>
+          <h2 class="is-form__heading">${heading}</h2>
           <select class="is-header-select" id="isFormStatus">${statusOptions}</select>
         </div>
 
@@ -419,12 +369,12 @@ export class IssuesPage {
           <div class="is-form__field">
             <label class="is-form__label" for="isFormTitle">Title <span class="is-form__required">*</span></label>
             <input class="is-form__input" id="isFormTitle" type="text" maxlength="200"
-              placeholder="Describe the issue…" autocomplete="off" value="${escHtml(issue?.title || '')}"/>
+              placeholder="${isTask ? 'Describe the task…' : 'Describe the issue…'}" autocomplete="off" value="${escHtml(issue?.title || '')}"/>
           </div>
 
           <div class="is-form__row">
             <div class="is-form__field">
-              <label class="is-form__label" for="isFormSeverity">Severity</label>
+              <label class="is-form__label" for="isFormSeverity">${priorityLabel}</label>
               <select class="is-form__select" id="isFormSeverity">${severityOptions}</select>
             </div>
             <div class="is-form__field">
@@ -438,7 +388,7 @@ export class IssuesPage {
 
           <div class="is-form__field">
             <div class="is-desc-label-row">
-              <label class="is-form__label" for="isFormDesc">Issue Details</label>
+              <label class="is-form__label" for="isFormDesc">${descLabel}</label>
               <div class="is-desc-actions">
                 <button class="is-desc-btn" id="isDescExpandBtn" type="button" title="Expand to full editor">
                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -450,14 +400,15 @@ export class IssuesPage {
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                     <path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                   </svg>
-                  Add to Tasks Queue
+                  Add to Queue
                 </button>
               </div>
             </div>
             <textarea class="is-form__textarea" id="isFormDesc" rows="11"
-              placeholder="What is the issue about?">${escHtml(issue?.description || '')}</textarea>
+              placeholder="${descPlaceholder}">${escHtml(issue?.description || '')}</textarea>
           </div>
 
+          ${!isTask ? `
           <div class="is-form__field">
             <label class="is-form__label" for="isFormSteps">Steps to Reproduce</label>
             <textarea class="is-form__textarea is-form__textarea--steps" id="isFormSteps" rows="4"
@@ -478,22 +429,24 @@ export class IssuesPage {
             <textarea class="is-form__textarea" id="isFormActual" rows="3"
               placeholder="What actually happened…">${escHtml(issue?.actual_behavior || '')}</textarea>
           </div>
+          ` : ''}
 
         </div>
       </div>
     `;
   }
 
-  async _bindFormEvents(el, issue) {
-    const titleEl    = el.querySelector('#isFormTitle');
-    const severityEl = el.querySelector('#isFormSeverity');
-    const statusEl   = el.querySelector('#isFormStatus');
-    const layerEl    = el.querySelector('#isFormLayer');
-    const descEl     = el.querySelector('#isFormDesc');
-    const stepsEl    = el.querySelector('#isFormSteps');
-    const expectedEl = el.querySelector('#isFormExpected');
-    const actualEl   = el.querySelector('#isFormActual');
-    const saveBtn    = this.container.querySelector('#isFormSave');
+  async _bindFormEvents(el, issue, type = 'issue') {
+    const isTask      = type === 'task';
+    const titleEl     = el.querySelector('#isFormTitle');
+    const severityEl  = el.querySelector('#isFormSeverity');
+    const statusEl    = el.querySelector('#isFormStatus');
+    const layerEl     = el.querySelector('#isFormLayer');
+    const descEl      = el.querySelector('#isFormDesc');
+    const stepsEl     = el.querySelector('#isFormSteps');
+    const expectedEl  = el.querySelector('#isFormExpected');
+    const actualEl    = el.querySelector('#isFormActual');
+    const saveBtn     = this.container.querySelector('#isFormSave');
 
     if (issue) {
       statusEl.addEventListener('change', async () => {
@@ -514,18 +467,19 @@ export class IssuesPage {
       layerEl.classList.remove('is-form__input--error');
       this._pendingSave   = null;
       saveBtn.disabled    = true;
-      saveBtn.textContent = issue ? 'Saving…' : 'Adding…';
+      saveBtn.textContent = issue ? 'Saving…' : (isTask ? 'Adding…' : 'Adding…');
 
       const payload = {
         project_id:         this._projectId,
         layer_id:           layerId,
         title,
-        description:        descEl.value.trim()        || null,
-        steps_to_reproduce: stepsEl.value.trim()       || null,
-        expected_behavior:  expectedEl.value.trim()    || null,
-        actual_behavior:    actualEl.value.trim()       || null,
+        description:        descEl.value.trim()                    || null,
+        steps_to_reproduce: stepsEl    ? stepsEl.value.trim()    || null : null,
+        expected_behavior:  expectedEl ? expectedEl.value.trim() || null : null,
+        actual_behavior:    actualEl   ? actualEl.value.trim()   || null : null,
         status:             statusEl.value,
         severity:           severityEl.value,
+        type,
       };
 
       try {
@@ -543,7 +497,7 @@ export class IssuesPage {
         }
       } catch {
         saveBtn.disabled    = false;
-        saveBtn.textContent = issue ? 'Save Changes' : 'Add Issue';
+        saveBtn.textContent = issue ? 'Save Changes' : (isTask ? 'Add Task' : 'Add Issue');
       }
     };
 
@@ -553,14 +507,14 @@ export class IssuesPage {
     el.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } });
 
     el.querySelector('#isDescExpandBtn')?.addEventListener('click', () => {
-      this._openDescExpand(descEl);
+      this._openDescExpand(descEl, isTask ? 'Description' : 'Issue Details');
     });
 
     el.querySelector('#isDescQueueBtn')?.addEventListener('click', async () => {
       const desc     = descEl.value.trim();
-      const steps    = stepsEl.value.trim();
-      const expected = expectedEl.value.trim();
-      const actual   = actualEl.value.trim();
+      const steps    = stepsEl    ? stepsEl.value.trim()    : '';
+      const expected = expectedEl ? expectedEl.value.trim() : '';
+      const actual   = actualEl   ? actualEl.value.trim()   : '';
       const layerId  = parseInt(layerEl.value) || null;
       if (!desc) return;
       if (!layerId) {
@@ -577,7 +531,9 @@ export class IssuesPage {
       }
       el.querySelector('#isQueueLayerMsg')?.remove();
 
-      const parts = [`Issue: ${titleEl.value.trim() || 'Untitled Issue'}`, '', `Description:\n${desc}`];
+      const itemTitle   = titleEl.value.trim() || (isTask ? 'Untitled Task' : 'Untitled Issue');
+      const typeLabel   = isTask ? 'Task' : 'Issue';
+      const parts = [`${typeLabel}: ${itemTitle}`, '', `Description:\n${desc}`];
       if (steps)    parts.push('', `Steps to Reproduce:\n${steps}`);
       if (expected) parts.push('', `Expected Behavior:\n${expected}`);
       if (actual)   parts.push('', `Actual Behavior:\n${actual}`);
@@ -587,9 +543,9 @@ export class IssuesPage {
       await window.db.promptQueue.add({
         project_id:    this._projectId,
         user_story_id: null,
-        story_title:   titleEl.value.trim() || 'Untitled Issue',
+        story_title:   itemTitle,
         prompt_id:     null,
-        tag:           'Issue',
+        tag:           typeLabel,
         prompt_text:   promptText,
         layer_id:      layerId,
       });
@@ -599,7 +555,6 @@ export class IssuesPage {
       queueBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Added`;
       setTimeout(() => { queueBtn.innerHTML = origHTML; queueBtn.disabled = false; }, 1500);
     });
-
   }
 
   _refreshCardBadges(id, status, severity) {
@@ -613,7 +568,7 @@ export class IssuesPage {
     const dot = itemEl.querySelector('.is-sev-dot');
     if (dot) {
       dot.className = `is-sev-dot is-sev-dot--${severity || 'medium'}`;
-      dot.title     = (SEVERITY_META[severity] || SEVERITY_META.medium).label;
+      dot.title     = (PRIORITY_META[severity] || PRIORITY_META.medium).label;
     }
   }
 
@@ -658,15 +613,15 @@ export class IssuesPage {
   }
 
   // ----------------------------------------------------------------
-  // Expand overlay for Issue Details
+  // Expand overlay
   // ----------------------------------------------------------------
-  _openDescExpand(textarea) {
+  _openDescExpand(textarea, title = 'Details') {
     const overlay = document.createElement('div');
     overlay.className = 'is-expand-overlay';
     overlay.innerHTML = `
       <div class="is-expand-dialog">
         <div class="is-expand-header">
-          <span class="is-expand-title">Issue Details</span>
+          <span class="is-expand-title">${escHtml(title)}</span>
           <button class="is-expand-close" id="isExpandClose" type="button">✕</button>
         </div>
         <textarea class="is-expand-textarea" id="isExpandTa" spellcheck="true">${escHtml(textarea.value)}</textarea>

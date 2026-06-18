@@ -15,8 +15,21 @@ function relativeTime(isoString) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+function parseLcov(content) {
+  if (!content) return null;
+  let lf = 0, lh = 0;
+  for (const line of content.split('\n')) {
+    const lfm = line.match(/^LF:(\d+)/);
+    const lhm = line.match(/^LH:(\d+)/);
+    if (lfm) lf += parseInt(lfm[1], 10);
+    if (lhm) lh += parseInt(lhm[1], 10);
+  }
+  if (!lf) return null;
+  return Math.round((lh / lf) * 100);
+}
+
 function parseResults(text) {
-  const results = { passed: null, failed: null, skipped: null, duration: null };
+  const results = { passed: null, failed: null, skipped: null, duration: null, coverage: null };
 
   // Cypress: "42 passing (3s)" / "2 failing" / "1 pending"
   const cyPass = text.match(/(\d+)\s+passing/i);
@@ -72,6 +85,16 @@ function parseResults(text) {
     return results;
   }
 
+  // Jest: "Lines        : 72.4% ( 381/526 )"
+  const jestCov = text.match(/^Lines\s*:\s*([\d.]+)%/im);
+  if (jestCov) results.coverage = parseFloat(jestCov[1]);
+
+  // .NET Coverlet console reporter: "| Total    | 72.4%  | ..."
+  if (results.coverage == null) {
+    const dotnetCov = text.match(/\|\s*Total\s*\|\s*([\d.]+)%/i);
+    if (dotnetCov) results.coverage = parseFloat(dotnetCov[1]);
+  }
+
   return results;
 }
 
@@ -88,10 +111,11 @@ export class TestRunnerPage {
     this._outputText    = '';
     this._activeEntry   = null; // command entry currently running
     this._history       = [];
-    this._lastRunId     = null; // DB id of the most recent test run (for dedup)
+    this._lastRunId     = null;
     this._modelCfg      = null;
     this._picker        = null;
     this._modelConfigsModal = null;
+    this._layerCoverage = {}; // key: 'root' | layerId → coverage %
   }
 
   async mount() {
@@ -122,6 +146,7 @@ export class TestRunnerPage {
 
     // Load history first so the panel is populated immediately
     this._history = await window.db.testRunHistory.list(this._projectId);
+    this._layerCoverage = this._computeLayerCoverage(this._history);
     this._renderHistory();
 
     // Load layers and render the sidebar
@@ -359,6 +384,13 @@ export class TestRunnerPage {
     const sidebar = this.container.querySelector('#trSidebar');
     if (!sidebar) return;
 
+    const covBadge = (key) => {
+      const pct = this._layerCoverage[key];
+      if (pct == null) return '';
+      const cls = pct >= 80 ? '' : pct >= 50 ? ' tr-cov-badge--warn' : ' tr-cov-badge--low';
+      return `<span class="tr-cov-badge${cls}">${pct}%</span>`;
+    };
+
     const hasProjectRoot = !!this._project?.project_path;
     const items = [];
 
@@ -366,7 +398,10 @@ export class TestRunnerPage {
       const isActive = this._activeLayerId === 'root';
       items.push(`
         <div class="tr-layer-item ${isActive ? 'tr-layer-item--active' : ''}" data-layer-id="root">
-          <span class="tr-layer-item__name">${escHtml(this._project.name)}</span>
+          <div class="tr-layer-item__row">
+            <span class="tr-layer-item__name">${escHtml(this._project.name)}</span>
+            ${covBadge('root')}
+          </div>
           <span class="tr-layer-item__path">${escHtml(this._project.project_path)}</span>
         </div>`);
     }
@@ -375,7 +410,10 @@ export class TestRunnerPage {
       const isActive = this._activeLayerId === l.id;
       items.push(`
         <div class="tr-layer-item ${isActive ? 'tr-layer-item--active' : ''}" data-layer-id="${l.id}">
-          <span class="tr-layer-item__name">${escHtml(l.name)}</span>
+          <div class="tr-layer-item__row">
+            <span class="tr-layer-item__name">${escHtml(l.name)}</span>
+            ${covBadge(l.id)}
+          </div>
           <span class="tr-layer-item__path">${escHtml(l.folder_path)}</span>
         </div>`);
     }
@@ -503,6 +541,22 @@ export class TestRunnerPage {
   async _onRunDone(exitCode) {
     this._setRunIdle();
     const results = parseResults(this._outputText);
+
+    // File-based coverage fallback for Flutter and Angular/Karma
+    if (results.coverage == null && this._activeCwd) {
+      const framework = (this._activeEntry?.framework ?? '').toLowerCase();
+      if (framework.includes('flutter') || framework.includes('angular') || framework.includes('karma')) {
+        results.coverage = await this._readFileCoverage(this._activeCwd);
+      }
+    }
+
+    // Update in-memory coverage map and refresh sidebar
+    if (results.coverage != null) {
+      const key = this._activeLayerId ?? 'root';
+      this._layerCoverage[key] = results.coverage;
+      this._renderLayerSidebar();
+    }
+
     this._showResults(exitCode, results);
     await this._saveRun(exitCode, results);
     this._notifyTelegram(exitCode, results);
@@ -1019,6 +1073,31 @@ export class TestRunnerPage {
     return failures;
   }
 
+  // Build map of latest coverage per layer from history (history is DESC by ran_at)
+  _computeLayerCoverage(history) {
+    const map = {};
+    for (const run of history) {
+      if (run.coverage == null) continue;
+      const key = run.layer_id != null ? run.layer_id : 'root';
+      if (!(key in map)) map[key] = run.coverage;
+    }
+    return map;
+  }
+
+  // Try to read lcov.info from {cwd}/coverage/lcov.info (Flutter & Angular)
+  async _readFileCoverage(cwd) {
+    const sep = cwd.includes('\\') ? '\\' : '/';
+    const candidates = [
+      `${cwd}${sep}coverage${sep}lcov.info`,
+    ];
+    for (const p of candidates) {
+      const content = await window.shell.readFile(p);
+      const pct = parseLcov(content);
+      if (pct != null) return pct;
+    }
+    return null;
+  }
+
   _showFixFeedback(message, success) {
     // Remove any old feedback
     document.querySelectorAll('.tr-fix-feedback').forEach(el => el.remove());
@@ -1048,16 +1127,21 @@ export class TestRunnerPage {
   // ----------------------------------------------------------------
   async _saveRun(exitCode, results) {
     if (!this._activeEntry) return;
+    const layerId = (this._activeLayerId != null && this._activeLayerId !== 'root')
+      ? this._activeLayerId
+      : null;
     const run = await window.db.testRunHistory.create({
       project_id: this._projectId,
       framework:  this._activeEntry.framework ?? null,
       command:    this._activeEntry.cmd,
-      passed:     results.passed   ?? null,
-      failed:     results.failed   ?? null,
-      skipped:    results.skipped  ?? null,
-      duration:   results.duration ?? null,
-      output:     this._outputText || null,
+      passed:     results.passed    ?? null,
+      failed:     results.failed    ?? null,
+      skipped:    results.skipped   ?? null,
+      duration:   results.duration  ?? null,
+      output:     this._outputText  || null,
       exit_code:  exitCode,
+      coverage:   results.coverage  ?? null,
+      layer_id:   layerId,
     });
     this._lastRunId = run?.id ?? null;
     this._history = await window.db.testRunHistory.list(this._projectId);
@@ -1155,6 +1239,10 @@ export class TestRunnerPage {
       if (r.skipped > 0)   parts.push(`<span class="tr-hcard__stat tr-hcard__stat--skip">${r.skipped} skipped</span>`);
       if (!parts.length)   parts.push(`<span class="tr-hcard__stat">exit ${r.exit_code}</span>`);
       if (r.duration)      parts.push(`<span class="tr-hcard__stat tr-hcard__stat--dur">${escHtml(r.duration)}</span>`);
+      if (r.coverage != null) {
+        const cls = r.coverage >= 80 ? 'cov-good' : r.coverage >= 50 ? 'cov-warn' : 'cov-low';
+        parts.push(`<span class="tr-hcard__stat tr-hcard__stat--${cls}">${r.coverage}% cov</span>`);
+      }
       return parts.join('');
     })();
 

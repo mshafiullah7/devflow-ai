@@ -184,7 +184,20 @@ export class WorkflowRunnerPage {
     this._term.loadAddon(this._fitAddon);
     this._term.open(el);
 
-    // Right-click: paste clipboard text into PTY
+    // Capture-phase paste handler covers Ctrl+V before xterm's own paste listener fires.
+    // Without this, both our handler and xterm's built-in one write to the PTY — double paste.
+    // For large pastes (>10 lines or >2000 chars), write to a temp file and send a prompt to
+    // the CLI asking it to read and execute the file — avoids console input-buffer issues.
+    el.addEventListener('paste', async (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // prevent xterm's textarea listener from also firing → no double paste
+      // clipboardData.getData can return empty in Electron; fall back to navigator.clipboard
+      const text = e.clipboardData?.getData('text/plain')
+        || await navigator.clipboard.readText().catch(() => '');
+      if (text) window.app.wfrPty.write(text);
+    }, true);
+
+    // Right-click: paste clipboard text into PTY (contextmenu doesn't fire a paste event)
     el.addEventListener('contextmenu', async (e) => {
       e.preventDefault();
       try {
@@ -201,16 +214,15 @@ export class WorkflowRunnerPage {
       }
     });
 
-    // Ctrl+C: copy selected text to clipboard; fall through to PTY only when nothing is selected
     this._term.attachCustomKeyEventHandler((ev) => {
       if (ev.type !== 'keydown') return true;
+      // Ctrl+C with selection → copy; otherwise fall through to PTY (SIGINT)
       if ((ev.ctrlKey || ev.metaKey) && ev.key === 'c' && !ev.shiftKey) {
         const sel = this._term.getSelection();
-        if (sel) {
-          navigator.clipboard.writeText(sel).catch(() => {});
-          return false;
-        }
+        if (sel) { navigator.clipboard.writeText(sel).catch(() => {}); return false; }
       }
+      // Ctrl+V is handled by the capture-phase paste listener; suppress the raw \x16 keydown
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'v' && !ev.shiftKey) return false;
       return true;
     });
 

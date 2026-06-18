@@ -65,6 +65,13 @@
   color: var(--accent);
 }
 
+.tr-layer-item__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .tr-layer-item__path {
   font-size: 10px;
   font-family: var(--font-mono);
@@ -73,6 +80,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Coverage badge in sidebar */
+.tr-cov-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+  background: color-mix(in srgb, #22c55e 14%, transparent);
+  color: #22c55e;
+}
+.tr-cov-badge--warn { background: color-mix(in srgb, #f97316 14%, transparent); color: #f97316; }
+.tr-cov-badge--low  { background: color-mix(in srgb, #ef4444 14%, transparent); color: #ef4444; }
 
 /* ------------------------------------------------------------------ */
 /* Main content area (right of sidebar)                                 */
@@ -832,7 +853,10 @@
 .tr-hcard__stat--pass { color: var(--success, #22c55e); }
 .tr-hcard__stat--fail { color: var(--danger, #ef4444); }
 .tr-hcard__stat--skip { color: var(--text-secondary); }
-.tr-hcard__stat--dur  { color: var(--text-secondary); font-weight: 400; }
+.tr-hcard__stat--dur      { color: var(--text-secondary); font-weight: 400; }
+.tr-hcard__stat--cov-good { color: #22c55e; font-weight: 600; }
+.tr-hcard__stat--cov-warn { color: #f97316; font-weight: 600; }
+.tr-hcard__stat--cov-low  { color: #ef4444; font-weight: 600; }
 
 .tr-hcard__time {
   font-size: 10px;

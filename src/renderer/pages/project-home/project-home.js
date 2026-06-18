@@ -160,7 +160,7 @@ export class ProjectHomePage {
     const mockups     = this._mockups  || [];
     const documents   = this._documents || [];
     const failed      = this._testRunHistory[0]?.failed ?? 0;
-    const issueOpen   = this._issueCount?.open  ?? 0;
+    const issueOpen   = (this._issueCount?.open ?? 0) + (this._issueCount?.in_progress ?? 0);
 
     return `
       <div class="project-home">
@@ -274,7 +274,7 @@ export class ProjectHomePage {
                   <line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Issues</span>
+              <span class="ph-nav-item__label">Tasks &amp; Issues</span>
               ${issueOpen > 0 ? `<span class="ph-nav-item__count ph-nav-item__count--danger">${issueOpen}</span>` : ''}
             </button>
 

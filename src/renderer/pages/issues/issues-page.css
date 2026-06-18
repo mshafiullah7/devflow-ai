@@ -3,6 +3,20 @@
 /* Panel structure uses project.css classes                             */
 /* ------------------------------------------------------------------ */
 
+/* Queue button with text label */
+.is-queue-btn--labeled {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  width: auto;
+}
+.is-queue-btn__label {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Issues list column */
 #isPanelIssuesList {
   flex: 0 0 35%;
@@ -15,7 +29,7 @@
   padding: 0 12px;
 }
 
-/* Add issue button inside section header */
+/* Add button inside section header */
 .is-add-btn {
   margin-left: 4px;
   display: flex;
@@ -33,6 +47,18 @@
   transition: background 0.12s, color 0.12s;
 }
 .is-add-btn:hover { background: var(--surface-hover); color: var(--accent); }
+
+/* Text-labeled add buttons (+ Task / + Issue) */
+.is-add-btn--text {
+  width: auto;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  background: transparent;
+}
+.is-add-btn--text:hover { background: var(--surface-hover); color: var(--accent); border-color: var(--accent); }
 
 /* Header status filter */
 .is-header-select {
@@ -90,15 +116,41 @@
   min-width: 0;
   flex: 1;
 }
+.is-item-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
 .is-item-desc {
   font-size: 11px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   line-height: 1.4;
 }
+
+/* Status chip shown on the second line of each list item */
+.is-status-chip {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  line-height: 1.6;
+  margin-left: auto;
+}
+.is-status-chip--open        { background: color-mix(in srgb, #6b7280 14%, transparent); color: #6b7280; }
+.is-status-chip--in_progress { background: color-mix(in srgb, #3b82f6 14%, transparent); color: #3b82f6; }
+.is-status-chip--resolved    { background: color-mix(in srgb, #22c55e 14%, transparent); color: #22c55e; }
+.is-status-chip--closed      { background: color-mix(in srgb, #6b7280 14%, transparent); color: #6b7280; }
+.is-status-chip--wont_fix    { background: color-mix(in srgb, #f87171 12%, transparent); color: #f87171; }
 
 /* ------------------------------------------------------------------ */
 /* Severity dot (shown in issue list items)                             */
@@ -114,6 +166,22 @@
 .is-sev-dot--high     { background: #f97316; }
 .is-sev-dot--medium   { background: #eab308; }
 .is-sev-dot--low      { background: #6b7280; }
+
+/* ------------------------------------------------------------------ */
+/* Type badge (Task / Issue) shown in list items                        */
+/* ------------------------------------------------------------------ */
+.is-type-badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 1.6;
+}
+.is-type-badge--task  { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.is-type-badge--issue { background: color-mix(in srgb, #f97316 14%, transparent); color: #f97316; }
 
 /* ------------------------------------------------------------------ */
 /* Detail form                                                           */
@@ -295,57 +363,6 @@
 }
 .is-form__btn:hover    { opacity: 0.88; }
 .is-form__btn:disabled { opacity: 0.5; cursor: default; }
-
-/* ------------------------------------------------------------------ */
-/* Issues list — status accordion                                        */
-/* ------------------------------------------------------------------ */
-.is-acc { margin-bottom: 2px; }
-
-.is-acc__hd {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  width: 100%;
-  padding: 4px 6px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  border-radius: var(--radius-sm);
-  transition: background 0.12s;
-  -webkit-app-region: no-drag;
-}
-.is-acc__hd:hover { background: var(--surface-hover); }
-
-.is-acc__chevron {
-  color: var(--text-muted);
-  flex-shrink: 0;
-  transition: transform 0.15s;
-}
-.is-acc__chevron--open { transform: rotate(90deg); }
-
-.is-acc__label {
-  flex: 1;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-secondary);
-}
-
-.is-acc__count {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted);
-  background: var(--surface-hover);
-  border-radius: 10px;
-  padding: 1px 6px;
-  min-width: 16px;
-  text-align: center;
-}
-
-.is-acc__body { padding-bottom: 2px; }
-.is-acc__body--collapsed { display: none; }
 
 /* ------------------------------------------------------------------ */
 /* Confirm dialog                                                        */

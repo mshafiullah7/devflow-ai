@@ -27,6 +27,9 @@ function applySchema(db) {
     // CLI model config: batch-mode extra flags and configurable skip-permissions flag
     `ALTER TABLE model_configs ADD COLUMN batch_flags     TEXT`,
     `ALTER TABLE model_configs ADD COLUMN skip_perms_flag TEXT`,
+    `ALTER TABLE issues            ADD COLUMN type     TEXT NOT NULL DEFAULT 'issue'`,
+    `ALTER TABLE test_run_history  ADD COLUMN coverage REAL`,
+    `ALTER TABLE test_run_history  ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}

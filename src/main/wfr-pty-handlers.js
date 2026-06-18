@@ -185,9 +185,7 @@ function registerWfrPtyHandlers() {
     _wc = event.sender;
 
     const spawnExe = isWin ? 'powershell.exe' : (process.env.SHELL || '/bin/bash');
-    const spawnArgs = isWin
-      ? ['-NoLogo', '-NoExit', '-Command', 'Remove-Module PSReadLine -ErrorAction SilentlyContinue']
-      : [];
+    const spawnArgs = isWin ? ['-NoLogo', '-NoExit'] : [];
     const spawnCwd = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
 
     try {

@@ -50,25 +50,6 @@ function stripAnsi(str) {
     .replace(/\x1B\][^\x07]*\x07/g, '');
 }
 
-function buildFileTree(files) {
-  const root = { name: '', path: '', type: 'dir', children: {} };
-  for (const filePath of files) {
-    const parts = filePath.replace(/\\/g, '/').split('/');
-    let node = root;
-    for (let i = 0; i < parts.length; i++) {
-      const name   = parts[i];
-      const path   = parts.slice(0, i + 1).join('/');
-      const isFile = i === parts.length - 1;
-      if (!node.children[name]) {
-        node.children[name] = isFile
-          ? { name, path, type: 'file',  children: null }
-          : { name, path, type: 'dir',   children: {} };
-      }
-      node = node.children[name];
-    }
-  }
-  return root;
-}
 
 export class TestGeneratorPage {
   constructor(container, params, router) {
@@ -85,12 +66,10 @@ export class TestGeneratorPage {
     this._mode             = 'generate'; // 'generate' | 'execute'
 
     // Unit test state
-    this._unitFiles        = [];
-    this._unitSelected     = new Set();
-    this._expandedDirs     = new Set();
-    this._treeAllExpanded  = true;
-    this._unitTestFolder   = '';
-    this._testedFiles      = new Set();
+    this._unitFiles      = [];
+    this._unitSelected   = new Set();
+    this._unitTestFolder = '';
+    this._testedFiles    = new Set();
 
     // Inline generation state
     this._genProgress      = [];
@@ -506,7 +485,6 @@ export class TestGeneratorPage {
           <div class="tg-file-picker-toolbar">
             <button class="tg-btn tg-btn--sm" id="tgUnitSelectAll">All</button>
             <button class="tg-btn tg-btn--sm" id="tgUnitClear">Clear</button>
-            <button class="tg-btn tg-btn--sm" id="tgUnitToggleTree">${this._treeAllExpanded ? 'Collapse' : 'Expand'}</button>
             <span class="tg-file-count" id="tgUnitFileCount">${selectedCount} / ${totalCount}</span>
           </div>
           <div class="tg-file-list" id="tgUnitFileList">${this._unitFilesListHtml()}</div>
@@ -560,76 +538,89 @@ export class TestGeneratorPage {
     if (!this._unitFiles.length)       return `<div class="tg-file-list--empty">No source files found in this folder.</div>`;
 
     const capped = this._unitFiles.slice(0, 200);
-    const tree   = buildFileTree(capped);
-    const html   = this._renderTreeChildren(tree.children, 0);
+
+    // Group files by immediate parent folder
+    const groups = new Map();
+    for (const filePath of capped) {
+      const rel       = filePath.replace(/\\/g, '/');
+      const lastSlash = rel.lastIndexOf('/');
+      const dir       = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+      if (!groups.has(dir)) groups.set(dir, []);
+      groups.get(dir).push(filePath);
+    }
+
+    // Root first, then alphabetical
+    const sorted = [...groups.entries()].sort((a, b) => {
+      if (!a[0]) return -1;
+      if (!b[0]) return 1;
+      return a[0].localeCompare(b[0]);
+    });
+
+    const folderIcon = `<svg class="tg-group-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+
+    const groupsHtml = sorted.map(([dir, files]) => {
+      const allSel  = files.every(f => this._unitSelected.has(f));
+      const someSel = !allSel && files.some(f => this._unitSelected.has(f));
+      const label   = dir || '(root)';
+
+      const filesHtml = files
+        .slice().sort((a, b) => a.localeCompare(b))
+        .map(filePath => {
+          const fileName  = filePath.replace(/\\/g, '/').split('/').pop();
+          const checked   = this._unitSelected.has(filePath);
+          const testedDot = this._testedFiles.has(filePath)
+            ? `<span class="tg-tree-tested-dot" title="Test file exists"></span>`
+            : '';
+          return `
+            <label class="tg-flat-row">
+              <input type="checkbox" data-file="${escHtml(filePath)}" ${checked ? 'checked' : ''}/>
+              <span class="tg-flat-name">${escHtml(fileName)}</span>
+              ${testedDot}
+            </label>`;
+        }).join('');
+
+      return `
+        <div class="tg-group">
+          <div class="tg-group-header">
+            <input type="checkbox" data-folder="${escHtml(dir)}"
+                   ${allSel ? 'checked' : ''} ${someSel ? 'data-indeterminate' : ''}/>
+            ${folderIcon}
+            <span class="tg-group-name" title="${escHtml(dir || '/')}">${escHtml(label)}</span>
+            <span class="tg-group-count">${files.length}</span>
+          </div>
+          <div class="tg-group-files">${filesHtml}</div>
+        </div>`;
+    }).join('');
+
     const extra  = this._unitFiles.length - capped.length;
     const notice = extra > 0
       ? `<div class="tg-file-list--notice">Showing first 200 files. Narrow the layer's folder to reduce results.</div>`
       : '';
-    return `<div class="tg-tree">${html}</div>${notice}`;
+    return groupsHtml + notice;
   }
 
-  _renderTreeChildren(children, depth) {
-    return Object.values(children)
-      .sort((a, b) => {
-        if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      })
-      .map(n => this._renderTreeNode(n, depth))
-      .join('');
-  }
-
-  _renderTreeNode(node, depth) {
-    const base = 8 + depth * 16;
-
-    if (node.type === 'file') {
-      const checked  = this._unitSelected.has(node.path);
-      const hasDot   = this._testedFiles.has(node.path);
-      const testedDot = hasDot
-        ? `<span class="tg-tree-tested-dot" title="Test file already exists"></span>`
-        : '';
-      return `
-        <label class="tg-tree-row tg-tree-row--file" style="padding-left:${base + 18}px">
-          <input type="checkbox" data-file="${escHtml(node.path)}" ${checked ? 'checked' : ''}/>
-          <svg class="tg-tree-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <span class="tg-tree-name-wrap">
-            <span class="tg-tree-name">${escHtml(node.name)}</span>${testedDot}
-          </span>
-        </label>`;
-    }
-
-    const descFiles = this._getFilesUnderPath(node.path);
-    const selCount  = descFiles.filter(f => this._unitSelected.has(f)).length;
-    const allSel    = descFiles.length > 0 && selCount === descFiles.length;
-    const someSel   = selCount > 0 && selCount < descFiles.length;
-    const open      = this._expandedDirs.has(node.path);
-
-    return `
-      <div class="tg-tree-dir" data-dir-path="${escHtml(node.path)}">
-        <div class="tg-tree-row tg-tree-row--dir" style="padding-left:${base}px">
-          <span class="tg-tree-arrow ${open ? 'tg-tree-arrow--open' : ''}">
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg>
-          </span>
-          <input type="checkbox" data-folder="${escHtml(node.path)}"
-                 ${allSel ? 'checked' : ''} ${someSel ? 'data-indeterminate' : ''}/>
-          <svg class="tg-tree-icon tg-tree-icon--dir" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span class="tg-tree-name">${escHtml(node.name)}</span>
-          <span class="tg-tree-badge">${descFiles.length}</span>
-        </div>
-        <div class="tg-tree-children ${open ? '' : 'tg-tree-children--collapsed'}">
-          ${this._renderTreeChildren(node.children, depth + 1)}
-        </div>
-      </div>`;
-  }
-
-  _getFilesUnderPath(folderPath) {
+  _getFilesInDir(dir) {
     if (!Array.isArray(this._unitFiles)) return [];
-    const prefix = folderPath + '/';
-    return this._unitFiles.filter(f => f.startsWith(prefix));
+    return this._unitFiles.filter(f => {
+      const rel       = f.replace(/\\/g, '/');
+      const lastSlash = rel.lastIndexOf('/');
+      const fileDir   = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+      return fileDir === dir;
+    });
+  }
+
+  _updateGroupCheckbox(filePath) {
+    const list = this.container.querySelector('#tgUnitFileList');
+    if (!list) return;
+    const rel       = filePath.replace(/\\/g, '/');
+    const lastSlash = rel.lastIndexOf('/');
+    const dir       = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+    const cb        = list.querySelector(`input[data-folder="${CSS.escape(dir)}"]`);
+    if (!cb) return;
+    const files = this._getFilesInDir(dir);
+    const sel   = files.filter(f => this._unitSelected.has(f)).length;
+    cb.checked       = files.length > 0 && sel === files.length;
+    cb.indeterminate = sel > 0 && sel < files.length;
   }
 
   _applyIndeterminateStates() {
@@ -640,36 +631,6 @@ export class TestGeneratorPage {
     });
   }
 
-  _updateAncestorFolderCheckboxes(changedPath) {
-    const list = this.container.querySelector('#tgUnitFileList');
-    if (!list) return;
-    const parts = changedPath.split('/');
-    for (let i = 1; i < parts.length; i++) {
-      const fp    = parts.slice(0, i).join('/');
-      const cb    = list.querySelector(`input[data-folder="${CSS.escape(fp)}"]`);
-      if (!cb) continue;
-      const files = this._getFilesUnderPath(fp);
-      const sel   = files.filter(f => this._unitSelected.has(f)).length;
-      cb.checked       = files.length > 0 && sel === files.length;
-      cb.indeterminate = sel > 0 && sel < files.length;
-    }
-  }
-
-  _updateSubtreeCheckboxes(folderPath, checked) {
-    const list = this.container.querySelector('#tgUnitFileList');
-    if (!list) return;
-    const prefix = folderPath + '/';
-    this._unitFiles.filter(f => f.startsWith(prefix)).forEach(f => {
-      const cb = list.querySelector(`input[data-file="${CSS.escape(f)}"]`);
-      if (cb) cb.checked = checked;
-    });
-    list.querySelectorAll('input[data-folder]').forEach(cb => {
-      if (cb.dataset.folder.startsWith(prefix)) {
-        cb.checked = checked;
-        cb.indeterminate = false;
-      }
-    });
-  }
 
   // ─── Events ──────────────────────────────────────────────────
   _bindEvents() {
@@ -695,7 +656,7 @@ export class TestGeneratorPage {
       if (e.target.dataset.file !== undefined) {
         const f = e.target.dataset.file;
         e.target.checked ? this._unitSelected.add(f) : this._unitSelected.delete(f);
-        this._updateAncestorFolderCheckboxes(f);
+        this._updateGroupCheckbox(f);
         this._updateUnitFileCount();
         this._syncGenerateBtns();
         this._execUpdateSelBtn();
@@ -703,10 +664,13 @@ export class TestGeneratorPage {
       }
       if (e.target.dataset.folder !== undefined) {
         const fp    = e.target.dataset.folder;
-        const files = this._getFilesUnderPath(fp);
+        const files = this._getFilesInDir(fp);
         files.forEach(f => e.target.checked ? this._unitSelected.add(f) : this._unitSelected.delete(f));
-        this._updateSubtreeCheckboxes(fp, e.target.checked);
-        this._updateAncestorFolderCheckboxes(fp);
+        const list  = this.container.querySelector('#tgUnitFileList');
+        if (list) files.forEach(f => {
+          const cb = list.querySelector(`input[data-file="${CSS.escape(f)}"]`);
+          if (cb) cb.checked = e.target.checked;
+        });
         this._updateUnitFileCount();
         this._syncGenerateBtns();
         this._execUpdateSelBtn();
@@ -719,31 +683,8 @@ export class TestGeneratorPage {
       if (e.target.id === 'tgModeExecute')        { this._switchMode('execute');    return; }
 
       if (!e.target.closest('#tgMain')) return;
-      const dirRow = e.target.closest('.tg-tree-row--dir');
-      if (dirRow && !e.target.matches('input')) {
-        const dirEl    = dirRow.closest('.tg-tree-dir');
-        const children = dirEl?.querySelector('.tg-tree-children');
-        const arrow    = dirRow.querySelector('.tg-tree-arrow');
-        const dirPath  = dirEl?.dataset.dirPath ?? '';
-        if (children) {
-          const nowCollapsed = children.classList.toggle('tg-tree-children--collapsed');
-          arrow?.classList.toggle('tg-tree-arrow--open', !nowCollapsed);
-          if (nowCollapsed) this._expandedDirs.delete(dirPath);
-          else              this._expandedDirs.add(dirPath);
-        }
-        return;
-      }
-      if (e.target.id === 'tgUnitSelectAll')   { this._unitFiles.slice(0, 200).forEach(f => this._unitSelected.add(f)); this._rerenderFileList(); return; }
-      if (e.target.id === 'tgUnitClear')        { this._unitSelected.clear(); this._rerenderFileList(); return; }
-      if (e.target.id === 'tgUnitToggleTree') {
-        this._treeAllExpanded = !this._treeAllExpanded;
-        this._expandedDirs = this._treeAllExpanded
-          ? this._getAllDirPaths(this._unitFiles.slice(0, 200))
-          : new Set();
-        e.target.textContent = this._treeAllExpanded ? 'Collapse' : 'Expand';
-        this._rerenderFileList();
-        return;
-      }
+      if (e.target.id === 'tgUnitSelectAll') { this._unitFiles.slice(0, 200).forEach(f => this._unitSelected.add(f)); this._rerenderFileList(); return; }
+      if (e.target.id === 'tgUnitClear')     { this._unitSelected.clear(); this._rerenderFileList(); return; }
       if (e.target.id === 'tgGenRunAll')         { this._genRunAll();              return; }
       if (e.target.id === 'tgGenStop')           { this._genStop();                return; }
       if (e.target.id === 'tgExecRun')           { this._execStart(false);         return; }
@@ -820,24 +761,11 @@ export class TestGeneratorPage {
   }
 
   // ─── Layer selection ─────────────────────────────────────────
-  _getAllDirPaths(files) {
-    const dirs = new Set();
-    for (const f of files) {
-      const parts = f.replace(/\\/g, '/').split('/');
-      for (let i = 1; i < parts.length; i++) {
-        dirs.add(parts.slice(0, i).join('/'));
-      }
-    }
-    return dirs;
-  }
-
   async _selectLayer(layer) {
-    this._activeLayer      = layer;
-    this._unitFiles        = 'loading';
-    this._unitSelected     = new Set();
-    this._expandedDirs     = new Set();
-    this._treeAllExpanded  = true;
-    this._execCommands     = [];
+    this._activeLayer  = layer;
+    this._unitFiles    = 'loading';
+    this._unitSelected = new Set();
+    this._execCommands = [];
     this._execCmd          = null;
     this._execOutput       = '';
     this._execResult       = null;
@@ -849,8 +777,7 @@ export class TestGeneratorPage {
     this.container.querySelector('#tgMain').innerHTML = this._mainHtml();
 
     const exts = inferExtensions(layer.setup_instructions);
-    this._unitFiles    = await window.shell.listFiles(layer.folder_path, exts);
-    this._expandedDirs = this._getAllDirPaths(this._unitFiles.slice(0, 200));
+    this._unitFiles = await window.shell.listFiles(layer.folder_path, exts);
     await this._checkExistingTests();
 
     this.container.querySelector('#tgMain').innerHTML = this._mainHtml();
