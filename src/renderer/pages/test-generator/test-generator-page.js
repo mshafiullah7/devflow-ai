@@ -5,22 +5,60 @@ import { ModelPicker } from '../../components/model-picker/model-picker.js';
 const FILE_EXTENSIONS = {
   flutter: ['.dart'],
   python:  ['.py'],
-  dotnet:  ['.cs'],
+  dotnet:  ['.cs', '.fs', '.vb'],
   java:    ['.java', '.kt'],
   go:      ['.go'],
   ruby:    ['.rb'],
+  vue:     ['.vue', '.ts', '.js'],
+  angular: ['.ts'],
+  react:   ['.tsx', '.jsx', '.ts', '.js'],
   default: ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'],
 };
 
+async function detectProjectExtensions(folderPath) {
+  const stat = f => window.shell.statFile(`${folderPath}/${f}`).catch(() => null);
+
+  if (await stat('pubspec.yaml'))     return FILE_EXTENSIONS.flutter;
+  if (await stat('go.mod'))           return FILE_EXTENSIONS.go;
+  if (await stat('Gemfile'))          return FILE_EXTENSIONS.ruby;
+  if (await stat('pom.xml'))          return FILE_EXTENSIONS.java;
+  if (await stat('build.gradle'))     return FILE_EXTENSIONS.java;
+  if (await stat('build.gradle.kts')) return FILE_EXTENSIONS.java;
+
+  for (const f of ['requirements.txt', 'setup.py', 'pyproject.toml', 'Pipfile']) {
+    if (await stat(f)) return FILE_EXTENSIONS.python;
+  }
+
+  const pkgRaw = await window.shell.readFile(`${folderPath}/package.json`).catch(() => null);
+  if (pkgRaw) {
+    try {
+      const pkg  = JSON.parse(pkgRaw);
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      if (deps['vue'] || deps['@vue/cli-service'] || deps['@vitejs/plugin-vue']) return FILE_EXTENSIONS.vue;
+      if (deps['@angular/core'])                                                  return FILE_EXTENSIONS.angular;
+      if (deps['react'])                                                          return FILE_EXTENSIONS.react;
+    } catch {}
+    return FILE_EXTENSIONS.default;
+  }
+
+  // .NET: no fixed-name root marker — scan for project files
+  const dotnetFiles = await window.shell.listFiles(folderPath, ['.csproj', '.fsproj', '.vbproj']).catch(() => []);
+  if (dotnetFiles.length) return FILE_EXTENSIONS.dotnet;
+
+  return null;
+}
 
 function inferExtensions(setupInstructions) {
   const s = (setupInstructions || '').toLowerCase();
-  if (s.includes('flutter') || s.includes('dart'))                          return FILE_EXTENSIONS.flutter;
-  if (s.includes('python') || s.includes('pytest') || s.includes('pip'))    return FILE_EXTENSIONS.python;
-  if (s.includes('.net') || s.includes('c#') || s.includes('dotnet'))       return FILE_EXTENSIONS.dotnet;
+  if (s.includes('flutter') || s.includes('dart'))                                                             return FILE_EXTENSIONS.flutter;
+  if (s.includes('python') || s.includes('pytest') || s.includes('pip'))                                      return FILE_EXTENSIONS.python;
+  if (s.includes('.net') || s.includes('c#') || s.includes('dotnet'))                                         return FILE_EXTENSIONS.dotnet;
   if ((s.includes('java') || s.includes('kotlin')) && !s.includes('javascript') && !s.includes('typescript')) return FILE_EXTENSIONS.java;
-  if (s.includes('golang') || /\bgo\b/.test(s))                             return FILE_EXTENSIONS.go;
-  if (s.includes('ruby') || s.includes('rspec') || s.includes('rails'))     return FILE_EXTENSIONS.ruby;
+  if (s.includes('golang') || /\bgo\b/.test(s))                                                               return FILE_EXTENSIONS.go;
+  if (s.includes('ruby') || s.includes('rspec') || s.includes('rails'))                                       return FILE_EXTENSIONS.ruby;
+  if (s.includes('vue') || s.includes('vuejs'))                                                               return FILE_EXTENSIONS.vue;
+  if (s.includes('angular'))                                                                                   return FILE_EXTENSIONS.angular;
+  if (s.includes('react'))                                                                                     return FILE_EXTENSIONS.react;
   return FILE_EXTENSIONS.default;
 }
 
@@ -62,6 +100,10 @@ export class TestGeneratorPage {
     this._modelCfg    = null;
     this._picker      = null;
 
+    // Sidebar
+    this._sidebarCollapsed = true;
+    this._projectCtxCache  = null;
+
     // Mode
     this._mode             = 'generate'; // 'generate' | 'execute'
 
@@ -86,11 +128,20 @@ export class TestGeneratorPage {
     this._execRunning      = false;
     this._execOutput       = '';
     this._execResult       = null; // { failed, passed } | null
+    this._execDetecting    = false;
+    this._execManualCmd    = '';
+
+    // Git panel
+    this._gitPanelVisible  = false;
+    this._gitFiles         = [];
+    this._gitPollInterval  = null;
+    this._gitExpandedFiles = new Set();
   }
 
   async mount() {
     injectCss('pages/project-home/project-home.css');
     injectCss('pages/test-generator/test-generator-page.css');
+    injectCss('components/git/git-diff.css');
     applyStoredTheme();
 
     const [project, layers, _mapping] = await Promise.all([
@@ -111,6 +162,7 @@ export class TestGeneratorPage {
     await this._picker.reload();
 
     this._bindEvents();
+    this._startGitPolling();
 
     window.app.testGenerationWindow.onFileSaved(async () => {
       await this._checkExistingTests();
@@ -130,8 +182,10 @@ export class TestGeneratorPage {
     if (this._execRunning) window.db.testRunner.kill();
     window.db.testRunner.removeListeners();
     window.app.testGenerationWindow.offFileSaved();
+    this._stopGitPolling();
     removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
+    removeCss('components/git/git-diff.css');
     this._picker?.unmount();
   }
 
@@ -155,16 +209,66 @@ export class TestGeneratorPage {
             <button class="tg-mode-btn ${this._mode === 'execute'  ? 'tg-mode-btn--active' : ''}" id="tgModeExecute">Execute</button>
           </div>
           <div id="tgModelPicker" style="-webkit-app-region:no-drag;"></div>
+          <button class="tg-git-toggle-btn" id="tgBtnGitToggle" title="Toggle Git Changes">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <circle cx="11" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M5 5.5v5a1.5 1.5 0 001.5 1.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M11 5.5V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            Git <span class="tg-git-badge" id="tgGitBadge" hidden></span>
+          </button>
         </header>
 
         <div class="tg-body">
-          <aside class="tg-sidebar">
-            <div class="tg-sidebar__header">Layers</div>
+          <aside class="tg-sidebar${this._sidebarCollapsed ? ' tg-sidebar--collapsed' : ''}">
+            <div class="tg-sidebar__header">
+              <span class="tg-sidebar__header-label">Layers</span>
+              <button class="tg-sidebar__toggle" id="tgSidebarToggle" aria-label="${this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 18l-6-6 6-6"/>
+                </svg>
+              </button>
+            </div>
             <div class="tg-sidebar__list" id="tgSidebar">${this._sidebarHtml()}</div>
           </aside>
           <div class="tg-main-wrap">
             <div class="tg-main" id="tgMain">
               ${this._mainHtml()}
+            </div>
+            <div class="tg-git-panel" id="tgGitPanel" hidden>
+              <div class="tg-git-panel__header">
+                <span class="tg-git-panel__title">Git Changes</span>
+                <span class="tg-git-panel__badge" id="tgGitPanelBadge" hidden></span>
+                <div class="tg-git-panel__actions">
+                  <button class="tg-git-panel__icon-btn" id="tgBtnGitExpandAll" title="Expand all">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="tg-git-panel__icon-btn" id="tgBtnGitCollapseAll" title="Collapse all">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="tg-git-panel__icon-btn" id="tgBtnGitRefresh" title="Refresh">↺</button>
+                  <button class="tg-git-panel__icon-btn" id="tgBtnGitClose" title="Close">✕</button>
+                </div>
+              </div>
+              <div class="tg-git-commit-bar">
+                <input class="tg-git-commit-msg" id="tgGitCommitMsg" type="text"
+                  spellcheck="false" placeholder="Commit message…">
+                <button class="tg-git-commit-btn" id="tgBtnGitCommit" disabled>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Commit
+                </button>
+              </div>
+              <div class="tg-git-panel__body" id="tgGitAccordion">
+                <div class="git-diff-empty">No changes yet.</div>
+              </div>
             </div>
           </div>
         </div>
@@ -236,11 +340,17 @@ export class TestGeneratorPage {
 
   // ─── Execute tab ──────────────────────────────────────────────
   _execRightHtml() {
-    const hasCmd   = this._execCommands.length > 0;
-    const loading  = this._activeLayer && !this._execCommands.length && !this._execOutput;
-    const selCount = this._unitSelected.size;
+    const hasCmd    = this._execCommands.length > 0;
+    const detecting = this._execDetecting;
+    const selCount  = this._unitSelected.size;
     const overLimit = selCount > 20;
-    const canRunSel = selCount > 0 && !overLimit && hasCmd && !this._execRunning && !!this._unitTestFolder.trim();
+
+    // Effective command: detected selection OR manual entry
+    const effectiveCmd = hasCmd
+      ? (this._execCmd?.cmd ?? '')
+      : this._execManualCmd.trim();
+    const canRun    = !!effectiveCmd && !this._execRunning;
+    const canRunSel = selCount > 0 && !overLimit && canRun && !!this._unitTestFolder.trim();
 
     const cmdOptions = this._execCommands.map(c =>
       `<option value="${escHtml(c.id)}" ${this._execCmd?.id === c.id ? 'selected' : ''}>${escHtml(c.label)}</option>`
@@ -248,15 +358,34 @@ export class TestGeneratorPage {
 
     const fw = this._execCmd?.framework ?? this._execCommands[0]?.framework ?? '';
 
+    const manualBlock = !hasCmd && !detecting ? `
+      <div class="tg-exec-manual" id="tgExecManualWrap">
+        <span class="tg-exec-manual-label">Enter test command manually:</span>
+        <div class="tg-exec-manual-row">
+          <input class="tg-exec-manual-input" id="tgExecManualInput"
+                 value="${escHtml(this._execManualCmd)}"
+                 placeholder="e.g. npx vitest run"
+                 spellcheck="false"
+                 ${this._execRunning ? 'disabled' : ''}/>
+          <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgExecRunManual"
+            ${!this._execManualCmd.trim() || this._execRunning ? 'disabled' : ''}>▶ Run</button>
+          <button class="tg-btn tg-btn--sm tg-btn--stop" id="tgExecStopManual"
+            ${this._execRunning ? '' : 'hidden'}>■ Stop</button>
+        </div>
+        <p class="tg-exec-manual-hint">Could not auto-detect a test command for this project. Enter a command and click Run.</p>
+      </div>` : '';
+
     return `
       <div class="tg-exec" id="tgExecSection">
+        ${detecting ? `<div class="tg-exec-detecting"><span class="tg-exec-detecting-spinner"></span>Detecting test framework…</div>` : `
         <div class="tg-exec-bar">
           ${fw ? `<span class="tg-exec-fw">${escHtml(fw)}</span>` : ''}
-          <select class="tg-exec-cmd-sel" id="tgExecCmdSel" ${!hasCmd || this._execRunning ? 'disabled' : ''}>
-            ${hasCmd ? cmdOptions : `<option>${loading ? 'Detecting…' : 'No unit test command detected'}</option>`}
+          ${hasCmd ? `
+          <select class="tg-exec-cmd-sel" id="tgExecCmdSel" ${this._execRunning ? 'disabled' : ''}>
+            ${cmdOptions}
           </select>
           <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgExecRun"
-            ${!hasCmd || this._execRunning ? 'disabled' : ''}>▶ Run All</button>
+            ${this._execRunning ? 'disabled' : ''}>▶ Run All</button>
           <button class="tg-btn tg-btn--sm" id="tgExecRunSel"
             ${!canRunSel ? 'disabled' : ''}
             title="${overLimit ? `Max 20 files — ${selCount} selected` : selCount === 0 ? 'Select files from the tree' : ''}">
@@ -264,7 +393,9 @@ export class TestGeneratorPage {
           </button>
           <button class="tg-btn tg-btn--sm tg-btn--stop" id="tgExecStop"
             ${this._execRunning ? '' : 'hidden'}>■ Stop</button>
-        </div>
+          ` : ''}
+        </div>`}
+        ${manualBlock}
         ${overLimit ? `<div class="tg-exec-limit-msg">Max 20 files for targeted run — ${selCount} selected. Deselect some or use Run All.</div>` : ''}
         <div class="tg-exec-output-wrap" id="tgExecOutputWrap">
           <pre class="tg-exec-output" id="tgExecOutput"></pre>
@@ -303,7 +434,7 @@ export class TestGeneratorPage {
       this._genSyncRight();
     } else {
       this._execRestoreOutput();
-      if (this._activeLayer && !this._execCommands.length) this._loadExecCommands();
+      if (this._activeLayer && !this._execCommands.length && !this._execDetecting) this._loadExecCommands();
     }
   }
 
@@ -316,20 +447,33 @@ export class TestGeneratorPage {
 
   async _loadExecCommands() {
     if (!this._activeLayer?.folder_path) return;
+    this._execDetecting = true;
+    if (this._mode === 'execute') this._execRefreshRight();
     this._execCommands = await window.db.testRunner.detect(this._activeLayer.folder_path);
     this._execCmd      = this._execCommands[0] ?? null;
-    if (this._mode === 'execute') {
-      const right = this.container.querySelector('#tgSplitRight');
-      if (right) {
-        right.innerHTML = this._execRightHtml();
-        this._execRestoreOutput();
-      }
+    this._execDetecting = false;
+    if (this._mode === 'execute') this._execRefreshRight();
+  }
+
+  _execRefreshRight() {
+    const right = this.container.querySelector('#tgSplitRight');
+    if (right) {
+      right.innerHTML = this._execRightHtml();
+      this._execRestoreOutput();
     }
   }
 
-  async _execStart(selectedOnly = false) {
-    if (this._execRunning || !this._execCmd || !this._activeLayer?.folder_path) return;
-    const command = selectedOnly ? this._buildSelectedFilesCmd() : this._execCmd.cmd;
+  async _execStart(selectedOnly = false, overrideCmd = null) {
+    if (this._execRunning || !this._activeLayer?.folder_path) return;
+    let command;
+    if (overrideCmd) {
+      command = overrideCmd;
+    } else if (selectedOnly) {
+      if (!this._execCmd) return;
+      command = this._buildSelectedFilesCmd();
+    } else {
+      command = this._execCmd?.cmd ?? this._execManualCmd.trim();
+    }
     if (!command) return;
     this._execOutput = '';
     this._execResult = null;
@@ -395,14 +539,20 @@ export class TestGeneratorPage {
 
   _execSetRunning(running) {
     this._execRunning = running;
-    const run    = this.container.querySelector('#tgExecRun');
-    const runSel = this.container.querySelector('#tgExecRunSel');
-    const stop   = this.container.querySelector('#tgExecStop');
-    const sel    = this.container.querySelector('#tgExecCmdSel');
-    if (run)    { run.hidden    = running; run.disabled    = running; }
-    if (runSel) { runSel.hidden = running; runSel.disabled = running; }
-    if (stop)     stop.hidden   = !running;
-    if (sel)      sel.disabled  = running;
+    const run       = this.container.querySelector('#tgExecRun');
+    const runSel    = this.container.querySelector('#tgExecRunSel');
+    const stop      = this.container.querySelector('#tgExecStop');
+    const sel       = this.container.querySelector('#tgExecCmdSel');
+    const runManual = this.container.querySelector('#tgExecRunManual');
+    const stopManual= this.container.querySelector('#tgExecStopManual');
+    const manualIn  = this.container.querySelector('#tgExecManualInput');
+    if (run)       { run.hidden    = running; run.disabled    = running; }
+    if (runSel)    { runSel.hidden = running; runSel.disabled = running; }
+    if (stop)        stop.hidden   = !running;
+    if (sel)         sel.disabled  = running;
+    if (runManual)   { runManual.hidden = running; runManual.disabled = running; }
+    if (stopManual)    stopManual.hidden = !running;
+    if (manualIn)    manualIn.disabled  = running;
   }
 
   _execAppend(text) {
@@ -545,6 +695,7 @@ export class TestGeneratorPage {
       const rel       = filePath.replace(/\\/g, '/');
       const lastSlash = rel.lastIndexOf('/');
       const dir       = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+      if (dir.split('/').some(seg => seg.startsWith('.'))) continue;
       if (!groups.has(dir)) groups.set(dir, []);
       groups.get(dir).push(filePath);
     }
@@ -637,6 +788,37 @@ export class TestGeneratorPage {
     this.container.querySelector('#tgBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
 
+    // Git panel toggle
+    this.container.querySelector('#tgBtnGitToggle')
+      ?.addEventListener('click', () => {
+        this._gitPanelVisible = !this._gitPanelVisible;
+        const panel = this.container.querySelector('#tgGitPanel');
+        panel?.toggleAttribute('hidden', !this._gitPanelVisible);
+        this.container.querySelector('#tgBtnGitToggle')
+          ?.classList.toggle('tg-git-toggle-btn--active', this._gitPanelVisible);
+        if (this._gitPanelVisible) this._refreshGitPanel();
+      });
+
+    this.container.querySelector('#tgBtnGitClose')
+      ?.addEventListener('click', () => {
+        this._gitPanelVisible = false;
+        this.container.querySelector('#tgGitPanel')?.setAttribute('hidden', '');
+        this.container.querySelector('#tgBtnGitToggle')?.classList.remove('tg-git-toggle-btn--active');
+      });
+
+    this.container.querySelector('#tgBtnGitCommit')
+      ?.addEventListener('click', () => this._commitChanges());
+
+    this.container.querySelector('#tgBtnGitRefresh')
+      ?.addEventListener('click', () => this._refreshGitPanel());
+    this.container.querySelector('#tgBtnGitExpandAll')
+      ?.addEventListener('click', () => this._expandCollapseAll(true));
+    this.container.querySelector('#tgBtnGitCollapseAll')
+      ?.addEventListener('click', () => this._expandCollapseAll(false));
+
+    this.container.querySelector('#tgSidebarToggle')
+      ?.addEventListener('click', () => this._toggleSidebar());
+
     this.container.querySelector('#tgSidebar')
       ?.addEventListener('click', e => {
         const item = e.target.closest('.tg-layer-item');
@@ -687,9 +869,11 @@ export class TestGeneratorPage {
       if (e.target.id === 'tgUnitClear')     { this._unitSelected.clear(); this._rerenderFileList(); return; }
       if (e.target.id === 'tgGenRunAll')         { this._genRunAll();              return; }
       if (e.target.id === 'tgGenStop')           { this._genStop();                return; }
-      if (e.target.id === 'tgExecRun')           { this._execStart(false);         return; }
-      if (e.target.id === 'tgExecRunSel')        { this._execStart(true);          return; }
-      if (e.target.id === 'tgExecStop')          { this._execStop();               return; }
+      if (e.target.id === 'tgExecRun')           { this._execStart(false);                                      return; }
+      if (e.target.id === 'tgExecRunSel')        { this._execStart(true);                                       return; }
+      if (e.target.id === 'tgExecStop')          { this._execStop();                                            return; }
+      if (e.target.id === 'tgExecRunManual')     { this._execStart(false, this._execManualCmd.trim());          return; }
+      if (e.target.id === 'tgExecStopManual')    { this._execStop();                                            return; }
       if (e.target.id === 'tgExecCreateIssue')   { this._execCreateIssue();        return; }
       if (e.target.id === 'tgExecDismissBanner') { this._execDismissBanner();      return; }
       if (e.target.id === 'tgBrowseTestFolder')  { this._browseTestFolder();       return; }
@@ -700,6 +884,12 @@ export class TestGeneratorPage {
       if (e.target.id === 'tgUnitTestFolder') {
         this._unitTestFolder = e.target.value;
         if (this._activeLayer) localStorage.setItem(`devflow_testfolder_${this._activeLayer.id}`, e.target.value);
+      }
+      if (e.target.id === 'tgExecManualInput') {
+        this._execManualCmd = e.target.value;
+        if (this._activeLayer) localStorage.setItem(`devflow_execcmd_${this._activeLayer.id}`, e.target.value);
+        const btn = this.container.querySelector('#tgExecRunManual');
+        if (btn) btn.disabled = !e.target.value.trim() || this._execRunning;
       }
     });
 
@@ -760,6 +950,14 @@ export class TestGeneratorPage {
     );
   }
 
+  _toggleSidebar() {
+    this._sidebarCollapsed = !this._sidebarCollapsed;
+    const sidebar = this.container.querySelector('.tg-sidebar');
+    const btn     = this.container.querySelector('#tgSidebarToggle');
+    sidebar?.classList.toggle('tg-sidebar--collapsed', this._sidebarCollapsed);
+    if (btn) btn.setAttribute('aria-label', this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  }
+
   // ─── Layer selection ─────────────────────────────────────────
   async _selectLayer(layer) {
     this._activeLayer  = layer;
@@ -769,6 +967,9 @@ export class TestGeneratorPage {
     this._execCmd          = null;
     this._execOutput       = '';
     this._execResult       = null;
+    this._execDetecting    = false;
+    this._execManualCmd    = localStorage.getItem(`devflow_execcmd_${layer.id}`) || '';
+    this._projectCtxCache  = null;
 
     const savedFolder      = localStorage.getItem(`devflow_testfolder_${layer.id}`);
     this._unitTestFolder   = savedFolder || inferDefaultTestFolder(layer);
@@ -776,7 +977,7 @@ export class TestGeneratorPage {
     this._rerenderSidebar();
     this.container.querySelector('#tgMain').innerHTML = this._mainHtml();
 
-    const exts = inferExtensions(layer.setup_instructions);
+    const exts = (await detectProjectExtensions(layer.folder_path)) ?? inferExtensions(layer.setup_instructions);
     this._unitFiles = await window.shell.listFiles(layer.folder_path, exts);
     await this._checkExistingTests();
 
@@ -931,9 +1132,13 @@ export class TestGeneratorPage {
       if (src === null) { this._genSetStatus(i, 'error', '', 'Could not read file'); return; }
       if (src.length > 8000) src = src.slice(0, 8000) + '\n// [truncated]';
 
-      const prompt  = this._buildUnitPrompt(item.relPath, src);
       const outPath = this._computeTestPath(item.relPath);
       if (!outPath) { this._genSetStatus(i, 'error', '', 'No test folder set'); return; }
+
+      // Gather project config context once per layer (cached)
+      if (!this._projectCtxCache) this._projectCtxCache = await this._gatherProjectContext();
+
+      const prompt = this._buildUnitPrompt(item.relPath, src, outPath, this._projectCtxCache);
 
       const raw  = await this._streamGenItem(prompt);
       const code = stripCodeFences(raw);
@@ -947,6 +1152,65 @@ export class TestGeneratorPage {
       this._genSetStatus(i, this._genAborted ? 'pending' : 'error', '', err.message || 'Failed');
     }
     this._genClearTimer();
+  }
+
+  async _gatherProjectContext() {
+    const root    = this._activeLayer.folder_path.replace(/\\/g, '/');
+    const tryRead = async (name) => {
+      const raw = await window.shell.readFile(`${root}/${name}`).catch(() => null);
+      if (!raw) return null;
+      return { name, content: raw.length > 3000 ? raw.slice(0, 3000) + '\n// [truncated]' : raw };
+    };
+
+    const candidates = await Promise.all([
+      tryRead('tsconfig.json'),
+      tryRead('tsconfig.app.json'),
+      tryRead('vitest.config.ts'),
+      tryRead('vitest.config.js'),
+      tryRead('vitest.config.mjs'),
+      tryRead('jest.config.ts'),
+      tryRead('jest.config.js'),
+      tryRead('jest.config.cjs'),
+      tryRead('nuxt.config.ts'),
+      tryRead('nuxt.config.js'),
+    ]);
+
+    return candidates.filter(Boolean);
+  }
+
+  _relativeImportPath(fromAbsFile, toAbsFile) {
+    const norm  = p => p.replace(/\\/g, '/');
+    const from  = norm(fromAbsFile).split('/').slice(0, -1); // dir of test file
+    const to    = norm(toAbsFile).split('/');
+
+    let common = 0;
+    while (common < from.length && common < to.length && from[common] === to[common]) common++;
+
+    const ups  = from.length - common;
+    const down = to.slice(common).join('/');
+    const rel  = (ups === 0 ? './' : '../'.repeat(ups)) + down;
+    return rel;
+  }
+
+  _extractImports(src) {
+    const lines = [];
+    const seen  = new Set();
+    const push  = (line) => { if (!seen.has(line)) { seen.add(line); lines.push(line); } };
+
+    // static import / export … from
+    for (const m of src.matchAll(/^(?:import|export)\s[^'"]*?from\s+['"]([^'"]+)['"]/gm))
+      push(m[0].trim());
+    // side-effect imports
+    for (const m of src.matchAll(/^import\s+['"]([^'"]+)['"]/gm))
+      push(m[0].trim());
+    // require()
+    for (const m of src.matchAll(/\brequire\(['"]([^'"]+)['"]\)/g))
+      push(m[0].trim());
+    // defineAsyncComponent / dynamic import()
+    for (const m of src.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g))
+      push(m[0].trim());
+
+    return lines.slice(0, 40); // cap to avoid bloating the prompt
   }
 
   _genStop() {
@@ -983,26 +1247,55 @@ export class TestGeneratorPage {
     });
   }
 
-  _buildUnitPrompt(relPath, content) {
-    const l = this._activeLayer;
+  _buildUnitPrompt(relPath, content, outPath, projectCtx = []) {
+    const l       = this._activeLayer;
+    const root    = l.folder_path.replace(/\\/g, '/');
+    const srcAbs  = `${root}/${relPath.replace(/\\/g, '/')}`;
+    const testAbs = (outPath || '').replace(/\\/g, '/');
+
+    // Relative path from the test file to the source file (for the import statement)
+    const relImport = testAbs ? this._relativeImportPath(testAbs, srcAbs) : `./${relPath.replace(/\\/g, '/')}`;
+
+    // Extract what the source file already imports (so model knows what to mock)
+    const srcImports = this._extractImports(content);
+    const importsSection = srcImports.length
+      ? `\n## Source File Imports (what the source already imports — mock these in tests)\n${srcImports.map(l => `  ${l}`).join('\n')}`
+      : '';
+
+    // Config files (tsconfig paths, vitest/jest setup, nuxt aliases)
+    const configSection = projectCtx.length
+      ? `\n## Project Config Files\n${projectCtx.map(c => `### ${c.name}\n\`\`\`\n${c.content}\n\`\`\``).join('\n\n')}`
+      : '';
+
     return `You are an expert software engineer writing unit tests.
 
 ## Tech Stack & Layer Context
 ${l.setup_instructions || '(no setup instructions provided)'}
 
 ## Layer: ${l.name}
-Folder: ${l.folder_path}
+Project root: ${root}
 
-## Source File: ${relPath}
+## File Paths
+- Source file (relative to project root): ${relPath.replace(/\\/g, '/')}
+- Test file will be saved at: ${testAbs}
+- Relative import from test file to source: \`${relImport}\`
+${configSection}${importsSection}
+
+## Source File: ${relPath.replace(/\\/g, '/')}
+\`\`\`
 ${content}
+\`\`\`
 
 ## Task
 Generate comprehensive unit tests using the testing framework implied by the tech stack above.
 - Cover: happy paths, edge cases, error conditions, boundary values
 - Use describe() blocks to group related tests
-- Each test should have a clear descriptive name
-- Mock external dependencies (DB, HTTP, filesystem) where appropriate
+- Each test should have a clear, descriptive name
+- Mock external dependencies (DB, HTTP, filesystem, stores, composables) where appropriate
 - Do not test implementation details — test observable behaviour and contracts
+- CRITICAL: Import the source file with exactly this path: \`${relImport}\`
+- CRITICAL: For all other imports, check the tsconfig/vitest config above for path aliases (e.g. \`@/\`, \`~/\`, \`#imports\`). Use aliases where the project uses them rather than long relative paths.
+- CRITICAL: Do NOT invent module paths — if you are unsure of an import, mock it or use the alias from the config.
 
 Output ONLY the test file content. No explanation text. Start directly with import or require statements.`;
   }
@@ -1080,5 +1373,246 @@ Output ONLY the test file content. No explanation text. Start directly with impo
     this._rerenderFileList();
   }
 
+  // ─── Git panel ────────────────────────────────────────────────
+
+  _getGitCwd() {
+    return this._project?.project_path || null;
+  }
+
+  _startGitPolling() {
+    this._stopGitPolling();
+    this._refreshGitPanel();
+    this._gitPollInterval = setInterval(() => this._refreshGitPanel(), 5000);
+  }
+
+  _stopGitPolling() {
+    if (this._gitPollInterval) { clearInterval(this._gitPollInterval); this._gitPollInterval = null; }
+  }
+
+  async _refreshGitPanel() {
+    const cwd         = this._getGitCwd();
+    const wrap        = this.container.querySelector('#tgGitAccordion');
+    const headerBadge = this.container.querySelector('#tgGitBadge');
+    const panelBadge  = this.container.querySelector('#tgGitPanelBadge');
+    const commitBtn   = this.container.querySelector('#tgBtnGitCommit');
+    if (!cwd || !wrap) return;
+
+    const _updateBadges = (count) => {
+      if (headerBadge) { headerBadge.textContent = String(count); headerBadge.hidden = count === 0; }
+      if (panelBadge)  { panelBadge.textContent  = String(count); panelBadge.hidden  = count === 0; }
+      if (commitBtn && !commitBtn.classList.contains('tg-git-commit-btn--busy')) {
+        commitBtn.disabled = count === 0;
+      }
+    };
+
+    try {
+      const r     = await window.db.terminal.exec({ command: 'git status --short -uall 2>&1', cwd });
+      const files = this._parseGitStatus(r.stdout || '');
+
+      const noChange = files.length === this._gitFiles.length &&
+        files.every((f, i) => f.file === this._gitFiles[i]?.file && f.statusType === this._gitFiles[i]?.statusType);
+
+      if (noChange && wrap.querySelector('.git-accordion__item')) {
+        _updateBadges(files.length);
+        return;
+      }
+
+      this._gitFiles = files;
+      _updateBadges(files.length);
+      if (this._gitPanelVisible) await this._renderGitAccordion(files, cwd);
+    } catch {
+      if (wrap) wrap.innerHTML = '<div class="git-diff-empty">Not a git repository.</div>';
+    }
+  }
+
+  async _renderGitAccordion(files, cwd) {
+    const wrap = this.container.querySelector('#tgGitAccordion');
+    if (!wrap) return;
+    if (files.length === 0) {
+      wrap.innerHTML = '<div class="git-diff-empty">Working tree is clean.</div>';
+      return;
+    }
+
+    wrap.innerHTML = files.map((f, i) => {
+      const expanded = this._gitExpandedFiles.has(f.file);
+      return `
+        <div class="git-accordion__item${expanded ? '' : ' git-accordion__item--collapsed'}" data-idx="${i}">
+          <button class="git-accordion__header" data-idx="${i}" aria-expanded="${expanded}" data-file="${escHtml(f.file)}">
+            <span class="git-diff-file__status git-diff-file__status--${f.statusType}">${f.statusType}</span>
+            <span class="git-accordion__filename">${escHtml(f.file)}</span>
+            <svg class="git-accordion__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="git-accordion__body" id="tgGdBody${i}" data-loaded="false">
+            ${expanded ? '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>' : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    wrap.querySelectorAll('.git-accordion__header').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx      = parseInt(btn.dataset.idx);
+        const file     = btn.dataset.file;
+        const body     = wrap.querySelector(`#tgGdBody${idx}`);
+        const item     = wrap.querySelector(`.git-accordion__item[data-idx="${idx}"]`);
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+
+        btn.setAttribute('aria-expanded', String(!expanded));
+        item.classList.toggle('git-accordion__item--collapsed', expanded);
+
+        if (!expanded) {
+          this._gitExpandedFiles.add(file);
+          if (body && body.dataset.loaded !== 'true') {
+            body.innerHTML = '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>';
+            const fileInfo = files[idx];
+            if (fileInfo) this._loadGitDiffInto(fileInfo, idx, cwd);
+          }
+        } else {
+          this._gitExpandedFiles.delete(file);
+        }
+      });
+    });
+
+    const toLoad = files.map((f, i) => ({ f, i })).filter(({ f }) => this._gitExpandedFiles.has(f.file));
+    if (toLoad.length > 0) {
+      await Promise.all(toLoad.map(({ f, i }) => this._loadGitDiffInto(f, i, cwd)));
+    }
+  }
+
+  async _loadGitDiffInto(fileInfo, idx, cwd) {
+    const body = this.container.querySelector(`#tgGdBody${idx}`);
+    if (!body) return;
+    try {
+      let diffText = '';
+      if (fileInfo.statusType === 'U') {
+        const r = await window.db.terminal.exec({
+          command: `Get-Content -Raw -Encoding UTF8 "${fileInfo.file}" 2>&1`,
+          cwd,
+        });
+        const content    = (r.stdout || '').replace(/\r\n/g, '\n');
+        const addedLines = content.split('\n').map(l => `+${l}`).join('\n');
+        diffText = `@@ -0,0 +1 @@\n${addedLines}`;
+      } else {
+        const r1 = await window.db.terminal.exec({ command: `git diff HEAD -- "${fileInfo.file}" 2>&1`, cwd });
+        diffText = (r1.stdout || '').trim();
+        if (!diffText) {
+          const r2 = await window.db.terminal.exec({ command: `git diff --cached -- "${fileInfo.file}" 2>&1`, cwd });
+          diffText = (r2.stdout || '').trim();
+        }
+      }
+      body.innerHTML = this._renderGitDiffBody(diffText);
+      body.dataset.loaded = 'true';
+    } catch {
+      body.innerHTML = '<div class="git-diff-error">Failed to load diff.</div>';
+    }
+  }
+
+  _expandCollapseAll(expand) {
+    const cwd  = this._getGitCwd();
+    const wrap = this.container.querySelector('#tgGitAccordion');
+    if (!wrap || !cwd) return;
+    wrap.querySelectorAll('.git-accordion__item').forEach((item, idx) => {
+      const btn  = item.querySelector('.git-accordion__header');
+      const body = item.querySelector('.git-accordion__body');
+      const file = btn?.dataset.file;
+      if (!btn || !body || !file) return;
+      btn.setAttribute('aria-expanded', String(expand));
+      item.classList.toggle('git-accordion__item--collapsed', !expand);
+      if (expand) {
+        this._gitExpandedFiles.add(file);
+        if (body.dataset.loaded !== 'true') {
+          body.innerHTML = '<div class="git-diff-empty" style="padding:8px 14px">Loading diff…</div>';
+          const fileInfo = this._gitFiles[idx];
+          if (fileInfo) this._loadGitDiffInto(fileInfo, idx, cwd);
+        }
+      } else {
+        this._gitExpandedFiles.delete(file);
+      }
+    });
+  }
+
+  async _commitChanges() {
+    const msgEl = this.container.querySelector('#tgGitCommitMsg');
+    const btn   = this.container.querySelector('#tgBtnGitCommit');
+    const cwd   = this._getGitCwd();
+    if (!cwd || !msgEl) return;
+
+    const msg = msgEl.value.trim();
+    if (!msg || this._gitFiles.length === 0) return;
+
+    btn?.classList.add('tg-git-commit-btn--busy');
+    if (btn) btn.disabled = true;
+
+    try {
+      const safeMsg = msg.replace(/'/g, "''");
+      const r = await window.db.terminal.exec({
+        command: `git add -A 2>&1; git commit -m '${safeMsg}' 2>&1`,
+        cwd,
+      });
+      if (r.exitCode === 0 || (r.stdout || '').includes('master') || (r.stdout || '').includes('main') || (r.stdout || '').includes('HEAD')) {
+        this._gitExpandedFiles.clear();
+        if (msgEl) msgEl.value = '';
+      }
+      await this._refreshGitPanel();
+    } catch {
+      await this._refreshGitPanel();
+    } finally {
+      btn?.classList.remove('tg-git-commit-btn--busy');
+    }
+  }
+
+  _parseGitStatus(output) {
+    return output.split('\n')
+      .filter(l => /^[ MADRCU?!]{2} .+/.test(l))
+      .map(line => {
+        const xy   = line.substring(0, 2);
+        const file = line.substring(3).trim().replace(/^"(.*)"$/, '$1');
+        let statusType;
+        if (xy.includes('?'))      statusType = 'U';
+        else if (xy.includes('A')) statusType = 'A';
+        else if (xy.includes('D')) statusType = 'D';
+        else if (xy.includes('R')) statusType = 'R';
+        else                       statusType = 'M';
+        return { xy, statusType, file };
+      });
+  }
+
+  _renderGitDiffBody(diffText) {
+    const esc = escHtml;
+    if (!diffText || !diffText.trim()) return '<div class="git-diff-empty">No diff available.</div>';
+
+    let html = '<table class="git-diff-table"><tbody>';
+    let oldLine = 0, newLine = 0;
+
+    for (const raw of diffText.split('\n')) {
+      if (/^(diff --git|index |--- |\+\+\+ |Binary |new file|deleted file|old mode|new mode|rename )/.test(raw)) continue;
+
+      if (raw.startsWith('@@')) {
+        const m = raw.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)/);
+        if (m) {
+          oldLine = parseInt(m[1]);
+          newLine = parseInt(m[2]);
+          const hunkHeader = raw.match(/@@ [^@]+ @@/)?.[0] || raw;
+          const ctx = m[3] ? esc(m[3].trim()) : '';
+          html += `<tr class="gd-row gd-row--hunk"><td class="gd-ln"></td><td class="gd-ln"></td><td class="gd-code">${esc(hunkHeader)}${ctx ? ` <span class="gd-hunk-ctx">${ctx}</span>` : ''}</td></tr>`;
+        }
+        continue;
+      }
+
+      if (raw.startsWith('-')) {
+        html += `<tr class="gd-row gd-row--del"><td class="gd-ln gd-ln--del">${oldLine++}</td><td class="gd-ln"></td><td class="gd-code gd-code--del"><span class="gd-sign">&#x2212;</span>${esc(raw.slice(1))}</td></tr>`;
+      } else if (raw.startsWith('+')) {
+        html += `<tr class="gd-row gd-row--add"><td class="gd-ln"></td><td class="gd-ln gd-ln--add">${newLine++}</td><td class="gd-code gd-code--add"><span class="gd-sign">+</span>${esc(raw.slice(1))}</td></tr>`;
+      } else if (raw.startsWith(' ')) {
+        html += `<tr class="gd-row gd-row--ctx"><td class="gd-ln">${oldLine++}</td><td class="gd-ln">${newLine++}</td><td class="gd-code">${esc(raw.slice(1))}</td></tr>`;
+      } else if (raw.startsWith('\\')) {
+        html += `<tr class="gd-row gd-row--meta"><td class="gd-ln"></td><td class="gd-ln"></td><td class="gd-code gd-code--meta">${esc(raw)}</td></tr>`;
+      }
+    }
+
+    html += '</tbody></table>';
+    return html;
+  }
 
 }

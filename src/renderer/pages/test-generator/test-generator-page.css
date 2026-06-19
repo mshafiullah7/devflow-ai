@@ -40,10 +40,33 @@
   flex-direction: column;
   overflow: hidden;
   -webkit-app-region: no-drag;
+  transition: flex-basis 0.2s ease, width 0.2s ease;
+}
+
+.tg-sidebar--collapsed {
+  flex: 0 0 36px;
+  width: 36px;
+}
+
+.tg-sidebar--collapsed .tg-sidebar__list {
+  display: none;
+}
+
+.tg-sidebar--collapsed .tg-sidebar__header-label {
+  display: none;
+}
+
+.tg-sidebar--collapsed .tg-sidebar__header {
+  justify-content: center;
+  padding: 8px 6px;
+}
+
+.tg-sidebar--collapsed .tg-sidebar__toggle svg {
+  transform: rotate(180deg);
 }
 
 .tg-sidebar__header {
-  padding: 8px 14px 6px;
+  padding: 8px 10px 6px 14px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: .06em;
@@ -51,6 +74,28 @@
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tg-sidebar__toggle {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, background 0.15s;
+  -webkit-app-region: no-drag;
+}
+
+.tg-sidebar__toggle:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
 }
 
 .tg-sidebar__list {
@@ -148,6 +193,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative; /* stacking context for git overlay */
 }
 
 /* ── Header toggle (centered) ────────────────────────────────── */
@@ -254,6 +300,80 @@
   white-space: pre-wrap;
   word-break: break-all;
   min-height: 100%;
+}
+
+/* ── Detecting indicator ─────────────────────────────────────── */
+.tg-exec-detecting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tg-exec-detecting-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: tg-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes tg-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Manual command entry ────────────────────────────────────── */
+.tg-exec-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+.tg-exec-manual-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: .03em;
+}
+
+.tg-exec-manual-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tg-exec-manual-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 5px 9px;
+  outline: none;
+}
+
+.tg-exec-manual-input:focus {
+  border-color: var(--accent);
+}
+
+.tg-exec-manual-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .tg-exec-banner {
@@ -1234,6 +1354,173 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: right;
+}
+
+/* ── Git toggle button ───────────────────────────────────────── */
+.tg-git-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 5px);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+.tg-git-toggle-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.tg-git-toggle-btn--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.tg-git-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.tg-git-badge[hidden] { display: none; }
+
+/* ── Git overlay panel ───────────────────────────────────────── */
+.tg-git-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 10;
+  background: var(--surface-header);
+  border-left: 1px solid var(--border);
+  box-shadow: -4px 0 16px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tg-git-panel[hidden] { display: none; }
+
+.tg-git-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-header);
+  flex-shrink: 0;
+}
+
+.tg-git-panel__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.tg-git-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+.tg-git-panel__badge[hidden] { display: none; }
+
+.tg-git-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tg-git-panel__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: background 0.1s, color 0.1s;
+}
+.tg-git-panel__icon-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+.tg-git-commit-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-header);
+}
+
+.tg-git-commit-msg {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.tg-git-commit-msg:focus { border-color: var(--accent); }
+
+.tg-git-commit-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: none;
+  background: var(--accent, #6366f1);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.12s;
+}
+.tg-git-commit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.tg-git-commit-btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent, #6366f1) 85%, white);
+}
+.tg-git-commit-btn--busy { opacity: 0.7; cursor: wait; }
+
+.tg-git-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  font-family: 'Consolas', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 12px;
 }
 
 /* ── Flat grouped file list ──────────────────────────────────── */

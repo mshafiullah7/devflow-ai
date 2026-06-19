@@ -21,7 +21,10 @@ export class TerminalPage {
     this._lastRows  = 0;
     this._switchingShell = false;
 
-    this._gitPanelVisible  = false;
+    this._sidebarCollapsed    = true;
+
+    this._gitPanelVisible     = true;
+    this._gitPanelCollapsed   = false;
     this._gitFiles         = [];
     this._gitPollInterval  = null;
     this._gitExpandedFiles = new Set();
@@ -290,7 +293,7 @@ export class TerminalPage {
           </button>
           <span class="wfr-header__title">Terminal — ${projectName}</span>
           <div class="wfr-header__actions">
-            <button class="wfr-git-toggle-btn" id="termBtnGitToggle" title="Toggle Git Changes">
+            <button class="wfr-git-toggle-btn${this._gitPanelVisible ? ' wfr-git-toggle-btn--active' : ''}" id="termBtnGitToggle" title="Toggle Git Changes">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
                 <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
@@ -305,14 +308,21 @@ export class TerminalPage {
 
         <div class="wfr-body">
           <!-- Left: project layer list -->
-          <aside class="wfr-sidebar">
-            <div class="wfr-sidebar__section-hd">Layers</div>
+          <aside class="wfr-sidebar${this._sidebarCollapsed ? ' wfr-sidebar--collapsed' : ''}">
+            <div class="wfr-sidebar__section-hd">
+              <span class="wfr-sidebar__hd-label">Layers</span>
+              <button class="wfr-sidebar__toggle" id="termSidebarToggle" aria-label="${this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 18l-6-6 6-6"/>
+                </svg>
+              </button>
+            </div>
             <div class="wfr-layer-list" id="termLayerList">
               ${this._layerListHtml()}
             </div>
           </aside>
 
-          <!-- Right: terminal panel + git overlay -->
+          <!-- Center: terminal panel -->
           <section class="wfr-output-panel">
             <div class="wfr-output-header">
               <div class="wfr-output-header__top">
@@ -326,41 +336,46 @@ export class TerminalPage {
               </div>
             </div>
             <div class="wfr-terminal-wrap" id="termTerminal"></div>
-
-            <!-- Git diff overlay -->
-            <aside class="wfr-git-panel" id="termGitPanel" hidden>
-              <div class="wfr-git-panel__header">
-                <span class="wfr-git-panel__title">Git Changes</span>
-                <span class="wfr-git-panel__badge" id="termGitPanelBadge" hidden></span>
-                <div class="wfr-git-panel__actions">
-                  <button class="wfr-git-panel__icon-btn" id="termBtnGitExpandAll" title="Expand all">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                  <button class="wfr-git-panel__icon-btn" id="termBtnGitCollapseAll" title="Collapse all">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                  <button class="wfr-git-panel__refresh" id="termBtnGitRefresh" title="Refresh">↺</button>
-                  <button class="wfr-git-panel__icon-btn" id="termBtnGitClose" title="Close">✕</button>
-                </div>
-              </div>
-              <div class="wfr-git-commit-bar">
-                <input class="wfr-git-commit-msg" id="termGitCommitMsg" type="text" spellcheck="false" placeholder="Commit message…">
-                <button class="wfr-git-commit-btn" id="termBtnGitCommit" disabled>
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Commit
-                </button>
-              </div>
-              <div class="wfr-git-panel__body" id="termGitAccordion">
-                <div class="git-diff-empty">No changes yet.</div>
-              </div>
-            </aside>
           </section>
+
+          <!-- Right: git panel (flex sibling, not overlay) -->
+          <aside class="wfr-git-panel${this._gitPanelCollapsed ? ' wfr-git-panel--collapsed' : ''}" id="termGitPanel" ${this._gitPanelVisible ? '' : 'hidden'}>
+            <div class="wfr-git-panel__header">
+              <button class="wfr-git-panel__collapse-btn" id="termBtnGitCollapse" title="${this._gitPanelCollapsed ? 'Expand' : 'Collapse'}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </button>
+              <span class="wfr-git-panel__title">Git Changes</span>
+              <span class="wfr-git-panel__badge" id="termGitPanelBadge" hidden></span>
+              <div class="wfr-git-panel__actions">
+                <button class="wfr-git-panel__icon-btn" id="termBtnGitExpandAll" title="Expand all">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button class="wfr-git-panel__icon-btn" id="termBtnGitCollapseAll" title="Collapse all">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button class="wfr-git-panel__refresh" id="termBtnGitRefresh" title="Refresh">↺</button>
+                <button class="wfr-git-panel__icon-btn" id="termBtnGitClose" title="Close">✕</button>
+              </div>
+            </div>
+            <div class="wfr-git-commit-bar">
+              <input class="wfr-git-commit-msg" id="termGitCommitMsg" type="text" spellcheck="false" placeholder="Commit message…">
+              <button class="wfr-git-commit-btn" id="termBtnGitCommit" disabled>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Commit
+              </button>
+            </div>
+            <div class="wfr-git-panel__body" id="termGitAccordion">
+              <div class="git-diff-empty">No changes yet.</div>
+            </div>
+          </aside>
         </div>
       </div>`;
 
@@ -372,12 +387,18 @@ export class TerminalPage {
     this.container.querySelector('#termBtnClose')
       ?.addEventListener('click', () => window.close());
 
+    this.container.querySelector('#termSidebarToggle')
+      ?.addEventListener('click', () => this._toggleSidebar());
+
     this.container.querySelectorAll('.wfr-layer-row').forEach(row => {
       row.addEventListener('click', () => this._selectLayer(+row.dataset.id));
     });
 
     this.container.querySelector('#termBtnGitToggle')
       ?.addEventListener('click', () => this._toggleGitPanel());
+
+    this.container.querySelector('#termBtnGitCollapse')
+      ?.addEventListener('click', () => this._toggleGitPanelCollapse());
 
     this.container.querySelector('#termBtnGitClose')
       ?.addEventListener('click', () => {
@@ -394,6 +415,24 @@ export class TerminalPage {
       ?.addEventListener('click', () => this._expandCollapseAll(false));
     this.container.querySelector('#termBtnGitCommit')
       ?.addEventListener('click', () => this._commitChanges());
+  }
+
+  // ── Sidebar collapse ─────────────────────────────────────────────────────
+
+  _toggleSidebar() {
+    this._sidebarCollapsed = !this._sidebarCollapsed;
+    const sidebar = this.container.querySelector('.wfr-sidebar');
+    const btn     = this.container.querySelector('#termSidebarToggle');
+    sidebar?.classList.toggle('wfr-sidebar--collapsed', this._sidebarCollapsed);
+    if (btn) btn.setAttribute('aria-label', this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  }
+
+  _toggleGitPanelCollapse() {
+    this._gitPanelCollapsed = !this._gitPanelCollapsed;
+    const panel = this.container.querySelector('#termGitPanel');
+    const btn   = this.container.querySelector('#termBtnGitCollapse');
+    panel?.classList.toggle('wfr-git-panel--collapsed', this._gitPanelCollapsed);
+    if (btn) btn.title = this._gitPanelCollapsed ? 'Expand' : 'Collapse';
   }
 
   // ── Git diff panel ───────────────────────────────────────────────────────

@@ -137,52 +137,6 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Layers toggle button                                                  */
-/* ------------------------------------------------------------------ */
-.git-page__layers-toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm, 5px);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 0.12s, color 0.12s, background 0.12s;
-  flex-shrink: 0;
-  -webkit-app-region: no-drag;
-}
-.git-page__layers-toggle:hover {
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
-.git-page__layers-toggle--active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-.git-page__layers-toggle-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-}
-.git-page__layers-toggle-badge[hidden] { display: none; }
-
-/* ------------------------------------------------------------------ */
 /* Console toggle button                                                */
 /* ------------------------------------------------------------------ */
 .git-page__console-toggle {
@@ -244,23 +198,17 @@
 /* Panel wrappers (Layers + Files)                                       */
 /* ------------------------------------------------------------------ */
 .gc-layer-panel {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 300px;
-  z-index: 10;
+  flex: 0 0 36px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  box-shadow: 4px 0 16px rgba(0,0,0,0.25);
-  will-change: transform;
-  transform: translateX(-100%);
-  transition: transform 0.25s ease;
+  overflow: hidden;
+  transition: flex-basis 0.2s ease;
 }
 .gc-layer-panel--open {
-  transform: translateX(0);
+  flex: 0 0 300px;
 }
 
 .git-page__files-panel {
@@ -275,7 +223,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
+  padding: 0 8px 0 12px;
   height: 34px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-header);
@@ -287,9 +235,55 @@
   user-select: none;
 }
 
-.gc-panel-header svg {
+.gc-panel-header svg,
+.gc-panel-header__icon {
   flex-shrink: 0;
   color: var(--text-muted);
+}
+
+.gc-panel-header__label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gc-layer-collapse-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  margin-left: auto;
+}
+.gc-layer-collapse-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+/* Collapsed state: hide content, center the toggle button */
+.gc-layer-panel:not(.gc-layer-panel--open) .gc-panel-header {
+  justify-content: center;
+  padding: 0 4px;
+}
+.gc-layer-panel:not(.gc-layer-panel--open) .gc-panel-header__label,
+.gc-layer-panel:not(.gc-layer-panel--open) .gc-panel-header__icon {
+  display: none;
+}
+.gc-layer-panel:not(.gc-layer-panel--open) .gc-layer-collapse-btn {
+  margin-left: 0;
+}
+.gc-layer-panel:not(.gc-layer-panel--open) .gc-layer-collapse-btn svg {
+  transform: rotate(180deg);
+}
+.gc-layer-panel:not(.gc-layer-panel--open) .gc-layer-sidebar {
+  display: none;
 }
 
 .gc-panel-header__layer-path {

@@ -75,15 +75,61 @@
   flex-direction: column;
   overflow-y: auto;
   padding-bottom: 12px;
+  transition: width 0.2s ease;
+}
+
+.wfr-sidebar--collapsed {
+  width: 36px;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.wfr-sidebar--collapsed .wfr-layer-list {
+  display: none;
+}
+
+.wfr-sidebar--collapsed .wfr-sidebar__hd-label {
+  display: none;
+}
+
+.wfr-sidebar--collapsed .wfr-sidebar__section-hd {
+  justify-content: center;
+  padding: 10px 6px;
+}
+
+.wfr-sidebar--collapsed .wfr-sidebar__toggle svg {
+  transform: rotate(180deg);
 }
 
 .wfr-sidebar__section-hd {
-  padding: 10px 12px 6px;
+  padding: 10px 10px 6px 12px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.wfr-sidebar__toggle {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.wfr-sidebar__toggle:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
 }
 
 .wfr-layer-list { display: flex; flex-direction: column; gap: 1px; }
@@ -152,7 +198,6 @@
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  position: relative;
 }
 
 .wfr-output-header {
@@ -256,20 +301,40 @@
 }
 .wfr-git-badge[hidden] { display: none; }
 
-/* Git panel overlay */
+/* Git panel — flex sibling of wfr-output-panel */
 .wfr-git-panel {
-  position: absolute;
-  top: 0; right: 0; bottom: 0;
-  width: 50vw;
-  z-index: 10;
+  flex: 0 0 50%;
+  min-width: 0;
+  min-height: 0;
   border-left: 1px solid var(--border);
   background: var(--surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: -4px 0 16px rgba(0,0,0,0.25);
+  transition: flex-basis 0.2s ease;
 }
 .wfr-git-panel[hidden] { display: none; }
+
+.wfr-git-panel--collapsed {
+  flex: 0 0 36px;
+}
+
+.wfr-git-panel--collapsed .wfr-git-panel__title,
+.wfr-git-panel--collapsed .wfr-git-panel__badge,
+.wfr-git-panel--collapsed .wfr-git-panel__actions,
+.wfr-git-panel--collapsed .wfr-git-commit-bar,
+.wfr-git-panel--collapsed .wfr-git-panel__body {
+  display: none;
+}
+
+.wfr-git-panel--collapsed .wfr-git-panel__header {
+  justify-content: center;
+  padding: 9px 6px;
+}
+
+.wfr-git-panel--collapsed .wfr-git-panel__collapse-btn svg {
+  transform: rotate(180deg);
+}
 
 .wfr-git-panel__header {
   display: flex;
@@ -279,6 +344,24 @@
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
+}
+
+.wfr-git-panel__collapse-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.wfr-git-panel__collapse-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
 }
 .wfr-git-panel__title {
   font-size: 11px;

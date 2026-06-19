@@ -653,7 +653,7 @@ export class PromptQueuePage {
 
     // Register per-run layerDone listener
     window.app.wfrPty.onLayerDone(async ({ layerId, error: runError }) => {
-      if (layerId !== String(item.id)) return;
+      if (layerId !== item.id) return;
 
       // Detach all listeners, re-attach permanent onData
       window.app.wfrPty.offAll();

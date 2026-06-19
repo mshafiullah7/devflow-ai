@@ -93,19 +93,21 @@
 .git-diff-file--active .git-diff-file__name { color: var(--text); }
 
 .git-diff-file__status {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
-  text-align: center;
+  height: 16px;
   border-radius: 3px;
-  padding: 1px 0;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
-.git-diff-file__status--M { color: #f59e0b; }
-.git-diff-file__status--A { color: #22c55e; }
-.git-diff-file__status--D { color: #ef4444; }
-.git-diff-file__status--R { color: #a78bfa; }
-.git-diff-file__status--U { color: #38bdf8; }
+.git-diff-file__status--M { background: rgba(99,102,241,.15); color: #818cf8; }
+.git-diff-file__status--A { background: rgba(34,197,94,.12);  color: #4ade80; }
+.git-diff-file__status--D { background: rgba(239,68,68,.12);  color: #f87171; }
+.git-diff-file__status--R { background: rgba(234,179,8,.12);  color: #facc15; }
+.git-diff-file__status--U { background: rgba(20,184,166,.12); color: #2dd4bf; }
 
 .git-diff-file__name {
   font-size: 11.5px;
@@ -262,4 +264,61 @@
 }
 [data-theme="light"] .git-diff-file--active .git-diff-file__name {
   color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Git accordion (slide panel used in prompt-queue, test-generator…)   */
+/* ------------------------------------------------------------------ */
+
+.git-accordion__item {
+  border-bottom: 1px solid var(--border);
+}
+.git-accordion__item:last-of-type {
+  border-bottom: none;
+}
+
+.git-accordion__header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: background 0.1s;
+}
+.git-accordion__header:hover { background: var(--surface-hover); }
+
+.git-accordion__filename {
+  flex: 1;
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  color: var(--text-secondary);
+}
+
+.git-accordion__chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.git-accordion__item--collapsed .git-accordion__chevron {
+  transform: rotate(-90deg);
+}
+
+.git-accordion__body {
+  overflow: hidden;
+  overflow-x: auto;
+  max-height: 400px;
+  background: var(--bg);
+}
+.git-accordion__item--collapsed .git-accordion__body {
+  display: none;
 }

@@ -47,7 +47,6 @@ export class GitChangesPage {
     this._qcmdModal.mount();
 
     this._bindEvents();
-    this._updateLayersBadge();
     this._updateFilesLayerPath();
 
     await this._loadLayerCounts();
@@ -109,14 +108,6 @@ export class GitChangesPage {
                 stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <button class="git-page__layers-toggle" id="gitPageLayersToggle" title="Toggle Layers">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="2" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
-              <rect x="1" y="9" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
-            </svg>
-            Layers
-            <span class="git-page__layers-toggle-badge" id="gitLayersToggleBadge" hidden></span>
-          </button>
           <button class="git-page__console-toggle" id="gitPageConsoleToggle" title="Toggle Console">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="4 17 10 11 4 5"/>
@@ -128,13 +119,18 @@ export class GitChangesPage {
         </header>
 
         <div class="git-page__body">
-          <div class="gc-layer-panel" id="gcLayerPanel">
+          <div class="gc-layer-panel${this._layersOpen ? ' gc-layer-panel--open' : ''}" id="gcLayerPanel">
             <div class="gc-panel-header">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <svg class="gc-panel-header__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <rect x="1" y="2" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
                 <rect x="1" y="9" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
               </svg>
-              Layers
+              <span class="gc-panel-header__label">Layers</span>
+              <button class="gc-layer-collapse-btn" id="gcLayerCollapseBtn" title="${this._layersOpen ? 'Collapse' : 'Expand'}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 18l-6-6 6-6"/>
+                </svg>
+              </button>
             </div>
             <aside class="gc-layer-sidebar" id="gcLayerSidebar"></aside>
           </div>
@@ -249,8 +245,8 @@ export class GitChangesPage {
         window.db.terminal.exec({ command: 'code .', cwd: path });
       });
 
-    this.container.querySelector('#gitPageLayersToggle')
-      .addEventListener('click', () => this._toggleLayers());
+    this.container.querySelector('#gcLayerCollapseBtn')
+      ?.addEventListener('click', () => this._toggleLayers());
 
     this.container.querySelector('#gitPageConsoleToggle')
       .addEventListener('click', () => this._toggleConsole());
@@ -510,18 +506,10 @@ export class GitChangesPage {
   // ----------------------------------------------------------------
   _toggleLayers() {
     this._layersOpen = !this._layersOpen;
-    const panel  = this.container.querySelector('#gcLayerPanel');
-    const toggle = this.container.querySelector('#gitPageLayersToggle');
+    const panel       = this.container.querySelector('#gcLayerPanel');
+    const collapseBtn = this.container.querySelector('#gcLayerCollapseBtn');
     panel?.classList.toggle('gc-layer-panel--open', this._layersOpen);
-    toggle?.classList.toggle('git-page__layers-toggle--active', this._layersOpen);
-  }
-
-  _updateLayersBadge() {
-    const badge = this.container.querySelector('#gitLayersToggleBadge');
-    if (!badge) return;
-    const count = this._layers.length;
-    badge.textContent = String(count);
-    badge.hidden = count === 0;
+    if (collapseBtn) collapseBtn.title = this._layersOpen ? 'Collapse' : 'Expand';
   }
 
   _updateConsoleBadge() {

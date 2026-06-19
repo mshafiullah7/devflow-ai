@@ -413,51 +413,103 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   safeHandle('testRunner:detect', (_e, projectPath) => {
     if (!projectPath) return [];
-    const exists  = (p) => { try { return fs.existsSync(p); } catch { return false; } };
+    const exists   = (p) => { try { return fs.existsSync(p); } catch { return false; } };
     const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
+    const listDir  = (p) => { try { return fs.readdirSync(p); } catch { return []; } };
     const commands = [];
 
     // Flutter
     if (exists(path.join(projectPath, 'pubspec.yaml'))) {
-      commands.push({ id: 'flutter-test',    label: 'flutter test',                   cmd: 'flutter test',                   framework: 'Flutter' });
+      commands.push({ id: 'flutter-test',    label: 'flutter test',                    cmd: 'flutter test',                    framework: 'Flutter' });
       commands.push({ id: 'flutter-verbose', label: 'flutter test --reporter expanded', cmd: 'flutter test --reporter expanded', framework: 'Flutter' });
     }
 
-    // Node-based projects
-    const pkgPath = path.join(projectPath, 'package.json');
+    // Python / pytest
+    const hasPyProject = exists(path.join(projectPath, 'pyproject.toml'));
+    const hasPipfile   = exists(path.join(projectPath, 'Pipfile'));
+    const hasReqs      = exists(path.join(projectPath, 'requirements.txt'));
+    const hasSetupPy   = exists(path.join(projectPath, 'setup.py'));
+    if (hasPyProject || hasPipfile || hasReqs || hasSetupPy) {
+      commands.push({ id: 'pytest',         label: 'pytest',          cmd: 'pytest',         framework: 'pytest' });
+      commands.push({ id: 'pytest-verbose', label: 'pytest -v',       cmd: 'pytest -v',      framework: 'pytest' });
+      commands.push({ id: 'python-m-pytest',label: 'python -m pytest',cmd: 'python -m pytest', framework: 'pytest' });
+    }
+
+    // Go
+    if (exists(path.join(projectPath, 'go.mod'))) {
+      commands.push({ id: 'go-test',         label: 'go test ./...',        cmd: 'go test ./...',        framework: 'Go' });
+      commands.push({ id: 'go-test-verbose', label: 'go test -v ./...',     cmd: 'go test -v ./...',     framework: 'Go' });
+    }
+
+    // Ruby / RSpec
+    if (exists(path.join(projectPath, 'Gemfile'))) {
+      commands.push({ id: 'rspec',    label: 'bundle exec rspec', cmd: 'bundle exec rspec', framework: 'RSpec' });
+      commands.push({ id: 'rspec-f',  label: 'rspec --format doc', cmd: 'bundle exec rspec --format doc', framework: 'RSpec' });
+    }
+
+    // Node-based projects — walk up one level to find package.json if not in projectPath
+    let pkgRoot = projectPath;
+    let pkgPath = path.join(pkgRoot, 'package.json');
+    if (!exists(pkgPath)) {
+      const parent = path.dirname(pkgRoot);
+      if (parent !== pkgRoot && exists(path.join(parent, 'package.json'))) {
+        pkgRoot = parent;
+        pkgPath = path.join(pkgRoot, 'package.json');
+      }
+    }
+
     if (exists(pkgPath)) {
       const pkg     = readJson(pkgPath) || {};
       const scripts = pkg.scripts || {};
       const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 
-      const isAngular    = exists(path.join(projectPath, 'angular.json'));
-      const hasCypress   = !!allDeps['cypress'] ||
-                           exists(path.join(projectPath, 'cypress.json')) ||
-                           exists(path.join(projectPath, 'cypress.config.js')) ||
-                           exists(path.join(projectPath, 'cypress.config.ts')) ||
-                           exists(path.join(projectPath, 'cypress.config.mjs'));
-      const hasPlaywright = !!allDeps['@playwright/test'] || !!allDeps['playwright'];
-      const hasJest       = !!allDeps['jest'] || !!allDeps['@jest/core'];
-      const fwLabel       = isAngular ? 'Angular' : 'Node';
+      const isAngular  = exists(path.join(pkgRoot, 'angular.json'));
+      const isNuxt     = exists(path.join(pkgRoot, 'nuxt.config.js')) ||
+                         exists(path.join(pkgRoot, 'nuxt.config.ts')) ||
+                         exists(path.join(pkgRoot, 'nuxt.config.mjs'));
+      const hasJest    = !!allDeps['jest'] || !!allDeps['@jest/core'];
+      const hasVitest  = !!allDeps['vitest'] || !!allDeps['@vitest/ui'] ||
+                         Object.values(scripts).some(s => /\bvitest\b/.test(s));
 
-      // Unit tests
-      if (scripts['test']) {
-        const fw     = isAngular ? 'Angular / Karma' : hasJest ? 'Jest' : fwLabel;
-        const suffix = isAngular ? ' --no-watch' : hasJest ? ' -- --watchAll=false' : '';
-        commands.push({ id: 'test', label: 'npm test', cmd: `npm test${suffix}`, framework: fw });
+      const fwFor = (scriptVal) => {
+        if (isAngular) return 'Angular / Karma';
+        if (hasVitest || /\bvitest\b/.test(scriptVal || '')) return isNuxt ? 'Nuxt / Vitest' : 'Vitest';
+        if (hasJest)   return 'Jest';
+        return isNuxt ? 'Nuxt' : 'Node';
+      };
+
+      // Collect unit-test-ish script names (exclude e2e / cypress / playwright)
+      const unitScriptNames = ['test', 'test:unit', 'test:run', 'unit', 'unit:test', 'vitest'];
+      for (const name of unitScriptNames) {
+        if (!scripts[name]) continue;
+        const val = scripts[name];
+        const isE2e = /cypress|playwright|e2e/i.test(val);
+        if (isE2e) continue;
+        const fw     = fwFor(val);
+        const isVt   = hasVitest || /\bvitest\b/.test(val);
+        const isJest = !isVt && hasJest;
+        const suffix = isAngular ? ' --no-watch' : isJest ? ' -- --watchAll=false' : '';
+        const cmd    = `npm run ${name}${suffix}`;
+        commands.push({ id: `script-${name}`, label: `npm run ${name}`, cmd, framework: fw });
       }
-      if (scripts['test:unit']) commands.push({ id: 'test-unit', label: 'npm run test:unit', cmd: 'npm run test:unit', framework: hasJest ? 'Jest' : fwLabel });
 
       // Angular CLI
       if (isAngular)
         commands.push({ id: 'ng-test', label: 'ng test --no-watch', cmd: 'npx ng test --no-watch --browsers=ChromeHeadless', framework: 'Angular / Karma' });
+
+      // Bare vitest if no script matched but vitest is installed
+      if (hasVitest && !commands.some(c => /vitest/i.test(c.cmd))) {
+        const fw = isNuxt ? 'Nuxt / Vitest' : 'Vitest';
+        commands.push({ id: 'vitest-run',     label: 'npx vitest run',              cmd: 'npx vitest run',              framework: fw });
+        commands.push({ id: 'vitest-verbose', label: 'npx vitest run --reporter verbose', cmd: 'npx vitest run --reporter verbose', framework: fw });
+      }
     }
 
     // .NET (xUnit / NUnit / MSTest) — detected via .sln or any .csproj
-    const hasSln    = fs.readdirSync(projectPath).some(f => f.endsWith('.sln'));
-    const hasCsproj = fs.readdirSync(projectPath).some(f => f.endsWith('.csproj'));
+    const hasSln    = listDir(projectPath).some(f => f.endsWith('.sln'));
+    const hasCsproj = listDir(projectPath).some(f => f.endsWith('.csproj'));
     if (hasSln || hasCsproj) {
-      commands.push({ id: 'dotnet-test',         label: 'dotnet test',                cmd: 'dotnet test',                framework: '.NET' });
+      commands.push({ id: 'dotnet-test',         label: 'dotnet test',               cmd: 'dotnet test',               framework: '.NET' });
       commands.push({ id: 'dotnet-test-verbose', label: 'dotnet test --verbosity n', cmd: 'dotnet test --verbosity n', framework: '.NET' });
     }
 
