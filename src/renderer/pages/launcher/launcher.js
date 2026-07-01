@@ -32,12 +32,6 @@ export class LauncherPage {
       <div class="launcher">
 
         <header class="launcher__header">
-          <div class="launcher__logo">
-            <div class="launcher__logo-icon">
-              <img src="../../assets/icon.png" alt="DevFlow AI" onerror="this.style.display='none'"/>
-            </div>
-            <span class="launcher__app-name">DevFlow AI</span>
-          </div>
           <div class="launcher__theme-control">
             <button class="launcher__theme-btn" data-theme="light">Light</button>
             <button class="launcher__theme-btn" data-theme="dark">Dark</button>

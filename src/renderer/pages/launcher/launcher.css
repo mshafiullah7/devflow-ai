@@ -64,6 +64,7 @@
 .launcher__theme-control {
   display: flex;
   gap: 3px;
+  margin-left: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;

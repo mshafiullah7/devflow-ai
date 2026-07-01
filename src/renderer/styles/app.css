@@ -202,6 +202,15 @@ body {
   background: var(--surface-header);
   -webkit-app-region: drag;
 }
+.app-titlebar__icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 7px;
+  flex-shrink: 0;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none;
+}
 .app-titlebar__title {
   font-size: 12px;
   font-weight: 600;

@@ -45,6 +45,21 @@
   color: var(--text-primary);
 }
 
+/* App brand icon in header */
+.project-home__brand {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.project-home__brand-icon {
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Project badge (initial circle + name) */
 .project-home__badge {
   flex: 1;
