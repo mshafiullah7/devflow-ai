@@ -226,6 +226,9 @@
   gap: 10px;
   margin-bottom: 28px;
 }
+.ph-stats-strip--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
 
 .ph-stat-box {
   background: var(--surface);

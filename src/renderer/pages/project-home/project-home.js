@@ -61,58 +61,94 @@ export class ProjectHomePage {
   }
 
   // ----------------------------------------------------------------
-  // Stats boxes (3-up: stories, features, issues)
+  // Stats: KPI row + workflow/issue status donuts
   // ----------------------------------------------------------------
   _statsHtml() {
-    const workflows   = this._workflows  || [];
-    const openIssues  = this._issueCount?.open  ?? 0;
-    const totalIssues = this._issueCount?.total ?? 0;
+    const workflows         = this._workflows || [];
+    const openIssues        = this._issueCount?.open        ?? 0;
+    const inProgressIssues  = this._issueCount?.in_progress  ?? 0;
+    const resolvedIssues    = this._issueCount?.resolved     ?? 0;
+    const totalIssues       = this._issueCount?.total        ?? 0;
 
     const wfOpen      = workflows.filter(w => !w.status || w.status === 'open').length;
     const wfInProg    = workflows.filter(w => w.status === 'in_progress').length;
     const wfCompleted = workflows.filter(w => w.status === 'completed').length;
     const wfDiffered  = workflows.filter(w => w.status === 'differed').length;
     const wfTotal     = workflows.length;
-
     const wfCompPct   = wfTotal ? Math.round((wfCompleted / wfTotal) * 100) : 0;
-    const wfInProgPct = wfTotal ? Math.round((wfInProg    / wfTotal) * 100) : 0;
 
-    const wfPills = `
-      <div class="ph-stat-box__status-pills">
-        ${wfOpen      > 0 ? `<span class="ph-wf-pill ph-wf-pill--open">Open <b>${wfOpen}</b></span>`             : ''}
-        ${wfInProg    > 0 ? `<span class="ph-wf-pill ph-wf-pill--inprog">In Progress <b>${wfInProg}</b></span>`   : ''}
-        ${wfCompleted > 0 ? `<span class="ph-wf-pill ph-wf-pill--done">Completed <b>${wfCompleted}</b></span>`    : ''}
-        ${wfDiffered  > 0 ? `<span class="ph-wf-pill ph-wf-pill--differed">Differed <b>${wfDiffered}</b></span>` : ''}
-        ${!wfTotal ? `<span class="ph-wf-pill ph-wf-pill--open">No workflows yet</span>` : ''}
+    const kpi = (value, label, cls = '') => `
+      <div class="ph-stat-box ${cls}">
+        <div class="ph-stat-box__value">${value}</div>
+        <div class="ph-stat-box__label">${label}</div>
       </div>`;
 
-    const wfBar = `
-      <div class="ph-stat-bar">
-        <div class="ph-stat-bar__seg ph-stat-bar__seg--done"   style="width:${wfCompPct}%"></div>
-        <div class="ph-stat-bar__seg ph-stat-bar__seg--inprog" style="width:${wfInProgPct}%"></div>
-      </div>`;
+    const workflowDonut = this._donutCard('Workflow Status', wfTotal, [
+      { label: 'Completed',   count: wfCompleted, color: '#16a34a' },
+      { label: 'In Progress', count: wfInProg,    color: 'var(--accent)' },
+      { label: 'Open',        count: wfOpen,      color: 'var(--border)' },
+      { label: 'Differed',    count: wfDiffered,  color: '#9333ea' },
+    ]);
 
-    const closedIssues    = totalIssues - openIssues;
-    const issueClosedPct  = totalIssues ? Math.round((closedIssues / totalIssues) * 100) : 100;
-
-    const issueBar = `
-      <div class="ph-stat-bar ${openIssues > 0 ? 'ph-stat-bar--danger-bg' : ''}">
-        <div class="ph-stat-bar__seg ph-stat-bar__seg--done" style="width:${issueClosedPct}%"></div>
-      </div>`;
+    const issueDonut = this._donutCard('Issue Status', totalIssues, [
+      { label: 'Open',        count: openIssues,       color: 'var(--danger)' },
+      { label: 'In Progress', count: inProgressIssues, color: 'var(--accent)' },
+      { label: 'Resolved',    count: resolvedIssues,   color: '#16a34a' },
+    ]);
 
     return `
-      <div class="ph-stats-strip">
-        <div class="ph-stat-box ph-stat-box--accent">
-          <div class="ph-stat-box__value">${wfTotal}</div>
-          <div class="ph-stat-box__label">Workflows</div>
-          ${wfPills}
-          ${wfBar}
-        </div>
-        <div class="ph-stat-box ${openIssues > 0 ? 'ph-stat-box--danger' : ''}">
-          <div class="ph-stat-box__value">${openIssues}</div>
-          <div class="ph-stat-box__label">Open Issues</div>
-          <div class="ph-stat-box__total">of ${totalIssues} total</div>
-          ${issueBar}
+      <div class="ph-stats-strip ph-stats-strip--3">
+        ${kpi(wfTotal, 'Workflows Total')}
+        ${kpi(openIssues, 'Open Issues', openIssues > 0 ? 'ph-stat-box--danger' : '')}
+        ${kpi(wfTotal ? wfCompPct + '%' : '—', 'Workflows Complete')}
+      </div>
+      <div class="ph-mc-grid" style="margin-bottom:28px">
+        ${workflowDonut}
+        ${issueDonut}
+      </div>`;
+  }
+
+  // ----------------------------------------------------------------
+  // Donut chart card (title + ring + legend), used by _statsHtml
+  // ----------------------------------------------------------------
+  _donutCard(title, total, segments) {
+    const active         = segments.filter(s => s.count > 0);
+    const r               = 40;
+    const cx = 50, cy = 50;
+    const circumference   = 2 * Math.PI * r;
+    let acc = 0;
+
+    const arcs = total > 0
+      ? active.map(s => {
+          const dash   = (s.count / total) * circumference;
+          const offset = -acc;
+          acc += dash;
+          return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="14"
+            style="stroke:${s.color}" stroke-dasharray="${dash.toFixed(2)} ${(circumference - dash).toFixed(2)}"
+            stroke-dashoffset="${offset.toFixed(2)}"/>`;
+        }).join('')
+      : '';
+
+    const legend = active.length
+      ? active.map(s => `
+          <div class="ph-dleg-item">
+            <span class="ph-dleg-dot" style="background:${s.color}"></span>
+            <span class="ph-dleg-name">${escHtml(s.label)}</span>
+            <span class="ph-dleg-cnt">${s.count}</span>
+          </div>`).join('')
+      : `<div class="ph-status-empty">No data yet</div>`;
+
+    return `
+      <div class="ph-mc-card">
+        <div class="ph-mc-title">${escHtml(title)}</div>
+        <div class="ph-donut-layout">
+          <svg class="ph-donut-svg" viewBox="0 0 100 100">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--surface-hover)" stroke-width="14"/>
+            <g transform="rotate(-90 ${cx} ${cy})">${arcs}</g>
+            <text x="${cx}" y="47" text-anchor="middle" class="ph-donut-num">${total}</text>
+            <text x="${cx}" y="61" text-anchor="middle" class="ph-donut-sub">total</text>
+          </svg>
+          <div class="ph-donut-legend">${legend}</div>
         </div>
       </div>`;
   }
