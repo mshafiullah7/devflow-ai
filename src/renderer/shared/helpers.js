@@ -49,13 +49,16 @@ export function formatDate(dateStr) {
  */
 export function injectCss(href) {
   const id = href.replace(/[^a-z0-9]/gi, '-');
-  if (!document.getElementById(id)) {
+  if (document.getElementById(id)) return Promise.resolve();
+  return new Promise((resolve) => {
     const link = document.createElement('link');
-    link.id   = id;
-    link.rel  = 'stylesheet';
-    link.href = href;
+    link.id      = id;
+    link.rel     = 'stylesheet';
+    link.href    = href;
+    link.onload  = resolve;
+    link.onerror = resolve;
     document.head.appendChild(link);
-  }
+  });
 }
 
 /**

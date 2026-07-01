@@ -49,8 +49,8 @@ function registerDialogHandlers() {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
     const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-    const w = Math.round(sw * 0.75);
-    const h = Math.round(sh * 0.85);
+    const w = Math.max(1100, Math.round(sw * 0.75));
+    const h = Math.max(700,  Math.round(sh * 0.85));
     win.setSize(w, h);
     win.center();
   });

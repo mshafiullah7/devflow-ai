@@ -51,13 +51,13 @@
   --surface:        #1a1d27;
   --surface-header: #13151f;
   --surface-hover:  #21253a;
-  --border:         #2a2d3e;
-  --accent:         #6366f1;
-  --accent-rgb:     99, 102, 241;
-  --accent-hover:   #4f52d9;
-  --text-primary:   #c9d3e0;
-  --text-secondary: #7a8ba0;
-  --text-muted:     #506070;
+  --border:         #343850;
+  --accent:         #818cf8;
+  --accent-rgb:     129, 140, 248;
+  --accent-hover:   #6366f1;
+  --text-primary:   #dde4ed;
+  --text-secondary: #96a8bc;
+  --text-muted:     #637080;
   --danger:         #ef4444;
   --radius:         12px;
   --radius-sm:      8px;
@@ -74,13 +74,13 @@
   --console-caret:   #6ee7b7;
 
   /* Component-specific tokens */
-  --form-focus-shadow:  0 0 0 3px rgba(99,102,241,0.15);
+  --form-focus-shadow:  0 0 0 3px rgba(129,140,248,0.18);
   --modal-overlay-bg:   rgba(0,0,0,0.6);
-  --card-icon-bg:       linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --card-icon-bg:       linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
   --bg-secondary:       #141720;
-  --border-default:     #2a2d3e;
+  --border-default:     #343850;
   --bg-hover:           #21253a;
-  --text-tertiary:      #4a5568;
+  --text-tertiary:      #5a6a82;
 }
 
 [data-theme="midnight"] {

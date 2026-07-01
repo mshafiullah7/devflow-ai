@@ -41,8 +41,8 @@ let mainWindow = null;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 960,
+    height: 660,
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     frame: false,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',

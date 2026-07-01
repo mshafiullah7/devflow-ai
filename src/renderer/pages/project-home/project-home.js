@@ -11,7 +11,7 @@ export class ProjectHomePage {
   }
 
   async mount() {
-    injectCss('pages/project-home/project-home.css');
+    await injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
     const [project, workflows, documents, mockups, issueCount, testRunHistory, layers, layerStats, queuePendingCount] = await Promise.all([

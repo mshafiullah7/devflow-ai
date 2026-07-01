@@ -27,6 +27,6 @@ export class Router {
     const PageClass = loader.prototype ? loader : await loader();
 
     this.currentPage = new PageClass(this.container, params, this);
-    this.currentPage.mount();
+    await this.currentPage.mount();
   }
 }

@@ -10,8 +10,8 @@ export class LauncherPage {
   // ----------------------------------------------------------------
   // Lifecycle
   // ----------------------------------------------------------------
-  mount() {
-    injectCss('pages/launcher/launcher.css');
+  async mount() {
+    await injectCss('pages/launcher/launcher.css');
     this.container.innerHTML = this._template();
     this._bindRefs();
     this._bindEvents();
@@ -41,8 +41,8 @@ export class LauncherPage {
 
         <main class="launcher__main">
 
-          <div class="launcher__mark">
-            <img src="../../assets/icon.png" alt="" onerror="this.style.display='none'"/>
+          <div class="launcher__mark" style="width:48px;height:48px;overflow:hidden;flex-shrink:0;">
+            <img src="../../assets/icon.png" alt="" style="width:48px;height:48px;object-fit:cover;display:block;" onerror="this.style.display='none'"/>
           </div>
           <h1 class="launcher__title">Welcome back</h1>
           <p class="launcher__subtitle">Select a project or start a new one</p>
