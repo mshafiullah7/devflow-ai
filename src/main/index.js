@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, ipcMain, session } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, session, screen } = require('electron');
 const path = require('node:path');
 const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
@@ -124,9 +124,10 @@ app.whenReady().then(async () => {
     const os      = require('os');
     const tmpFile = path.join(os.tmpdir(), `devflow-mockup-${Date.now()}.html`);
     fs.writeFileSync(tmpFile, htmlContent, 'utf8');
+    const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
     const win = new BrowserWindow({
-      width:  1280,
-      height: 900,
+      width:  Math.max(900, Math.round(sw * 0.65)),
+      height: Math.max(600, Math.round(sh * 0.80)),
       title:  title ? `Mockup — ${title}` : 'Mockup Preview',
       webPreferences: { contextIsolation: true },
     });

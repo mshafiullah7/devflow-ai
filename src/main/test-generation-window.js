@@ -1,7 +1,7 @@
 'use strict';
 
-const { BrowserWindow } = require('electron');
-const path              = require('node:path');
+const { BrowserWindow, screen } = require('electron');
+const path                      = require('node:path');
 
 let _win = null;
 
@@ -14,9 +14,10 @@ function openTestGenerationWindow(data) {
 
   const title = data?.mode === 'e2e' ? 'Generate E2E Tests' : 'Generate Unit Tests';
 
+  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
   _win = new BrowserWindow({
-    width:     1280,
-    height:    960,
+    width:     Math.max(900, Math.round(sw * 0.65)),
+    height:    Math.max(600, Math.round(sh * 0.80)),
     minWidth:  720,
     minHeight: 500,
     title,

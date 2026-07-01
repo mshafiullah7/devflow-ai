@@ -1,7 +1,7 @@
 'use strict';
 
-const { BrowserWindow } = require('electron');
-const path              = require('node:path');
+const { BrowserWindow, screen } = require('electron');
+const path                      = require('node:path');
 
 let _win = null;
 
@@ -13,9 +13,10 @@ function openQueueWindow(projectId) {
     return;
   }
 
+  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
   _win = new BrowserWindow({
-    width:  1280,
-    height: 960,
+    width:  Math.max(900, Math.round(sw * 0.65)),
+    height: Math.max(600, Math.round(sh * 0.80)),
     title:  'Task Queue',
     icon:   path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     webPreferences: {

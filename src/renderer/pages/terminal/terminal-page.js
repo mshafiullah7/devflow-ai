@@ -704,6 +704,8 @@ export class TerminalPage {
       await this._refreshGitPanel();
     } finally {
       btn?.classList.remove('wfr-git-commit-btn--busy');
+      if (btn) btn.disabled = false;
+      if (msgEl) msgEl.value = '';
     }
   }
 }
