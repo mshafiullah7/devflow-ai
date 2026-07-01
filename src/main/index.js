@@ -31,11 +31,22 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
+const isMac = process.platform === 'darwin';
+
+// Default overlay colors match the dark theme (styles/app.css) until the
+// renderer reports the user's actual stored theme via app:set-titlebar-overlay.
+const DEFAULT_TITLEBAR_OVERLAY = { color: '#13151f', symbolColor: '#c9d3e0', height: 40 };
+
+let mainWindow = null;
+
 const createWindow = () => {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
+    frame: false,
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    ...(isMac ? {} : { titleBarOverlay: DEFAULT_TITLEBAR_OVERLAY }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -46,6 +57,8 @@ const createWindow = () => {
   mainWindow.webContents.on('will-navigate', (event) => {
     event.preventDefault();
   });
+
+  mainWindow.on('closed', () => { mainWindow = null; });
 };
 
 app.whenReady().then(async () => {
@@ -55,6 +68,12 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:agent-cli-path', () =>
     path.join(app.getAppPath(), 'agent-cli', 'index.js')
   );
+
+  ipcMain.handle('app:set-titlebar-overlay', (_e, { color, symbolColor }) => {
+    if (isMac || !mainWindow) return { ok: false };
+    mainWindow.setTitleBarOverlay({ color, symbolColor, height: 40 });
+    return { ok: true };
+  });
 
   ipcMain.handle('app:openQueueWindow', (_e, projectId) => {
     openQueueWindow(projectId);

@@ -2,7 +2,7 @@
 /* Launcher page — Combined design (B header + C minimal body)          */
 /* ------------------------------------------------------------------ */
 .launcher {
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;

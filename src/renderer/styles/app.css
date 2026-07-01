@@ -124,6 +124,11 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text-primary);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
 
   /* ── Font options ─────────────────────────────────────────────────────
      Uncomment ONE of the lines below (and comment out the active one)
@@ -180,7 +185,32 @@ html, body {
 }
 
 #app {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Custom title bar — replaces the OS frame (see main/index.js)        */
+/* ------------------------------------------------------------------ */
+.app-titlebar {
+  flex-shrink: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--surface-header);
+  -webkit-app-region: drag;
+}
+.app-titlebar__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  -webkit-user-select: none;
+  user-select: none;
+}
+html.is-mac .app-titlebar {
+  padding-left: 78px;
 }
 
 /* ------------------------------------------------------------------ */

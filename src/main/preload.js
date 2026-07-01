@@ -213,7 +213,8 @@ contextBridge.exposeInMainWorld('db', {
 });
 
 contextBridge.exposeInMainWorld('app', {
-  agentCliPath:     () => invoke('app:agent-cli-path'),
+  agentCliPath:        () => invoke('app:agent-cli-path'),
+  setTitleBarOverlay:  (colors) => invoke('app:set-titlebar-overlay', colors),
   config: {
     get: (key)        => invoke('app:config:get', key),
     set: (key, value) => invoke('app:config:set', key, value),
