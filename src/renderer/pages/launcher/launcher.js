@@ -33,9 +33,9 @@ export class LauncherPage {
 
         <header class="launcher__header">
           <div class="launcher__theme-control">
-            <button class="launcher__theme-btn" data-theme="light">Light</button>
-            <button class="launcher__theme-btn" data-theme="dark">Dark</button>
-            <button class="launcher__theme-btn" data-theme="midnight">Midnight</button>
+            <button class="launcher__theme-btn" data-select-theme="light">Light</button>
+            <button class="launcher__theme-btn" data-select-theme="dark">Dark</button>
+            <button class="launcher__theme-btn" data-select-theme="midnight">Midnight</button>
           </div>
         </header>
 
@@ -139,7 +139,7 @@ export class LauncherPage {
   _syncThemeBtns() {
     const current = getTheme();
     document.querySelectorAll('.launcher__theme-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.theme === current);
+      btn.classList.toggle('active', btn.dataset.selectTheme === current);
     });
   }
 
@@ -150,7 +150,7 @@ export class LauncherPage {
     // Theme pill buttons
     document.querySelectorAll('.launcher__theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        setTheme(btn.dataset.theme);
+        setTheme(btn.dataset.selectTheme);
         this._syncThemeBtns();
       });
     });

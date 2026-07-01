@@ -50,7 +50,7 @@ function registerDialogHandlers() {
     if (!win) return;
     const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
     const w = Math.max(1100, Math.round(sw * 0.75));
-    const h = Math.max(700,  Math.round(sh * 0.85));
+    const h = Math.max(700,  Math.round(sh * 0.90));
     win.setSize(w, h);
     win.center();
   });

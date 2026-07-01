@@ -6,7 +6,7 @@ const VALID = ['light', 'dark', 'midnight'];
 // overlay colors are synced here whenever the theme is applied or changed.
 const TITLEBAR_COLORS = {
   light:    { color: '#f4f3ef', symbolColor: '#1a1916' },
-  dark:     { color: '#13151f', symbolColor: '#c9d3e0' },
+  dark:     { color: '#21252b', symbolColor: '#dcdfe4' },
   midnight: { color: '#060608', symbolColor: '#cbd5e1' },
 };
 

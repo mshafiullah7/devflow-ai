@@ -35,7 +35,7 @@ const isMac = process.platform === 'darwin';
 
 // Default overlay colors match the dark theme (styles/app.css) until the
 // renderer reports the user's actual stored theme via app:set-titlebar-overlay.
-const DEFAULT_TITLEBAR_OVERLAY = { color: '#13151f', symbolColor: '#c9d3e0', height: 40 };
+const DEFAULT_TITLEBAR_OVERLAY = { color: '#21252b', symbolColor: '#dcdfe4', height: 40 };
 
 let mainWindow = null;
 

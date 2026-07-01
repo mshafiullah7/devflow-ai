@@ -80,7 +80,7 @@
   font-weight: 500;
   cursor: pointer;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-family: inherit;
   transition: background 0.15s, color 0.15s;
 }
