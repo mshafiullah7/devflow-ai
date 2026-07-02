@@ -138,10 +138,19 @@ Project root: {project_root}
 # ---------------------------------------------------------------------------
 
 _DEFAULT_MODELS = {
-    "ollama":    "qwen2.5-coder:32b",
-    "openai":    "gpt-4o",
-    "groq":      "llama-3.3-70b-versatile",
-    "anthropic": "claude-sonnet-4-6",
+    "ollama":      "qwen2.5-coder:32b",
+    "openai":      "gpt-4o",
+    "groq":        "llama-3.3-70b-versatile",
+    "anthropic":   "claude-sonnet-4-6",
+    "mistral":     "mistral-large-latest",
+    "together":    "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "fireworks":   "accounts/fireworks/models/firefunction-v2",
+    "xai":         "grok-3-mini",
+    "cohere":      "command-r-plus",
+    "deepseek":    "deepseek-chat",
+    "perplexity":  "sonar-pro",
+    "nvidia":      "meta/llama-3.3-70b-instruct",
+    "custom":      "model-name",   # override with --model
 }
 
 
@@ -154,15 +163,23 @@ Provider-specific options:
   --thinking-budget N     Anthropic only. Enables extended thinking with N budget_tokens
                           (min 1024, recommended 5000-16000). Forces temperature=1.
   --reasoning-effort LVL  OpenAI o-series only (o1, o3, o4-mini). Values: low, medium, high.
-  --context-size N        Ollama only. Sets num_ctx (context window size), e.g. 32768.
+  --context-size N        Ollama / custom only. Sets num_ctx, e.g. 32768.
   --temperature T         All providers (float 0.0-2.0). Ignored when thinking is enabled
                           or when using OpenAI o-series models.
+
+Custom / self-hosted provider:
+  --provider custom --base-url http://localhost:8080/v1 --model my-model
+  Set CUSTOM_API_KEY env var if the server requires a key (defaults to "none").
+  Compatible with: vLLM, LM Studio, Jan, LocalAI, Llamafile, TabbyAPI, Oobabooga.
 """,
     )
     p.add_argument("--project",    required=True,  help="Project root directory")
     p.add_argument("--message",    required=True,  help="Task to perform")
     p.add_argument("--provider",   default="ollama",
-                   choices=["ollama", "openai", "groq", "anthropic"],
+                   choices=["ollama", "openai", "groq", "anthropic",
+                            "mistral", "together", "fireworks", "xai",
+                            "cohere", "deepseek", "perplexity", "nvidia",
+                            "custom"],
                    help="LLM provider (default: ollama)")
     p.add_argument("--model",      default=None,   help="Model name (provider default used if omitted)")
     p.add_argument("--base-url",   default=None,   dest="base_url", help="Ollama base URL")

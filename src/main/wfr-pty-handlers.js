@@ -408,6 +408,27 @@ function registerWfrPtyHandlers() {
     const permsPart     = (skipPermissions && skipPermsFlag) ? skipPermsFlag + ' ' : '';
 
     let coreCmd;
+
+    // Devflow Agent loop for api/anthropic models — run agent.py in the shell
+    // so the user sees its output in the terminal exactly like a CLI tool.
+    if (model?.use_devflow_agent && (model?.type === 'api' || model?.type === 'anthropic')) {
+      const agentPath = path.join(__dirname, '../../agent/agent.py');
+      const provider  = model.type === 'anthropic' ? 'anthropic' : 'custom';
+      const baseUrlPart = (provider === 'custom' && model?.base_url)
+        ? ` --base-url "${model.base_url}"`
+        : '';
+      if (isWin) {
+        coreCmd = `python "${agentPath}" --project "${spawnCwd}" --message (Get-Content '${escapedPath}' -Raw) --provider ${provider} --model ${modelName}${baseUrlPart} --verbose`;
+      } else {
+        coreCmd = `python "${agentPath}" --project "${spawnCwd}" --message "$(cat '${escapedPath}')" --provider ${provider} --model ${modelName}${baseUrlPart} --verbose`;
+      }
+      const fullCmd = isWin
+        ? `${coreCmd}; Write-Host "##WFR_DONE:${layerId}:$LASTEXITCODE##"`
+        : `${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
+      _pty.write(fullCmd + '\r');
+      return { ok: true, command: coreCmd };
+    }
+
     if (model?.flags && model.flags.includes('{{prompt}}')) {
       // Template-based: substitute {{model}} and {{prompt}} (file path) from model config
       const resolved = model.flags

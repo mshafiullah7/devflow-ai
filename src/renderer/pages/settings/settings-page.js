@@ -1306,6 +1306,13 @@ export class SettingsPage {
                   value="${escHtml(config?.type === 'api' ? String(config?.max_tokens || '') : '')}"/>
                 <span class="st-form__hint">Optional — leave blank for provider default</span>
               </div>
+              <div class="st-form__row" style="margin-top:4px">
+                <label class="st-form__check-label">
+                  <input type="checkbox" id="stFUseDevflow" ${config?.use_devflow_agent ? 'checked' : ''}/>
+                  Use Devflow Agent loop (agentic mode)
+                </label>
+                <span class="st-form__hint">Runs an autonomous coding loop instead of a single prompt.</span>
+              </div>
             </div>
 
             <div id="stFFieldsAnthropic" style="display:none">
@@ -1334,6 +1341,21 @@ export class SettingsPage {
                   value="${escHtml(config?.type === 'anthropic' ? String(config?.max_tokens || '') : '')}"/>
                 <span class="st-form__hint">Optional — defaults to 8096 if blank</span>
               </div>
+              <div class="st-form__row" style="margin-top:4px">
+                <label class="st-form__check-label">
+                  <input type="checkbox" id="stFUseDevflow" ${config?.use_devflow_agent ? 'checked' : ''}/>
+                  Use Devflow Agent loop (agentic mode)
+                </label>
+                <span class="st-form__hint">Runs an autonomous coding loop instead of a single prompt.</span>
+              </div>
+            </div>
+
+            <div id="stDevflowInstallRow" class="st-form__row" style="display:none; margin-top:4px">
+              <div class="st-devflow-install">
+                <span id="stDevflowInstallStatus" class="st-form__hint">Checking devflow command…</span>
+                <button type="button" id="stDevflowInstallBtn" class="st-detect-btn" style="display:none; margin-left:8px">Install</button>
+              </div>
+              <pre id="stDevflowInstallLog" class="st-devflow-log" style="display:none"></pre>
             </div>
 
             <div class="st-form__row">
@@ -1429,7 +1451,67 @@ export class SettingsPage {
 
     applyType(config?.type || 'cli');
 
-    const devflowCheckbox = overlay.querySelector('#stFUseDevflow');
+    const devflowCheckbox    = overlay.querySelector('#stFUseDevflow');
+    const devflowInstallRow  = overlay.querySelector('#stDevflowInstallRow');
+    const devflowInstallSt   = overlay.querySelector('#stDevflowInstallStatus');
+    const devflowInstallBtn  = overlay.querySelector('#stDevflowInstallBtn');
+    const devflowInstallLog  = overlay.querySelector('#stDevflowInstallLog');
+
+    const checkDevflowInstall = async () => {
+      if (!devflowInstallRow) return;
+      devflowInstallSt.textContent = 'Checking devflow command…';
+      devflowInstallBtn.style.display = 'none';
+      devflowInstallLog.style.display = 'none';
+      devflowInstallLog.textContent   = '';
+      try {
+        const { installed } = await window.agent.checkInstalled();
+        if (installed) {
+          devflowInstallSt.textContent = '✓ devflow command registered — usable in any terminal';
+          devflowInstallSt.style.color = 'var(--color-success, #4caf50)';
+          devflowInstallBtn.style.display = 'none';
+        } else {
+          devflowInstallSt.textContent = 'devflow command not found — app still works, but you can\'t run it from a terminal directly';
+          devflowInstallSt.style.color = '';
+          devflowInstallBtn.style.display = '';
+        }
+      } catch {
+        devflowInstallSt.textContent = 'Could not check devflow status';
+        devflowInstallSt.style.color = '';
+      }
+    };
+
+    const toggleDevflowInstallRow = () => {
+      const show = devflowCheckbox?.checked;
+      if (devflowInstallRow) devflowInstallRow.style.display = show ? '' : 'none';
+      if (show) checkDevflowInstall();
+    };
+
+    devflowCheckbox?.addEventListener('change', toggleDevflowInstallRow);
+    toggleDevflowInstallRow(); // run once on modal open
+
+    devflowInstallBtn?.addEventListener('click', async () => {
+      devflowInstallBtn.disabled      = true;
+      devflowInstallBtn.textContent   = 'Installing…';
+      devflowInstallLog.style.display = '';
+      devflowInstallLog.textContent   = '';
+      window.agent.onInstallLog(({ text }) => {
+        devflowInstallLog.textContent += text;
+        devflowInstallLog.scrollTop    = devflowInstallLog.scrollHeight;
+      });
+      try {
+        const { success } = await window.agent.install();
+        if (success) {
+          await checkDevflowInstall();
+        } else {
+          devflowInstallSt.textContent = 'Install failed — see log above';
+          devflowInstallSt.style.color = 'var(--color-error, #f44336)';
+        }
+      } finally {
+        window.agent.offInstallLog();
+        devflowInstallBtn.disabled    = false;
+        devflowInstallBtn.textContent = 'Install';
+      }
+    });
 
     overlay.querySelector('#stBtnDetect')?.addEventListener('click', loadOllamaModels);
 
@@ -1568,12 +1650,13 @@ export class SettingsPage {
           overlay.querySelector('#stFApiModel')?.focus();
           return;
         }
-        data.base_url   = overlay.querySelector('#stFApiBaseUrl')?.value.trim() || null;
-        data.model_name = apiModel;
-        const rawKey    = overlay.querySelector('#stFApiKey')?.value.trim();
+        data.base_url          = overlay.querySelector('#stFApiBaseUrl')?.value.trim() || null;
+        data.model_name        = apiModel;
+        const rawKey           = overlay.querySelector('#stFApiKey')?.value.trim();
         if (rawKey) data.api_key = rawKey;
-        const maxTok    = overlay.querySelector('#stFApiMaxTokens')?.value.trim();
+        const maxTok           = overlay.querySelector('#stFApiMaxTokens')?.value.trim();
         if (maxTok) data.max_tokens = Number(maxTok);
+        data.use_devflow_agent = overlay.querySelector('#stFUseDevflow')?.checked ? 1 : 0;
       } else if (type === 'anthropic') {
         const anthModel = overlay.querySelector('#stFAnthropicModel')?.value.trim() || '';
         if (!anthModel) {
@@ -1582,11 +1665,12 @@ export class SettingsPage {
           overlay.querySelector('#stFAnthropicModel')?.focus();
           return;
         }
-        data.model_name = anthModel;
-        const rawKey    = overlay.querySelector('#stFAnthropicKey')?.value.trim();
+        data.model_name        = anthModel;
+        const rawKey           = overlay.querySelector('#stFAnthropicKey')?.value.trim();
         if (rawKey) data.api_key = rawKey;
-        const maxTok    = overlay.querySelector('#stFAnthropicMaxTokens')?.value.trim();
+        const maxTok           = overlay.querySelector('#stFAnthropicMaxTokens')?.value.trim();
         if (maxTok) data.max_tokens = Number(maxTok);
+        data.use_devflow_agent = overlay.querySelector('#stFUseDevflow')?.checked ? 1 : 0;
       }
 
       if (config) {

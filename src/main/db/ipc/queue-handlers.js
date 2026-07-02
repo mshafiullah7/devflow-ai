@@ -129,12 +129,18 @@ function registerQueueHandlers() {
 
     _notifyTelegram(proj, label, 'start', null, null);
 
-    if (type === 'anthropic') { _runAnthropic(send, trimmed, modelConfig); return { pid: null }; }
+    if (type === 'anthropic') {
+      if (modelConfig?.use_devflow_agent) return _runAgentPy(send, trimmed, modelConfig, cwd, { planOnly: true });
+      _runAnthropic(send, trimmed, modelConfig); return { pid: null };
+    }
     if (type === 'ollama') {
       if (modelConfig?.use_devflow_agent) return _runDevflowAgent(send, trimmed, modelConfig, cwd, { planOnly: true });
       _runOllama(send, trimmed, modelConfig); return { pid: null };
     }
-    if (type === 'api')           { _runApi(send, trimmed, modelConfig);                return { pid: null }; }
+    if (type === 'api') {
+      if (modelConfig?.use_devflow_agent) return _runAgentPy(send, trimmed, modelConfig, cwd, { planOnly: true });
+      _runApi(send, trimmed, modelConfig); return { pid: null };
+    }
     if (type === 'devflow-agent') { return _runDevflowAgent(send, trimmed, modelConfig, cwd, { planOnly: true }); }
 
     return _runCli(send, trimmed, modelConfig, cwd);
@@ -161,6 +167,10 @@ function registerQueueHandlers() {
     const trimmed = trimMessages(Array.isArray(messages) ? messages : [{ role: 'user', content: messages }]);
     _notifyTelegram(proj, label, 'start', null, null);
 
+    const approveType = modelConfig?.type || 'ollama';
+    if ((approveType === 'api' || approveType === 'anthropic') && modelConfig?.use_devflow_agent) {
+      return _runAgentPy(send, trimmed, modelConfig, cwd, { approvedPlan: plan });
+    }
     return _runDevflowAgent(send, trimmed, modelConfig, cwd, { approvedPlan: plan });
   });
 }
@@ -326,6 +336,124 @@ function _runDevflowAgent(send, messages, modelConfig, cwd, options = {}) {
   proc.on('error', err => {
     _activeQueueProc = null;
     send('promptQueue:data', { text: `devflow-agent error: ${err.message}\n` });
+    send('promptQueue:done', { exitCode: 1 });
+  });
+
+  return { pid: proc.pid };
+}
+
+// ----------------------------------------------------------------
+// agent.py — multi-provider (anthropic, api/custom, openai, etc.)
+//
+// Mirrors _runDevflowAgent but invokes agent.py with --provider
+// instead of devflow_agent.py with --base-url.
+// ----------------------------------------------------------------
+function _runAgentPy(send, messages, modelConfig, cwd, options = {}) {
+  const type     = modelConfig?.type || 'api';
+  const provider = type === 'anthropic' ? 'anthropic' : 'custom';
+  const model    = modelConfig?.model_name || (type === 'anthropic' ? 'claude-sonnet-4-6' : 'gpt-4o');
+
+  _logAiCall('agent.py', model, `python agent.py --provider ${provider}`, messages, cwd);
+
+  const agentPath = path.join(__dirname, '../../../../agent/agent.py');
+  const task      = messages.map(m => (typeof m === 'string' ? m : m.content || '')).join('\n');
+
+  const spawnArgs = [
+    agentPath,
+    '--project',   cwd || os.homedir(),
+    '--message',   task,
+    '--provider',  provider,
+    '--model',     model,
+    '--max-turns', String(modelConfig?.max_tokens || 15),
+    '--verbose',
+  ];
+
+  if (provider === 'custom' && modelConfig?.base_url) {
+    spawnArgs.push('--base-url', modelConfig.base_url);
+  }
+  if (options.planOnly)     spawnArgs.push('--plan-only');
+  if (options.approvedPlan) spawnArgs.push('--approved-plan', options.approvedPlan);
+
+  // Inject stored API key into the subprocess environment
+  const env = { ...process.env };
+  if (type === 'anthropic' && modelConfig?.api_key) env.ANTHROPIC_API_KEY = modelConfig.api_key;
+  if (type === 'api'       && modelConfig?.api_key) env.CUSTOM_API_KEY    = modelConfig.api_key;
+
+  const proc = spawn('python', spawnArgs, {
+    cwd: cwd || os.homedir(),
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  _activeQueueProc = proc;
+
+  let planBuf = '';
+  let inPlan  = false;
+
+  proc.stdout.on('data', d => {
+    let remaining = d.toString('utf8');
+
+    if (inPlan) {
+      const endIdx = remaining.indexOf('[PLAN_END]');
+      if (endIdx === -1) { planBuf += remaining; return; }
+      planBuf  += remaining.slice(0, endIdx);
+      remaining  = remaining.slice(endIdx + '[PLAN_END]'.length);
+      inPlan     = false;
+      try { send('promptQueue:plan', { plan: JSON.parse(planBuf.trim()) }); }
+      catch (e) { send('promptQueue:data', { text: `[Plan parse error: ${e.message}]\n` }); }
+      planBuf = '';
+      if (remaining) send('promptQueue:data', { text: remaining });
+      return;
+    }
+
+    const startIdx = remaining.indexOf('[PLAN_START]');
+    if (startIdx !== -1) {
+      const pre = remaining.slice(0, startIdx);
+      if (pre) send('promptQueue:data', { text: pre });
+      const afterStart = remaining.slice(startIdx + '[PLAN_START]'.length);
+      const endIdx     = afterStart.indexOf('[PLAN_END]');
+      if (endIdx !== -1) {
+        planBuf   = afterStart.slice(0, endIdx);
+        remaining = afterStart.slice(endIdx + '[PLAN_END]'.length);
+        try { send('promptQueue:plan', { plan: JSON.parse(planBuf.trim()) }); }
+        catch (e) { send('promptQueue:data', { text: `[Plan parse error: ${e.message}]\n` }); }
+        planBuf = '';
+        if (remaining) send('promptQueue:data', { text: remaining });
+      } else {
+        planBuf = afterStart;
+        inPlan  = true;
+      }
+      return;
+    }
+
+    const stepMatch = remaining.match(/\[STEP:(\d+)\/(\d+)\]\s*(.*)/);
+    if (stepMatch) send('promptQueue:step', { stepNum: parseInt(stepMatch[1]), total: parseInt(stepMatch[2]), title: stepMatch[3].trim(), state: 'running' });
+    const doneMatch = remaining.match(/\[STEP_DONE:(\d+)\/(\d+)\]/);
+    if (doneMatch) send('promptQueue:step', { stepNum: parseInt(doneMatch[1]), total: parseInt(doneMatch[2]), state: 'done' });
+    const failMatch = remaining.match(/\[STEP_FAILED:(\d+)\/(\d+)\]/);
+    if (failMatch) send('promptQueue:step', { stepNum: parseInt(failMatch[1]), total: parseInt(failMatch[2]), state: 'failed' });
+
+    if (remaining.includes('[DONE]')) {
+      const m = remaining.match(/\[DONE\] turns=(\d+) tool_calls=(\d+) tokens_in=(\d+) tokens_out=(\d+) elapsed=([\d.]+)s files=(\[.*?\])/);
+      if (m) {
+        let files = [];
+        try { files = JSON.parse(m[6]); } catch (_) {}
+        send('promptQueue:runSummary', { turns: parseInt(m[1]), toolCalls: parseInt(m[2]), tokensIn: parseInt(m[3]), tokensOut: parseInt(m[4]), elapsed: parseFloat(m[5]), files });
+      }
+    }
+
+    send('promptQueue:data', { text: remaining });
+  });
+
+  proc.stderr.on('data', d => send('promptQueue:data', { text: d.toString('utf8') }));
+
+  proc.on('close', code => {
+    _activeQueueProc = null;
+    send('promptQueue:done', { exitCode: code ?? 0 });
+  });
+  proc.on('error', err => {
+    _activeQueueProc = null;
+    send('promptQueue:data', { text: `agent.py error: ${err.message}\n` });
     send('promptQueue:done', { exitCode: 1 });
   });
 

@@ -6,6 +6,7 @@ const { registerDialogHandlers }   = require('./dialog-handlers');
 const { registerChatHandlers }     = require('./chat-handlers');
 const { registerQueueHandlers }    = require('./queue-handlers');
 const { registerOllamaHandlers }   = require('./ollama-handlers');
+const { registerAgentHandlers }    = require('./agent-handlers');
 const { registerWfrPtyHandlers }   = require('../../wfr-pty-handlers');
 
 function registerHandlers() {
@@ -15,6 +16,7 @@ function registerHandlers() {
   registerChatHandlers();
   registerQueueHandlers();
   registerOllamaHandlers();
+  registerAgentHandlers();
   registerWfrPtyHandlers();
 }
 

@@ -348,6 +348,13 @@ contextBridge.exposeInMainWorld('ollama', {
   listModels: (host) => invoke('ollama:list-models', { host }),
 });
 
+contextBridge.exposeInMainWorld('agent', {
+  checkInstalled: ()   => invoke('agent:checkInstalled'),
+  install:        ()   => invoke('agent:install'),
+  onInstallLog:   (cb) => ipcRenderer.on('agent:installLog', (_e, p) => cb(p)),
+  offInstallLog:  ()   => ipcRenderer.removeAllListeners('agent:installLog'),
+});
+
 contextBridge.exposeInMainWorld('shell', {
   openDrawio: (data)              => invoke('shell:openDrawio', data),
   readFile:            (filepath)          => invoke('shell:readFile', filepath),

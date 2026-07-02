@@ -20,7 +20,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 14px;
-  height: 44px;
+  height: 48px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-header);
   flex-shrink: 0;
@@ -132,7 +132,7 @@
   justify-content: space-between;
   padding: 6px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-header);
+  background: var(--surface);
   flex-shrink: 0;
   gap: 10px;
 }
@@ -190,94 +190,29 @@
 /* ── List column (wraps quick-add + filter + list) ──────────────────── */
 
 .pq-list-col {
-  width: 280px;
+  width: 400px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
-  background: var(--surface-header);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-/* ── Quick-add bar (pinned bottom of list column) ────────────────────── */
+/* ── Action Items label ──────────────────────────────────────────────── */
 
-.pq-quick-add {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 8px 10px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-  background: var(--surface-header);
-}
-
-.pq-quick-add__layer-row {
+.pq-list-label {
+  height: 40px;
   display: flex;
   align-items: center;
-}
-
-.pq-quick-add__layer-select {
-  flex: 1;
-  height: 26px;
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 5px);
-  background: var(--input-bg, var(--surface));
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-.pq-quick-add__layer-select:focus { border-color: var(--accent); color: var(--text-primary); }
-
-.pq-quick-add__input {
-  width: 100%;
-  box-sizing: border-box;
-  resize: none;
-  overflow-y: auto;
-  max-height: 300px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 5px);
-  background: var(--input-bg, var(--surface));
-  color: var(--text-primary);
-  font-family: var(--font-sans, system-ui);
-  font-size: 12px;
-  padding: 5px 8px;
-  line-height: 1.4;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.pq-quick-add__input:focus { border-color: var(--accent); }
-.pq-quick-add__input::placeholder { color: var(--text-muted); }
-
-/* ── Source filter pills ─────────────────────────────────────────────── */
-
-.pq-source-filter {
-  display: flex;
-  gap: 4px;
-  padding: 6px 10px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-}
-
-.pq-source-filter__btn {
-  flex: 1;
-  padding: 3px 0;
-  border-radius: var(--radius-sm, 5px);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-.pq-source-filter__btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
-.pq-source-filter__btn--active {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 /* ── List panel ─────────────────────────────────────────────────────── */
@@ -285,7 +220,6 @@
 .pq-list-panel {
   flex: 1;
   min-height: 0;
-  background: var(--surface-header);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -333,48 +267,38 @@
 }
 
 .pq-item__label {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   display: flex;
-  align-items: center;
-  gap: 5px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pq-item__meta {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pq-item__title {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  word-break: break-word;
 }
 
 .pq-item__snippet {
   font-size: 11px;
   color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   margin-top: 2px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.pq-item__layer-badge {
-  font-size: 10px;
-  font-weight: 500;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--surface-hover);
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
 
-.pq-item__source-badge {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 4px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  margin-left: 3px;
-}
-.pq-item__source-badge--quick {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--accent);
-}
 
 .pq-item__actions {
   display: flex;
@@ -437,7 +361,7 @@
   flex-direction: column;
   position: relative; /* stacking context for absolute git overlay */
   overflow: hidden;
-  background: var(--console-bg, #0d0d0d);
+  background: var(--bg);
 }
 
 /* ── Term strip (info bar for pending/skipped items) ────────────────── */
@@ -448,7 +372,7 @@
   gap: 10px;
   padding: 7px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-header);
+  background: var(--surface);
   flex-shrink: 0;
 }
 .pq-term-strip[hidden] { display: none; }
@@ -520,7 +444,7 @@
   bottom: 0;
   width: 50vw;
   z-index: 10;
-  background: var(--surface-header);
+  background: var(--surface);
   border-left: 1px solid var(--border);
   box-shadow: -4px 0 16px rgba(0,0,0,0.25);
   display: flex;
@@ -535,14 +459,16 @@
   gap: 6px;
   padding: 9px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-header);
+  background: var(--surface);
   flex-shrink: 0;
 }
 
 .pq-git-panel__title {
-  font-size: 12.5px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
   flex: 1;
 }
 
@@ -591,7 +517,7 @@
   gap: 6px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-header);
+  background: var(--surface);
 }
 
 .pq-git-commit-msg {

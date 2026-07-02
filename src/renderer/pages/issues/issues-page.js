@@ -224,14 +224,6 @@ export class IssuesPage {
     listEl.querySelectorAll('.eus-src-item').forEach(item => {
       const id = parseInt(item.dataset.id);
       item.addEventListener('click', () => this._selectIssue(id));
-      item.querySelector('.is-list-queue-btn')?.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await this._addIssueToQueue(id, item.querySelector('.is-list-queue-btn'));
-      });
-      item.querySelector('.eus-story-action--delete')?.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await this._deleteIssue(id);
-      });
     });
   }
 
@@ -246,26 +238,13 @@ export class IssuesPage {
         <div class="eus-src-item__info is-item-info">
           <div class="is-item-title-row">
             <span class="eus-src-item__id">#${issue.id}</span>
-            <span class="is-status-chip is-status-chip--${status}">${statusLabel}</span>
             <span class="eus-src-item__title">${escHtml(issue.title)}</span>
           </div>
           <div class="is-item-meta-row">
             <span class="is-item-desc">${desc}</span>
           </div>
         </div>
-        <div class="eus-src-item__actions">
-          <button class="eus-story-action is-list-queue-btn" title="Add to Queue" aria-label="Add to Queue">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <button class="eus-story-action eus-story-action--delete" title="Delete" aria-label="Delete">
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-              <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
-                stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
+        <span class="is-status-chip is-status-chip--${status}">${statusLabel}</span>
       </div>
     `;
   }
@@ -333,7 +312,10 @@ export class IssuesPage {
     const type   = issue.type || 'issue';
     el.innerHTML = this._formHtml(issue, layers, type);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
-    if (headerActions) headerActions.innerHTML = '<button class="is-form__btn" id="isFormSave">Save Changes</button>';
+    if (headerActions) headerActions.innerHTML = `
+      <button class="is-form__btn" id="isFormSave">Save Changes</button>
+      <button class="is-form__btn is-form__btn--danger" id="isFormDelete">Delete</button>
+    `;
     await this._bindFormEvents(el, issue, type);
   }
 
@@ -452,6 +434,11 @@ export class IssuesPage {
     const expectedEl  = el.querySelector('#isFormExpected');
     const actualEl    = el.querySelector('#isFormActual');
     const saveBtn     = this.container.querySelector('#isFormSave');
+    const deleteBtn   = this.container.querySelector('#isFormDelete');
+
+    if (deleteBtn && issue) {
+      deleteBtn.addEventListener('click', () => this._deleteIssue(issue.id), { signal });
+    }
 
     if (issue) {
       statusEl.addEventListener('change', async () => {

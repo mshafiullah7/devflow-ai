@@ -19,7 +19,7 @@
 
 /* Issues list column */
 #isPanelIssuesList {
-  flex: 0 0 35%;
+  flex: 0 0 500px;
   min-width: 180px;
 }
 
@@ -126,17 +126,19 @@
 .is-item-desc {
   font-size: 11px;
   color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   flex: 1;
   min-width: 0;
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* Status chip shown on the second line of each list item */
+/* Status chip — shown on the right side of each list item */
 .is-status-chip {
   flex-shrink: 0;
+  margin-left: auto;
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -362,6 +364,9 @@
 }
 .is-form__btn:hover    { opacity: 0.88; }
 .is-form__btn:disabled { opacity: 0.5; cursor: default; }
+.is-form__btn--danger  { background: var(--danger, #ef4444); }
+
+#isDetailHeaderActions { display: flex; gap: 6px; align-items: center; }
 
 /* ------------------------------------------------------------------ */
 /* Confirm dialog                                                        */
