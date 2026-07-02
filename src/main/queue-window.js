@@ -17,7 +17,7 @@ function openQueueWindow(projectId) {
   _win = new BrowserWindow({
     width:  Math.max(900, Math.round(sw * 0.65)),
     height: Math.max(600, Math.round(sh * 0.80)),
-    title:  'Task Queue',
+    title:  'Mockup Queue',
     icon:   path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
