@@ -1130,6 +1130,14 @@ ${base}`;
     this._layers.push(layer);
     this._layers.sort((a, b) => a.order_num - b.order_num);
     this._addingLayer = false;
+
+    const wf = this._workflows.find(w => w.id === this._activeId);
+    if (wf && (wf.status || 'open') === 'completed') {
+      await window.db.workflows.updateStatus({ id: wf.id, status: 'in_progress' });
+      wf.status = 'in_progress';
+      this._renderList();
+    }
+
     this._refreshLayersTab();
   }
 

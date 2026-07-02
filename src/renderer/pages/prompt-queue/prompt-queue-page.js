@@ -27,10 +27,12 @@ export class PromptQueuePage {
     this._from       = params.from || 'project-home';
     this._project    = null;
     this._queue        = [];
-    this._sourceFilter = 'all'; // 'all' | 'quick_add' | 'manual'
-    this._selectedId   = null;
-    this._selectedItem = null;
-    this._isRunning    = false;
+    this._sourceFilter    = 'all'; // 'all' | 'quick_add' | 'manual'
+    this._selectedId      = null;
+    this._selectedItem    = null;
+    this._isRunning       = false;
+    this._layers          = [];
+    this._quickAddLayerId = null;
     this._runAll     = false;
     this._modelCfg   = null;
 
@@ -70,9 +72,10 @@ export class PromptQueuePage {
     applyStoredTheme();
 
     let _mapping;
-    [this._project, this._queue, _mapping] = await Promise.all([
+    [this._project, this._queue, this._layers, _mapping] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.promptQueue.list({ project_id: this.projectId }),
+      window.db.projectLayers.list(this.projectId),
       window.db.modelMapping.get('prompt-queue'),
     ]);
 
@@ -95,6 +98,7 @@ export class PromptQueuePage {
     this._initTerminal();
     this._startGitPolling();
     this._initLayoutObserver();
+    this._populateLayerDropdown();
     this._renderList();
     this._bindEvents();
 
@@ -346,18 +350,20 @@ export class PromptQueuePage {
 
         <div class="pq-layout">
           <div class="pq-list-col">
-            <div class="pq-quick-add">
-              <textarea class="pq-quick-add__input" id="pqQuickAddInput"
-                placeholder="Quick fix prompt… (Enter to add, Shift+Enter for newline)"
-                rows="2"></textarea>
-              <button class="pq-quick-add__btn" id="pqQuickAddBtn">Add</button>
-            </div>
             <div class="pq-source-filter" id="pqSourceFilter">
               <button class="pq-source-filter__btn pq-source-filter__btn--active" data-src="all">All</button>
               <button class="pq-source-filter__btn" data-src="quick_add">Quick Fix</button>
               <button class="pq-source-filter__btn" data-src="manual">Manual</button>
             </div>
             <div class="pq-list-panel" id="pqListPanel"></div>
+            <div class="pq-quick-add">
+              <div class="pq-quick-add__layer-row">
+                <select class="pq-quick-add__layer-select" id="pqQuickAddLayer"></select>
+              </div>
+              <textarea class="pq-quick-add__input" id="pqQuickAddInput"
+                placeholder="Quick fix prompt… (Enter to add, Shift+Enter for newline)"
+                rows="2"></textarea>
+            </div>
           </div>
 
           <div class="pq-detail-panel" id="pqDetailPanel">
@@ -1119,6 +1125,22 @@ export class PromptQueuePage {
     if (this._picker) await this._picker.reload();
   }
 
+  // ── Layer dropdown ────────────────────────────────────────────────────
+
+  _populateLayerDropdown() {
+    const select = this.container.querySelector('#pqQuickAddLayer');
+    if (!select) return;
+    select.innerHTML = this._layers.length
+      ? this._layers.map(l => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('')
+      : `<option value="">No layers configured</option>`;
+    if (this._layers.length) {
+      this._quickAddLayerId = this._quickAddLayerId
+        ? (this._layers.find(l => l.id === this._quickAddLayerId) ? this._quickAddLayerId : this._layers[0].id)
+        : this._layers[0].id;
+      select.value = this._quickAddLayerId;
+    }
+  }
+
   // ── Events ───────────────────────────────────────────────────────────
 
   async _addQuickItem() {
@@ -1132,22 +1154,32 @@ export class PromptQueuePage {
       prompt_text: text,
       tag:         'Quick Fix',
       source:      'quick_add',
+      layer_id:    this._quickAddLayerId || null,
     });
 
     this._queue.push(item);
     input.value = '';
+    input.style.height = 'auto';
     this._renderList();
     this._selectItem(item);
   }
 
   _bindEvents() {
     // Quick-add bar
-    this.container.querySelector('#pqQuickAddBtn')
-      ?.addEventListener('click', () => this._addQuickItem());
-
-    this.container.querySelector('#pqQuickAddInput')
-      ?.addEventListener('keydown', (e) => {
+    const input = this.container.querySelector('#pqQuickAddInput');
+    if (input) {
+      input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._addQuickItem(); }
+      });
+      input.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 300) + 'px';
+      });
+    }
+
+    this.container.querySelector('#pqQuickAddLayer')
+      ?.addEventListener('change', (e) => {
+        this._quickAddLayerId = parseInt(e.target.value) || null;
       });
 
     // Source filter pills

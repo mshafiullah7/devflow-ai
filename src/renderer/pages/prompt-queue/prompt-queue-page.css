@@ -199,19 +199,44 @@
   min-height: 0;
 }
 
-/* ── Quick-add bar ───────────────────────────────────────────────────── */
+/* ── Quick-add bar (pinned bottom of list column) ────────────────────── */
 
 .pq-quick-add {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 5px;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
+  background: var(--surface-header);
 }
 
-.pq-quick-add__input {
+.pq-quick-add__layer-row {
+  display: flex;
+  align-items: center;
+}
+
+.pq-quick-add__layer-select {
   flex: 1;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 5px);
+  background: var(--input-bg, var(--surface));
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.pq-quick-add__layer-select:focus { border-color: var(--accent); color: var(--text-primary); }
+
+.pq-quick-add__input {
+  width: 100%;
+  box-sizing: border-box;
   resize: none;
+  overflow-y: auto;
+  max-height: 300px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 5px);
   background: var(--input-bg, var(--surface));
@@ -225,20 +250,6 @@
 }
 .pq-quick-add__input:focus { border-color: var(--accent); }
 .pq-quick-add__input::placeholder { color: var(--text-muted); }
-
-.pq-quick-add__btn {
-  flex-shrink: 0;
-  padding: 0 12px;
-  border-radius: var(--radius-sm, 5px);
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.12s;
-}
-.pq-quick-add__btn:hover { opacity: 0.88; }
 
 /* ── Source filter pills ─────────────────────────────────────────────── */
 
