@@ -144,7 +144,6 @@
   padding: 1px 6px;
   border-radius: 3px;
   line-height: 1.6;
-  margin-left: auto;
 }
 .is-status-chip--open        { background: color-mix(in srgb, #6b7280 14%, transparent); color: #6b7280; }
 .is-status-chip--in_progress { background: color-mix(in srgb, #3b82f6 14%, transparent); color: #3b82f6; }

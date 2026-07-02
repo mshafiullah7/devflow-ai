@@ -253,7 +253,7 @@ export class ProjectHomePage {
                   <polyline points="2 12 12 17 22 12"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Layers</span>
+              <span class="ph-nav-item__label">Project Layers</span>
               <span class="ph-nav-item__count">${this._layers.length}</span>
             </button>
 

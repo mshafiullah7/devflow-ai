@@ -105,7 +105,7 @@ export class ProjectLayersPage {
           <!-- Left 30%: Layers list -->
           <aside class="project-panel" id="plPanelList">
             <div class="project-related__section-hd">
-              <span class="project-related__section-label">Layers</span>
+              <span class="project-related__section-label">Project Layers</span>
               <span class="project-related__section-count" id="plLayerCount">0</span>
               <button class="pl-generate-btn" id="plBtnGenerate" title="Generate layers from documents" style="-webkit-app-region:no-drag;">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -130,7 +130,7 @@ export class ProjectLayersPage {
           <!-- Right 70%: Layer detail -->
           <section class="project-panel project-panel--detail" id="plPanelDetail">
             <div class="project-panel__header">
-              <span class="project-panel__title">Layer Detail</span>
+              <span class="project-panel__title">Project Layer Detail</span>
               <div class="project-panel__header-actions" id="plDetailHeaderActions"></div>
             </div>
             <div class="project-panel__content" id="plLayerDetail">

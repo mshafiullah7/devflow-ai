@@ -117,7 +117,6 @@ export class IssuesPage {
                 <option value="closed">Closed</option>
                 <option value="wont_fix">Won't Fix</option>
               </select>
-              <button class="is-add-btn is-add-btn--text" id="isBtnAddTask" title="Add task" aria-label="Add task">+ Task</button>
               <button class="is-add-btn is-add-btn--text" id="isBtnAddIssue" title="Add bug" aria-label="Add bug">+ Bug</button>
             </div>
             <div class="project-related__section-body" id="isIssuesList">
@@ -174,9 +173,6 @@ export class IssuesPage {
     this.container.querySelector('#isBtnQueue')
       .addEventListener('click', () => window.app.openTaskQueueWindow(this._projectId));
 
-    this.container.querySelector('#isBtnAddTask')
-      .addEventListener('click', () => this._showAddForm('task'));
-
     this.container.querySelector('#isBtnAddIssue')
       .addEventListener('click', () => this._showAddForm('issue'));
 
@@ -194,7 +190,7 @@ export class IssuesPage {
     const filters = { project_id: this._projectId };
     if (this._filterStatus) filters.status = this._filterStatus;
 
-    this._issues = await window.db.issues.list(filters);
+    this._issues = (await window.db.issues.list(filters)).filter(i => (i.type || 'issue') !== 'task');
     this._renderIssues();
 
     if (this._activeId && !this._issues.find(i => i.id === this._activeId)) {
@@ -228,6 +224,10 @@ export class IssuesPage {
     listEl.querySelectorAll('.eus-src-item').forEach(item => {
       const id = parseInt(item.dataset.id);
       item.addEventListener('click', () => this._selectIssue(id));
+      item.querySelector('.is-list-queue-btn')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this._addIssueToQueue(id, item.querySelector('.is-list-queue-btn'));
+      });
       item.querySelector('.eus-story-action--delete')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         await this._deleteIssue(id);
@@ -238,9 +238,6 @@ export class IssuesPage {
   _issueItemHtml(issue) {
     const pv        = PRIORITY_META[issue.severity] || PRIORITY_META.medium;
     const desc      = issue.description ? escHtml(issue.description) : '';
-    const isTask    = (issue.type || 'issue') === 'task';
-    const typeCls   = isTask ? 'is-type-badge--task' : 'is-type-badge--issue';
-    const typeLabel = isTask ? 'Task' : 'Bug';
     const status    = issue.status || 'open';
     const statusLabel = STATUS_META[status]?.label ?? status;
     return `
@@ -249,15 +246,19 @@ export class IssuesPage {
         <div class="eus-src-item__info is-item-info">
           <div class="is-item-title-row">
             <span class="eus-src-item__id">#${issue.id}</span>
-            <span class="is-type-badge ${typeCls}">${typeLabel}</span>
+            <span class="is-status-chip is-status-chip--${status}">${statusLabel}</span>
             <span class="eus-src-item__title">${escHtml(issue.title)}</span>
           </div>
           <div class="is-item-meta-row">
             <span class="is-item-desc">${desc}</span>
-            <span class="is-status-chip is-status-chip--${status}">${statusLabel}</span>
           </div>
         </div>
         <div class="eus-src-item__actions">
+          <button class="eus-story-action is-list-queue-btn" title="Add to Queue" aria-label="Add to Queue">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
           <button class="eus-story-action eus-story-action--delete" title="Delete" aria-label="Delete">
             <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
               <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8M5.5 6v4M8.5 6v4"
@@ -571,6 +572,33 @@ export class IssuesPage {
       queueBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Added`;
       setTimeout(() => { queueBtn.innerHTML = origHTML; queueBtn.disabled = false; }, 1500);
     });
+  }
+
+  async _addIssueToQueue(id, btn) {
+    const issue = this._issues.find(i => i.id === id);
+    if (!issue || !issue.layer_id) return;
+
+    const parts = [`Bug: ${issue.title}`];
+    if (issue.description)        parts.push('', `Description:\n${issue.description}`);
+    if (issue.steps_to_reproduce) parts.push('', `Steps to Reproduce:\n${issue.steps_to_reproduce}`);
+    if (issue.expected_behavior)  parts.push('', `Expected Behavior:\n${issue.expected_behavior}`);
+    if (issue.actual_behavior)    parts.push('', `Actual Behavior:\n${issue.actual_behavior}`);
+
+    await window.db.promptQueue.add({
+      project_id:    this._projectId,
+      user_story_id: null,
+      story_title:   issue.title,
+      prompt_id:     null,
+      tag:           'Bug',
+      prompt_text:   parts.join('\n'),
+      layer_id:      issue.layer_id,
+    });
+    this._refreshQueueBadge();
+
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; }, 1500);
   }
 
   _refreshCardBadges(id, status, severity) {
