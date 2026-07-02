@@ -234,8 +234,10 @@ function extractJsonCandidate(text) {
 }
 
 export class GenerateWorkflowsPage {
-  constructor(container) {
+  constructor(container, params, router) {
     this.container         = container;
+    this._router           = router;
+    this._params           = params ?? {};
     this._projectId        = null;
     this._modelConfig      = null;
     this._picker           = null;
@@ -255,11 +257,11 @@ export class GenerateWorkflowsPage {
   // ----------------------------------------------------------------
   // Lifecycle
   // ----------------------------------------------------------------
-  mount() {
+  async mount() {
     injectCss('pages/generate-workflows/generate-workflows-page.css');
     applyStoredTheme();
     this.container.innerHTML = '<div class="gw-loading">Loading…</div>';
-    window.app.genWorkflowsWindow.onInit(data => this._init(data));
+    await this._init(this._params);
   }
 
   unmount() {
@@ -479,7 +481,7 @@ export class GenerateWorkflowsPage {
   // ----------------------------------------------------------------
   _bindEvents() {
     this.container.querySelector('#gwBtnClose')
-      ?.addEventListener('click', () => window.close());
+      ?.addEventListener('click', () => this._router.navigate('workflows', { projectId: this._projectId }));
 
     // Screen selection
     this.container.querySelectorAll('[data-screen-id]').forEach(el => {
@@ -828,7 +830,7 @@ export class GenerateWorkflowsPage {
           <button class="gw-close-btn" id="gwBtnClose">Close Window</button>
         </div>`;
       preview.querySelector('#gwBtnClose')
-        ?.addEventListener('click', () => window.close());
+        ?.addEventListener('click', () => this._router.navigate('workflows', { projectId: this._projectId }));
     }
   }
 

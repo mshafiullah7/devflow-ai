@@ -476,10 +476,10 @@ export class ProjectHomePage {
 
 
     this.container.querySelector('#navTestGenerator')
-      .addEventListener('click', () => window.app.openUnitTestsWindow(this.projectId));
+      .addEventListener('click', () => this.router.navigate('test-generator', { projectId: this.projectId }));
 
     this.container.querySelector('#navE2eTests')
-      .addEventListener('click', () => window.app.openTestGenerationWindow({ mode: 'e2e', projectId: this.projectId }));
+      .addEventListener('click', () => this.router.navigate('test-generation', { mode: 'e2e', projectId: this.projectId }));
 
     this.container.querySelector('#navIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));

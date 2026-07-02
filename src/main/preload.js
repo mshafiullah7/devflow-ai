@@ -314,10 +314,6 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('genWorkflowChat:done');
     },
   },
-  openGenerateWorkflowsWindow: (data) => ipcRenderer.invoke('app:openGenerateWorkflowsWindow', data),
-  genWorkflowsWindow: {
-    onInit: (cb) => ipcRenderer.on('genWorkflows:init', (_e, p) => cb(p)),
-  },
   // Separate AI channel for the test generation window.
   testGenChat: {
     generate: (data) => ipcRenderer.invoke('testGenChat:generate', data),
@@ -329,15 +325,9 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('testGenChat:done');
     },
   },
-  openTestGenerationWindow: (data) => ipcRenderer.invoke('app:openTestGenerationWindow', data),
   testGenerationWindow: {
-    onInit:         (cb) => ipcRenderer.on('testGen:init',      (_e, p) => cb(p)),
     onFileSaved:    (cb) => ipcRenderer.on('testGen:fileSaved', (_e, p) => cb(p)),
     offFileSaved:   ()   => ipcRenderer.removeAllListeners('testGen:fileSaved'),
-  },
-  openUnitTestsWindow: (projectId) => ipcRenderer.invoke('app:openUnitTestsWindow', projectId),
-  unitTestsWindow: {
-    onInit: (cb) => ipcRenderer.on('unitTests:init', (_e, p) => cb(p)),
   },
   openTerminalWindow: (projectId) => ipcRenderer.invoke('app:openTerminalWindow', projectId),
   terminalWindow: {

@@ -1,4 +1,4 @@
-import { escHtml, injectCss } from '../../shared/helpers.js';
+import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }   from '../../shared/theme-manager.js';
 import { ModelPicker }        from '../../components/model-picker/model-picker.js';
 
@@ -82,8 +82,10 @@ function stripCodeFences(raw) {
 
 // ─────────────────────────────────────────────────────────────────
 export class TestGenerationPage {
-  constructor(container) {
+  constructor(container, params, router) {
     this.container = container;
+    this._router   = router;
+    this._params   = params ?? {};
 
     this._mode       = 'unit';   // 'unit' | 'e2e'
     this._layer      = null;
@@ -103,17 +105,19 @@ export class TestGenerationPage {
     this._picker      = null;
   }
 
-  mount() {
+  async mount() {
     injectCss('pages/test-generation/test-generation-page.css');
     applyStoredTheme();
 
     this.container.innerHTML = this._waitingTemplate();
-    window.app.testGenerationWindow.onInit(data => this._onInit(data));
+    await this._onInit(this._params);
   }
 
   unmount() {
     this._picker?.unmount();
     this._clearTimer();
+    window.app.testGenChat.offAll();
+    removeCss('pages/test-generation/test-generation-page.css');
   }
 
   // ─── Init ──────────────────────────────────────────────────────
@@ -179,6 +183,12 @@ export class TestGenerationPage {
     return `
       <div class="tgw-page">
         <header class="tgw-header">
+          <button class="tgw-back-btn" id="tgwBtnBack" aria-label="Back">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </button>
           <div class="tgw-header-info">
             <div class="tgw-title">${modeLabel} Tests · ${escHtml(name)}</div>
             <div class="tgw-subtitle">${escHtml(this._testFolder)}</div>
@@ -238,6 +248,9 @@ export class TestGenerationPage {
 
   // ─── Event binding ──────────────────────────────────────────────
   _bindEvents() {
+    this.container.querySelector('#tgwBtnBack')
+      ?.addEventListener('click', () => this._router.navigate('project-home', { projectId: this._params.projectId }));
+
     this.container.querySelector('#tgwBtnRunAll')
       ?.addEventListener('click', () => this._runAll());
     this.container.querySelector('#tgwBtnRunSelected')

@@ -72,4 +72,12 @@ router.register('test-generator', async () => {
   const { TestGeneratorPage } = await import('./pages/test-generator/test-generator-page.js');
   return TestGeneratorPage;
 });
+router.register('test-generation', async () => {
+  const { TestGenerationPage } = await import('./pages/test-generation/test-generation-page.js');
+  return TestGenerationPage;
+});
+router.register('generate-workflows', async () => {
+  const { GenerateWorkflowsPage } = await import('./pages/generate-workflows/generate-workflows-page.js');
+  return GenerateWorkflowsPage;
+});
 router.navigate('launcher');

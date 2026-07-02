@@ -7,9 +7,6 @@ const { registerHandlers } = require('./db/ipc');
 const { closeDb } = require('./db/database');
 const { openTaskQueueWindow }         = require('./task-queue-window');
 const { openWorkflowWindow }          = require('./workflow-window');
-const { openGenerateWorkflowsWindow } = require('./generate-workflows-window');
-const { openTestGenerationWindow }    = require('./test-generation-window');
-const { openUnitTestsWindow }         = require('./unit-tests-window');
 const { openTerminalWindow }          = require('./terminal-window');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
 const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
@@ -79,21 +76,6 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:openWorkflowWindow', (_e, data) => {
     openWorkflowWindow(data);
-    return { ok: true };
-  });
-
-  ipcMain.handle('app:openGenerateWorkflowsWindow', (_e, data) => {
-    openGenerateWorkflowsWindow(data);
-    return { ok: true };
-  });
-
-  ipcMain.handle('app:openTestGenerationWindow', (_e, data) => {
-    openTestGenerationWindow(data);
-    return { ok: true };
-  });
-
-  ipcMain.handle('app:openUnitTestsWindow', (_e, projectId) => {
-    openUnitTestsWindow(projectId);
     return { ok: true };
   });
 
