@@ -686,7 +686,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
               </svg>
               Run All
             </button>
-            <button class="wfr-git-toggle-btn" id="wfrBtnGitToggle" title="Toggle Git Changes">
+<button class="wfr-git-toggle-btn" id="wfrBtnGitToggle" title="Toggle Git Changes">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
                 <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
@@ -782,7 +782,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         this._runAll();
       });
 
-    this.container.querySelector('#wfrBtnSkipPerms')
+this.container.querySelector('#wfrBtnSkipPerms')
       ?.addEventListener('click', () => {
         this._skipPermissions = !this._skipPermissions;
         const btn   = this.container.querySelector('#wfrBtnSkipPerms');

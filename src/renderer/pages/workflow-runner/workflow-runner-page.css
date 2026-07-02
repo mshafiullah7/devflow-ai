@@ -450,6 +450,7 @@
 .wfr-token-cost     { color: var(--text-muted); margin-left: 3px; }
 .wfr-token-thinking { font-size: 11px; color: var(--text-muted); font-style: italic; }
 
+
 /* ── Git toggle button (header) ─────────────────────────────────────── */
 .wfr-git-toggle-btn {
   display: flex;

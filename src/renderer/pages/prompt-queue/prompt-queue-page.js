@@ -27,6 +27,7 @@ export class PromptQueuePage {
     this._from       = params.from || 'project-home';
     this._project    = null;
     this._queue        = [];
+    this._sourceFilter = 'all'; // 'all' | 'quick_add' | 'manual'
     this._selectedId   = null;
     this._selectedItem = null;
     this._isRunning    = false;
@@ -338,7 +339,20 @@ export class PromptQueuePage {
         </div>
 
         <div class="pq-layout">
-          <div class="pq-list-panel" id="pqListPanel"></div>
+          <div class="pq-list-col">
+            <div class="pq-quick-add">
+              <textarea class="pq-quick-add__input" id="pqQuickAddInput"
+                placeholder="Quick fix prompt… (Enter to add, Shift+Enter for newline)"
+                rows="2"></textarea>
+              <button class="pq-quick-add__btn" id="pqQuickAddBtn">Add</button>
+            </div>
+            <div class="pq-source-filter" id="pqSourceFilter">
+              <button class="pq-source-filter__btn pq-source-filter__btn--active" data-src="all">All</button>
+              <button class="pq-source-filter__btn" data-src="quick_add">Quick Fix</button>
+              <button class="pq-source-filter__btn" data-src="manual">Manual</button>
+            </div>
+            <div class="pq-list-panel" id="pqListPanel"></div>
+          </div>
 
           <div class="pq-detail-panel" id="pqDetailPanel">
             <!-- Thin info bar: shown only for pending/skipped items -->
@@ -389,17 +403,26 @@ export class PromptQueuePage {
 
   // ── List rendering ───────────────────────────────────────────────────
 
+  _filteredQueue() {
+    if (this._sourceFilter === 'all') return this._queue;
+    return this._queue.filter(q => (q.source || 'manual') === this._sourceFilter);
+  }
+
   _renderList() {
     const panel = this.container.querySelector('#pqListPanel');
     if (!panel) return;
 
-    if (this._queue.length === 0) {
-      panel.innerHTML = `<div class="pq-list-empty">No prompts queued yet.<br>Use the queue button on prompts in User Stories.</div>`;
+    const visible = this._filteredQueue();
+    if (visible.length === 0) {
+      const msg = this._queue.length === 0
+        ? 'No prompts queued yet.<br>Type above to add a quick fix.'
+        : `No <strong>${this._sourceFilter === 'quick_add' ? 'Quick Fix' : 'Manual'}</strong> items in the queue.`;
+      panel.innerHTML = `<div class="pq-list-empty">${msg}</div>`;
       this._updateSummary();
       return;
     }
 
-    panel.innerHTML = this._queue.map(item => this._itemHtml(item)).join('');
+    panel.innerHTML = visible.map(item => this._itemHtml(item)).join('');
 
     panel.querySelectorAll('.pq-item').forEach(el => {
       el.addEventListener('click', () => {
@@ -437,7 +460,7 @@ export class PromptQueuePage {
         this._queue = this._queue.filter(q => q.id !== id);
         el.remove();
         if (this._queue.length === 0) {
-          panel.innerHTML = `<div class="pq-list-empty">No prompts queued yet.<br>Use the queue button on prompts in User Stories.</div>`;
+          panel.innerHTML = `<div class="pq-list-empty">No prompts queued yet.<br>Type above to add a quick fix.</div>`;
         }
         if (this._selectedId === id) {
           this._selectedId = null;
@@ -467,6 +490,9 @@ export class PromptQueuePage {
     const layerBadge = item.layer_name
       ? `<span class="pq-item__layer-badge" title="Layer: ${escHtml(item.layer_name)}">${escHtml(item.layer_name)}</span>`
       : '';
+    const sourceBadge = item.source === 'quick_add'
+      ? `<span class="pq-item__source-badge pq-item__source-badge--quick" title="Added via Quick Fix">QF</span>`
+      : '';
     const elapsedText = isRunning && this._startTimes[item.id]
       ? this._fmt(Date.now() - this._startTimes[item.id])
       : '';
@@ -475,7 +501,7 @@ export class PromptQueuePage {
       <div class="pq-item pq-item--${item.status}${this._selectedId === item.id ? ' pq-item--selected' : ''}" data-id="${item.id}">
         <span class="pq-item__icon">${icon}</span>
         <div class="pq-item__body">
-          <div class="pq-item__label">${escHtml(label)}${layerBadge}</div>
+          <div class="pq-item__label">${escHtml(label)}${layerBadge}${sourceBadge}</div>
           <div class="pq-item__snippet">${escHtml(snippet)}</div>
         </div>
         <div class="pq-item__actions">
@@ -1058,7 +1084,47 @@ export class PromptQueuePage {
 
   // ── Events ───────────────────────────────────────────────────────────
 
+  async _addQuickItem() {
+    const input = this.container.querySelector('#pqQuickAddInput');
+    const text  = input?.value.trim();
+    if (!text) return;
+
+    const item = await window.db.promptQueue.add({
+      project_id:  this.projectId,
+      story_title: text.split('\n')[0].slice(0, 80),
+      prompt_text: text,
+      tag:         'Quick Fix',
+      source:      'quick_add',
+    });
+
+    this._queue.push(item);
+    input.value = '';
+    this._renderList();
+    this._selectItem(item);
+  }
+
   _bindEvents() {
+    // Quick-add bar
+    this.container.querySelector('#pqQuickAddBtn')
+      ?.addEventListener('click', () => this._addQuickItem());
+
+    this.container.querySelector('#pqQuickAddInput')
+      ?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._addQuickItem(); }
+      });
+
+    // Source filter pills
+    this.container.querySelector('#pqSourceFilter')
+      ?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-src]');
+        if (!btn) return;
+        this._sourceFilter = btn.dataset.src;
+        this.container.querySelectorAll('.pq-source-filter__btn').forEach(b =>
+          b.classList.toggle('pq-source-filter__btn--active', b.dataset.src === this._sourceFilter)
+        );
+        this._renderList();
+      });
+
     this.container.querySelector('#pqBtnBack')
       .addEventListener('click', () => this.router.navigate(this._from, { projectId: this.projectId }));
 

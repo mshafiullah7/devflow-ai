@@ -213,6 +213,26 @@
 .wf-run-all-btn:hover:not(:disabled) { opacity: 0.88; }
 .wf-run-all-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
+.wf-quick-fix-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: var(--radius-sm, 5px);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.wf-quick-fix-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 /* ── Layer rows ─────────────────────────────────────────────────── */
 .wf-layers-list {
   display: flex;

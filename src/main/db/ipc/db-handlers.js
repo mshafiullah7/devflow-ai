@@ -952,23 +952,26 @@ function registerDbHandlers() {
   // ----------------------------------------------------------------
   // prompt_queue
   // ----------------------------------------------------------------
-  safeHandle('db:prompt_queue:list', (_e, { project_id }) => {
+  safeHandle('db:prompt_queue:list', (_e, { project_id, source }) => {
+    const whereSource = source ? ' AND pq.source = ?' : '';
+    const params = source ? [project_id, source] : [project_id];
     return db.prepare(`
       SELECT pq.*, pl.name AS layer_name, pl.folder_path AS layer_folder_path
         FROM prompt_queue pq
         LEFT JOIN project_layers pl ON pq.layer_id = pl.id
-       WHERE pq.project_id = ?
+       WHERE pq.project_id = ?${whereSource}
        ORDER BY pq.sort_order ASC, pq.created_at ASC
-    `).all(project_id);
+    `).all(...params);
   });
 
-  safeHandle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text, layer_id }) => {
+  safeHandle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text, layer_id, source }) => {
     const max = db.prepare('SELECT MAX(sort_order) AS m FROM prompt_queue WHERE project_id = ?').get(project_id);
     const sort_order = (max?.m ?? -1) + 1;
+    const src = source || 'manual';
     const result = db.prepare(`
-      INSERT INTO prompt_queue (project_id, user_story_id, story_title, prompt_id, tag, prompt_text, sort_order, layer_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(project_id, user_story_id ?? null, story_title ?? null, prompt_id ?? null, tag ?? null, prompt_text, sort_order, layer_id ?? null);
+      INSERT INTO prompt_queue (project_id, user_story_id, story_title, prompt_id, tag, prompt_text, sort_order, layer_id, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(project_id, user_story_id ?? null, story_title ?? null, prompt_id ?? null, tag ?? null, prompt_text, sort_order, layer_id ?? null, src);
 
     return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(result.lastInsertRowid);
   });

@@ -485,6 +485,12 @@ export class WorkflowsPage {
           </svg>
           Run Layers →
         </button>
+        <button class="wf-quick-fix-btn" id="wfBtnQuickFix" title="Open Quick Fix queue for minor post-run changes">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1v14M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          Quick Fix
+        </button>
         <button class="is-add-btn" id="wfBtnAddLayer" title="Add layer" style="margin-left:auto">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
             <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -1273,6 +1279,11 @@ ${base}`;
 
     body.querySelector('#wfBtnRunAll')
       ?.addEventListener('click', () => this._launchRunAll());
+
+    body.querySelector('#wfBtnQuickFix')
+      ?.addEventListener('click', () => {
+        if (this._projectId) window.app.openTaskQueueWindow(this._projectId);
+      });
 
     body.querySelector('#wfBtnAddLayer')
       ?.addEventListener('click', () => {

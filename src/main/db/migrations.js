@@ -326,10 +326,13 @@ function runMigrations(db) {
     `);
   }
 
-  // Add commit_sha / layer_id to prompt_queue for existing databases
+  // Add commit_sha / layer_id / source to prompt_queue for existing databases
   const pqCols = db.prepare('PRAGMA table_info(prompt_queue)').all().map(c => c.name);
   if (!pqCols.includes('commit_sha')) {
     db.exec('ALTER TABLE prompt_queue ADD COLUMN commit_sha TEXT');
+  }
+  if (!pqCols.includes('source')) {
+    db.exec("ALTER TABLE prompt_queue ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
   }
 
   // Ensure prompt_queue_messages exists and its FK points to prompt_queue (not prompt_queue_old).
