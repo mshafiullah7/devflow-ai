@@ -264,21 +264,6 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('chat:validateDone');
     },
   },
-  // Separate AI channel for the detached queue window — own subprocess slot.
-  queueChat: {
-    generate: (data) => ipcRenderer.invoke('queueChat:generate', data),
-    cancel:   ()     => ipcRenderer.invoke('queueChat:cancel'),
-    onToken:  (cb)   => ipcRenderer.on('queueChat:token', (_e, p) => cb(p)),
-    onDone:   (cb)   => ipcRenderer.on('queueChat:done',  (_e, p) => cb(p)),
-    offAll:   ()     => {
-      ipcRenderer.removeAllListeners('queueChat:token');
-      ipcRenderer.removeAllListeners('queueChat:done');
-    },
-  },
-  openQueueWindow: (projectId) => ipcRenderer.invoke('app:openQueueWindow', projectId),
-  queueWindow: {
-    onInit: (cb) => ipcRenderer.on('queue:init', (_e, p) => cb(p)),
-  },
   openTaskQueueWindow: (projectId) => ipcRenderer.invoke('app:openTaskQueueWindow', projectId),
   taskQueueWindow: {
     onInit: (cb) => ipcRenderer.on('taskQueue:init', (_e, p) => cb(p)),
@@ -357,21 +342,6 @@ contextBridge.exposeInMainWorld('app', {
   openTerminalWindow: (projectId) => ipcRenderer.invoke('app:openTerminalWindow', projectId),
   terminalWindow: {
     onInit: (cb) => ipcRenderer.on('terminal-win:init', (_e, p) => cb(p)),
-  },
-  // Separate AI channel for the workflow AI edit window.
-  wfAiEditChat: {
-    generate: (data) => ipcRenderer.invoke('wfAiEditChat:generate', data),
-    cancel:   ()     => ipcRenderer.invoke('wfAiEditChat:cancel'),
-    onToken:  (cb)   => ipcRenderer.on('wfAiEditChat:token', (_e, p) => cb(p)),
-    onDone:   (cb)   => ipcRenderer.on('wfAiEditChat:done',  (_e, p) => cb(p)),
-    offAll:   ()     => {
-      ipcRenderer.removeAllListeners('wfAiEditChat:token');
-      ipcRenderer.removeAllListeners('wfAiEditChat:done');
-    },
-  },
-  openWorkflowAiEditWindow: (data) => ipcRenderer.invoke('app:openWorkflowAiEditWindow', data),
-  workflowAiEditWindow: {
-    onInit: (cb) => ipcRenderer.on('workflowAiEdit:init', (_e, p) => cb(p)),
   },
   workflowEvents: {
     onLayerStatusChanged: (cb) => ipcRenderer.on('workflow:layerStatusChanged', (_e, p) => cb(p)),

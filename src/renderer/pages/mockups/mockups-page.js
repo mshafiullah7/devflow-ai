@@ -1505,14 +1505,6 @@ function buildExtractPsCommand(instruction, model) {
   return `$p = @'\n${safeInst}\n'@\n${exe}${flags}${modelFlag} $p`;
 }
 
-function buildPsCommand(prompt, model) {
-  const exe       = model.executable || 'claude';
-  const flags     = model.flags ? ` ${model.flags}` : '';
-  const modelFlag = model.model_name ? ` --model ${model.model_name}` : '';
-  const safe      = prompt.replace(/'/g, "''");
-  return `$p = @'\n${safe}\n'@\n${exe}${flags}${modelFlag} $p`;
-}
-
 // ----------------------------------------------------------------
 // MockupsPage — full-page version of ScreensModal
 // ----------------------------------------------------------------
@@ -1581,7 +1573,6 @@ export class MockupsPage {
         this._selectedModelId = model?.id ?? null;
         const nameEl = this.container.querySelector('#scrModelName');
         if (nameEl) nameEl.textContent = model?.label || 'No model selected';
-        this._updateMockupBtns?.();
       },
       initialId: _mappedId,
     });
@@ -1650,12 +1641,6 @@ export class MockupsPage {
             <div class="mockups-page__title">${escHtml(name)}</div>
             <div class="mockups-page__subtitle">Project Mockups</div>
           </div>
-          <button class="project-page__git-btn" id="mockupsQueueBtn" title="Generation queue" style="-webkit-app-region:no-drag;">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-              <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <span class="project-page__git-badge" id="mockupsQueueBadge" hidden></span>
-          </button>
           <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
             <div id="mockupsModelPicker"></div>
           </div>
@@ -1690,8 +1675,6 @@ export class MockupsPage {
   _renderList() {
     if (this._screens.length === 0) return '<p class="scr-sidebar__empty">No screens yet</p>';
     return this._screens.map(s => {
-      const canQueue = !!s.description;
-      const isQueued = !!s.queued;
       return `
         <div class="scr-sidebar__item${s.id === this._activeId ? ' scr-sidebar__item--active' : ''}" data-id="${s.id}">
           <svg class="scr-sidebar__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -1705,13 +1688,6 @@ export class MockupsPage {
               ${s.style_valid === 0 ? `<span class="scr-val-dot scr-val-dot--warn" title="Style issues found"></span>` : ''}
             </div>
           </div>
-          ${canQueue ? `
-            <button class="scr-sidebar__queue-btn${isQueued ? ' scr-sidebar__queue-btn--active' : ''}"
-              data-queue-id="${s.id}" data-queued="${isQueued ? '1' : '0'}"
-              title="${isQueued ? 'Remove from queue' : 'Add to queue'}">
-              ${isQueued ? 'Queued' : 'Queue'}
-            </button>
-          ` : ''}
         </div>
       `;
     }).join('');
@@ -1728,21 +1704,6 @@ export class MockupsPage {
       el.addEventListener('click', () => this._selectScreen(Number(el.dataset.id)));
     });
 
-    this.container.querySelectorAll('.scr-sidebar__queue-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const id       = Number(btn.dataset.queueId);
-        const queued   = btn.dataset.queued === '1' ? 0 : 1;
-        await window.db.screenDesigns.update({ id, queued });
-        const screen = this._screens.find(s => s.id === id);
-        if (screen) screen.queued = queued;
-        btn.dataset.queued = queued;
-        btn.title = queued ? 'Remove from queue' : 'Add to queue';
-        btn.textContent = queued ? 'Queued' : 'Queue';
-        btn.classList.toggle('scr-sidebar__queue-btn--active', !!queued);
-        this._refreshHeaderQueueBadge();
-      });
-    });
   }
 
   async _reloadModelDropdown() {
@@ -1763,33 +1724,7 @@ export class MockupsPage {
 
 
 
-    this.container.querySelector('#mockupsQueueBtn')
-      .addEventListener('click', () => window.app.openQueueWindow(this._projectId));
-
-    this._refreshHeaderQueueBadge();
     this._bindSidebarItems();
-  }
-
-  async _refreshHeaderQueueBadge() {
-    const badge = this.container.querySelector('#mockupsQueueBadge');
-    if (!badge) return;
-    const all = await window.db.screenDesigns.list(this._projectId);
-    const count = all.filter(s => s.queued && s.is_active !== 0).length;
-    if (count > 0) {
-      badge.textContent = count > 99 ? '99+' : count;
-      badge.hidden = false;
-    } else {
-      badge.hidden = true;
-    }
-  }
-
-  _updateMockupBtns() {
-    const model = this._getSelectedModel();
-    const isCli = model?.type === 'cli';
-    const runBtn  = this.container.querySelector('#scrRunBtn');
-    const editBtn = this.container.querySelector('#scrEditBtn');
-    if (runBtn)  runBtn.hidden = !isCli;
-    if (editBtn) editBtn.hidden = !isCli;
   }
 
   _updateStyleGuideBtn() {
@@ -2578,36 +2513,6 @@ export class MockupsPage {
     });
   }
 
-  async _runInTerminal() {
-    const main  = this.container.querySelector('#scrMain');
-    const title = main.querySelector('#scrTitle').value.trim();
-    const desc  = main.querySelector('#scrDescription').value.trim();
-    if (!title) { main.querySelector('#scrTitle').focus(); return; }
-    if (!desc)  { main.querySelector('#scrDescription').focus(); return; }
-
-    const model = this._getSelectedModel();
-    if (!model || model.type === 'anthropic' || !model.executable) {
-      await Dialog.alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
-      return;
-    }
-
-    await this._saveForm();
-    this._screens = await window.db.screenDesigns.list(this._projectId);
-    this._refreshSidebar();
-
-    const project    = this._getProject();
-    const screensDir = await window.app.screensDir(project?.name);
-    const safeTitle  = title.replace(/[^a-z0-9_\-]/gi, '_');
-    const outputFile = `${screensDir}\\${safeTitle}.html`;
-    const prompt     = buildScreenPrompt(desc, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
-    const cmd        = buildPsCommand(prompt, model);
-
-    this._showPromptPreviewModal(prompt, async () => {
-      await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
-      await this._saveToHistory(desc);
-    });
-  }
-
   async _chooseFile() {
     if (!this._editingId) {
       const saved = await this._saveForm();
@@ -2632,208 +2537,8 @@ export class MockupsPage {
     this._showScreenViewer(screen);
   }
 
-  // ----------------------------------------------------------------
-  // Queue panel
-  // ----------------------------------------------------------------
-  async _renderQueuePanel(panel) {
-    const allScreens = await window.db.screenDesigns.list(this._projectId);
-    const queued     = allScreens.filter(s => s.queued && s.is_active !== 0);
-
-    panel.innerHTML = `
-      <div class="scr-queue-panel">
-        <div class="scr-queue-panel__header">
-          <span class="scr-queue-panel__title">Queue</span>
-          <span class="scr-queue-panel__count">${queued.length} screen${queued.length !== 1 ? 's' : ''}</span>
-          <div style="flex:1"></div>
-          <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrQueueStopBtn" hidden>
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-              <rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor"/>
-            </svg>
-            Stop
-          </button>
-          <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrQueueClearBtn" hidden>
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-              <path d="M4 8h8M8 4l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Clear completed
-          </button>
-          <button class="scr-btn scr-btn--primary scr-btn--sm" id="scrQueueRunBtn" ${queued.length === 0 ? 'disabled' : ''}>
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-              <path d="M4 3l9 5-9 5V3z" fill="currentColor"/>
-            </svg>
-            Run All
-          </button>
-        </div>
-        <div class="scr-queue-panel__list" id="scrQueueList">
-          ${queued.length === 0
-            ? '<p class="scr-queue-panel__empty">No screens are queued. Set <strong>queued = 1</strong> on screens to add them here.</p>'
-            : queued.map(s => `
-              <div class="scr-queue-item" data-id="${s.id}">
-                <div class="scr-queue-item__row">
-                  <svg class="scr-queue-item__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
-                    <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-                  </svg>
-                  <span class="scr-queue-item__title">${escHtml(s.title)}</span>
-                  ${s.description ? '' : '<span class="scr-queue-item__no-desc" title="No description — will be skipped">No description</span>'}
-                  ${s.description ? `<button class="scr-queue-item__prompt-btn" data-prompt-id="${s.id}" title="Show prompt">
-                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                      <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
-                      <path d="M8 7v4M8 5.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                    </svg>
-                  </button>` : ''}
-                  <span class="scr-queue-item__status scr-queue-item__status--pending" id="scrQueueStatus-${s.id}">Pending</span>
-                </div>
-                ${s.description ? `<pre class="scr-queue-item__prompt-pre" id="scrQueuePrompt-${s.id}" hidden></pre>` : ''}
-              </div>
-            `).join('')}
-        </div>
-      </div>
-    `;
-
-    if (queued.length === 0) return;
-
-    const runBtn   = panel.querySelector('#scrQueueRunBtn');
-    const stopBtn  = panel.querySelector('#scrQueueStopBtn');
-    const clearBtn = panel.querySelector('#scrQueueClearBtn');
-
-    const refreshBadges = () => this._refreshHeaderQueueBadge();
-
-    runBtn.addEventListener('click', () => {
-      runBtn.hidden  = true;
-      stopBtn.hidden = false;
-      this._runQueue(queued, panel, () => {
-        runBtn.hidden  = false;
-        stopBtn.hidden = true;
-        clearBtn.hidden = false;
-        refreshBadges();
-      });
-    });
-
-    stopBtn.addEventListener('click', () => {
-      this._queueStopped = true;
-      window.app.chat.cancel();
-      window.app.chat.offAll();
-      stopBtn.hidden  = true;
-      runBtn.hidden   = false;
-      clearBtn.hidden = false;
-    });
-
-    clearBtn.addEventListener('click', async () => {
-      // Re-render panel — done items already have queued=0 in DB so they disappear naturally
-      await this._renderQueuePanel(panel);
-      this._refreshSidebar();
-      refreshBadges();
-    });
-
-    // Prompt preview toggles
-    panel.querySelectorAll('.scr-queue-item__prompt-btn').forEach(btn => {
-      const id      = Number(btn.dataset.promptId);
-      const screen  = queued.find(s => s.id === id);
-      const pre     = panel.querySelector(`#scrQueuePrompt-${id}`);
-      if (!screen || !pre) return;
-      btn.addEventListener('click', () => {
-        const open = !pre.hidden;
-        if (open) {
-          pre.hidden = true;
-          btn.classList.remove('scr-queue-item__prompt-btn--active');
-        } else {
-          if (!pre.dataset.built) {
-            pre.textContent = buildScreenPrompt(
-              screen.description,
-              this._project?.description || '',
-              '',
-              this._getDesignTemplateForPrompt()
-            );
-            pre.dataset.built = '1';
-          }
-          pre.hidden = false;
-          btn.classList.add('scr-queue-item__prompt-btn--active');
-        }
-      });
-    });
-  }
-
   _tgNotify(text) {
     window.app.telegram.send(text).catch(() => {});
-  }
-
-  async _runQueue(screens, panel, onFinish) {
-    this._queueStopped = false;
-    const model = this._getSelectedModel();
-    if (!model) { await Dialog.alert('No model selected.'); onFinish(); return; }
-
-    const projectName = this._project?.name || 'project';
-    let doneCount  = 0;
-    let errorCount = 0;
-
-    for (const screen of screens) {
-      if (this._queueStopped) break;
-
-      const statusEl = panel.querySelector(`#scrQueueStatus-${screen.id}`);
-      if (!screen.description) {
-        if (statusEl) {
-          statusEl.textContent = 'Skipped';
-          statusEl.className   = 'scr-queue-item__status scr-queue-item__status--skipped';
-        }
-        continue;
-      }
-
-      if (statusEl) {
-        statusEl.textContent = 'Running…';
-        statusEl.className   = 'scr-queue-item__status scr-queue-item__status--running';
-      }
-
-      const prompt = buildScreenPrompt(
-        screen.description,
-        this._project?.description || '',
-        '',
-        this._getDesignTemplateForPrompt()
-      );
-
-      const result = await new Promise(resolve => {
-        window.app.chat.offAll();
-        window.app.chat.onDone(resolve);
-        window.app.chat.generate({ prompt, model });
-      });
-
-      if (this._queueStopped) break;
-
-      if (result.html && !result.error) {
-        await window.db.screenDesigns.update({
-          id:           screen.id,
-          html_content: result.html,
-          executed:     1,
-          queued:       0,
-        });
-        screen.html_content = result.html;
-        screen.executed     = 1;
-        screen.queued       = 0;
-        doneCount++;
-        if (statusEl) {
-          statusEl.textContent = 'Done';
-          statusEl.className   = 'scr-queue-item__status scr-queue-item__status--done';
-        }
-        this._tgNotify(`✅ *${screen.title}* generated successfully\n_Project: ${projectName}_`);
-      } else {
-        errorCount++;
-        const errMsg = result.error || 'Unknown error';
-        if (statusEl) {
-          statusEl.textContent = errMsg;
-          statusEl.className   = 'scr-queue-item__status scr-queue-item__status--error';
-        }
-        this._tgNotify(`❌ *${screen.title}* failed\n\`${errMsg}\`\n_Project: ${projectName}_`);
-      }
-    }
-
-    window.app.chat.offAll();
-
-    if (this._queueStopped) {
-      this._tgNotify(`⏹ Queue stopped — ${doneCount} done, ${errorCount} error${errorCount !== 1 ? 's' : ''}\n_Project: ${projectName}_`);
-    } else {
-      this._tgNotify(`🏁 Queue finished — ${doneCount} done, ${errorCount} error${errorCount !== 1 ? 's' : ''}\n_Project: ${projectName}_`);
-    }
-
-    onFinish();
   }
 
   // ----------------------------------------------------------------
@@ -2978,44 +2683,19 @@ export class MockupsPage {
               Validate
             </button>
             ` : ''}
-            <div class="scr-actions-menu" id="scrActionsMenu">
-              <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrActionsMenuTrigger" title="Actions">
-                Actions
-                <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-                  <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-              <div class="scr-actions-dropdown" id="scrActionsDropdown" hidden>
-                <button class="scr-actions-dropdown__item" id="scrExportHtmlBtn">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                    <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Export HTML
-                </button>
-                <button class="scr-actions-dropdown__item" id="scrRunBtn">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-                    <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
-                    <path d="M10 7h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                  </svg>
-                  Run in Terminal
-                </button>
-                <button class="scr-actions-dropdown__item" id="scrEditBtn">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                  </svg>
-                  Edit Mockup in Terminal
-                </button>
-                <button class="scr-actions-dropdown__item" id="scrChooseFileBtn">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                  </svg>
-                  Choose File
-                </button>
-              </div>
-            </div>
-
+            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrExportHtmlBtn">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Export HTML
+            </button>
+            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="scrChooseFileBtn">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4a1 1 0 011-1h3l1.5 2H13a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+              Choose File
+            </button>
             <button class="scr-btn scr-btn--sm scr-btn--danger" id="scrDeleteBtn" title="Delete screen">
               <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
                 <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3 3.5l.7 8h6.6l.7-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -3050,6 +2730,16 @@ export class MockupsPage {
             <div class="scr-viewer__preview-bar">
               <span class="scr-viewer__preview-label">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></span>
               <button class="scr-btn scr-btn--sm" id="scrViewportToggle"></button>
+              ${screen.html_content ? `
+              <button class="scr-btn scr-btn--sm" id="scrOpenWindowBtn" title="Open preview in a separate window">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <rect x="1.5" y="3" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M7 1.5h7.5V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7 9l7-7.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+                Open Window
+              </button>
+              ` : ''}
               <button class="scr-btn scr-btn--sm" id="scrRefreshBtn" title="Refresh preview (R)">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -3285,8 +2975,6 @@ export class MockupsPage {
     split.hidden     = false;
     editPanel.hidden = true;
 
-    this._refreshHeaderQueueBadge();
-
     // Edit panel — description textarea + save
     const viewerDescTextarea = main.querySelector('#scrViewerDescTextarea');
     viewerDescTextarea.value = screen.description || '';
@@ -3388,17 +3076,6 @@ export class MockupsPage {
     });
 
     // Actions dropdown toggle
-    const actionsMenuEl = main.querySelector('#scrActionsMenu');
-    const dropdownEl    = main.querySelector('#scrActionsDropdown');
-    main.querySelector('#scrActionsMenuTrigger').addEventListener('click', (e) => {
-      e.stopPropagation();
-      dropdownEl.hidden = !dropdownEl.hidden;
-    });
-    dropdownEl.addEventListener('click', () => { dropdownEl.hidden = true; });
-    document.addEventListener('click', (e) => {
-      if (!actionsMenuEl.contains(e.target)) dropdownEl.hidden = true;
-    }, { capture: false });
-
     main.querySelector('#scrExportHtmlBtn').addEventListener('click', async () => {
       const fresh = await window.db.screenDesigns.get(screen.id);
       const html  = fresh?.html_content || screen.html_content || '';
@@ -3424,33 +3101,6 @@ export class MockupsPage {
       }
     });
 
-    main.querySelector('#scrRunBtn').addEventListener('click', async () => {
-      const model = this._getSelectedModel();
-      if (!model || model.type === 'anthropic' || !model.executable) {
-        await Dialog.alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
-        return;
-      }
-
-      const desc = screen.description || '';
-      if (!desc) {
-        await Dialog.alert('No description saved for this screen. Edit the screen details and add a description first.');
-        return;
-      }
-
-      const project    = this._getProject();
-      const screensDir = await window.app.screensDir(project?.name);
-      const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
-      const outputFile = `${screensDir}\\${safeTitle}.html`;
-      const prompt     = buildScreenPrompt(desc, project?.description || '', outputFile, this._getDesignTemplateForPrompt());
-      const cmd        = buildPsCommand(prompt, model);
-      this._showPromptPreviewModal(cmd, async () => {
-        await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
-        await this._saveToHistory(desc);
-      });
-    });
-
-    main.querySelector('#scrEditBtn').addEventListener('click', () => this._openEdits(screen.title, screen.id));
-
     main.querySelector('#scrChooseFileBtn').addEventListener('click', async () => {
       const result = await window.db.dialog.openFile({
         title:      'Choose Generated Screen File',
@@ -3461,6 +3111,10 @@ export class MockupsPage {
       await window.db.screenDesigns.update({ id: screen.id, html_content: result.content });
       screen.html_content = result.content;
       this._loadPreview(result.content);
+    });
+
+    main.querySelector('#scrOpenWindowBtn')?.addEventListener('click', () => {
+      window.app.openMockupPreview({ title: screen.title, htmlContent: screen.html_content });
     });
 
     main.querySelector('#scrExtractBtn')?.addEventListener('click', () => this._showExtractDialog(screen));
@@ -3502,7 +3156,6 @@ export class MockupsPage {
     observer.observe(document.body, { childList: true, subtree: true });
 
     this._loadInitialHistory(screen.id, main);
-    this._updateMockupBtns();
   }
 
   // ----------------------------------------------------------------
@@ -4115,78 +3768,6 @@ Spacing:
   // ----------------------------------------------------------------
   // Edits — open the selected CLI with the screen file as context
   // ----------------------------------------------------------------
-  async _openEdits(titleOverride, screenId) {
-    const main  = this.container.querySelector('#scrMain');
-    const title = titleOverride || main?.querySelector('#scrTitle')?.value.trim() || '';
-
-    if (!title) {
-      await Dialog.alert('Save the screen first so a file exists to edit.');
-      return;
-    }
-
-    const model = this._getSelectedModel();
-    if (!model || model.type === 'anthropic' || !model.executable) {
-      await Dialog.alert('Please select a CLI model (Claude CLI or Gemini CLI) from the model dropdown.');
-      return;
-    }
-
-    const safeTitle   = title.replace(/[^a-z0-9_\-]/gi, '_');
-    const projectName = this._project?.name;
-    const safeProject = (projectName || '').replace(/[^a-z0-9_\-]/gi, '_');
-    const rootDir     = await window.app.screensDir();
-    const screensDir  = safeProject ? `${rootDir}\\${safeProject}` : rootDir;
-    const filePath    = `${screensDir}\\${safeTitle}.html`;
-
-    const existing = await window.shell.readFile(filePath);
-    if (!existing && screenId) {
-      const screen = await window.db.screenDesigns.get(screenId);
-      if (screen?.html_content) {
-        await window.shell.writeFile(filePath, screen.html_content);
-      }
-    }
-
-    const flags     = model.flags ? ` ${model.flags}` : '';
-    const modelFlag = model.model_name ? ` --model ${model.model_name}` : '';
-    const cmd = `${model.executable}${flags}${modelFlag} "${filePath}"`;
-    this._showPromptPreviewModal(cmd, async () => {
-      await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
-    });
-  }
-
-  // ----------------------------------------------------------------
-  // Prompt Preview modal
-  // ----------------------------------------------------------------
-  _showPromptPreviewModal(prompt, onRun) {
-    const dlg = document.createElement('div');
-    dlg.className = 'scr-extract-overlay';
-    dlg.innerHTML = `
-      <div class="scr-prompt-preview-dialog">
-        <div class="scr-extract-dialog__header">
-          <span>Prompt Preview</span>
-          <button class="scr-extract-dialog__close">&times;</button>
-        </div>
-        <div class="scr-prompt-preview-dialog__body">
-          <pre class="scr-prompt-preview-dialog__pre">${escHtml(prompt)}</pre>
-        </div>
-        <div class="scr-extract-dialog__footer">
-          <button class="scr-btn scr-btn--secondary" id="promptPreviewClose">Close</button>
-          <button class="scr-btn scr-btn--primary"   id="promptPreviewRun">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-              <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
-            </svg>
-            Run
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(dlg);
-    const close = () => dlg.remove();
-    dlg.querySelector('.scr-extract-dialog__close').addEventListener('click', close);
-    dlg.querySelector('#promptPreviewClose').addEventListener('click', close);
-    dlg.querySelector('#promptPreviewRun').addEventListener('click', () => { close(); onRun(); });
-  }
-
   // ----------------------------------------------------------------
   // Extract Stories dialog
   // ----------------------------------------------------------------

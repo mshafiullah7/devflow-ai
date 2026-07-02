@@ -54,12 +54,10 @@ function createCtx() {
 }
 
 const _mainCtx       = createCtx();
-const _queueCtx      = createCtx();
 const _validateCtx   = createCtx();
 const _workflowCtx   = createCtx();
 const _genWfCtx      = createCtx();
 const _testGenCtx    = createCtx();
-const _wfAiEditCtx   = createCtx();
 
 function _logAiCall(type, modelName, exe, promptOrMessages) {
   const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -91,7 +89,7 @@ function killCtx(ctx) {
   }
 }
 
-const _SUBWIN_DONE = new Set(['queueChat:done', 'workflowChat:done', 'genWorkflowChat:done', 'testGenChat:done']);
+const _SUBWIN_DONE = new Set(['workflowChat:done', 'genWorkflowChat:done', 'testGenChat:done']);
 
 function _flashWin(wc) {
   const win = BrowserWindow.fromWebContents(wc);
@@ -680,16 +678,6 @@ function registerChatHandlers() {
     return { started: true };
   });
 
-  // --- Queue window chat (queueChat:*) — separate subprocess slot ---
-  safeHandle('queueChat:cancel', () => killCtx(_queueCtx));
-
-  safeHandle('queueChat:generate', (event, { prompt, model }) => {
-    if (_queueCtx.proc || _queueCtx.req) killCtx(_queueCtx);
-    _queueCtx.cancelled = false;
-    dispatch(event.sender, prompt, null, model, null, _queueCtx, 'queueChat:token', 'queueChat:done');
-    return { started: true };
-  });
-
   // --- Workflow runner window chat (workflowChat:*) — separate subprocess slot ---
   safeHandle('workflowChat:cancel', () => killCtx(_workflowCtx));
 
@@ -720,15 +708,6 @@ function registerChatHandlers() {
     return { started: true };
   });
 
-  // --- Workflow AI Edit window chat (wfAiEditChat:*) — separate subprocess slot ---
-  safeHandle('wfAiEditChat:cancel', () => killCtx(_wfAiEditCtx));
-
-  safeHandle('wfAiEditChat:generate', (event, { prompt, model, cwd, systemPrompt }) => {
-    if (_wfAiEditCtx.proc || _wfAiEditCtx.req) killCtx(_wfAiEditCtx);
-    _wfAiEditCtx.cancelled = false;
-    dispatch(event.sender, prompt, null, model, null, _wfAiEditCtx, 'wfAiEditChat:token', 'wfAiEditChat:done', cwd, true, systemPrompt);
-    return { started: true };
-  });
 }
 
 module.exports = { registerChatHandlers };

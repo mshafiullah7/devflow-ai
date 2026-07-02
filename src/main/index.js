@@ -5,12 +5,10 @@ const path = require('node:path');
 const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
 const { closeDb } = require('./db/database');
-const { openQueueWindow }             = require('./queue-window');
 const { openTaskQueueWindow }         = require('./task-queue-window');
 const { openWorkflowWindow }          = require('./workflow-window');
 const { openGenerateWorkflowsWindow } = require('./generate-workflows-window');
 const { openTestGenerationWindow }    = require('./test-generation-window');
-const { openWorkflowAiEditWindow }    = require('./workflow-ai-edit-window');
 const { openUnitTestsWindow }         = require('./unit-tests-window');
 const { openTerminalWindow }          = require('./terminal-window');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
@@ -74,11 +72,6 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
-  ipcMain.handle('app:openQueueWindow', (_e, projectId) => {
-    openQueueWindow(projectId);
-    return { ok: true };
-  });
-
   ipcMain.handle('app:openTaskQueueWindow', (_e, projectId) => {
     openTaskQueueWindow(projectId);
     return { ok: true };
@@ -96,11 +89,6 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:openTestGenerationWindow', (_e, data) => {
     openTestGenerationWindow(data);
-    return { ok: true };
-  });
-
-  ipcMain.handle('app:openWorkflowAiEditWindow', (_e, data) => {
-    openWorkflowAiEditWindow(data);
     return { ok: true };
   });
 
