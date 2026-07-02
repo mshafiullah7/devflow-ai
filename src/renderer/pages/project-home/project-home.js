@@ -292,7 +292,7 @@ export class ProjectHomePage {
               <span class="ph-nav-item__label">Unit Tests</span>
             </button>
 
-            <button class="ph-nav-item ph-nav-item--disabled" disabled title="Coming soon">
+            <button class="ph-nav-item ph-nav-item--disabled" id="navE2eTests" disabled title="Coming soon">
               <span class="ph-nav-item__icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -478,6 +478,8 @@ export class ProjectHomePage {
     this.container.querySelector('#navTestGenerator')
       .addEventListener('click', () => window.app.openUnitTestsWindow(this.projectId));
 
+    this.container.querySelector('#navE2eTests')
+      .addEventListener('click', () => window.app.openTestGenerationWindow({ mode: 'e2e', projectId: this.projectId }));
 
     this.container.querySelector('#navIssues')
       .addEventListener('click', () => this.router.navigate('issues', { projectId: this.projectId }));
