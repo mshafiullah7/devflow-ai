@@ -11,7 +11,6 @@ const { openWorkflowWindow }          = require('./workflow-window');
 const { openGenerateWorkflowsWindow } = require('./generate-workflows-window');
 const { openTestGenerationWindow }    = require('./test-generation-window');
 const { openWorkflowAiEditWindow }    = require('./workflow-ai-edit-window');
-const { openTestRunnerWindow }        = require('./test-runner-window');
 const { openUnitTestsWindow }         = require('./unit-tests-window');
 const { openTerminalWindow }          = require('./terminal-window');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
@@ -102,11 +101,6 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:openWorkflowAiEditWindow', (_e, data) => {
     openWorkflowAiEditWindow(data);
-    return { ok: true };
-  });
-
-  ipcMain.handle('app:openTestRunnerWindow', (_e, data) => {
-    openTestRunnerWindow(data);
     return { ok: true };
   });
 

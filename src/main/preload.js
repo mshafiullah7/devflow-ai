@@ -350,10 +350,6 @@ contextBridge.exposeInMainWorld('app', {
     onFileSaved:    (cb) => ipcRenderer.on('testGen:fileSaved', (_e, p) => cb(p)),
     offFileSaved:   ()   => ipcRenderer.removeAllListeners('testGen:fileSaved'),
   },
-  openTestRunnerWindow: (data) => ipcRenderer.invoke('app:openTestRunnerWindow', data),
-  testRunnerWindow: {
-    onInit: (cb) => ipcRenderer.on('testRunnerWin:init', (_e, p) => cb(p)),
-  },
   openUnitTestsWindow: (projectId) => ipcRenderer.invoke('app:openUnitTestsWindow', projectId),
   unitTestsWindow: {
     onInit: (cb) => ipcRenderer.on('unitTests:init', (_e, p) => cb(p)),
