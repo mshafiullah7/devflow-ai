@@ -62,6 +62,10 @@ export class WorkflowRunnerPage {
     this._gitPollInterval  = null;
     this._gitExpandedFiles = new Set();
     this._switchingShell   = false;
+
+    // Responsive layout
+    this._layoutObs  = null;
+    this._isWideMode = false;
   }
 
   mount() {
@@ -80,6 +84,7 @@ export class WorkflowRunnerPage {
     if (this._gitPollInterval) clearInterval(this._gitPollInterval);
     if (this._resizeObs)   this._resizeObs.disconnect();
     if (this._onWinResize) window.removeEventListener('resize', this._onWinResize);
+    if (this._layoutObs)   { this._layoutObs.disconnect(); this._layoutObs = null; }
     if (this._term) { this._term.dispose(); this._term = null; }
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
   }
@@ -120,6 +125,7 @@ export class WorkflowRunnerPage {
     this._render();
     this._initTerminal();
     this._startGitPolling();
+    this._initLayoutObserver();
 
     if (startLayerId) {
       const target = this._layers.find(l => l.id === startLayerId);
@@ -1051,6 +1057,37 @@ this.container.querySelector('#wfrBtnSkipPerms')
         this._gitExpandedFiles.delete(file);
       }
     });
+  }
+
+  // ── Responsive layout ────────────────────────────────────────────────
+
+  _initLayoutObserver() {
+    const layout = this.container.querySelector('.wfr-body');
+    if (!layout) return;
+    this._layoutObs = new ResizeObserver(entries => {
+      this._applyWidthMode(entries[0].contentRect.width);
+    });
+    this._layoutObs.observe(layout);
+  }
+
+  _applyWidthMode(width) {
+    const layout = this.container.querySelector('.wfr-body');
+    const panel  = this.container.querySelector('#wfrGitPanel');
+    const toggle = this.container.querySelector('#wfrBtnGitToggle');
+    if (!layout) return;
+    const isWide = width >= 1100;
+    if (isWide === this._isWideMode) return;
+    this._isWideMode = isWide;
+    layout.classList.toggle('wfr-body--wide', isWide);
+    if (isWide) {
+      panel?.removeAttribute('hidden');
+      this._gitPanelVisible = true;
+      toggle?.classList.add('wfr-git-toggle-btn--active');
+      this._refreshGitPanel();
+    } else {
+      if (!this._gitPanelVisible) panel?.setAttribute('hidden', '');
+      toggle?.classList.toggle('wfr-git-toggle-btn--active', this._gitPanelVisible);
+    }
   }
 
   _startGitPolling() {

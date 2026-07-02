@@ -756,3 +756,23 @@
   color: var(--text-muted);
   margin-left: 6px;
 }
+
+/* ── Wide layout: git panel becomes fixed right sidebar ─────────────── */
+
+.pq-layout--wide .pq-detail-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 60% 40%;
+}
+.pq-layout--wide .pq-term-strip    { grid-column: 1; grid-row: 1; }
+.pq-layout--wide .pq-terminal-wrap { grid-column: 1; grid-row: 2; min-height: 0; }
+.pq-layout--wide .pq-git-panel {
+  display: flex !important;  /* override [hidden] */
+  grid-column: 2;
+  grid-row: 1 / -1;
+  position: relative;
+  width: auto;
+  box-shadow: none;
+  top: auto; right: auto; bottom: auto;
+}
+.pq-layout--wide .pq-git-toggle-btn { display: none; }

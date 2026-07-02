@@ -58,6 +58,10 @@ export class PromptQueuePage {
     this._gitFiles         = [];
     this._gitPollInterval  = null;
     this._gitExpandedFiles = new Set();
+
+    // Responsive layout
+    this._layoutObs  = null;
+    this._isWideMode = false;
   }
 
   async mount() {
@@ -90,6 +94,7 @@ export class PromptQueuePage {
 
     this._initTerminal();
     this._startGitPolling();
+    this._initLayoutObserver();
     this._renderList();
     this._bindEvents();
 
@@ -106,6 +111,7 @@ export class PromptQueuePage {
     this._stopGitPolling();
     if (this._resizeObs)   { this._resizeObs.disconnect(); this._resizeObs = null; }
     if (this._onWinResize) { window.removeEventListener('resize', this._onWinResize); this._onWinResize = null; }
+    if (this._layoutObs)   { this._layoutObs.disconnect(); this._layoutObs = null; }
     if (this._term)        { this._term.dispose(); this._term = null; }
     this._runAll    = false;
     this._isRunning = false;
@@ -1064,6 +1070,37 @@ export class PromptQueuePage {
         this._gitExpandedFiles.delete(file);
       }
     });
+  }
+
+  // ── Responsive layout ────────────────────────────────────────────────
+
+  _initLayoutObserver() {
+    const layout = this.container.querySelector('.pq-layout');
+    if (!layout) return;
+    this._layoutObs = new ResizeObserver(entries => {
+      this._applyWidthMode(entries[0].contentRect.width);
+    });
+    this._layoutObs.observe(layout);
+  }
+
+  _applyWidthMode(width) {
+    const layout = this.container.querySelector('.pq-layout');
+    const panel  = this.container.querySelector('#pqGitPanel');
+    const toggle = this.container.querySelector('#pqBtnGitToggle');
+    if (!layout) return;
+    const isWide  = width >= 1100;
+    if (isWide === this._isWideMode) return;
+    this._isWideMode = isWide;
+    layout.classList.toggle('pq-layout--wide', isWide);
+    if (isWide) {
+      panel?.removeAttribute('hidden');
+      this._gitPanelVisible = true;
+      toggle?.classList.add('pq-git-toggle-btn--active');
+      this._refreshGitPanel();
+    } else {
+      if (!this._gitPanelVisible) panel?.setAttribute('hidden', '');
+      toggle?.classList.toggle('pq-git-toggle-btn--active', this._gitPanelVisible);
+    }
   }
 
   _startGitPolling() {

@@ -475,6 +475,27 @@
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+/* ── Wide layout: git panel becomes fixed right sidebar ─────────────── */
+
+.wfr-body--wide .wfr-output-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 60% 40%;
+}
+.wfr-body--wide .wfr-output-header { grid-column: 1 / -1; grid-row: 1; }
+.wfr-body--wide .wfr-terminal-wrap { grid-column: 1; grid-row: 2; min-height: 0; }
+.wfr-body--wide .wfr-git-panel {
+  display: flex !important;  /* override [hidden] */
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  width: auto;
+  box-shadow: none;
+  top: auto; right: auto; bottom: auto;
+}
+.wfr-body--wide .wfr-git-toggle-btn { display: none; }
+
+
 .wfr-git-badge {
   display: inline-flex;
   align-items: center;
