@@ -7,6 +7,13 @@ module.exports = {
     name: 'DevFlow AI',
     executableName: 'devflow-ai',
     icon: './assets/icon',
+    ignore: [
+      /^\/agent\//,         // Python agent source — never ship readable code
+      /^\/\.claude\//,      // worktrees, memory, session data
+      /^\/\.git\//,         // git history
+      /^\/out\//,           // previous build output
+      /^\/\.env/,           // any .env files
+    ],
   },
   rebuildConfig: {
     onlyModules: ['better-sqlite3'],
