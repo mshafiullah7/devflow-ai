@@ -80,6 +80,13 @@ export class PromptQueuePage {
     });
     await this._picker.reload();
 
+    // Reset any items stuck in 'running' from a previous crashed/stopped session
+    const stuckItems = this._queue.filter(q => q.status === 'running');
+    if (stuckItems.length > 0) {
+      await Promise.all(stuckItems.map(q => window.db.promptQueue.update({ id: q.id, status: 'pending' })));
+      stuckItems.forEach(q => { q.status = 'pending'; });
+    }
+
     this._initTerminal();
     this._startGitPolling();
     this._renderList();
@@ -1118,11 +1125,30 @@ export class PromptQueuePage {
 
     // Stop
     this.container.querySelector('#pqBtnStop')
-      .addEventListener('click', () => {
+      .addEventListener('click', async () => {
         this._runAll = false;
         window.app.wfrPty.kill();
         this._updateToolbarRunState(false);
         this._updateToolbarRunAllState(false);
+
+        // Clean up run state and reset the stopped item back to pending
+        const stoppedId = this._activeItemId;
+        this._isRunning    = false;
+        this._activeItemId = null;
+        this._stopElapsedTimer();
+        window.app.wfrPty.offAll();
+        this._reattachPtyListeners();
+
+        if (stoppedId != null) {
+          const item = this._queue.find(q => q.id === stoppedId);
+          if (item) {
+            item.status = 'pending';
+            await window.db.promptQueue.update({ id: item.id, status: 'pending' });
+            this._refreshItemEl(item.id);
+            this._updateSummary();
+            if (this._selectedId === item.id) this._updateStrip(item);
+          }
+        }
       });
 
     // Clear Done

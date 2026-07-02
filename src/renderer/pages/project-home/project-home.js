@@ -310,7 +310,7 @@ export class ProjectHomePage {
                   <line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
               </span>
-              <span class="ph-nav-item__label">Tasks &amp; Issues</span>
+              <span class="ph-nav-item__label">Issues</span>
               ${issueOpen > 0 ? `<span class="ph-nav-item__count ph-nav-item__count--danger">${issueOpen}</span>` : ''}
             </button>
 

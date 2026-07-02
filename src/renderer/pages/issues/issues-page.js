@@ -27,8 +27,9 @@ export class IssuesPage {
     this._activeId      = null;
     this._filterStatus  = '';
     this._aiModelConfig = null;
-    this._deepItemId    = params.itemId ?? null;
-    this._pendingSave   = null;
+    this._deepItemId         = params.itemId ?? null;
+    this._pendingSave        = null;
+    this._formAbortController = null;
     this._layers             = [];
   }
 
@@ -85,7 +86,7 @@ export class IssuesPage {
           </button>
           <div class="project-page__title-group">
             <h1 class="project-page__title">${name}</h1>
-            <p class="project-page__desc">Tasks &amp; Issues</p>
+            <p class="project-page__desc">Issues</p>
           </div>
           <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
             <div class="project-page__model-group">
@@ -106,7 +107,7 @@ export class IssuesPage {
           <!-- Panel 1: List -->
           <aside class="project-panel" id="isPanelIssuesList">
             <div class="project-related__section-hd">
-              <span class="project-related__section-label">Tasks &amp; Issues</span>
+              <span class="project-related__section-label">Issues</span>
               <span class="project-related__section-count" id="isIssueCount">0</span>
               <select class="is-header-select is-section-filter" id="isStatusFilter" title="Filter by status">
                 <option value="">All</option>
@@ -117,7 +118,7 @@ export class IssuesPage {
                 <option value="wont_fix">Won't Fix</option>
               </select>
               <button class="is-add-btn is-add-btn--text" id="isBtnAddTask" title="Add task" aria-label="Add task">+ Task</button>
-              <button class="is-add-btn is-add-btn--text" id="isBtnAddIssue" title="Add issue" aria-label="Add issue">+ Issue</button>
+              <button class="is-add-btn is-add-btn--text" id="isBtnAddIssue" title="Add bug" aria-label="Add bug">+ Bug</button>
             </div>
             <div class="project-related__section-body" id="isIssuesList">
               <div class="project-related__empty">No items</div>
@@ -239,7 +240,7 @@ export class IssuesPage {
     const desc      = issue.description ? escHtml(issue.description) : '';
     const isTask    = (issue.type || 'issue') === 'task';
     const typeCls   = isTask ? 'is-type-badge--task' : 'is-type-badge--issue';
-    const typeLabel = isTask ? 'Task' : 'Issue';
+    const typeLabel = isTask ? 'Task' : 'Bug';
     const status    = issue.status || 'open';
     const statusLabel = STATUS_META[status]?.label ?? status;
     return `
@@ -319,7 +320,7 @@ export class IssuesPage {
     const layers = await window.db.projectLayers.list(this._projectId) ?? [];
     el.innerHTML = this._formHtml(null, layers, type);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
-    const label = type === 'task' ? 'Add Task' : 'Add Issue';
+    const label = type === 'task' ? 'Add Task' : 'Add Bug';
     if (headerActions) headerActions.innerHTML = `<button class="is-form__btn" id="isFormSave">${label}</button>`;
     await this._bindFormEvents(el, null, type);
     el.querySelector('#isFormTitle')?.focus();
@@ -341,7 +342,7 @@ export class IssuesPage {
   _formHtml(issue, layers = [], type = 'issue') {
     const isEdit    = !!issue;
     const isTask    = type === 'task';
-    const heading   = isEdit ? (isTask ? 'Edit Task' : 'Edit Issue') : (isTask ? 'Add Task' : 'Add Issue');
+    const heading   = isEdit ? (isTask ? 'Edit Task' : 'Edit Bug') : (isTask ? 'Add Task' : 'Add Bug');
     const priorityLabel = isTask ? 'Priority' : 'Severity';
 
     const statusOptions = Object.entries(STATUS_META).map(([val, m]) =>
@@ -354,8 +355,8 @@ export class IssuesPage {
       `<option value="${l.id}"${issue?.layer_id === l.id ? ' selected' : ''}>${escHtml(l.name)}</option>`
     ).join('');
 
-    const descLabel     = isTask ? 'Description' : 'Issue Details';
-    const descPlaceholder = isTask ? 'What needs to be done?' : 'What is the issue about?';
+    const descLabel     = isTask ? 'Description' : 'Bug Details';
+    const descPlaceholder = isTask ? 'What needs to be done?' : 'What is the bug about?';
 
     return `
       <div class="is-form">
@@ -437,6 +438,9 @@ export class IssuesPage {
   }
 
   async _bindFormEvents(el, issue, type = 'issue') {
+    this._formAbortController?.abort();
+    this._formAbortController = new AbortController();
+    const { signal } = this._formAbortController;
     const isTask      = type === 'task';
     const titleEl     = el.querySelector('#isFormTitle');
     const severityEl  = el.querySelector('#isFormSeverity');
@@ -493,21 +497,33 @@ export class IssuesPage {
           const created = await window.db.issues.create(payload);
           this._issues.unshift(created);
           this._renderIssues();
-          this._selectIssue(created.id);
+
+          // Keep Layer & Priority, clear everything else, focus Title for next entry
+          titleEl.value = '';
+          descEl.value  = '';
+          if (stepsEl)    stepsEl.value    = '';
+          if (expectedEl) expectedEl.value = '';
+          if (actualEl)   actualEl.value   = '';
+          titleEl.classList.remove('is-form__input--error');
+          layerEl.classList.remove('is-form__input--error');
+          saveBtn.disabled    = false;
+          saveBtn.textContent = isTask ? 'Add Task' : 'Add Bug';
+          this._pendingSave   = null;
+          titleEl.focus();
         }
       } catch {
         saveBtn.disabled    = false;
-        saveBtn.textContent = issue ? 'Save Changes' : (isTask ? 'Add Task' : 'Add Issue');
+        saveBtn.textContent = issue ? 'Save Changes' : (isTask ? 'Add Task' : 'Add Bug');
       }
     };
 
     this._pendingSave = () => save(true);
 
     saveBtn.addEventListener('click', () => save());
-    el.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } });
+    el.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } }, { signal });
 
     el.querySelector('#isDescExpandBtn')?.addEventListener('click', () => {
-      this._openDescExpand(descEl, isTask ? 'Description' : 'Issue Details');
+      this._openDescExpand(descEl, isTask ? 'Description' : 'Bug Details');
     });
 
     el.querySelector('#isDescQueueBtn')?.addEventListener('click', async () => {
@@ -532,7 +548,7 @@ export class IssuesPage {
       el.querySelector('#isQueueLayerMsg')?.remove();
 
       const itemTitle   = titleEl.value.trim() || (isTask ? 'Untitled Task' : 'Untitled Issue');
-      const typeLabel   = isTask ? 'Task' : 'Issue';
+      const typeLabel   = isTask ? 'Task' : 'Bug';
       const parts = [`${typeLabel}: ${itemTitle}`, '', `Description:\n${desc}`];
       if (steps)    parts.push('', `Steps to Reproduce:\n${steps}`);
       if (expected) parts.push('', `Expected Behavior:\n${expected}`);
