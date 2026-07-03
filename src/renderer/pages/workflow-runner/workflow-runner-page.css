@@ -637,6 +637,8 @@
 
 .git-accordion__body {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 400px;
   background: var(--bg);
 }
 .git-accordion__item--collapsed .git-accordion__body { display: none; }

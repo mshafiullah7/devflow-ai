@@ -314,8 +314,8 @@
 }
 
 .git-accordion__body {
-  overflow: hidden;
   overflow-x: auto;
+  overflow-y: auto;
   max-height: 400px;
   background: var(--bg);
 }
