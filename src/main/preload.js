@@ -264,9 +264,9 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('chat:validateDone');
     },
   },
-  openTaskQueueWindow: (projectId) => ipcRenderer.invoke('app:openTaskQueueWindow', projectId),
-  taskQueueWindow: {
-    onInit: (cb) => ipcRenderer.on('taskQueue:init', (_e, p) => cb(p)),
+  openIssueRunnerWindow: (projectId) => ipcRenderer.invoke('app:openIssueRunnerWindow', projectId),
+  issueRunnerWindow: {
+    onInit: (cb) => ipcRenderer.on('issueRunner:init', (_e, p) => cb(p)),
   },
   // Separate AI channel for the detached workflow runner window.
   workflowChat: {
@@ -290,6 +290,7 @@ contextBridge.exposeInMainWorld('app', {
     spawnShell:     (data) => ipcRenderer.invoke('wfrPty:spawnShell', data),
     resize:         (data) => ipcRenderer.invoke('wfrPty:resize', data),
     kill:           ()     => ipcRenderer.invoke('wfrPty:kill'),
+    isBusy:         ()     => ipcRenderer.invoke('wfrPty:isBusy'),
     runLayer:       (data) => ipcRenderer.invoke('wfrPty:runLayer', data),
     runInShell:     (data) => ipcRenderer.invoke('wfrPty:runInShell', data),
     runUsage:       (data) => ipcRenderer.invoke('wfrPty:runUsage', data),
@@ -301,6 +302,21 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('wfrPty:data');
       ipcRenderer.removeAllListeners('wfrPty:layerDone');
       ipcRenderer.removeAllListeners('wfrPty:tokenStats');
+    },
+  },
+  // PTY-backed terminal for the issue runner window (independent from wfrPty)
+  irPty: {
+    write:      (data) => ipcRenderer.invoke('irPty:write', data),
+    spawnShell: (data) => ipcRenderer.invoke('irPty:spawnShell', data),
+    resize:     (data) => ipcRenderer.invoke('irPty:resize', data),
+    kill:       ()     => ipcRenderer.invoke('irPty:kill'),
+    isBusy:     ()     => ipcRenderer.invoke('irPty:isBusy'),
+    runInShell: (data) => ipcRenderer.invoke('irPty:runInShell', data),
+    onData:      (cb)  => ipcRenderer.on('irPty:data',      (_e, p) => cb(p)),
+    onLayerDone: (cb)  => ipcRenderer.on('irPty:layerDone', (_e, p) => cb(p)),
+    offAll:      ()    => {
+      ipcRenderer.removeAllListeners('irPty:data');
+      ipcRenderer.removeAllListeners('irPty:layerDone');
     },
   },
   // Separate AI channel for the generate-workflows window.

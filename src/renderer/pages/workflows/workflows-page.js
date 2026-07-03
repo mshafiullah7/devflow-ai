@@ -927,6 +927,15 @@ ${base}`;
 
     const cwd = projectLayer?.folder_path || this._project?.project_path || null;
 
+    const busy = await window.app.wfrPty.isBusy().catch(() => false);
+    if (busy) {
+      const ok = await Dialog.confirm(
+        'Another runner is currently active and shares the same terminal.\nOpening Workflow Runner now may interrupt it.\nContinue anyway?',
+        { confirmText: 'Open Runner' }
+      );
+      if (!ok) return;
+    }
+
     window.app.openWorkflowWindow({
       projectId:    this._projectId,
       workflowId:   this._activeId,
@@ -1430,8 +1439,16 @@ ${base}`;
   // ----------------------------------------------------------------
   // Launch Run All → detached window
   // ----------------------------------------------------------------
-  _launchRunAll() {
+  async _launchRunAll() {
     if (!this._activeId) return;
+    const busy = await window.app.wfrPty.isBusy().catch(() => false);
+    if (busy) {
+      const ok = await Dialog.confirm(
+        'Another runner is currently active and shares the same terminal.\nOpening Workflow Runner now may interrupt it.\nContinue anyway?',
+        { confirmText: 'Open Runner' }
+      );
+      if (!ok) return;
+    }
     window.app.openWorkflowWindow({
       projectId:   this._projectId,
       workflowId:  this._activeId,

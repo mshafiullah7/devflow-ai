@@ -27,11 +27,10 @@ export class IssuesPage {
     this._activeId      = null;
     this._filterStatus  = 'open_and_in_progress';
     this._aiModelConfig = null;
-    this._deepItemId         = params.itemId ?? null;
-    this._pendingSave        = null;
+    this._deepItemId          = params.itemId ?? null;
+    this._pendingSave         = null;
     this._formAbortController = null;
-    this._layers             = [];
-    this._queuePollInterval  = null;
+    this._layers              = [];
   }
 
   async mount() {
@@ -58,15 +57,25 @@ export class IssuesPage {
     this._bindHeaderEvents();
     this._initResizable();
     await this._loadIssues();
-    this._refreshQueueBadge();
-    this._queuePollInterval = setInterval(() => this._refreshQueueBadge(), 5000);
+
+    // Refresh list whenever the main window regains focus so that status
+    // changes made in Issue Runner (a separate BrowserWindow) are reflected
+    // without needing to navigate away and back.
+    this._lastLoadTime = Date.now();
+    this._onWindowFocus = () => {
+      if (Date.now() - this._lastLoadTime > 2000) this._loadIssues();
+    };
+    window.addEventListener('focus', this._onWindowFocus);
   }
 
   unmount() {
-    if (this._queuePollInterval) { clearInterval(this._queuePollInterval); this._queuePollInterval = null; }
     const fn = this._pendingSave;
     this._pendingSave = null;
     if (fn) fn();
+    if (this._onWindowFocus) {
+      window.removeEventListener('focus', this._onWindowFocus);
+      this._onWindowFocus = null;
+    }
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     this._picker?.unmount();
@@ -95,12 +104,11 @@ export class IssuesPage {
             <div class="project-page__model-group">
               <div id="isModelPicker"></div>
             </div>
-            <button class="project-page__git-btn is-queue-btn--labeled" id="isBtnQueue" title="Open Queued Items">
+            <button class="project-page__git-btn is-queue-btn--labeled" id="isBtnRunner" title="Open Issue Runner">
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <path d="M3 5h14M3 10h10M3 15h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M5 4l11 6-11 6V4z" fill="currentColor"/>
               </svg>
-              <span class="is-queue-btn__label">Queued Items</span>
-              <span class="project-page__git-badge" id="isQueueBadge" hidden></span>
+              <span class="is-queue-btn__label">Run Issues</span>
             </button>
           </div>
         </header>
@@ -158,24 +166,14 @@ export class IssuesPage {
     if (this._picker) await this._picker.reload();
   }
 
-  async _refreshQueueBadge() {
-    const badge = this.container.querySelector('#isQueueBadge');
-    if (!badge) return;
-    const count = await window.db.promptQueue.pendingCount(this._projectId);
-    if (count > 0) {
-      badge.textContent = count;
-      badge.hidden = false;
-    } else {
-      badge.hidden = true;
-    }
-  }
-
   _bindHeaderEvents() {
     this.container.querySelector('#isBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
 
-    this.container.querySelector('#isBtnQueue')
-      .addEventListener('click', () => window.app.openTaskQueueWindow(this._projectId));
+    this.container.querySelector('#isBtnRunner')
+      .addEventListener('click', () => {
+        window.app.openIssueRunnerWindow(this._projectId);
+      });
 
     this.container.querySelector('#isBtnAddIssue')
       .addEventListener('click', () => this._showAddForm('issue'));
@@ -191,6 +189,7 @@ export class IssuesPage {
   // Issues list panel
   // ----------------------------------------------------------------
   async _loadIssues() {
+    this._lastLoadTime = Date.now();
     const filters = { project_id: this._projectId };
     const isCombined = this._filterStatus === 'open_and_in_progress';
     if (this._filterStatus && !isCombined) filters.status = this._filterStatus;
@@ -387,12 +386,6 @@ export class IssuesPage {
                   </svg>
                   Expand
                 </button>
-                <button class="is-desc-btn is-desc-btn--queue" id="isDescQueueBtn" type="button" title="Add to Prompt Queue">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 4h7M2 8h5M2 12h3M11 6v6M8 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  </svg>
-                  Add to Queue
-                </button>
               </div>
             </div>
             <textarea class="is-form__textarea" id="isFormDesc" rows="11"
@@ -520,81 +513,6 @@ export class IssuesPage {
     el.querySelector('#isDescExpandBtn')?.addEventListener('click', () => {
       this._openDescExpand(descEl, isTask ? 'Description' : 'Bug Details');
     });
-
-    el.querySelector('#isDescQueueBtn')?.addEventListener('click', async () => {
-      const desc     = descEl.value.trim();
-      const steps    = stepsEl    ? stepsEl.value.trim()    : '';
-      const expected = expectedEl ? expectedEl.value.trim() : '';
-      const actual   = actualEl   ? actualEl.value.trim()   : '';
-      const layerId  = parseInt(layerEl.value) || null;
-      if (!desc) return;
-      if (!layerId) {
-        const existing = el.querySelector('#isQueueLayerMsg');
-        if (!existing) {
-          const msg = document.createElement('span');
-          msg.id        = 'isQueueLayerMsg';
-          msg.className = 'is-queue-layer-msg';
-          msg.textContent = 'Please select a Layer first';
-          el.querySelector('#isDescExpandBtn').insertAdjacentElement('beforebegin', msg);
-          setTimeout(() => msg.remove(), 2500);
-        }
-        return;
-      }
-      el.querySelector('#isQueueLayerMsg')?.remove();
-
-      const itemTitle   = titleEl.value.trim() || (isTask ? 'Untitled Task' : 'Untitled Issue');
-      const typeLabel   = isTask ? 'Task' : 'Bug';
-      const parts = [`${typeLabel}: ${itemTitle}`, '', `Description:\n${desc}`];
-      if (steps)    parts.push('', `Steps to Reproduce:\n${steps}`);
-      if (expected) parts.push('', `Expected Behavior:\n${expected}`);
-      if (actual)   parts.push('', `Actual Behavior:\n${actual}`);
-      const promptText = parts.join('\n');
-
-      const queueBtn = el.querySelector('#isDescQueueBtn');
-      await window.db.promptQueue.add({
-        project_id:    this._projectId,
-        user_story_id: null,
-        issue_id:      issue?.id ?? null,
-        story_title:   itemTitle,
-        prompt_id:     null,
-        tag:           typeLabel,
-        prompt_text:   promptText,
-        layer_id:      layerId,
-      });
-      this._refreshQueueBadge();
-      const origHTML = queueBtn.innerHTML;
-      queueBtn.disabled = true;
-      queueBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Added`;
-      setTimeout(() => { queueBtn.innerHTML = origHTML; queueBtn.disabled = false; }, 1500);
-    });
-  }
-
-  async _addIssueToQueue(id, btn) {
-    const issue = this._issues.find(i => i.id === id);
-    if (!issue || !issue.layer_id) return;
-
-    const parts = [`Bug: ${issue.title}`];
-    if (issue.description)        parts.push('', `Description:\n${issue.description}`);
-    if (issue.steps_to_reproduce) parts.push('', `Steps to Reproduce:\n${issue.steps_to_reproduce}`);
-    if (issue.expected_behavior)  parts.push('', `Expected Behavior:\n${issue.expected_behavior}`);
-    if (issue.actual_behavior)    parts.push('', `Actual Behavior:\n${issue.actual_behavior}`);
-
-    await window.db.promptQueue.add({
-      project_id:    this._projectId,
-      user_story_id: null,
-      issue_id:      issue.id,
-      story_title:   issue.title,
-      prompt_id:     null,
-      tag:           'Bug',
-      prompt_text:   parts.join('\n'),
-      layer_id:      issue.layer_id,
-    });
-    this._refreshQueueBadge();
-
-    const origHTML = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 8.5l3.5 3.5 7-7" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; }, 1500);
   }
 
   _refreshCardBadges(id, status, severity) {

@@ -5,10 +5,10 @@ const path                      = require('node:path');
 
 let _win = null;
 
-function openTaskQueueWindow(projectId) {
+function openIssueRunnerWindow(projectId) {
   if (_win && !_win.isDestroyed()) {
     _win.focus();
-    _win.webContents.send('taskQueue:init', { projectId });
+    _win.webContents.send('issueRunner:init', { projectId });
     return;
   }
 
@@ -16,20 +16,20 @@ function openTaskQueueWindow(projectId) {
   _win = new BrowserWindow({
     width:  Math.max(900, Math.round(sw * 0.65)),
     height: Math.max(600, Math.round(sh * 0.80)),
-    title:  'Task Queue',
+    title:  'Issue Runner',
     icon:   path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
 
-  _win.loadFile(path.join(__dirname, '../renderer/task-queue.html'));
+  _win.loadFile(path.join(__dirname, '../renderer/issue-runner.html'));
 
   _win.webContents.once('did-finish-load', () => {
-    _win.webContents.send('taskQueue:init', { projectId });
+    _win.webContents.send('issueRunner:init', { projectId });
   });
 
   _win.on('closed', () => { _win = null; });
 }
 
-module.exports = { openTaskQueueWindow };
+module.exports = { openIssueRunnerWindow };

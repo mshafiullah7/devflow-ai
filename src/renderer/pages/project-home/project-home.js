@@ -14,7 +14,7 @@ export class ProjectHomePage {
     await injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, workflows, documents, mockups, issueCount, testRunHistory, layers, layerStats, queuePendingCount] = await Promise.all([
+    const [project, workflows, documents, mockups, issueCount, testRunHistory, layers, layerStats] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.workflows.list(this.projectId),
       window.db.documents.list(this.projectId),
@@ -23,18 +23,16 @@ export class ProjectHomePage {
       window.db.testRunHistory.list(this.projectId),
       window.db.projectLayers.list(this.projectId),
       window.db.layers.statsByProjectLayer(this.projectId),
-      window.db.promptQueue.pendingCount(this.projectId),
     ]);
 
-    this._project            = project;
-    this._workflows          = workflows ?? [];
-    this._documents          = documents;
-    this._mockups            = mockups;
-    this._issueCount         = issueCount;
-    this._testRunHistory     = testRunHistory;
-    this._layers             = layers ?? [];
-    this._layerStats         = layerStats ?? [];
-    this._queuePendingCount  = queuePendingCount ?? 0;
+    this._project        = project;
+    this._workflows      = workflows ?? [];
+    this._documents      = documents;
+    this._mockups        = mockups;
+    this._issueCount     = issueCount;
+    this._testRunHistory = testRunHistory;
+    this._layers         = layers ?? [];
+    this._layerStats     = layerStats ?? [];
 
     this.container.innerHTML = this._template();
 

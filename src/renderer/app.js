@@ -48,14 +48,12 @@ router.register('issues', async () => {
   const { IssuesPage } = await import('./pages/issues/issues-page.js');
   return IssuesPage;
 });
+
 router.register('git-changes', async () => {
   const { GitChangesPage } = await import('./pages/git-changes/git-changes-page.js');
   return GitChangesPage;
 });
-router.register('prompt-queue', async () => {
-  const { PromptQueuePage } = await import('./pages/prompt-queue/prompt-queue-page.js');
-  return PromptQueuePage;
-});
+
 router.register('settings', async () => {
   const { SettingsPage } = await import('./pages/settings/settings-page.js');
   return SettingsPage;
