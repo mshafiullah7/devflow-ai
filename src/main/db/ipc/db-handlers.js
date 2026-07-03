@@ -964,14 +964,14 @@ function registerDbHandlers() {
     `).all(...params);
   });
 
-  safeHandle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text, layer_id, source }) => {
+  safeHandle('db:prompt_queue:add', (_e, { project_id, user_story_id, story_title, prompt_id, tag, prompt_text, layer_id, source, issue_id }) => {
     const max = db.prepare('SELECT MAX(sort_order) AS m FROM prompt_queue WHERE project_id = ?').get(project_id);
     const sort_order = (max?.m ?? -1) + 1;
     const src = source || 'manual';
     const result = db.prepare(`
-      INSERT INTO prompt_queue (project_id, user_story_id, story_title, prompt_id, tag, prompt_text, sort_order, layer_id, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(project_id, user_story_id ?? null, story_title ?? null, prompt_id ?? null, tag ?? null, prompt_text, sort_order, layer_id ?? null, src);
+      INSERT INTO prompt_queue (project_id, user_story_id, story_title, prompt_id, tag, prompt_text, sort_order, layer_id, source, issue_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(project_id, user_story_id ?? null, story_title ?? null, prompt_id ?? null, tag ?? null, prompt_text, sort_order, layer_id ?? null, src, issue_id ?? null);
 
     return db.prepare('SELECT * FROM prompt_queue WHERE id = ?').get(result.lastInsertRowid);
   });

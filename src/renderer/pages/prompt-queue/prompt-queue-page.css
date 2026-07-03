@@ -163,20 +163,21 @@
   transition: background 0.12s, color 0.12s, border-color 0.12s;
   white-space: nowrap;
 }
-.pq-toolbar__btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.pq-toolbar__btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+.pq-toolbar__btn:disabled { opacity: 0.38; cursor: not-allowed; }
 
 .pq-toolbar__btn--primary {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
 }
-.pq-toolbar__btn--primary:hover { opacity: 0.88; background: var(--accent); }
+.pq-toolbar__btn--primary:hover:not(:disabled) { opacity: 0.88; background: var(--accent); }
 
 .pq-toolbar__btn--stop {
   border-color: rgba(239,68,68,.4);
   color: #dc2626;
 }
-.pq-toolbar__btn--stop:hover { background: rgba(239,68,68,.08); border-color: #dc2626; }
+.pq-toolbar__btn--stop:hover:not(:disabled) { background: rgba(239,68,68,.08); border-color: #dc2626; }
 
 /* ── Two-column layout ──────────────────────────────────────────────── */
 

@@ -441,6 +441,17 @@ function registerWfrPtyHandlers() {
         : '';
 
       coreCmd = `${exe} ${permsPart}${batchPart}${resolved}`;
+    } else if (model?.flags) {
+      // CLI command without {{prompt}} — echo the temp file path so the user can pass it
+      // manually to the CLI, then run the command as configured
+      const echoCmd = isWin
+        ? `Write-Host "Prompt file: ${tmpFile}"`
+        : `echo "Prompt file: ${tmpFile}"`;
+      const resolvedFlags = model.flags.replace(/\{\{model\}\}/g, modelName);
+      const batchPart = (interactive === false && model?.batch_flags)
+        ? model.batch_flags + ' '
+        : '';
+      coreCmd = `${echoCmd}; ${exe} ${permsPart}${batchPart}${resolvedFlags}`;
     } else {
       // Claude default path: @filepath syntax with interactive/batch handling
       if (_claudeActive) {

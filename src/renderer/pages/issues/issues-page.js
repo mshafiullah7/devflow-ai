@@ -25,12 +25,13 @@ export class IssuesPage {
     this._project       = null;
     this._issues        = [];
     this._activeId      = null;
-    this._filterStatus  = '';
+    this._filterStatus  = 'open_and_in_progress';
     this._aiModelConfig = null;
     this._deepItemId         = params.itemId ?? null;
     this._pendingSave        = null;
     this._formAbortController = null;
     this._layers             = [];
+    this._queuePollInterval  = null;
   }
 
   async mount() {
@@ -58,9 +59,11 @@ export class IssuesPage {
     this._initResizable();
     await this._loadIssues();
     this._refreshQueueBadge();
+    this._queuePollInterval = setInterval(() => this._refreshQueueBadge(), 5000);
   }
 
   unmount() {
+    if (this._queuePollInterval) { clearInterval(this._queuePollInterval); this._queuePollInterval = null; }
     const fn = this._pendingSave;
     this._pendingSave = null;
     if (fn) fn();
@@ -110,6 +113,7 @@ export class IssuesPage {
               <span class="project-related__section-label">Issues</span>
               <span class="project-related__section-count" id="isIssueCount">0</span>
               <select class="is-header-select is-section-filter" id="isStatusFilter" title="Filter by status">
+                <option value="open_and_in_progress" selected>Open &amp; In Progress</option>
                 <option value="">All</option>
                 <option value="open">Open</option>
                 <option value="in_progress">In Progress</option>
@@ -188,9 +192,12 @@ export class IssuesPage {
   // ----------------------------------------------------------------
   async _loadIssues() {
     const filters = { project_id: this._projectId };
-    if (this._filterStatus) filters.status = this._filterStatus;
+    const isCombined = this._filterStatus === 'open_and_in_progress';
+    if (this._filterStatus && !isCombined) filters.status = this._filterStatus;
 
-    this._issues = (await window.db.issues.list(filters)).filter(i => (i.type || 'issue') !== 'task');
+    let issues = (await window.db.issues.list(filters)).filter(i => (i.type || 'issue') !== 'task');
+    if (isCombined) issues = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
+    this._issues = issues;
     this._renderIssues();
 
     if (this._activeId && !this._issues.find(i => i.id === this._activeId)) {
@@ -547,6 +554,7 @@ export class IssuesPage {
       await window.db.promptQueue.add({
         project_id:    this._projectId,
         user_story_id: null,
+        issue_id:      issue?.id ?? null,
         story_title:   itemTitle,
         prompt_id:     null,
         tag:           typeLabel,
@@ -574,6 +582,7 @@ export class IssuesPage {
     await window.db.promptQueue.add({
       project_id:    this._projectId,
       user_story_id: null,
+      issue_id:      issue.id,
       story_title:   issue.title,
       prompt_id:     null,
       tag:           'Bug',

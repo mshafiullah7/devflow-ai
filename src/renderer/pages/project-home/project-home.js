@@ -49,7 +49,7 @@ export class ProjectHomePage {
 
     this._bindEvents();
 
-    if (this._project?.project_path) {
+    if (this._project?.project_path || this._layers.some(l => l.folder_path)) {
       this._git.refreshStatus();
       this._git.startPoll();
     }

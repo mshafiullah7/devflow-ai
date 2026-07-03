@@ -57,6 +57,7 @@ export class PromptQueuePage {
     this._gitFiles         = [];
     this._gitPollInterval  = null;
     this._gitExpandedFiles = new Set();
+    this._projectLayers    = [];
 
     // Responsive layout
     this._layoutObs  = null;
@@ -69,9 +70,10 @@ export class PromptQueuePage {
     applyStoredTheme();
 
     let _mapping;
-    [this._project, this._queue, _mapping] = await Promise.all([
+    [this._project, this._queue, this._projectLayers, _mapping] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.promptQueue.list({ project_id: this.projectId }),
+      window.db.projectLayers.list(this.projectId),
       window.db.modelMapping.get('prompt-queue'),
     ]);
 
@@ -98,6 +100,7 @@ export class PromptQueuePage {
     this._bindEvents();
 
     if (this._queue.length > 0) this._selectItem(this._queue[0]);
+    this._syncButtonStates();
   }
 
   unmount() {
@@ -301,13 +304,6 @@ export class PromptQueuePage {
 
           <div class="project-page__model-group pq-header__model" style="-webkit-app-region:no-drag;">
             <div id="pqModelPicker"></div>
-            <button class="project-page__model-cfg-btn" id="pqBtnModelConfigs" title="Configure AI models">
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"
-                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
           </div>
 
           <button class="pq-git-toggle-btn" id="pqBtnGitToggle" title="Toggle Git Changes">
@@ -325,11 +321,11 @@ export class PromptQueuePage {
         <div class="pq-toolbar">
           <span class="pq-toolbar__summary" id="pqSummary"></span>
           <div class="pq-toolbar__actions">
-            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunThis" hidden title="Run selected item">
+            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunThis" disabled title="Run selected item">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
               Run Selected
             </button>
-            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunAll" title="Run All (Ctrl+Enter)">
+            <button class="pq-toolbar__btn pq-toolbar__btn--primary" id="pqBtnRunAll" disabled title="Run All (Ctrl+Enter)">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3l5 5-5 5V3zM9 3l5 5-5 5V3z" fill="currentColor"/></svg>
               Run All
             </button>
@@ -454,7 +450,8 @@ export class PromptQueuePage {
           panel.innerHTML = `<div class="pq-list-empty">No action items queued yet.</div>`;
         }
         if (this._selectedId === id) {
-          this._selectedId = null;
+          this._selectedId   = null;
+          this._selectedItem = null;
           this.container.querySelector('#pqTermStrip')?.setAttribute('hidden', '');
           if (this._term) { this._term.reset(); this._term.writeln(`${ANSI.dim}(no item selected)${ANSI.reset}`); }
         }
@@ -559,7 +556,8 @@ export class PromptQueuePage {
       this._queue = this._queue.filter(q => q.id !== id);
       newEl.remove();
       if (this._selectedId === id) {
-        this._selectedId = null;
+        this._selectedId   = null;
+        this._selectedItem = null;
         this.container.querySelector('#pqTermStrip')?.setAttribute('hidden', '');
         if (this._term) { this._term.reset(); this._term.writeln(`${ANSI.dim}(no item selected)${ANSI.reset}`); }
       }
@@ -568,6 +566,7 @@ export class PromptQueuePage {
   }
 
   _selectItem(item) {
+    const prevLayerId  = this._selectedItem?.layer_id ?? null;
     this._selectedId   = item.id;
     this._selectedItem = item;
     const panel = this.container.querySelector('#pqListPanel');
@@ -576,6 +575,10 @@ export class PromptQueuePage {
 
     this._updateStrip(item);
     this._updateCommitMsg(item);
+    this._syncButtonStates();
+
+    // Refresh git panel when switching to an item in a different layer
+    if (item.layer_id !== prevLayerId) this._refreshGitPanel();
 
     if (item.status === 'done' || item.status === 'failed') {
       this._replayOutput(item);
@@ -605,8 +608,6 @@ export class PromptQueuePage {
     const isSkipped = item.status === 'skipped';
     strip.hidden = !(isPending || isSkipped);
 
-    // Show/hide toolbar Run Selected based on whether selected item is pending
-    if (runThisBtn) runThisBtn.hidden = !isPending;
 
     if (!isPending && !isSkipped) return;
 
@@ -707,6 +708,14 @@ export class PromptQueuePage {
         status: item.status,
         output: item.output,
       });
+
+      if (succeeded && item.issue_id) {
+        console.log('[PQ] auto-resolve issue', item.issue_id);
+        await window.db.issues.update({ id: item.issue_id, status: 'resolved' })
+          .catch(err => console.error('[PQ] auto-resolve failed:', err));
+      } else if (succeeded) {
+        console.log('[PQ] no issue_id on item', item.id, '— skipping auto-resolve');
+      }
 
       this._activeItemId = null;
       this._isRunning    = false;
@@ -848,6 +857,7 @@ export class PromptQueuePage {
     const runAll = this.container.querySelector('#pqBtnRunAll');
     if (stop)   stop.hidden   = !running;
     if (runAll) runAll.hidden = running || this._runAll;
+    this._syncButtonStates();
   }
 
   _updateToolbarRunAllState(active) {
@@ -855,6 +865,7 @@ export class PromptQueuePage {
     const stop   = this.container.querySelector('#pqBtnStop');
     if (runAll) runAll.hidden = active;
     if (stop)   stop.hidden  = !active && !this._isRunning;
+    this._syncButtonStates();
   }
 
   _updateSummary() {
@@ -866,11 +877,25 @@ export class PromptQueuePage {
     const parts   = [`${pending} pending`, `${done} done`];
     if (failed > 0) parts.push(`${failed} failed`);
     el.textContent = parts.join(' · ');
+    this._syncButtonStates();
+  }
+
+  _syncButtonStates() {
+    const runAll  = this.container.querySelector('#pqBtnRunAll');
+    const runThis = this.container.querySelector('#pqBtnRunThis');
+    const pending = this._queue.filter(q => q.status === 'pending').length;
+
+    if (runAll)  runAll.disabled  = pending === 0 || this._isRunning;
+    if (runThis) runThis.disabled = this._selectedItem == null || this._isRunning;
   }
 
   // ── Git panel ────────────────────────────────────────────────────────
 
   _getGitCwd() {
+    if (this._selectedItem?.layer_id) {
+      const layer = this._projectLayers.find(l => l.id === this._selectedItem.layer_id);
+      if (layer?.folder_path?.trim()) return layer.folder_path.trim();
+    }
     return this._project?.project_path || null;
   }
 
@@ -1113,20 +1138,12 @@ export class PromptQueuePage {
     if (this._gitPollInterval) { clearInterval(this._gitPollInterval); this._gitPollInterval = null; }
   }
 
-  // ── Model dropdown ───────────────────────────────────────────────────
-
-  async _reloadModelDropdown() {
-    if (this._picker) await this._picker.reload();
-  }
 
   // ── Events ───────────────────────────────────────────────────────────
 
   _bindEvents() {
     this.container.querySelector('#pqBtnBack')
       .addEventListener('click', () => this.router.navigate(this._from, { projectId: this.projectId }));
-
-    this.container.querySelector('#pqBtnModelConfigs')
-      .addEventListener('click', () => this.router.navigate('settings', { from: 'prompt-queue', fromParams: { projectId: this.projectId } }));
 
     // Skip Permissions toggle
     this.container.querySelector('#pqBtnSkipPerms')
@@ -1222,7 +1239,8 @@ export class PromptQueuePage {
         if (this._selectedId) {
           const stillExists = this._queue.find(q => q.id === this._selectedId);
           if (!stillExists) {
-            this._selectedId = null;
+            this._selectedId   = null;
+            this._selectedItem = null;
             this.container.querySelector('#pqTermStrip')?.setAttribute('hidden', '');
             if (this._term) { this._term.reset(); this._term.writeln(`${ANSI.dim}(no item selected)${ANSI.reset}`); }
           }
