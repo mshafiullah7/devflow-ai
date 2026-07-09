@@ -60,6 +60,55 @@
 }
 .is-add-btn--text:hover { background: var(--surface-hover); color: var(--accent); border-color: var(--accent); }
 
+/* Add dropdown */
+.is-add-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+}
+.is-add-dropdown__toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 0;
+}
+.is-add-dropdown__caret {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.is-add-dropdown__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 200;
+  min-width: 120px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.is-add-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+.is-add-dropdown__item:hover { background: var(--surface-hover); color: var(--accent); }
+
 /* Header status filter */
 .is-header-select {
   padding: 5px 8px;
@@ -125,7 +174,7 @@
 }
 .is-item-desc {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   flex: 1;
   min-width: 0;
   line-height: 1.4;
@@ -135,7 +184,7 @@
   overflow: hidden;
 }
 
-/* Status chip — shown on the right side of each list item */
+/* Status chip — shown at the end of the title row */
 .is-status-chip {
   flex-shrink: 0;
   margin-left: auto;
@@ -181,8 +230,11 @@
   border-radius: 3px;
   line-height: 1.6;
 }
-.is-type-badge--task  { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
-.is-type-badge--issue { background: color-mix(in srgb, #f97316 14%, transparent); color: #f97316; }
+.is-type-badge--task    { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.is-type-badge--issue   { background: color-mix(in srgb, #f97316 14%, transparent); color: #f97316; }
+.is-type-badge--bug     { background: color-mix(in srgb, #ef4444 14%, transparent); color: #ef4444; }
+.is-type-badge--feature { background: color-mix(in srgb, #a855f7 14%, transparent); color: #a855f7; }
+.is-type-badge--change  { background: color-mix(in srgb, #06b6d4 14%, transparent); color: #06b6d4; }
 
 /* ------------------------------------------------------------------ */
 /* Detail form                                                           */
@@ -229,23 +281,6 @@
 
 .is-form__field { display: flex; flex-direction: column; gap: 4px; }
 
-/* Issue Details label row with action buttons */
-.is-desc-label-row { display: flex; align-items: center; margin-bottom: 2px; }
-.is-desc-actions   { display: flex; gap: 4px; margin-left: auto; }
-.is-desc-btn {
-  display: flex; align-items: center; gap: 4px;
-  padding: 2px 8px; font-size: 11px; font-weight: 500;
-  background: transparent; border: 1px solid var(--border);
-  border-radius: var(--radius-sm); color: var(--text-secondary);
-  cursor: pointer; transition: background 0.12s, color 0.12s;
-  -webkit-app-region: no-drag;
-}
-.is-desc-btn:hover        { background: var(--surface-hover); color: var(--text-primary); }
-.is-desc-btn--queue       { border-color: var(--accent); color: var(--accent); }
-.is-desc-btn--queue:hover { background: var(--accent); color: #fff; }
-.is-desc-btn--clean       { border-color: var(--text-muted); color: var(--text-secondary); }
-.is-desc-btn--clean:hover { background: var(--surface-hover); color: var(--text-primary); }
-
 /* Inline validation message shown when Layer is not selected before Add to Queue */
 .is-queue-layer-msg {
   font-size: 11px;
@@ -260,45 +295,6 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Issue Details expand overlay */
-.is-expand-overlay {
-  position: fixed; inset: 0; z-index: 2000;
-  background: rgba(0,0,0,0.65); backdrop-filter: blur(3px);
-  display: flex; align-items: center; justify-content: center;
-}
-.is-expand-dialog {
-  width: 80%; height: 80vh;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden;
-}
-.is-expand-header {
-  display: flex; align-items: center; padding: 12px 16px;
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-.is-expand-title { font-size: 13px; font-weight: 600; color: var(--text-primary); flex: 1; }
-.is-expand-close {
-  background: transparent; border: none; cursor: pointer;
-  color: var(--text-muted); font-size: 14px; padding: 2px 6px;
-  border-radius: var(--radius-sm);
-}
-.is-expand-close:hover  { background: var(--surface-hover); color: var(--text-primary); }
-.is-expand-textarea {
-  flex: 1; resize: none; border: none; outline: none; padding: 14px 16px;
-  background: var(--bg); color: var(--text-primary);
-  font-size: 13px; line-height: 1.6; font-family: inherit;
-}
-.is-expand-footer {
-  display: flex; justify-content: flex-end; padding: 10px 16px;
-  border-top: 1px solid var(--border); flex-shrink: 0;
-}
-.is-expand-btn {
-  padding: 6px 18px; font-size: 12px; font-weight: 600;
-  border-radius: var(--radius-sm); cursor: pointer;
-  border: 1px solid var(--border); background: var(--surface);
-  color: var(--text-secondary); transition: background 0.12s;
-}
-.is-expand-btn--done { background: var(--accent); color: #fff; border-color: var(--accent); }
-.is-expand-btn--done:hover { opacity: 0.88; }
 
 .is-form__label {
   font-size: 10px;

@@ -2,6 +2,12 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 
+const TYPE_META = {
+  issue:   { label: 'Bug',     cls: 'is-type-badge--bug'     },
+  feature: { label: 'Feature', cls: 'is-type-badge--feature' },
+  change:  { label: 'Change',  cls: 'is-type-badge--change'  },
+};
+
 const STATUS_META = {
   open:        { label: 'Open',        cls: 'is-status--open'        },
   in_progress: { label: 'In Progress', cls: 'is-status--in-progress' },
@@ -129,7 +135,25 @@ export class IssuesPage {
                 <option value="closed">Closed</option>
                 <option value="wont_fix">Won't Fix</option>
               </select>
-              <button class="is-add-btn is-add-btn--text" id="isBtnAddIssue" title="Add bug" aria-label="Add bug">+ Bug</button>
+              <div class="is-add-dropdown" id="isAddDropdown">
+                <button class="is-add-btn is-add-btn--text is-add-dropdown__toggle" id="isBtnAddIssue" title="Add issue" aria-label="Add issue" aria-haspopup="true" aria-expanded="false">
+                  + Add <svg class="is-add-dropdown__caret" width="8" height="5" viewBox="0 0 8 5" fill="none"><path d="M1 1l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="is-add-dropdown__menu" id="isAddMenu" hidden>
+                  <button class="is-add-dropdown__item" data-type="issue">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="5" x2="8" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="currentColor"/></svg>
+                    Bug
+                  </button>
+                  <button class="is-add-dropdown__item" data-type="feature">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="8,1.5 10,6 15,6.5 11.5,10 12.5,15 8,12.5 3.5,15 4.5,10 1,6.5 6,6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Feature
+                  </button>
+                  <button class="is-add-dropdown__item" data-type="change">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0 1 10.5-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M14 8a6 6 0 0 1-10.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><polyline points="11,4 12.5,4 12.5,2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><polyline points="5,12 3.5,12 3.5,13.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Change
+                  </button>
+                </div>
+              </div>
             </div>
             <div class="project-related__section-body" id="isIssuesList">
               <div class="project-related__empty">No items</div>
@@ -175,8 +199,30 @@ export class IssuesPage {
         window.app.openIssueRunnerWindow(this._projectId);
       });
 
-    this.container.querySelector('#isBtnAddIssue')
-      .addEventListener('click', () => this._showAddForm('issue'));
+    const addMenu   = this.container.querySelector('#isAddMenu');
+    const addToggle = this.container.querySelector('#isBtnAddIssue');
+
+    addToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const opening = addMenu.hidden;
+      addMenu.hidden = !opening;
+      addToggle.setAttribute('aria-expanded', String(opening));
+    });
+
+    addMenu.addEventListener('click', (e) => {
+      const item = e.target.closest('.is-add-dropdown__item');
+      if (!item) return;
+      addMenu.hidden = true;
+      addToggle.setAttribute('aria-expanded', 'false');
+      this._showAddForm(item.dataset.type);
+    });
+
+    document.addEventListener('click', () => {
+      if (!addMenu.hidden) {
+        addMenu.hidden = true;
+        addToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
 
     this.container.querySelector('#isStatusFilter')
       .addEventListener('change', async (e) => {
@@ -234,23 +280,29 @@ export class IssuesPage {
   }
 
   _issueItemHtml(issue) {
-    const pv        = PRIORITY_META[issue.severity] || PRIORITY_META.medium;
-    const desc      = issue.description ? escHtml(issue.description) : '';
-    const status    = issue.status || 'open';
+    const pv          = PRIORITY_META[issue.severity] || PRIORITY_META.medium;
+    const desc        = issue.description ? escHtml(issue.description) : '';
+    const status      = issue.status || 'open';
     const statusLabel = STATUS_META[status]?.label ?? status;
+    const typeKey     = issue.type || 'issue';
+    const typeMeta    = TYPE_META[typeKey];
+    const typeBadge   = typeMeta
+      ? `<span class="is-type-badge ${typeMeta.cls}">${typeMeta.label}</span>`
+      : '';
     return `
       <div class="eus-src-item is-list-item${issue.id === this._activeId ? ' eus-src-item--active' : ''}" data-id="${issue.id}">
         <span class="is-sev-dot is-sev-dot--${issue.severity || 'medium'}" title="${pv.label}"></span>
         <div class="eus-src-item__info is-item-info">
           <div class="is-item-title-row">
             <span class="eus-src-item__id">#${issue.id}</span>
+            ${typeBadge}
             <span class="eus-src-item__title">${escHtml(issue.title)}</span>
+            <span class="is-status-chip is-status-chip--${status}">${statusLabel}</span>
           </div>
           <div class="is-item-meta-row">
             <span class="is-item-desc">${desc}</span>
           </div>
         </div>
-        <span class="is-status-chip is-status-chip--${status}">${statusLabel}</span>
       </div>
     `;
   }
@@ -306,7 +358,7 @@ export class IssuesPage {
     const layers = await window.db.projectLayers.list(this._projectId) ?? [];
     el.innerHTML = this._formHtml(null, layers, type);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
-    const label = type === 'task' ? 'Add Task' : 'Add Bug';
+    const label = type === 'task' ? 'Add Task' : type === 'feature' ? 'Add Feature' : type === 'change' ? 'Add Change' : 'Add Bug';
     if (headerActions) headerActions.innerHTML = `<button class="is-form__btn" id="isFormSave">${label}</button>`;
     await this._bindFormEvents(el, null, type);
     el.querySelector('#isFormTitle')?.focus();
@@ -319,8 +371,8 @@ export class IssuesPage {
     el.innerHTML = this._formHtml(issue, layers, type);
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = `
-      <button class="is-form__btn" id="isFormSave">Save Changes</button>
       <button class="is-form__btn is-form__btn--danger" id="isFormDelete">Delete</button>
+      <button class="is-form__btn" id="isFormSave">Save Changes</button>
     `;
     await this._bindFormEvents(el, issue, type);
   }
@@ -331,7 +383,12 @@ export class IssuesPage {
   _formHtml(issue, layers = [], type = 'issue') {
     const isEdit    = !!issue;
     const isTask    = type === 'task';
-    const heading   = isEdit ? (isTask ? 'Edit Task' : 'Edit Bug') : (isTask ? 'Add Task' : 'Add Bug');
+    const isFeature = type === 'feature';
+    const isChange  = type === 'change';
+    const isBug     = !isTask && !isFeature && !isChange;
+    const heading   = isEdit
+      ? (isFeature ? 'Edit Feature' : isChange ? 'Edit Change' : isTask ? 'Edit Task' : 'Edit Bug')
+      : (isFeature ? 'Add Feature' : isChange ? 'Add Change' : isTask ? 'Add Task' : 'Add Bug');
     const priorityLabel = isTask ? 'Priority' : 'Severity';
 
     const statusOptions = Object.entries(STATUS_META).map(([val, m]) =>
@@ -340,12 +397,12 @@ export class IssuesPage {
     const severityOptions = Object.entries(PRIORITY_META).map(([val, m]) =>
       `<option value="${val}"${(issue?.severity ?? 'medium') === val ? ' selected' : ''}>${m.label}</option>`
     ).join('');
-    const layerOptions = layers.map(l =>
-      `<option value="${l.id}"${issue?.layer_id === l.id ? ' selected' : ''}>${escHtml(l.name)}</option>`
+    const layerOptions = layers.map((l, i) =>
+      `<option value="${l.id}"${issue?.layer_id === l.id || (!issue && i === 0) ? ' selected' : ''}>${escHtml(l.name)}</option>`
     ).join('');
 
-    const descLabel     = isTask ? 'Description' : 'Bug Details';
-    const descPlaceholder = isTask ? 'What needs to be done?' : 'What is the bug about?';
+    const descLabel       = isTask ? 'Description' : isFeature ? 'Feature Details' : isChange ? 'Change Details' : 'Bug Details';
+    const descPlaceholder = isTask ? 'What needs to be done?' : isFeature ? 'Describe the feature…' : isChange ? 'Describe the change…' : 'What is the bug about?';
 
     return `
       <div class="is-form">
@@ -359,7 +416,7 @@ export class IssuesPage {
           <div class="is-form__field">
             <label class="is-form__label" for="isFormTitle">Title <span class="is-form__required">*</span></label>
             <input class="is-form__input" id="isFormTitle" type="text" maxlength="200"
-              placeholder="${isTask ? 'Describe the task…' : 'Describe the issue…'}" autocomplete="off" value="${escHtml(issue?.title || '')}"/>
+              placeholder="${isTask ? 'Describe the task…' : isFeature ? 'Describe the feature…' : isChange ? 'Describe the change…' : 'Describe the issue…'}" autocomplete="off" value="${escHtml(issue?.title || '')}"/>
           </div>
 
           <div class="is-form__row">
@@ -377,22 +434,12 @@ export class IssuesPage {
           </div>
 
           <div class="is-form__field">
-            <div class="is-desc-label-row">
-              <label class="is-form__label" for="isFormDesc">${descLabel}</label>
-              <div class="is-desc-actions">
-                <button class="is-desc-btn" id="isDescExpandBtn" type="button" title="Expand to full editor">
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                    <path d="M9 2h5v5M7 9L14 2M2 7v7h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Expand
-                </button>
-              </div>
-            </div>
+            <label class="is-form__label" for="isFormDesc">${descLabel}</label>
             <textarea class="is-form__textarea" id="isFormDesc" rows="11"
               placeholder="${descPlaceholder}">${escHtml(issue?.description || '')}</textarea>
           </div>
 
-          ${!isTask ? `
+          ${isBug ? `
           <div class="is-form__field">
             <label class="is-form__label" for="isFormSteps">Steps to Reproduce</label>
             <textarea class="is-form__textarea is-form__textarea--steps" id="isFormSteps" rows="4"
@@ -459,7 +506,7 @@ export class IssuesPage {
       layerEl.classList.remove('is-form__input--error');
       this._pendingSave   = null;
       saveBtn.disabled    = true;
-      saveBtn.textContent = issue ? 'Saving…' : (isTask ? 'Adding…' : 'Adding…');
+      saveBtn.textContent = 'Adding…';
 
       const payload = {
         project_id:         this._projectId,
@@ -495,13 +542,13 @@ export class IssuesPage {
           titleEl.classList.remove('is-form__input--error');
           layerEl.classList.remove('is-form__input--error');
           saveBtn.disabled    = false;
-          saveBtn.textContent = isTask ? 'Add Task' : 'Add Bug';
+          saveBtn.textContent = isTask ? 'Add Task' : type === 'feature' ? 'Add Feature' : type === 'change' ? 'Add Change' : 'Add Bug';
           this._pendingSave   = null;
           titleEl.focus();
         }
       } catch {
         saveBtn.disabled    = false;
-        saveBtn.textContent = issue ? 'Save Changes' : (isTask ? 'Add Task' : 'Add Bug');
+        saveBtn.textContent = issue ? 'Save Changes' : isTask ? 'Add Task' : type === 'feature' ? 'Add Feature' : type === 'change' ? 'Add Change' : 'Add Bug';
       }
     };
 
@@ -509,10 +556,6 @@ export class IssuesPage {
 
     saveBtn.addEventListener('click', () => save());
     el.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 's') { e.preventDefault(); save(); } }, { signal });
-
-    el.querySelector('#isDescExpandBtn')?.addEventListener('click', () => {
-      this._openDescExpand(descEl, isTask ? 'Description' : 'Bug Details');
-    });
   }
 
   _refreshCardBadges(id, status, severity) {
@@ -568,36 +611,6 @@ export class IssuesPage {
         document.addEventListener('mouseup',   onUp);
       });
     });
-  }
-
-  // ----------------------------------------------------------------
-  // Expand overlay
-  // ----------------------------------------------------------------
-  _openDescExpand(textarea, title = 'Details') {
-    const overlay = document.createElement('div');
-    overlay.className = 'is-expand-overlay';
-    overlay.innerHTML = `
-      <div class="is-expand-dialog">
-        <div class="is-expand-header">
-          <span class="is-expand-title">${escHtml(title)}</span>
-          <button class="is-expand-close" id="isExpandClose" type="button">✕</button>
-        </div>
-        <textarea class="is-expand-textarea" id="isExpandTa" spellcheck="true">${escHtml(textarea.value)}</textarea>
-        <div class="is-expand-footer">
-          <button class="is-expand-btn is-expand-btn--done" id="isExpandDone" type="button">Done</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    const ta = overlay.querySelector('#isExpandTa');
-    ta.focus();
-    ta.setSelectionRange(ta.value.length, ta.value.length);
-    const close = () => document.body.removeChild(overlay);
-    const done  = () => { textarea.value = ta.value; close(); };
-    overlay.querySelector('#isExpandDone').addEventListener('click', done);
-    overlay.querySelector('#isExpandClose').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
   }
 
   // ----------------------------------------------------------------

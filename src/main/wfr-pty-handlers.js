@@ -211,10 +211,10 @@ function registerPtyHandlers(prefix) {
       }
       _shellLineBuf += data;
 
-      const m = _shellLineBuf.match(/##WFR_DONE:(\d+):(\d+)##/);
+      const m = _shellLineBuf.match(/##WFR_DONE:([^:]+):(\d+)##/);
       if (m) {
         const fullSentinel = m[0];
-        const layerId  = parseInt(m[1], 10);
+        const layerId  = /^\d+$/.test(m[1]) ? parseInt(m[1], 10) : m[1];
         const exitCode = parseInt(m[2], 10);
 
         const idx    = _shellLineBuf.indexOf(fullSentinel);

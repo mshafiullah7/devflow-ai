@@ -313,7 +313,7 @@
 
 .ir-item__desc {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-top: 2px;
   line-height: 1.5;
   display: -webkit-box;

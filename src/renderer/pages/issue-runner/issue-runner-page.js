@@ -10,6 +10,12 @@ const STATUS_META = {
   wont_fix:    { label: "Won't Fix"   },
 };
 
+const TYPE_META = {
+  issue:   { label: 'Bug',     cls: 'is-type-badge--bug'     },
+  feature: { label: 'Feature', cls: 'is-type-badge--feature' },
+  change:  { label: 'Change',  cls: 'is-type-badge--change'  },
+};
+
 const ANSI = {
   reset: '\x1b[0m',
   bold:  '\x1b[1m',
@@ -284,19 +290,25 @@ export class IssueRunnerPage {
       icon = `<span class="is-sev-dot is-sev-dot--${issue.severity || 'medium'}" title="${issue.severity || 'medium'}"></span>`;
     }
 
+    const typeKey  = issue.type || 'issue';
+    const typeMeta = TYPE_META[typeKey];
+    const typeBadge = typeMeta
+      ? `<span class="is-type-badge ${typeMeta.cls}">${typeMeta.label}</span>`
+      : '';
     return `
       <div class="ir-item ir-item--${runState}${this._selectedId === issue.id ? ' ir-item--selected' : ''}" data-id="${issue.id}">
         <span class="ir-item__icon">${icon}</span>
         <div class="ir-item__body">
           <div class="ir-item__title-row">
             <span class="ir-item__id">#${issue.id}</span>
+            ${typeBadge}
             <span class="ir-item__title">${escHtml(issue.title)}</span>
+            <span class="is-status-chip is-status-chip--${status}">${sm.label}</span>
           </div>
           ${issue.description ? `<div class="ir-item__desc">${escHtml(issue.description)}</div>` : ''}
         </div>
         <div class="ir-item__right">
           <span class="ir-item__elapsed">${elapsed}</span>
-          <span class="is-status-chip is-status-chip--${status}">${sm.label}</span>
         </div>
       </div>`;
   }
