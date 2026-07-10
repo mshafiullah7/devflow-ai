@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
 import { Dialog }                        from '../../components/dialog/dialog.js';
+import { ProjectSidebar }                from '../../components/project-sidebar/project-sidebar.js';
 
 export class WorkflowsPage {
   constructor(container, params, router) {
@@ -37,6 +38,7 @@ export class WorkflowsPage {
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     injectCss('pages/issues/issues-page.css');
     injectCss('pages/workflows/workflows-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     const [project, _mapping, pages, projectLayers] = await Promise.all([
@@ -59,6 +61,8 @@ export class WorkflowsPage {
     await this._picker.reload();
 
     this._bindHeaderEvents();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container);
     this._initResizable();
     await this._loadWorkflows();
     this._subscribeToRunnerEvents();
@@ -71,6 +75,7 @@ export class WorkflowsPage {
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('pages/user-stories/user-stories.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
   }
 
@@ -193,21 +198,24 @@ export class WorkflowsPage {
   // Top-level template
   // ----------------------------------------------------------------
   _template() {
-    const name = this._project?.name ?? 'Project';
+    const name    = this._project?.name ?? 'Project';
+    const initial = name.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'workflows' });
     return `
-      <div class="project-page">
-        <header class="project-page__header">
-          <button class="project-page__back" id="wfBtnBack" aria-label="Back">
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-              <path d="M12 4l-6 6 6 6" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round"/>
+      <div class="ph-project-shell">
+
+        <header class="project-home__header">
+          <button class="project-home__back" id="wfBtnBack" aria-label="Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <div class="project-page__title-group">
-            <h1 class="project-page__title">${escHtml(name)}</h1>
-            <p class="project-page__desc">Workflows</p>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${escHtml(initial)}</div>
+            <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
-          <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
+          <span class="ph-header-page-chip">Workflows</span>
+          <div class="ph-header-actions">
             <button class="gw-open-btn" id="wfBtnGenerate" title="Generate workflows with AI">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -221,8 +229,11 @@ export class WorkflowsPage {
           </div>
         </header>
 
-        <div class="project-page__workspace">
-          <aside class="project-panel" id="wfPanelList">
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="project-page">
+            <div class="project-page__workspace">
+              <aside class="project-panel" id="wfPanelList">
             <div class="project-related__section-hd">
               <span class="project-related__section-label">Workflows</span>
               <div class="wf-list-hd-right">
@@ -241,11 +252,13 @@ export class WorkflowsPage {
 
           <section class="project-panel project-panel--detail" id="wfPanelDetail">
             <div id="wfDetailRoot"></div>
-          </section>
+              </section>
+            </div>
+          </div>
         </div>
-      </div>
 
-      `;
+      </div>
+    `;
   }
 
   // ----------------------------------------------------------------

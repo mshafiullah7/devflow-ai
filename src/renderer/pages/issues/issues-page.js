@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
+import { ProjectSidebar }    from '../../components/project-sidebar/project-sidebar.js';
 
 const TYPE_META = {
   issue:   { label: 'Bug',     cls: 'is-type-badge--bug'     },
@@ -43,6 +44,7 @@ export class IssuesPage {
     injectCss('pages/user-stories/user-stories.css');
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     injectCss('pages/issues/issues-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     let _mapping;
@@ -61,6 +63,8 @@ export class IssuesPage {
     await this._picker.reload();
 
     this._bindHeaderEvents();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container);
     this._initResizable();
     await this._loadIssues();
 
@@ -84,6 +88,7 @@ export class IssuesPage {
     }
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
     removeCss('pages/user-stories/user-stories.css');
   }
@@ -92,21 +97,24 @@ export class IssuesPage {
   // Template — 2-panel layout: List | Detail
   // ----------------------------------------------------------------
   _template() {
-    const name = this._project ? escHtml(this._project.name) : 'Project';
+    const name    = this._project ? escHtml(this._project.name) : 'Project';
+    const initial = this._project?.name?.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'issues' });
     return `
-      <div class="project-page">
+      <div class="ph-project-shell">
 
-        <header class="project-page__header">
-          <button class="project-page__back" id="isBtnBack" aria-label="Back">
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-              <path d="M12 4l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <header class="project-home__header">
+          <button class="project-home__back" id="isBtnBack" aria-label="Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <div class="project-page__title-group">
-            <h1 class="project-page__title">${name}</h1>
-            <p class="project-page__desc">Issues</p>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${initial}</div>
+            <span class="project-home__badge-name">${name}</span>
           </div>
-          <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
+          <span class="ph-header-page-chip">Issues</span>
+          <div class="ph-header-actions">
             <div class="project-page__model-group">
               <div id="isModelPicker"></div>
             </div>
@@ -119,7 +127,10 @@ export class IssuesPage {
           </div>
         </header>
 
-        <div class="project-page__workspace">
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="project-page">
+            <div class="project-page__workspace">
 
           <!-- Panel 1: List -->
           <aside class="project-panel" id="isPanelIssuesList">
@@ -178,6 +189,8 @@ export class IssuesPage {
             </div>
           </section>
 
+            </div>
+          </div>
         </div>
       </div>
     `;

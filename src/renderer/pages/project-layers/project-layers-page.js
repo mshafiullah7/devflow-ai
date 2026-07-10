@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }      from '../../components/model-picker/model-picker.js';
+import { ProjectSidebar }   from '../../components/project-sidebar/project-sidebar.js';
 
 export class ProjectLayersPage {
   constructor(container, params, router) {
@@ -25,6 +26,7 @@ export class ProjectLayersPage {
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     injectCss('pages/issues/issues-page.css');
     injectCss('pages/project-layers/project-layers-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     const [project, _mapping] = await Promise.all([
@@ -50,6 +52,8 @@ export class ProjectLayersPage {
     await this._picker.reload();
 
     this._bindHeaderEvents();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container);
     this._initResizable();
 
     await Promise.all([
@@ -71,6 +75,7 @@ export class ProjectLayersPage {
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('pages/user-stories/user-stories.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
   }
 
@@ -78,75 +83,82 @@ export class ProjectLayersPage {
   // Template — 30% list | resize | 70% detail (mirrors Issues page)
   // ----------------------------------------------------------------
   _template() {
-    const name = this._project ? escHtml(this._project.name) : 'Project';
+    const name    = this._project ? escHtml(this._project.name) : 'Project';
+    const initial = this._project?.name?.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'project-layers' });
     return `
-      <div class="project-page">
+      <div class="ph-project-shell">
 
-        <header class="project-page__header">
-          <button class="project-page__back" id="plBtnBack" aria-label="Back">
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-              <path d="M12 4l-6 6 6 6" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round"/>
+        <header class="project-home__header">
+          <button class="project-home__back" id="plBtnBack" aria-label="Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <div class="project-page__title-group">
-            <h1 class="project-page__title">${name}</h1>
-            <p class="project-page__desc">Project Layers</p>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${initial}</div>
+            <span class="project-home__badge-name">${name}</span>
           </div>
-          <div class="project-page__header-actions" style="-webkit-app-region:no-drag;">
-            <div class="project-page__model-group">
-              <div id="plModelPicker"></div>
-            </div>
+          <span class="ph-header-page-chip">Project Layers</span>
+          <div class="ph-header-actions">
+            <div id="plModelPicker"></div>
           </div>
         </header>
 
-        <div class="project-page__workspace">
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="project-page">
 
-          <!-- Left 30%: Layers list -->
-          <aside class="project-panel" id="plPanelList">
-            <div class="project-related__section-hd">
-              <span class="project-related__section-label">Project Layers</span>
-              <span class="project-related__section-count" id="plLayerCount">0</span>
-              <button class="pl-generate-btn" id="plBtnGenerate" title="Generate layers from documents" style="-webkit-app-region:no-drag;">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-                Generate
-              </button>
-              <button class="is-add-btn" id="plBtnAdd" title="Add layer (Ctrl+N)" aria-label="Add layer">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-              </button>
-            </div>
-            <div class="project-related__section-body" id="plLayersList">
-              <div class="project-related__empty">No layers</div>
-            </div>
-          </aside>
+            <div class="project-page__workspace">
 
-          <div class="project-panel__resize" data-resize="pl-list"></div>
+              <!-- Left 30%: Layers list -->
+              <aside class="project-panel" id="plPanelList">
+                <div class="project-related__section-hd">
+                  <span class="project-related__section-label">Project Layers</span>
+                  <span class="project-related__section-count" id="plLayerCount">0</span>
+                  <button class="pl-generate-btn" id="plBtnGenerate" title="Generate layers from documents" style="-webkit-app-region:no-drag;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    Generate
+                  </button>
+                  <button class="is-add-btn" id="plBtnAdd" title="Add layer (Ctrl+N)" aria-label="Add layer">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="project-related__section-body" id="plLayersList">
+                  <div class="project-related__empty">No layers</div>
+                </div>
+              </aside>
 
-          <!-- Right 70%: Layer detail -->
-          <section class="project-panel project-panel--detail" id="plPanelDetail">
-            <div class="project-panel__header">
-              <span class="project-panel__title">Project Layer Detail</span>
-              <div class="project-panel__header-actions" id="plDetailHeaderActions"></div>
-            </div>
-            <div class="project-panel__content" id="plLayerDetail">
-              <div class="project-panel__empty">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                  <polyline points="2 17 12 22 22 17"/>
-                  <polyline points="2 12 12 17 22 12"/>
-                </svg>
-                <p>Select a layer or add a new one</p>
-              </div>
-            </div>
-          </section>
+              <div class="project-panel__resize" data-resize="pl-list"></div>
 
+              <!-- Right 70%: Layer detail -->
+              <section class="project-panel project-panel--detail" id="plPanelDetail">
+                <div class="project-panel__header">
+                  <span class="project-panel__title">Project Layer Detail</span>
+                  <div class="project-panel__header-actions" id="plDetailHeaderActions"></div>
+                </div>
+                <div class="project-panel__content" id="plLayerDetail">
+                  <div class="project-panel__empty">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                      <polyline points="2 17 12 22 22 17"/>
+                      <polyline points="2 12 12 17 22 12"/>
+                    </svg>
+                    <p>Select a layer or add a new one</p>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+          </div>
         </div>
+
       </div>
     `;
   }

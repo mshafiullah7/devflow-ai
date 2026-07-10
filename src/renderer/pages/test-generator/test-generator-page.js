@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker } from '../../components/model-picker/model-picker.js';
+import { ProjectSidebar } from '../../components/project-sidebar/project-sidebar.js';
 
 const FILE_EXTENSIONS = {
   flutter: ['.dart'],
@@ -142,6 +143,7 @@ export class TestGeneratorPage {
     injectCss('pages/project-home/project-home.css');
     injectCss('pages/test-generator/test-generator-page.css');
     injectCss('components/git/git-diff.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     const [project, layers, _mapping] = await Promise.all([
@@ -162,6 +164,8 @@ export class TestGeneratorPage {
     await this._picker.reload();
 
     this._bindEvents();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container);
     this._startGitPolling();
 
     window.app.testGenerationWindow.onFileSaved(async () => {
@@ -186,42 +190,50 @@ export class TestGeneratorPage {
     removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
     removeCss('components/git/git-diff.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
   }
 
   // ─── Template ────────────────────────────────────────────────
   _template() {
-    const name = this._project?.name ?? 'Project';
+    const name    = this._project?.name ?? 'Project';
+    const initial = this._project?.name?.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'test-generator' });
     return `
-      <div class="project-home">
+      <div class="project-home ph-project-shell">
         <header class="project-home__header">
           <button class="project-home__back" id="tgBtnBack" aria-label="Back">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <div class="tg-title-group">
-            <h1 class="tg-title">${escHtml(name)}</h1>
-            <p class="tg-subtitle">Unit Tests</p>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${initial}</div>
+            <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
-          <div class="tg-header-toggle" style="-webkit-app-region:no-drag;">
-            <button class="tg-mode-btn ${this._mode === 'generate' ? 'tg-mode-btn--active' : ''}" id="tgModeGenerate">Generate</button>
-            <button class="tg-mode-btn ${this._mode === 'execute'  ? 'tg-mode-btn--active' : ''}" id="tgModeExecute">Execute</button>
+          <span class="ph-header-page-chip">Unit Tests</span>
+          <div class="ph-header-actions">
+            <div class="tg-header-toggle">
+              <button class="tg-mode-btn ${this._mode === 'generate' ? 'tg-mode-btn--active' : ''}" id="tgModeGenerate">Generate</button>
+              <button class="tg-mode-btn ${this._mode === 'execute'  ? 'tg-mode-btn--active' : ''}" id="tgModeExecute">Execute</button>
+            </div>
+            <div id="tgModelPicker"></div>
+            <button class="tg-git-toggle-btn" id="tgBtnGitToggle" title="Toggle Git Changes">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <circle cx="11" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M5 5.5v5a1.5 1.5 0 001.5 1.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M11 5.5V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              Git <span class="tg-git-badge" id="tgGitBadge" hidden></span>
+            </button>
           </div>
-          <div id="tgModelPicker" style="-webkit-app-region:no-drag;"></div>
-          <button class="tg-git-toggle-btn" id="tgBtnGitToggle" title="Toggle Git Changes">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-              <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
-              <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
-              <circle cx="11" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
-              <path d="M5 5.5v5a1.5 1.5 0 001.5 1.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-              <path d="M11 5.5V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            </svg>
-            Git <span class="tg-git-badge" id="tgGitBadge" hidden></span>
-          </button>
         </header>
 
-        <div class="tg-body">
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="tg-body">
           <aside class="tg-sidebar${this._sidebarCollapsed ? ' tg-sidebar--collapsed' : ''}">
             <div class="tg-sidebar__header">
               <span class="tg-sidebar__header-label">Layers</span>
@@ -270,6 +282,7 @@ export class TestGeneratorPage {
                 <div class="git-diff-empty">No changes yet.</div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>`;

@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { QuickCommandsModal } from '../../components/quick-commands/quick-commands-modal.js';
+import { ProjectSidebar } from '../../components/project-sidebar/project-sidebar.js';
 
 export class GitChangesPage {
   constructor(container, params, router) {
@@ -32,6 +33,7 @@ export class GitChangesPage {
   async mount() {
     injectCss('components/git/git-diff.css');
     injectCss('pages/git-changes/git-changes-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     this._project = await window.db.projects.get(this._projectId);
@@ -47,6 +49,8 @@ export class GitChangesPage {
     this._qcmdModal.mount();
 
     this._bindEvents();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container);
     this._updateFilesLayerPath();
 
     await this._loadLayerCounts();
@@ -62,6 +66,7 @@ export class GitChangesPage {
   unmount() {
     removeCss('pages/git-changes/git-changes-page.css');
     removeCss('components/git/git-diff.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     window.db.terminal.removeListeners();
   }
 
@@ -69,56 +74,62 @@ export class GitChangesPage {
   // Template
   // ----------------------------------------------------------------
   _template() {
-    const name = this._project ? escHtml(this._project.name) : 'Project';
+    const name    = this._project ? escHtml(this._project.name) : 'Project';
+    const initial = this._project?.name?.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'git-changes' });
     return `
-      <div class="git-page">
-        <header class="git-page__header">
-          <button class="git-page__back" id="gitPageBack" aria-label="Back">
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-              <path d="M12 4l-6 6 6 6" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round"/>
+      <div class="ph-project-shell">
+        <header class="project-home__header">
+          <button class="project-home__back" id="gitPageBack" aria-label="Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <div class="git-page__title-group">
-            <h1 class="git-page__title">${name}</h1>
-            <p class="git-page__subtitle">Git Changes</p>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${initial}</div>
+            <span class="project-home__badge-name">${name}</span>
           </div>
-          <div class="git-page__center"></div>
-          <button class="git-page__refresh git-page__refresh--labeled" id="gitPageVSCode" title="Open layer in VS Code"
-            ${this._project?.project_path ? '' : 'disabled'}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 2H8a2 2 0 00-2 2v16a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2z"/>
-              <path d="M9 9l3 3-3 3"/>
-            </svg>
-            <span>VS Code</span>
-          </button>
-          <button class="git-page__refresh" id="gitPageQcmd" title="Quick Commands">
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
-              <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <button class="git-page__refresh" id="gitPageRefresh" title="Refresh (Ctrl+R)">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-              <path d="M4 4a8 8 0 1 1 0 12" stroke="currentColor" stroke-width="1.6"
-                stroke-linecap="round"/>
-              <path d="M4 2v4h4" stroke="currentColor" stroke-width="1.6"
-                stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button class="git-page__console-toggle" id="gitPageConsoleToggle" title="Toggle Console">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="4 17 10 11 4 5"/>
-              <line x1="12" y1="19" x2="20" y2="19"/>
-            </svg>
-            Console
-            <span class="git-page__console-toggle-badge" id="gitConsoleToggleBadge" hidden></span>
-          </button>
+          <span class="ph-header-page-chip">Git Changes</span>
+          <div class="ph-header-actions">
+            <button class="git-page__refresh git-page__refresh--labeled" id="gitPageVSCode" title="Open layer in VS Code"
+              ${this._project?.project_path ? '' : 'disabled'}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 2H8a2 2 0 00-2 2v16a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2z"/>
+                <path d="M9 9l3 3-3 3"/>
+              </svg>
+              <span>VS Code</span>
+            </button>
+            <button class="git-page__refresh" id="gitPageQcmd" title="Quick Commands">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+                <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+                <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+                <path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button class="git-page__refresh" id="gitPageRefresh" title="Refresh (Ctrl+R)">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                <path d="M4 4a8 8 0 1 1 0 12" stroke="currentColor" stroke-width="1.6"
+                  stroke-linecap="round"/>
+                <path d="M4 2v4h4" stroke="currentColor" stroke-width="1.6"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="git-page__console-toggle" id="gitPageConsoleToggle" title="Toggle Console">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 17 10 11 4 5"/>
+                <line x1="12" y1="19" x2="20" y2="19"/>
+              </svg>
+              Console
+              <span class="git-page__console-toggle-badge" id="gitConsoleToggleBadge" hidden></span>
+            </button>
+          </div>
         </header>
 
-        <div class="git-page__body">
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="git-page">
+            <div class="git-page__body">
           <div class="gc-layer-panel${this._layersOpen ? ' gc-layer-panel--open' : ''}" id="gcLayerPanel">
             <div class="gc-panel-header">
               <svg class="gc-panel-header__icon" width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -223,6 +234,8 @@ export class GitChangesPage {
               </svg>
               Log
             </button>
+          </div>
+        </div>
           </div>
         </div>
       </div>

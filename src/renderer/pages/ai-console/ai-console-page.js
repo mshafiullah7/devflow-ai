@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
+import { ProjectSidebar }                from '../../components/project-sidebar/project-sidebar.js';
 
 // ----------------------------------------------------------------
 // Helpers
@@ -42,6 +43,7 @@ export class AiConsolePage {
   // ----------------------------------------------------------------
   async mount() {
     injectCss('pages/ai-console/ai-console-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     let _mapping;
@@ -59,6 +61,8 @@ export class AiConsolePage {
     });
 
     this._bindEvents();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container);
     await this._picker.reload();
     this._enableUi();
     this._renderWelcome();
@@ -68,6 +72,7 @@ export class AiConsolePage {
     window.app.chat.offAll();
     this._picker?.unmount();
     removeCss('pages/ai-console/ai-console-page.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
   }
 
   // ----------------------------------------------------------------
@@ -234,29 +239,36 @@ You may query up to 3 times. After receiving data give your final answer in plai
   // HTML template
   // ----------------------------------------------------------------
   _template() {
+    const name    = this._project?.name ?? 'Project';
+    const initial = this._project?.name?.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this.projectId, router: this.router, activeRoute: 'ai-console' });
     return `
-      <div class="aic-page">
+      <div class="ph-project-shell">
 
         <!-- Header -->
-        <header class="aic-header">
-          <button class="aic-header__back" id="aicBtnBack" aria-label="Back">
+        <header class="project-home__header">
+          <button class="project-home__back" id="aicBtnBack" aria-label="Back">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-
-          <div class="aic-header__title-group">
-            <div class="aic-header__title">${escHtml(this._project?.name ?? 'Project')}</div>
-            <div class="aic-header__subtitle">AI Chat</div>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${initial}</div>
+            <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
-
-          <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
-            <div id="aicModelPicker"></div>
+          <span class="ph-header-page-chip">AI Chat</span>
+          <div class="ph-header-actions">
+            <div class="project-page__model-group">
+              <div id="aicModelPicker"></div>
+            </div>
           </div>
         </header>
 
-        <!-- Body: context panel + chat -->
-        <div class="aic-body">
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="aic-page">
+            <!-- Body: context panel + chat -->
+            <div class="aic-body">
 
           <!-- Context panel (left) -->
           <aside class="aic-context" id="aicContext">
@@ -345,6 +357,8 @@ You may query up to 3 times. After receiving data give your final answer in plai
 
           </div>
 
+            </div>
+          </div>
         </div>
       </div>
     `;

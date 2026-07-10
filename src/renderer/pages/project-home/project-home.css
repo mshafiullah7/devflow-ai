@@ -106,7 +106,7 @@
 /* Sidebar                                                              */
 /* ------------------------------------------------------------------ */
 .project-home__sidebar {
-  width: 260px;
+  width: 220px;
   flex-shrink: 0;
   background: var(--surface-header);
   border-right: 1px solid var(--border);

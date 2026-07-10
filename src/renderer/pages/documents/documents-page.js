@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { Dialog }            from '../../components/dialog/dialog.js';
+import { ProjectSidebar }    from '../../components/project-sidebar/project-sidebar.js';
 
 export class DocumentsPage {
   constructor(container, params, router) {
@@ -22,6 +23,7 @@ export class DocumentsPage {
 
   async mount() {
     injectCss('pages/documents/documents-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     let _mapping;
@@ -59,7 +61,8 @@ export class DocumentsPage {
 
 
     this._bindShellEvents();
-
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container, { documents: this._docs, layers: this._layers });
 
     if (this._activeId) this._selectDoc(this._activeId, false);
     else                this._showEmpty();
@@ -67,6 +70,7 @@ export class DocumentsPage {
 
   unmount() {
     removeCss('pages/documents/documents-page.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
     document.querySelector('.doc-attach-form-overlay')?.remove();
   }
@@ -75,38 +79,48 @@ export class DocumentsPage {
   // Page shell
   // ----------------------------------------------------------------
   _pageTemplate() {
-    const name = this._project?.name ?? 'Project';
+    const name    = this._project?.name ?? 'Project';
+    const initial = name.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'documents' });
     return `
-      <div class="documents-page">
-        <header class="documents-page__header">
-          <button class="documents-page__back" id="btnBack" aria-label="Back">
+      <div class="ph-project-shell">
+
+        <header class="project-home__header">
+          <button class="project-home__back" id="btnBack" aria-label="Back">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <div class="documents-page__title-group">
-            <div class="documents-page__title">${escHtml(name)}</div>
-            <div class="documents-page__subtitle">Project Documents</div>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${escHtml(initial)}</div>
+            <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
-          <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
+          <span class="ph-header-page-chip">Documents</span>
+          <div class="ph-header-actions">
             <div id="docModelPicker"></div>
           </div>
         </header>
 
-        <div class="documents-page__body">
-          <aside class="doc-sidebar">
-            <div class="doc-sidebar__toolbar">
-              <button class="doc-sidebar__add" id="docAddBtn" title="New document">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-                New
-              </button>
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="documents-page">
+            <div class="documents-page__body">
+              <aside class="doc-sidebar">
+                <div class="doc-sidebar__toolbar">
+                  <button class="doc-sidebar__add" id="docAddBtn" title="New document">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                    New
+                  </button>
+                </div>
+                <div class="doc-sidebar__list" id="docList">${this._renderList()}</div>
+              </aside>
+              <div class="doc-panel" id="docPanel"></div>
             </div>
-            <div class="doc-sidebar__list" id="docList">${this._renderList()}</div>
-          </aside>
-          <div class="doc-panel" id="docPanel"></div>
+          </div>
         </div>
+
       </div>
     `;
   }

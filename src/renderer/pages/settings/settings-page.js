@@ -1,5 +1,6 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+import { ProjectSidebar } from '../../components/project-sidebar/project-sidebar.js';
 
 const ANTHROPIC_MODELS = [
   'claude-sonnet-4-6',
@@ -69,14 +70,20 @@ export class SettingsPage {
 
   async mount() {
     injectCss('pages/settings/settings-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
     this.container.innerHTML = this._template();
     this._bindEvents();
+    if (this._sidebar) {
+      this._sidebar.bindEvents(this.container);
+      this._sidebar.loadCounts(this.container);
+    }
     await this._renderModelList();
   }
 
   unmount() {
     removeCss('pages/settings/settings-page.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     document.querySelector('.st-overlay')?.remove();
   }
 
@@ -84,18 +91,25 @@ export class SettingsPage {
   // Page shell
   // ----------------------------------------------------------------
   _template() {
+    const projectId = this._fromParams?.projectId ?? null;
+    this._sidebar = projectId
+      ? new ProjectSidebar({ projectId, router: this.router, activeRoute: 'settings' })
+      : null;
     return `
-      <div class="settings-page">
-        <header class="settings-page__header">
-          <button class="settings-page__back" id="stBtnBack" aria-label="Back">
+      <div class="ph-project-shell">
+        <header class="project-home__header">
+          <button class="project-home__back" id="stBtnBack" aria-label="Back">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <span class="settings-page__title">Settings</span>
+          <span class="ph-header-page-chip">Settings</span>
         </header>
 
-        <div class="settings-page__layout">
+        <div class="ph-page-with-nav">
+          ${this._sidebar ? this._sidebar.html() : ''}
+          <div class="settings-page">
+            <div class="settings-page__layout">
           <nav class="settings-page__sidebar">
             <div class="st-sidebar-section">Configuration</div>
             <button class="st-nav-item active" id="stNavAiConfig">
@@ -163,6 +177,8 @@ export class SettingsPage {
           </nav>
 
           <main class="settings-page__content" id="stMainContent"></main>
+        </div>
+          </div>
         </div>
       </div>
     `;

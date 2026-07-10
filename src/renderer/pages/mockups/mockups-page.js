@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss, timeAgo, renderMarkdown } from '../../sh
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
 import { Dialog }            from '../../components/dialog/dialog.js';
+import { ProjectSidebar }    from '../../components/project-sidebar/project-sidebar.js';
 
 const TECH = 'Plain HTML / CSS';
 
@@ -1528,6 +1529,7 @@ export class MockupsPage {
   async mount() {
     injectCss('styles/screens.css');
     injectCss('pages/mockups/mockups-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     let _mapping;
@@ -1577,6 +1579,8 @@ export class MockupsPage {
       initialId: _mappedId,
     });
     this._bindShellEvents();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container, { mockups: this._screens });
     await this._picker.reload();
 
     if (this._activeId) this._selectScreen(this._activeId);
@@ -1586,6 +1590,7 @@ export class MockupsPage {
   unmount() {
     removeCss('pages/mockups/mockups-page.css');
     removeCss('styles/screens.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
     window.app.chat.offAll();
     window.app.chat.cancel();
@@ -1628,46 +1633,56 @@ export class MockupsPage {
   // Page shell
   // ----------------------------------------------------------------
   _pageTemplate() {
-    const name = this._project?.name ?? 'Project';
+    const name    = this._project?.name ?? 'Project';
+    const initial = name.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'mockups' });
     return `
-      <div class="mockups-page">
-        <header class="mockups-page__header">
-          <button class="mockups-page__back" id="btnBack" aria-label="Back">
+      <div class="ph-project-shell">
+
+        <header class="project-home__header">
+          <button class="project-home__back" id="btnBack" aria-label="Back">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <div class="mockups-page__title-group">
-            <div class="mockups-page__title">${escHtml(name)}</div>
-            <div class="mockups-page__subtitle">Project Mockups</div>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${escHtml(initial)}</div>
+            <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
-          <div class="project-page__model-group" style="-webkit-app-region:no-drag;">
+          <span class="ph-header-page-chip">Mockups</span>
+          <div class="ph-header-actions">
             <div id="mockupsModelPicker"></div>
+            <button class="mockups-page__style-btn scr-btn scr-btn--sm${this._hasAnyTemplate() ? ' scr-btn--ds-active' : ''}" id="scrStyleGuideBtn" title="Open Project Style Guide page">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              Styles
+              <span class="scr-style-dot${this._hasAnyTemplate() ? ' scr-style-dot--active' : ''}"></span>
+            </button>
           </div>
-          <button class="mockups-page__style-btn scr-btn scr-btn--sm${this._hasAnyTemplate() ? ' scr-btn--ds-active' : ''}" id="scrStyleGuideBtn" title="Open Project Style Guide page">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
-              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-            </svg>
-            Styles
-            <span class="scr-style-dot${this._hasAnyTemplate() ? ' scr-style-dot--active' : ''}"></span>
-          </button>
         </header>
 
-        <div class="mockups-page__body">
-          <aside class="scr-sidebar">
-            <div class="scr-sidebar__toolbar">
-              <button class="scr-sidebar__add" id="scrNewBtn">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-                New Screen
-              </button>
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="mockups-page">
+            <div class="mockups-page__body">
+              <aside class="scr-sidebar">
+                <div class="scr-sidebar__toolbar">
+                  <button class="scr-sidebar__add" id="scrNewBtn">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                    New Screen
+                  </button>
+                </div>
+                <div class="scr-sidebar__list" id="scrList">${this._renderList()}</div>
+              </aside>
+              <div class="scr-main" id="scrMain"></div>
             </div>
-            <div class="scr-sidebar__list" id="scrList">${this._renderList()}</div>
-          </aside>
-          <div class="scr-main" id="scrMain"></div>
+          </div>
         </div>
+
       </div>
     `;
   }
