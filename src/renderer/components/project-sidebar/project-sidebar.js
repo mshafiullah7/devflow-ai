@@ -109,6 +109,15 @@ export class ProjectSidebar {
           <span class="ph-nav-item__badge--soon">Soon</span>
         </button>
 
+        <button class="ph-nav-item${a('security-scans')}" id="psnSecurityScans">
+          <span class="ph-nav-item__icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </span>
+          <span class="ph-nav-item__label">Security Scans</span>
+        </button>
+
         <button class="ph-nav-item${a('issues')}" id="psnIssues">
           <span class="ph-nav-item__icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -190,6 +199,8 @@ export class ProjectSidebar {
       ?.addEventListener('click', () => r.navigate('workflows', { projectId: pid }));
     container.querySelector('#psnTests')
       ?.addEventListener('click', () => r.navigate('test-generator', { projectId: pid }));
+    container.querySelector('#psnSecurityScans')
+      ?.addEventListener('click', () => r.navigate('security-scans', { projectId: pid }));
     container.querySelector('#psnIssues')
       ?.addEventListener('click', () => r.navigate('issues', { projectId: pid }));
     container.querySelector('#psnTerminal')

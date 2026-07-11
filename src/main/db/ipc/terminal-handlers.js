@@ -7,8 +7,9 @@ const fs   = require('node:fs');
 const os   = require('node:os');
 const path = require('node:path');
 
-let _activeProc     = null;
-let _activeTestProc = null;
+let _activeProc         = null;
+let _activeTestProc     = null;
+let _activeSecurityProc = null;
 
 function killTree(proc) {
   if (!proc) return;
@@ -145,6 +146,44 @@ function registerTerminalHandlers() {
 
   safeHandle('testRunner:kill', () => {
     if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
+  });
+
+  // Dedicated security scanner — separate process slot so it never conflicts with the test runner
+  safeHandle('securityScanner:run', (event, { command, cwd }) => {
+    if (_activeSecurityProc) { killTree(_activeSecurityProc); _activeSecurityProc = null; }
+
+    const wc        = event.sender;
+    const utf8Pre   = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; ';
+    _activeSecurityProc = spawn(
+      'powershell.exe',
+      ['-NoLogo', '-NonInteractive', '-Command', utf8Pre + command],
+      { stdio: ['ignore', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: process.env, windowsHide: true }
+    );
+
+    const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };
+
+    _activeSecurityProc.stdout.on('data', d => send('securityScanner:data', { text: d.toString('utf8') }));
+    _activeSecurityProc.stderr.on('data', d => send('securityScanner:data', { text: d.toString('utf8') }));
+    _activeSecurityProc.on('close', code => { _activeSecurityProc = null; send('securityScanner:done', { exitCode: code }); });
+    _activeSecurityProc.on('error', err => {
+      _activeSecurityProc = null;
+      send('securityScanner:data', { text: err.message });
+      send('securityScanner:done', { exitCode: 1 });
+    });
+
+    return { pid: _activeSecurityProc.pid };
+  });
+
+  safeHandle('securityScanner:kill', () => {
+    if (_activeSecurityProc) { killTree(_activeSecurityProc); _activeSecurityProc = null; }
+  });
+
+  safeHandle('securityScanner:saveTempOutput', (_e, text) => {
+    const dir  = path.join(os.tmpdir(), 'devflow-security-output');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `scan-${Date.now()}.txt`);
+    fs.writeFileSync(file, text, 'utf8');
+    return file;
   });
 
 

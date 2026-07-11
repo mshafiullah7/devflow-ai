@@ -1,6 +1,7 @@
-import { escHtml, injectCss } from '../../shared/helpers.js';
-import { applyStoredTheme }   from '../../shared/theme-manager.js';
-import { ModelPicker }        from '../../components/model-picker/model-picker.js';
+import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
+import { applyStoredTheme }              from '../../shared/theme-manager.js';
+import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
+import { ProjectSidebar }                from '../../components/project-sidebar/project-sidebar.js';
 
 // ── Helper: derive a conventional Dart file path from a screen title ─────────
 function toDartPath(screenTitle) {
@@ -239,6 +240,7 @@ export class GenerateWorkflowsPage {
     this._router           = router;
     this._params           = params ?? {};
     this._projectId        = null;
+    this._project          = null;
     this._modelConfig      = null;
     this._picker           = null;
     this._screens          = [];
@@ -259,6 +261,7 @@ export class GenerateWorkflowsPage {
   // ----------------------------------------------------------------
   async mount() {
     injectCss('pages/generate-workflows/generate-workflows-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
     this.container.innerHTML = '<div class="gw-loading">Loading…</div>';
     await this._init(this._params);
@@ -268,6 +271,8 @@ export class GenerateWorkflowsPage {
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     if (this._picker)   { this._picker.unmount(); this._picker = null; }
     window.app.genWorkflowChat.offAll();
+    removeCss('pages/generate-workflows/generate-workflows-page.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
   }
 
   // ----------------------------------------------------------------
@@ -287,12 +292,14 @@ export class GenerateWorkflowsPage {
     this._parsedWorkflows  = null;
     this._lastPrompt       = '';
 
-    const [screens, documents, projectLayers, mapping] = await Promise.all([
+    const [project, screens, documents, projectLayers, mapping] = await Promise.all([
+      window.db.projects.get(projectId),
       window.db.screenDesigns.list(projectId),
       window.db.documents.list(projectId),
       window.db.projectLayers.list(projectId),
       window.db.modelMapping.get('generate-workflows'),
     ]);
+    this._project        = project        || null;
     this._screens        = screens        || [];
     this._documents      = documents      || [];
     this._projectLayers  = projectLayers  || [];
@@ -323,28 +330,38 @@ export class GenerateWorkflowsPage {
   // ----------------------------------------------------------------
   _render() {
     this.container.innerHTML = this._template();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container);
     this._bindEvents();
     this._refreshGenerateBtn();
   }
 
   _template() {
+    const name    = this._project?.name ?? 'Project';
+    const initial = this._project?.name?.trim()[0]?.toUpperCase() ?? '?';
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this._router, activeRoute: 'workflows' });
     return `
-      <div class="gw-page">
-        <header class="gw-header">
-          <button class="gw-back-btn" id="gwBtnClose" aria-label="Close window">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="ph-project-shell">
+        <header class="project-home__header">
+          <button class="project-home__back" id="gwBtnClose" aria-label="Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
           </button>
-          <svg class="gw-header__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
-          </svg>
-          <span class="gw-header__title">Generate Workflows</span>
-          <div class="gw-header__model" id="gwModelPicker"></div>
+          <div class="project-home__badge">
+            <div class="project-home__badge-initial">${initial}</div>
+            <span class="project-home__badge-name">${escHtml(name)}</span>
+          </div>
+          <span class="ph-header-page-chip">Generate Workflows</span>
+          <div class="ph-header-actions">
+            <div id="gwModelPicker"></div>
+          </div>
         </header>
 
-        <div class="gw-body">
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="gw-page">
+            <div class="gw-body">
           <!-- ── Sidebar ── -->
           <aside class="gw-sidebar">
             <!-- Screens -->
@@ -436,6 +453,8 @@ export class GenerateWorkflowsPage {
               </div>
             </div>
           </main>
+            </div>
+          </div>
         </div>
       </div>`;
   }

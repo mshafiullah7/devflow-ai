@@ -517,6 +517,124 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // securityScanner — tool detection
+  // ----------------------------------------------------------------
+  safeHandle('securityScanner:detect', (_e, projectPath) => {
+    if (!projectPath) return [];
+    const exists   = (p) => { try { return fs.existsSync(p); } catch { return false; } };
+    const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
+    const listDir  = (p) => { try { return fs.readdirSync(p); } catch { return []; } };
+    const commands = [];
+
+    // Node.js — npm audit (built-in, always available when package.json exists)
+    let pkgRoot = projectPath;
+    let pkgPath = path.join(pkgRoot, 'package.json');
+    if (!exists(pkgPath)) {
+      const parent = path.dirname(pkgRoot);
+      if (parent !== pkgRoot && exists(path.join(parent, 'package.json'))) {
+        pkgRoot = parent;
+        pkgPath = path.join(pkgRoot, 'package.json');
+      }
+    }
+    if (exists(pkgPath)) {
+      const pkg     = readJson(pkgPath) || {};
+      const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      commands.push({ id: 'npm-audit',          label: 'npm audit',                       cmd: 'npm audit',                       tool: 'npm audit' });
+      commands.push({ id: 'npm-audit-moderate', label: 'npm audit --audit-level=moderate', cmd: 'npm audit --audit-level=moderate', tool: 'npm audit' });
+      // snyk if available
+      if (allDeps['snyk'] || allDeps['@snyk/cli']) {
+        commands.push({ id: 'snyk-test', label: 'snyk test', cmd: 'npx snyk test', tool: 'Snyk' });
+      }
+    }
+
+    // Python — pip-audit and bandit
+    const hasPyProject = exists(path.join(projectPath, 'pyproject.toml'));
+    const hasPipfile   = exists(path.join(projectPath, 'Pipfile'));
+    const hasReqs      = exists(path.join(projectPath, 'requirements.txt'));
+    const hasSetupPy   = exists(path.join(projectPath, 'setup.py'));
+    if (hasPyProject || hasPipfile || hasReqs || hasSetupPy) {
+      commands.push({ id: 'pip-audit',  label: 'pip-audit',  cmd: 'pip-audit',  tool: 'pip-audit' });
+      commands.push({ id: 'bandit',     label: 'bandit -r .', cmd: 'bandit -r .', tool: 'Bandit' });
+      commands.push({ id: 'safety',     label: 'safety check', cmd: 'safety check', tool: 'Safety' });
+    }
+
+    // Go — govulncheck and gosec
+    if (exists(path.join(projectPath, 'go.mod'))) {
+      commands.push({ id: 'govulncheck', label: 'govulncheck ./...', cmd: 'govulncheck ./...', tool: 'govulncheck' });
+      commands.push({ id: 'gosec',       label: 'gosec ./...',       cmd: 'gosec ./...',       tool: 'gosec' });
+    }
+
+    // Ruby — bundler-audit
+    if (exists(path.join(projectPath, 'Gemfile'))) {
+      commands.push({ id: 'bundle-audit',        label: 'bundle audit check',          cmd: 'bundle audit check',          tool: 'bundler-audit' });
+      commands.push({ id: 'bundle-audit-update', label: 'bundle audit check --update', cmd: 'bundle audit check --update', tool: 'bundler-audit' });
+    }
+
+    // Flutter / Dart — dart pub audit
+    if (exists(path.join(projectPath, 'pubspec.yaml'))) {
+      commands.push({ id: 'dart-pub-audit', label: 'dart pub audit', cmd: 'dart pub audit', tool: 'dart pub audit' });
+    }
+
+    // .NET — dotnet list package --vulnerable
+    const hasSln    = listDir(projectPath).some(f => f.endsWith('.sln'));
+    const hasCsproj = listDir(projectPath).some(f => f.endsWith('.csproj'));
+    if (hasSln || hasCsproj) {
+      commands.push({ id: 'dotnet-vuln',        label: 'dotnet list package --vulnerable',            cmd: 'dotnet list package --vulnerable',            tool: 'dotnet' });
+      commands.push({ id: 'dotnet-vuln-include', label: 'dotnet list package --vulnerable --include-transitive', cmd: 'dotnet list package --vulnerable --include-transitive', tool: 'dotnet' });
+    }
+
+    // Java / Maven — OWASP dependency check
+    if (exists(path.join(projectPath, 'pom.xml'))) {
+      commands.push({ id: 'mvn-owasp', label: 'mvn dependency-check:check', cmd: 'mvn org.owasp:dependency-check-maven:check', tool: 'OWASP Dependency-Check' });
+    }
+
+    // Java / Gradle
+    if (exists(path.join(projectPath, 'build.gradle')) || exists(path.join(projectPath, 'build.gradle.kts'))) {
+      commands.push({ id: 'gradle-owasp', label: 'gradle dependencyCheckAnalyze', cmd: 'gradle dependencyCheckAnalyze', tool: 'OWASP Dependency-Check' });
+    }
+
+    return commands;
+  });
+
+  // ----------------------------------------------------------------
+  // security_scan_history
+  // ----------------------------------------------------------------
+  safeHandle('securityScanHistory:list', (_e, project_id) => {
+    return db.prepare(
+      `SELECT * FROM security_scan_history WHERE project_id = ? ORDER BY scanned_at DESC LIMIT 20`
+    ).all(project_id);
+  });
+
+  safeHandle('securityScanHistory:create', (_e, { project_id, layer_id, tool, command, critical, high, medium, low, total, exit_code }) => {
+    db.prepare(
+      `INSERT INTO security_scan_history (project_id, layer_id, tool, command, critical, high, medium, low, total, exit_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      project_id,
+      layer_id  ?? null,
+      tool      ?? null,
+      command,
+      critical  ?? null,
+      high      ?? null,
+      medium    ?? null,
+      low       ?? null,
+      total     ?? null,
+      exit_code ?? 0
+    );
+    // Keep only the latest 20 scans per project
+    db.prepare(
+      `DELETE FROM security_scan_history
+        WHERE project_id = ?
+          AND id NOT IN (
+            SELECT id FROM security_scan_history
+             WHERE project_id = ?
+             ORDER BY scanned_at DESC
+             LIMIT 20
+          )`
+    ).run(project_id, project_id);
+  });
+
+  // ----------------------------------------------------------------
   // issues
   // ----------------------------------------------------------------
   safeHandle('db:issues:list', (_e, { project_id, status, severity } = {}) => {

@@ -9,7 +9,8 @@ const FRIENDLY = {
   'chat:':        'The AI request failed. Check your model settings.',
   'promptQueue:': 'Prompt execution failed.',
   'terminal:':    'Command execution failed.',
-  'testRunner:':  'Test runner failed.',
+  'testRunner:':      'Test runner failed.',
+  'securityScanner:': 'Security scan failed.',
   'dialog:':      'File operation failed.',
   'shell:':       'Shell operation failed.',
   'ollama:':      'Ollama request failed. Is the server running?',
@@ -77,5 +78,9 @@ router.register('test-generation', async () => {
 router.register('generate-workflows', async () => {
   const { GenerateWorkflowsPage } = await import('./pages/generate-workflows/generate-workflows-page.js');
   return GenerateWorkflowsPage;
+});
+router.register('security-scans', async () => {
+  const { SecurityScansPage } = await import('./pages/security-scans/security-scans-page.js');
+  return SecurityScansPage;
 });
 router.navigate('launcher');

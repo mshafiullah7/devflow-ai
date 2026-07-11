@@ -162,6 +162,22 @@ contextBridge.exposeInMainWorld('db', {
     list:   (project_id) => invoke('testRunHistory:list', project_id),
     create: (data)       => invoke('testRunHistory:create', data),
   },
+  securityScanner: {
+    detect:          (projectPath) => invoke('securityScanner:detect', projectPath),
+    run:             (data)        => invoke('securityScanner:run', data),
+    kill:            ()            => invoke('securityScanner:kill'),
+    saveTempOutput:  (text)        => invoke('securityScanner:saveTempOutput', text),
+    onData:          (cb)          => ipcRenderer.on('securityScanner:data', (_e, p) => cb(p)),
+    onDone:          (cb)          => ipcRenderer.on('securityScanner:done', (_e, p) => cb(p)),
+    removeListeners: ()            => {
+      ipcRenderer.removeAllListeners('securityScanner:data');
+      ipcRenderer.removeAllListeners('securityScanner:done');
+    },
+  },
+  securityScanHistory: {
+    list:   (project_id) => invoke('securityScanHistory:list', project_id),
+    create: (data)       => invoke('securityScanHistory:create', data),
+  },
   issues: {
     list:   (filters)    => invoke('db:issues:list', filters),
     get:    (id)         => invoke('db:issues:get', id),

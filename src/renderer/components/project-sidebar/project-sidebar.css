@@ -26,7 +26,8 @@
 .ph-page-with-nav > .aic-page,
 .ph-page-with-nav > .settings-page,
 .ph-page-with-nav > .project-home,
-.ph-page-with-nav > .tg-body {
+.ph-page-with-nav > .tg-body,
+.ph-page-with-nav > .gw-page {
   flex: 1;
   min-width: 0;
   height: auto;

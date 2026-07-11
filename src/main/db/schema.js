@@ -246,6 +246,24 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- SECURITY SCAN HISTORY
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS security_scan_history (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      layer_id   INTEGER REFERENCES project_layers(id) ON DELETE SET NULL,
+      tool       TEXT,
+      command    TEXT    NOT NULL,
+      critical   INTEGER,
+      high       INTEGER,
+      medium     INTEGER,
+      low        INTEGER,
+      total      INTEGER,
+      exit_code  INTEGER NOT NULL DEFAULT 0,
+      scanned_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ----------------------------------------------------------------
     -- QUICK COMMANDS
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS quick_commands (
