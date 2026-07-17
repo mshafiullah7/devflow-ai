@@ -3357,107 +3357,909 @@ export class MockupsPage {
     };
   }
 
-  _buildPreviewHtml(v, contextTheme = 'dark') {
+  _buildPreviewHtml(lightV, darkV, contextTheme = 'dark') {
     const toRgb = hex => {
-      const h = hex.replace('#', '');
+      const h    = hex.replace('#', '');
       const full = h.length <= 4 ? h.split('').map(c => c + c).join('') : h;
-      return [0,2,4].map(i => parseInt(full.slice(i, i+2), 16)).join(',');
+      return [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16)).join(',');
     };
-    const primaryRgb = toRgb(v.primary);
 
-    const ctxBg = { dark: '#0f1117', light: '#f0ece6', midnight: '#08080f' }[contextTheme] || '#0f1117';
-    const scheme = contextTheme === 'light' ? 'light' : 'dark';
+    const adjustColor = (hex, percent) => {
+      const num = parseInt(hex.replace('#',''), 16);
+      const amt = Math.round(2.55 * percent);
+      const R = (num >> 16) + amt;
+      const G = (num >> 8 & 0x00FF) + amt;
+      const B = (num & 0x0000FF) + amt;
+      return '#' + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
+    };
+
+    const getContrastColor = hex => {
+      const rgb = toRgb(hex).split(',').map(Number);
+      const yiq = ((rgb[0] * 299) + (rgb[1] * 587) + (rgb[2] * 114)) / 1000;
+      return (yiq >= 150) ? '#0f172a' : '#ffffff';
+    };
+
+    const safeToRgb = hex => {
+      if (!hex || !hex.startsWith('#')) return '99,102,241';
+      return toRgb(hex);
+    };
+    const safeAdjustColor = (hex, percent) => {
+      if (!hex || !hex.startsWith('#')) return percent < 0 ? '#1e1b4b' : '#a5b4fc';
+      return adjustColor(hex, percent);
+    };
+    const safeGetContrastColor = hex => {
+      if (!hex || !hex.startsWith('#')) return '#ffffff';
+      return getContrastColor(hex);
+    };
 
     return `<!DOCTYPE html>
-<html>
+<html lang="en" class="${contextTheme === 'dark' ? 'dark' : ''}">
 <head>
-<meta charset="utf-8">
-<meta name="color-scheme" content="${scheme}">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoilStack .md — AI-Powered Markdown Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: ${scheme}; }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: ${lightV.primary};
+    --primary-strong: ${lightV.primary};
+    --text-on-primary: ${safeGetContrastColor(lightV.primary)};
+    --bg: ${lightV.background};
+    --surface: ${lightV.surface};
+    --text-primary: ${lightV.textPrimary};
+    --text-secondary: ${lightV.textSecondary};
+    --border: ${lightV.border};
+    --danger: ${lightV.danger};
+    --hero: linear-gradient(135deg, ${safeAdjustColor(lightV.primary, -25)} 0%, ${lightV.primary} 60%, ${safeAdjustColor(lightV.primary, 10)} 100%);
+    --chip-bg: rgba(${safeToRgb(lightV.primary)}, 0.12);
+    --input-bg: #f1f5f9;
+    --input-border: ${lightV.border};
+    --progress-bg: #f1f5f9;
+    --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.08);
+    --radius: ${lightV.borderRadius};
+    --font-family: ${lightV.fontFamily};
+  }
+
+  html.dark {
+    --primary: ${darkV.primary};
+    --primary-strong: ${darkV.primary};
+    --text-on-primary: ${safeGetContrastColor(darkV.primary)};
+    --bg: ${darkV.background};
+    --surface: ${darkV.surface};
+    --text-primary: ${darkV.textPrimary};
+    --text-secondary: ${darkV.textSecondary};
+    --border: ${darkV.border};
+    --danger: ${darkV.danger};
+    --hero: linear-gradient(135deg, ${safeAdjustColor(darkV.primary, -25)} 0%, ${darkV.primary} 60%, ${safeAdjustColor(darkV.primary, 10)} 100%);
+    --chip-bg: rgba(${safeToRgb(darkV.primary)}, 0.18);
+    --input-bg: rgba(255, 255, 255, 0.05);
+    --input-border: ${darkV.border};
+    --progress-bg: rgba(255, 255, 255, 0.1);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --radius: ${darkV.borderRadius};
+    --font-family: ${darkV.fontFamily};
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
   body {
-    background: ${ctxBg};
-    color: ${v.textPrimary};
-    font-family: ${v.fontFamily};
-    font-size: 13px;
-    padding: 16px;
+    font-family: var(--font-family);
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1.5;
+    background: var(--bg);
+    color: var(--text-primary);
+    transition: background 0.25s ease, color 0.25s ease;
+    overflow-x: hidden;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+
+  h1, h2, h3 {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .container {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Theme toggle */
+  #themeToggle {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 9999;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    font-size: 18px;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  #themeToggle:hover { transform: scale(1.06); }
+  #themeToggle:active { transform: scale(0.94); }
+
+  /* Nav */
+  header.nav {
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
+    font-weight: 800;
+  }
+  .brand .logo-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: calc(var(--radius) * 0.83);
+    background: var(--hero);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .nav-links {
+    display: flex;
+    gap: 28px;
+    align-items: center;
+  }
+  .nav-links a {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 14px;
+    transition: color 0.2s ease;
+  }
+  .nav-links a:hover { color: var(--primary); }
+  .nav-cta {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .btn {
+    border-radius: var(--radius);
+    padding: 10px 18px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--text-on-primary);
+  }
+  .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+  .menu-toggle { display: none; }
+
+  /* Hero */
+  .hero {
+    background: var(--hero);
+    color: #fff;
+    padding: 96px 24px 120px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 80% 20%, rgba(255,255,255,0.12), transparent 55%);
+  }
+  .hero-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 48px;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: 46px;
+    line-height: 1.12;
+    margin-bottom: 18px;
+  }
+  .hero p {
+    font-size: 16px;
+    color: rgba(255,255,255,0.88);
+    max-width: 480px;
+    margin-bottom: 28px;
+  }
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero .btn-primary {
+    background: #fff;
+    color: var(--primary);
+  }
+  .hero .btn-ghost {
+    border-color: rgba(255,255,255,0.4);
+    color: #fff;
+  }
+  .hero .btn-ghost:hover { border-color: #fff; color: #fff; background: rgba(255,255,255,0.1); }
+
+  .hero-stats {
+    display: flex;
+    gap: 28px;
+    margin-top: 40px;
+  }
+  .hero-stats div strong {
+    display: block;
+    font-size: 24px;
+    font-weight: 800;
+  }
+  .hero-stats div span {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+  }
+
+  .hero-visual {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow-md);
+    color: var(--text-primary);
+  }
+  .mock-window {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .mock-titlebar {
+    display: flex;
+    gap: 6px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .mock-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+  .mock-body {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr;
+    min-height: 220px;
+  }
+  .mock-tree {
+    border-right: 1px solid var(--border);
+    padding: 12px 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .mock-tree div { padding: 5px 6px; border-radius: calc(var(--radius) * 0.67); margin-bottom: 2px; }
+  .mock-tree div.active { background: var(--chip-bg); color: var(--primary); font-weight: 700; }
+  .mock-editor {
+    padding: 14px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    border-right: 1px solid var(--border);
+  }
+  .mock-editor .line { height: 8px; background: var(--border); opacity: 0.5; border-radius: 4px; margin-bottom: 8px; }
+  .mock-editor .line.w60 { width: 60%; }
+  .mock-editor .line.w80 { width: 80%; }
+  .mock-editor .line.w40 { width: 40%; }
+  .mock-chat { padding: 14px; font-size: 11px; }
+  .mock-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) * 0.83);
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+  }
+  .mock-bubble.ai { background: var(--chip-bg); color: var(--primary); border-color: transparent; }
+
+  /* Sections */
+  section { padding: 88px 24px; }
+  .section-head {
+    text-align: center;
+    max-width: 620px;
+    margin: 0 auto 52px;
+  }
+  .eyebrow {
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: block;
+  }
+  .section-head h2 { font-size: 32px; margin-bottom: 12px; }
+  .section-head p { color: var(--text-secondary); font-size: 15px; }
+
+  /* Feature grid */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
   }
   .card {
-    background: ${v.surface};
-    border: 1px solid ${v.border};
-    border-radius: ${v.borderRadius};
-    padding: 14px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 24px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
-  h3 { font-size: 14px; font-weight: 600; margin-bottom: 5px; }
-  p  { color: ${v.textSecondary}; font-size: 12px; line-height: 1.6; margin-bottom: 10px; }
-  .btn-row { display: flex; gap: 7px; flex-wrap: wrap; }
-  button {
-    display: inline-flex; align-items: center;
-    padding: 6px 13px; font-size: 12px; font-weight: 500;
-    border-radius: ${v.borderRadius}; border: none; cursor: pointer;
+  .card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+  .card .icon {
+    width: 42px;
+    height: 42px;
+    border-radius: calc(var(--radius) * 0.83);
+    background: var(--chip-bg);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+  .card h3 { font-size: 16px; margin-bottom: 8px; font-weight: 800; }
+  .card p { color: var(--text-secondary); font-size: 13.5px; }
+
+  /* Workflow / how it works */
+  .workflow {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+  .step {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    position: relative;
+  }
+  .step .num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--text-on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+  .step h3 { font-size: 14.5px; margin-bottom: 6px; }
+  .step p { color: var(--text-secondary); font-size: 13px; }
+
+  /* Providers */
+  .providers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .provider-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .provider-row .pname { font-weight: 700; font-size: 14px; }
+  .provider-row .ptag { font-size: 11px; color: var(--text-secondary); }
+  .chip {
+    background: var(--chip-bg);
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 999px;
+  }
+  .chip.danger { background: rgba(239,68,68,0.12); color: var(--danger); }
+
+  /* Progress demo */
+  .progress-track {
+    height: 6px;
+    background: var(--progress-bg);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 10px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--primary-strong);
+    border-radius: 999px;
+  }
+
+  /* Shortcuts */
+  .shortcut-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .shortcut-table th, .shortcut-table td {
+    text-align: left;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13.5px;
+  }
+  .shortcut-table th {
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: rgba(${safeToRgb(lightV.primary)}, 0.05);
+  }
+  .shortcut-table tr:last-child td { border-bottom: none; }
+  kbd {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
     font-family: inherit;
+    font-weight: 700;
+    font-size: 12px;
   }
-  .btn-primary { background: ${v.primary}; color: #fff; }
-  .btn-outline { background: transparent; color: ${v.primary}; border: 1px solid ${v.primary}; }
-  .btn-muted   { background: transparent; color: ${v.textSecondary}; border: 1px solid ${v.border}; }
-  .btn-danger  { background: ${v.danger}; color: #fff; }
-  input {
-    display: block; width: 100%;
-    padding: 6px 9px; margin-bottom: 9px;
-    background: ${v.background}; border: 1px solid ${v.border};
-    border-radius: ${v.borderRadius}; color: ${v.textPrimary};
-    font-size: 12px; font-family: inherit; outline: none;
+
+  /* CTA band */
+  .cta-band {
+    background: var(--hero);
+    color: #fff;
+    border-radius: 20px;
+    margin: 0 24px;
+    padding: 56px 32px;
+    text-align: center;
   }
-  .badge {
-    display: inline-flex; align-items: center;
-    font-size: 11px; padding: 2px 8px; border-radius: 999px;
-    background: rgba(${primaryRgb},.12); color: ${v.primary};
-    border: 1px solid rgba(${primaryRgb},.3);
+  .cta-band h2 { font-size: 28px; margin-bottom: 10px; }
+  .cta-band p { color: rgba(255,255,255,0.85); margin-bottom: 26px; }
+  .cta-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .cta-band .btn-primary { background: #fff; color: var(--primary); }
+  .cta-band .btn-ghost { border-color: rgba(255,255,255,0.4); color: #fff; }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 56px 24px 28px;
+    margin-top: 40px;
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: 32px;
+    padding-bottom: 36px;
+  }
+  .footer-brand p { color: var(--text-secondary); margin-top: 12px; font-size: 13px; max-width: 260px; }
+  .footer-col h4 { font-size: 13px; margin-bottom: 16px; }
+  .footer-col a {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 13px;
     margin-bottom: 10px;
+    transition: color 0.2s ease;
   }
-  .swatches { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .sw { display:flex; flex-direction:column; align-items:center; gap:3px; }
-  .sw-dot { width:28px; height:28px; border-radius:6px; border:1px solid ${v.border}; }
-  .sw-lbl { font-size:9px; color:${v.textSecondary}; }
+  .footer-col a:hover { color: var(--primary); }
+  .footer-bottom {
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+  }
+  .footer-badges { display: flex; gap: 8px; }
+  .footer-badges span {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  @media (max-width: 900px) {
+    .hero-inner { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 34px; }
+    .feature-grid { grid-template-columns: repeat(2, 1fr); }
+    .steps { grid-template-columns: repeat(2, 1fr); }
+    .providers { grid-template-columns: 1fr; }
+    .footer-grid { grid-template-columns: 1fr 1fr; }
+    .nav-links { display: none; }
+  }
+  @media (max-width: 560px) {
+    .feature-grid { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    .hero { padding: 76px 20px 90px; }
+    .hero-stats { gap: 18px; flex-wrap: wrap; }
+    .footer-grid { grid-template-columns: 1fr; }
+    section { padding: 64px 18px; }
+  }
 </style>
 </head>
 <body>
-  <div class="card">
-    <h3>Color Palette</h3>
-    <p>Extracted from your style guide.</p>
-    <div class="swatches">
-      <div class="sw"><div class="sw-dot" style="background:${v.primary}"></div><div class="sw-lbl">Primary</div></div>
-      <div class="sw"><div class="sw-dot" style="background:${v.background}"></div><div class="sw-lbl">BG</div></div>
-      <div class="sw"><div class="sw-dot" style="background:${v.surface}"></div><div class="sw-lbl">Surface</div></div>
-      <div class="sw"><div class="sw-dot" style="background:${v.textPrimary}"></div><div class="sw-lbl">Text</div></div>
-      <div class="sw"><div class="sw-dot" style="background:${v.textSecondary}"></div><div class="sw-lbl">Muted</div></div>
-      <div class="sw"><div class="sw-dot" style="background:${v.danger}"></div><div class="sw-lbl">Danger</div></div>
+
+<button id="themeToggle" aria-label="Toggle theme">🌙</button>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <div class="logo-mark">M</div>
+      MoilStack .md
+    </div>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#providers">AI Providers</a>
+      <a href="#shortcuts">Shortcuts</a>
+    </nav>
+    <div class="nav-cta">
+      <a href="#" class="btn btn-ghost">GitHub</a>
+      <a href="#" class="btn btn-primary">Download</a>
     </div>
   </div>
+</header>
 
-  <div class="card">
-    <h3>Typography</h3>
-    <p>Font: ${v.fontFamily.split(',')[0]} · Border radius: ${v.borderRadius}</p>
-    <span class="badge">Active</span>
-  </div>
-
-  <div class="card">
-    <h3>Form Elements</h3>
-    <input type="text" placeholder="Sample input field…" />
-    <div class="btn-row">
-      <button class="btn-primary">Primary</button>
-      <button class="btn-outline">Outline</button>
-      <button class="btn-muted">Muted</button>
-      <button class="btn-danger">Danger</button>
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <span class="hero-badge">✨ Local-first · AI-powered · Free</span>
+      <h1>Write Markdown. Let AI do the heavy lifting.</h1>
+      <p>MoilStack .md is a desktop Markdown editor with a built-in AI assistant — syntax highlighting, live preview, and instant document edits, all running privately on your machine.</p>
+      <div class="hero-actions">
+        <a href="#" class="btn btn-primary">⬇ Download for Windows</a>
+        <a href="#features" class="btn btn-ghost">Explore Features</a>
+      </div>
+      <div class="hero-stats">
+        <div><strong>10+</strong><span>AI Providers</span></div>
+        <div><strong>100%</strong><span>Local Files</span></div>
+        <div><strong>MIT</strong><span>Open Source</span></div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="mock-window">
+        <div class="mock-titlebar">
+          <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-tree">
+            <div class="active">📄 draft.md</div>
+            <div>📄 notes.md</div>
+            <div>📄 ideas.md</div>
+            <div>📁 archive</div>
+          </div>
+          <div class="mock-editor">
+            <div class="line w80"></div>
+            <div class="line w60"></div>
+            <div class="line"></div>
+            <div class="line w40"></div>
+            <div class="line w80"></div>
+            <div class="line w60"></div>
+          </div>
+          <div class="mock-chat">
+            <div class="mock-bubble">Fix grammar in intro</div>
+            <div class="mock-bubble ai">✓ Edited 3 lines. Undo?</div>
+            <div class="mock-bubble">Summarise this doc</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+</section>
+
+<section id="features">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Features</span>
+      <h2>Everything a writer actually needs</h2>
+      <p>A focused editor with the right amount of AI — powerful when you want it, invisible when you don't.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="card">
+        <div class="icon">⌗</div>
+        <h3>Dual-Pane Editor</h3>
+        <p>Syntax-highlighted Markdown editing with a live preview pane. Toggle with <kbd>Ctrl+\`</kbd> anytime.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🗂</div>
+        <h3>File Explorer</h3>
+        <p>Browse, create, rename, and open <code>.md</code> files from any folder without leaving the app.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🤖</div>
+        <h3>AI Assistant</h3>
+        <p>Ask the AI to edit your document, answer questions, or improve your writing in plain language.</p>
+      </div>
+      <div class="card">
+        <div class="icon">⚡</div>
+        <h3>Smart AI Editing</h3>
+        <p>Document edits are applied silently and instantly — informational answers stream as chat instead.</p>
+      </div>
+      <div class="card">
+        <div class="icon">↺</div>
+        <h3>Undo AI Edits</h3>
+        <p>Every AI change is reversible with the Undo button on the chat bubble or <kbd>Ctrl+Z</kbd>.</p>
+      </div>
+      <div class="card">
+        <div class="icon">▦</div>
+        <h3>Visual Table Builder</h3>
+        <p>Insert Markdown tables with a point-and-click grid editor — no manual pipe counting.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🏷</div>
+        <h3>File Labels</h3>
+        <p>Colour-tag files in the explorer for quick visual navigation across large projects.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🛡</div>
+        <h3>Automatic Backups</h3>
+        <p>Every AI edit is snapshotted to <code>.markflow/backups/</code> before it touches your file.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🧩</div>
+        <h3>Multi-Model Support</h3>
+        <p>Connect any OpenAI-compatible API — Groq, OpenAI, Mistral, Together AI — or run Ollama locally.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📄</div>
+        <h3>Export to PDF</h3>
+        <p>One-click export via the native save dialog, ready to share or print.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🌗</div>
+        <h3>Dark / Light Theme</h3>
+        <p>A polished theme for every hour of the day, persisted automatically across sessions.</p>
+      </div>
+      <div class="card">
+        <div class="icon">⚙</div>
+        <h3>Configurable Editor</h3>
+        <p>Tune font size and font family so the editor feels like yours.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works" class="workflow">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">How it works</span>
+      <h2>From prompt to polished document</h2>
+      <p>Select, ask, and review — the AI handles the edit, you stay in control.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h3>Open a folder</h3>
+        <p>Point MoilStack .md at any folder of <code>.md</code> files to start browsing and editing.</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h3>Select scope (optional)</h3>
+        <p>Highlight specific lines in the editor to scope the AI's next edit precisely.</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h3>Prompt the assistant</h3>
+        <p>Type a request like "make the intro more concise" and press <kbd>Enter</kbd>.</p>
+      </div>
+      <div class="step">
+        <div class="num">4</div>
+        <h3>Review or undo</h3>
+        <p>Edits apply instantly with a change summary — revert anytime with <kbd>Ctrl+Z</kbd>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="providers">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">AI Providers</span>
+      <h2>Bring your own model</h2>
+      <p>MoilStack .md speaks the OpenAI Chat Completions format — connect a cloud provider or run fully offline with Ollama.</p>
+    </div>
+    <div class="providers">
+      <div class="provider-row">
+        <div><div class="pname">Groq</div><div class="ptag">llama-3.3-70b-versatile</div></div>
+        <span class="chip">Free tier</span>
+      </div>
+      <div class="provider-row">
+        <div><div class="pname">Google Gemini</div><div class="ptag">gemini-2.0-flash</div></div>
+        <span class="chip">Free tier</span>
+      </div>
+      <div class="provider-row">
+        <div><div class="pname">OpenRouter</div><div class="ptag">Free models available</div></div>
+        <span class="chip">Free tier</span>
+      </div>
+      <div class="provider-row">
+        <div><div class="pname">Mistral AI</div><div class="ptag">Compatible endpoint</div></div>
+        <span class="chip">Free tier</span>
+      </div>
+      <div class="provider-row">
+        <div><div class="pname">Together AI</div><div class="ptag">$1 signup credit</div></div>
+        <span class="chip">Free tier</span>
+      </div>
+      <div class="provider-row">
+        <div><div class="pname">OpenAI</div><div class="ptag">gpt-4o-mini</div></div>
+        <span class="chip">Paid</span>
+      </div>
+      <div class="provider-row">
+        <div><div class="pname">Ollama (local)</div><div class="ptag">qwen2.5:7b · fully private</div></div>
+        <span class="chip">Free · Offline</span>
+      </div>
+      <div class="provider-row">
+        <div><div class="pname">Azure OpenAI</div><div class="ptag">Deployment-specific endpoint</div></div>
+        <span class="chip">Limited</span>
+      </div>
+      <div class="provider-row">
+        <div><div class="pname">Anthropic Claude</div><div class="ptag">Different API format</div></div>
+        <span class="chip danger">Unsupported</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="shortcuts">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Keyboard Shortcuts</span>
+      <h2>Stay on the keyboard</h2>
+      <p>Every core action in MoilStack .md is one shortcut away.</p>
+    </div>
+    <table class="shortcut-table">
+      <thead>
+        <tr><th>Shortcut</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><kbd>Ctrl+S</kbd></td><td>Save file</td></tr>
+        <tr><td><kbd>Ctrl+Z</kbd></td><td>Undo (AI edits first, then native undo)</td></tr>
+        <tr><td><kbd>Ctrl+\`</kbd></td><td>Toggle Edit / Preview mode</td></tr>
+        <tr><td><kbd>Ctrl+O</kbd></td><td>Open folder picker</td></tr>
+        <tr><td><kbd>Ctrl+N</kbd></td><td>New file in current folder</td></tr>
+        <tr><td><kbd>Ctrl+F</kbd></td><td>Find & replace</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Send chat message</td></tr>
+        <tr><td><kbd>Alt+Enter</kbd></td><td>New line in chat input</td></tr>
+        <tr><td><kbd>Escape</kbd></td><td>Close any open modal or dropdown</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="cta-band">
+    <h2>Start writing with AI at your side</h2>
+    <p>Free, local-first, and open source under MIT. Windows installers available today.</p>
+    <div class="cta-actions">
+      <a href="#" class="btn btn-primary">⬇ Download for Windows</a>
+      <a href="#" class="btn btn-ghost">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="brand">
+          <div class="logo-mark">M</div>
+          MoilStack .md
+        </div>
+        <p>A desktop Markdown editor with an integrated AI assistant, built with Electron. Write and edit locally — your files never leave your machine unless you choose a cloud model.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#providers">AI Providers</a>
+        <a href="#shortcuts">Shortcuts</a>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <a href="#">Documentation</a>
+        <a href="#">Changelog</a>
+        <a href="#">Releases</a>
+        <a href="#">Report an issue</a>
+      </div>
+      <div class="footer-col">
+        <h4>Project</h4>
+        <a href="#">GitHub</a>
+        <a href="#">License (MIT)</a>
+        <a href="#">Branding Policy</a>
+        <a href="#">Contributing</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 MoilStack. Released under the MIT License.</span>
+      <div class="footer-badges">
+        <span>Windows</span>
+        <span>Electron</span>
+        <span>v1.1.0</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var toggle = document.getElementById('themeToggle');
+
+    function applyTheme(isDark) {
+      if (isDark) {
+        root.classList.add('dark');
+        toggle.textContent = '☀️';
+      } else {
+        root.classList.remove('dark');
+        toggle.textContent = '🌙';
+      }
+    }
+
+    applyTheme(root.classList.contains('dark'));
+
+    toggle.addEventListener('click', function () {
+      applyTheme(!root.classList.contains('dark'));
+    });
+  })();
+</script>
+
 </body>
-</html>`;
+</html>\`;
   }
 
   // ----------------------------------------------------------------
@@ -3865,10 +4667,13 @@ Spacing:
     };
 
     const renderPreview = () => {
-      const tpl   = getActiveTpl();
-      const frame = main.querySelector('#scrDsPreviewFrame');
-      frame.srcdoc = tpl
-        ? this._buildPreviewHtml(this._parseDesignTemplate(tpl, activeTheme), activeTheme)
+      const lightText = main.querySelector('#scrDsTplLight').value;
+      const darkText  = main.querySelector('#scrDsTplDark').value;
+      const lightV    = this._parseDesignTemplate(lightText, 'light');
+      const darkV     = this._parseDesignTemplate(darkText, 'dark');
+      const frame     = main.querySelector('#scrDsPreviewFrame');
+      frame.srcdoc    = (lightText.trim() || darkText.trim())
+        ? this._buildPreviewHtml(lightV, darkV, activeTheme)
         : blankHtml(activeTheme);
     };
 
