@@ -1,6 +1,6 @@
 'use strict';
 
-const { ipcMain, dialog, BrowserWindow, screen } = require('electron');
+const { ipcMain, dialog, BrowserWindow } = require('electron');
 const { safeHandle } = require('../../ipc-safe-handle');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
@@ -48,10 +48,7 @@ function registerDialogHandlers() {
   safeHandle('window:expand', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
-    const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-    const w = Math.max(1100, Math.round(sw * 0.75));
-    const h = Math.max(700,  Math.round(sh * 0.90));
-    win.setSize(w, h);
+    win.setSize(1600, 1050);
     win.center();
   });
 

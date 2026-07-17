@@ -63,7 +63,7 @@ export class WorkflowRunnerPage {
     this._onWinResize = null;
 
     // git diff panel
-    this._gitPanelVisible  = false;
+    this._gitPanelVisible  = true;
     this._gitFiles         = [];
     this._gitPollInterval  = null;
     this._gitExpandedFiles = new Set();
@@ -613,7 +613,14 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   _updateLayerHeader() {
     const layer  = this._layers.find(l => l.id === this._selectedId);
     const nameEl = this.container.querySelector('#wfrOutputLayerName');
-    if (nameEl) nameEl.textContent = layer?.layer || '';
+    if (nameEl) {
+      nameEl.textContent = layer
+        ? (layer.purpose ? `${layer.layer} - Purpose: ${layer.purpose}` : layer.layer)
+        : '';
+      nameEl.title = layer?.purpose ? `${layer.layer} - Purpose: ${layer.purpose}` : '';
+    }
+    const titleEl = this.container.querySelector('#wfrHeaderTitle');
+    if (titleEl) titleEl.textContent = this._headerTitleText();
     const cwdEl = this.container.querySelector('#wfrOutputCwd');
     if (cwdEl) {
       const cwd = layer ? this._getCwd(layer) : null;
@@ -725,13 +732,24 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       </header>`;
   }
 
+  /** Raw (unescaped) text — callers must escHtml() it for innerHTML use. */
+  _headerTitleText() {
+    const wf    = this._workflow;
+    const title = wf?.feature || 'Workflow';
+    return `Workflow: ${title}`;
+  }
+
   _render() {
     const wf     = this._workflow;
-    const name   = wf ? escHtml(wf.feature || 'Workflow') : 'Workflow';
     const wfId   = wf?.id   || '';
     const wfName = wf?.feature || 'Workflow';
 
-    const closeBtnHtml = this._embedded ? '' : `
+    const closeBtnHtml = this._embedded ? `
+          <button class="wfr-back-btn" id="wfrBtnClose" aria-label="Back">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+          </button>` : `
           <button class="wfr-back-btn" id="wfrBtnClose" aria-label="Close window">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
@@ -742,7 +760,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       <div class="wfr-page">
         <header class="wfr-header">
           ${closeBtnHtml}
-          <span class="wfr-header__title">${name} — Run Layers</span>
+          <span class="wfr-header__title" id="wfrHeaderTitle">${escHtml(this._headerTitleText())}</span>
           <div class="wfr-header__actions">
             <button class="wfr-perm-btn wfr-perm-btn--on" id="wfrBtnSkipPerms" aria-pressed="true" title="When ON: skips all tool permission prompts (--dangerously-skip-permissions). When OFF: Claude asks before each tool use.">
               Skip Permissions: <span id="wfrSkipPermsLabel">ON</span>
@@ -750,7 +768,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
             <div class="project-page__model-group wfr-header__model" style="-webkit-app-region:no-drag;">
               <div id="wfrModelPicker"></div>
             </div>
-<button class="wfr-git-toggle-btn" id="wfrBtnGitToggle" title="Toggle Git Changes">
+<button class="wfr-git-toggle-btn${this._gitPanelVisible ? ' wfr-git-toggle-btn--active' : ''}" id="wfrBtnGitToggle" title="Toggle Git Changes">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
                 <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
@@ -804,7 +822,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
             <div class="wfr-terminal-wrap" id="wfrTerminal"></div>
 
             <!-- Git diff overlay — absolute, slides in from the right -->
-            <aside class="wfr-git-panel" id="wfrGitPanel" hidden>
+            <aside class="wfr-git-panel" id="wfrGitPanel"${this._gitPanelVisible ? '' : ' hidden'}>
               <div class="wfr-git-panel__header">
                 <span class="wfr-git-panel__title">Git Changes</span>
                 <span class="wfr-git-panel__badge" id="wfrGitPanelBadge" hidden></span>
@@ -1162,22 +1180,11 @@ this.container.querySelector('#wfrBtnSkipPerms')
 
   _applyWidthMode(width) {
     const layout = this.container.querySelector('.wfr-body');
-    const panel  = this.container.querySelector('#wfrGitPanel');
-    const toggle = this.container.querySelector('#wfrBtnGitToggle');
     if (!layout) return;
     const isWide = width >= 1100;
     if (isWide === this._isWideMode) return;
     this._isWideMode = isWide;
     layout.classList.toggle('wfr-body--wide', isWide);
-    if (isWide) {
-      panel?.removeAttribute('hidden');
-      this._gitPanelVisible = true;
-      toggle?.classList.add('wfr-git-toggle-btn--active');
-      this._refreshGitPanel();
-    } else {
-      if (!this._gitPanelVisible) panel?.setAttribute('hidden', '');
-      toggle?.classList.toggle('wfr-git-toggle-btn--active', this._gitPanelVisible);
-    }
   }
 
   _startGitPolling() {

@@ -1036,7 +1036,7 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.wf-layer-status--open   { background: var(--surface-hover); color: var(--text-muted); }
+.wf-layer-status--open   { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); padding: 0 5px; }
 .wf-layer-status--done   { background: rgba(34,197,94,.12);  color: #16a34a; }
 .wf-layer-status--error  { background: rgba(239,68,68,.12);  color: #dc2626; }
 .wf-layer-status--review { background: rgba(234,179,8,.12);  color: #b45309; }
@@ -1063,7 +1063,7 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.wf-wfstatus--open     { background: var(--surface-hover); color: var(--text-muted); }
+.wf-wfstatus--open     { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); padding: 1px 6px; }
 .wf-wfstatus--progress { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 .wf-wfstatus--done     { background: rgba(34,197,94,.12); color: #16a34a; }
 .wf-wfstatus--differed { background: rgba(168,85,247,.12); color: #9333ea; }

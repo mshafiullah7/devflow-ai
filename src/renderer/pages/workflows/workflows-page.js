@@ -1267,7 +1267,7 @@ ${base}`;
 
     this.container.querySelector('#wfBtnGenerate')
       ?.addEventListener('click', () => {
-        this.router.navigate('generate-workflows', {
+        this.router.navigateTo('generate-workflows', {
           projectId:   this._projectId,
           modelConfig: this._aiModelConfig,
         });

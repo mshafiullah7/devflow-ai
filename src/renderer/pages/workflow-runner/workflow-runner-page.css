@@ -305,7 +305,7 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.wfr-status--open    { background: var(--surface-hover); color: var(--text-muted); }
+.wfr-status--open    { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); padding: 1px 5px; }
 .wfr-status--running { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 .wfr-status--done    { background: rgba(34,197,94,.12); color: #16a34a; }
 .wfr-status--error   { background: rgba(239,68,68,.12); color: #dc2626; }
@@ -376,7 +376,10 @@
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary);
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .wfr-elapsed {
   font-size: 11px;
@@ -492,17 +495,19 @@
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-/* ── Wide layout: git panel becomes fixed right sidebar ─────────────── */
+/* ── Wide layout: git panel becomes fixed right sidebar (still toggleable) ── */
 
 .wfr-body--wide .wfr-output-panel {
   display: grid;
   grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr;
+}
+.wfr-body--wide .wfr-output-panel:has(#wfrGitPanel:not([hidden])) {
   grid-template-columns: 60% 40%;
 }
 .wfr-body--wide .wfr-output-header { grid-column: 1 / -1; grid-row: 1; }
 .wfr-body--wide .wfr-terminal-wrap { grid-column: 1; grid-row: 2; min-height: 0; }
 .wfr-body--wide .wfr-git-panel {
-  display: flex !important;  /* override [hidden] */
   grid-column: 2;
   grid-row: 2;
   position: relative;
@@ -510,7 +515,6 @@
   box-shadow: none;
   top: auto; right: auto; bottom: auto;
 }
-.wfr-body--wide .wfr-git-toggle-btn { display: none; }
 
 
 .wfr-git-badge {

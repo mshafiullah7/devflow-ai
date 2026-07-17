@@ -267,12 +267,32 @@ export class GenerateWorkflowsPage {
     await this._init(this._params);
   }
 
+  /**
+   * Called by the persistent-page host when this route is activated again.
+   * Opening the generator for a different project re-inits in place;
+   * re-showing the same project's session just leaves the in-progress
+   * generation (or its result) exactly as it was.
+   */
+  onResume(params) {
+    if (params && params.projectId !== this._projectId) {
+      this._init(params);
+    }
+  }
+
+  /** Fully stops the running generation and tears down the page (explicit close, not a tab switch). */
   unmount() {
+    if (this._generating) window.app.genWorkflowChat.cancel();
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     if (this._picker)   { this._picker.unmount(); this._picker = null; }
     window.app.genWorkflowChat.offAll();
+    if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
     removeCss('pages/generate-workflows/generate-workflows-page.css');
     removeCss('components/project-sidebar/project-sidebar.css');
+  }
+
+  _handleClose() {
+    this._router?.closePersistentRoute?.('generate-workflows');
+    this._router?.navigateTo?.('workflows', { projectId: this._projectId });
   }
 
   // ----------------------------------------------------------------
@@ -353,14 +373,22 @@ export class GenerateWorkflowsPage {
             <span class="project-home__badge-name">${escHtml(name)}</span>
           </div>
           <span class="ph-header-page-chip">Generate Workflows</span>
-          <div class="ph-header-actions">
-            <div id="gwModelPicker"></div>
-          </div>
         </header>
 
         <div class="ph-page-with-nav">
           ${this._sidebar.html()}
           <div class="gw-page">
+            <header class="gw-header">
+              <button class="gw-back-btn" id="gwBtnBack" aria-label="Back">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 12H5M12 5l-7 7 7 7"/>
+                </svg>
+              </button>
+              <span class="gw-header__title">Generate Workflows</span>
+              <div class="gw-header__model">
+                <div id="gwModelPicker"></div>
+              </div>
+            </header>
             <div class="gw-body">
           <!-- ── Sidebar ── -->
           <aside class="gw-sidebar">
@@ -500,7 +528,10 @@ export class GenerateWorkflowsPage {
   // ----------------------------------------------------------------
   _bindEvents() {
     this.container.querySelector('#gwBtnClose')
-      ?.addEventListener('click', () => this._router.navigate('workflows', { projectId: this._projectId }));
+      ?.addEventListener('click', () => this._handleClose());
+
+    this.container.querySelector('#gwBtnBack')
+      ?.addEventListener('click', () => this._handleClose());
 
     // Screen selection
     this.container.querySelectorAll('[data-screen-id]').forEach(el => {
@@ -849,7 +880,7 @@ export class GenerateWorkflowsPage {
           <button class="gw-close-btn" id="gwBtnClose">Close Window</button>
         </div>`;
       preview.querySelector('#gwBtnClose')
-        ?.addEventListener('click', () => this._router.navigate('workflows', { projectId: this._projectId }));
+        ?.addEventListener('click', () => this._handleClose());
     }
   }
 
