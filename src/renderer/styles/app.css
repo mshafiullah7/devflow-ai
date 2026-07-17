@@ -8,6 +8,7 @@
 /* Themes                                                               */
 /* ------------------------------------------------------------------ */
 [data-theme="light"] {
+  color-scheme: light;
   --bg:             #fafaf8;
   --surface:        #ffffff;
   --surface-header: #f4f3ef;
@@ -47,6 +48,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg:             #282c34;
   --surface:        #2c313c;
   --surface-header: #21252b;
@@ -84,6 +86,7 @@
 }
 
 [data-theme="midnight"] {
+  color-scheme: dark;
   --bg:             #000000;
   --surface:        #0a0a0f;
   --surface-header: #060608;

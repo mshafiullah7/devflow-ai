@@ -1,6 +1,8 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }       from '../../components/model-picker/model-picker.js';
+import { ProjectSidebar }    from '../../components/project-sidebar/project-sidebar.js';
+import { Dialog }            from '../../components/dialog/dialog.js';
 
 /* ------------------------------------------------------------------ */
 /* Built-in preset examples (shipped with the app)                     */
@@ -182,12 +184,16 @@ export class StyleGuidePage {
     this._aiModelConfig = null;
     this._libraryThemes = [];
     this._generating    = false;
+    this._themeMenuOpen   = false;
+    this._selectedThemeId = '';
+    this._handleThemeMenuOutside = this._handleThemeMenuOutside.bind(this);
   }
 
   async mount() {
     injectCss('styles/screens.css');
     injectCss('pages/mockups/mockups-page.css');
     injectCss('pages/style-guide/style-guide-page.css');
+    injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
     this._project = await window.db.projects.get(this._projectId);
@@ -200,14 +206,18 @@ export class StyleGuidePage {
     await this._picker.reload();
 
     this._bindEvents();
+    this._sidebar.bindEvents(this.container);
+    this._sidebar.loadCounts(this.container);
     await this._seedBuiltinThemes();
     await this._loadThemeDropdown();
   }
 
   unmount() {
     window.app.chat.offAll();
+    document.removeEventListener('click', this._handleThemeMenuOutside, true);
     removeCss('pages/style-guide/style-guide-page.css');
     removeCss('pages/mockups/mockups-page.css');
+    removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
     removeCss('styles/screens.css');
   }
@@ -229,9 +239,10 @@ export class StyleGuidePage {
     const name   = escHtml(this._project?.name ?? 'Project');
     const parts  = this._getTemplateParts();
     const hasAny = this._hasAnyTemplate();
+    this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'style-guide' });
 
     return `
-      <div class="sg-page">
+      <div class="ph-project-shell">
         <header class="sg-page__header">
           <button class="sg-page__back" id="sgBtnBack" aria-label="Back">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -257,11 +268,17 @@ export class StyleGuidePage {
           </span>
         </header>
 
+        <div class="ph-page-with-nav">
+          ${this._sidebar.html()}
+          <div class="sg-page">
         <div class="sg-page__body">
-          <p class="sg-page__hint">
-            Define colours, typography, spacing, and component styles for light and dark themes.
-            Both are injected into every screen generation prompt.
-          </p>
+          <div class="sg-page__toolbar">
+            <p class="sg-page__hint">
+              Define colours, typography, spacing, and component styles for light and dark themes.
+              Both are injected into every screen generation prompt.
+            </p>
+            <div class="sg-theme-picker" id="sgThemePickerAnchor"></div>
+          </div>
 
           <div class="sg-page__editor">
 
@@ -340,31 +357,14 @@ export class StyleGuidePage {
 
           <!-- Actions bar -->
           <div class="sg-page__actions">
-            <div class="sg-page__actions-left">
-              <select class="sg-page__theme-select" id="sgThemeSelect">
-                <option value="">— Select a theme —</option>
-              </select>
-              <button class="scr-btn scr-btn--sm" id="sgNewBtn">New</button>
-            </div>
             <div class="sg-page__actions-right">
-              <button class="scr-btn scr-btn--sm scr-btn--accent" id="sgSaveToLibraryBtn">Save to Library</button>
+              <button class="scr-btn scr-btn--accent" id="sgSaveToLibraryBtn" type="button">Add to Library</button>
               <button class="scr-btn scr-btn--primary" id="sgSaveBtn">Apply</button>
             </div>
           </div>
 
-          <!-- Save to Library inline form (hidden by default) -->
-          <div class="sg-page__lib-save-form" id="sgLibSaveForm" style="display:none">
-            <input
-              type="text"
-              class="form-input sg-page__lib-name-input"
-              id="sgLibNameInput"
-              placeholder="Theme name (e.g. My Dark Indigo)…"
-              maxlength="60"
-            />
-            <button class="scr-btn scr-btn--primary scr-btn--sm" id="sgLibSaveConfirm">Save</button>
-            <button class="scr-btn scr-btn--sm" id="sgLibSaveCancel">Cancel</button>
+        </div>
           </div>
-
         </div>
       </div>
     `;
@@ -385,7 +385,8 @@ export class StyleGuidePage {
 
     const blankHtml = theme => {
       const bg = { dark: '#0f1117', light: '#f0ece6' }[theme] || '#0f1117';
-      return `<html><body style="margin:0;height:100vh;background:${bg};display:flex;align-items:center;justify-content:center;font-family:system-ui"><p style="color:#6b7280;font-size:12px;text-align:center">No ${theme} template yet.<br>Add one on the left to see the preview.</p></body></html>`;
+      const scheme = theme === 'light' ? 'light' : 'dark';
+      return `<html><head><meta name="color-scheme" content="${scheme}"><style>:root{color-scheme:${scheme}}</style></head><body style="margin:0;height:100vh;background:${bg};display:flex;align-items:center;justify-content:center;font-family:system-ui"><p style="color:#6b7280;font-size:12px;text-align:center">No ${theme} template yet.<br>Add one on the left to see the preview.</p></body></html>`;
     };
 
     const getActiveTpl = () => (activeTheme === 'light'
@@ -401,28 +402,13 @@ export class StyleGuidePage {
     const renderPreview = () => {
       const tpl = getActiveTpl();
       frame.srcdoc = tpl
-        ? this._buildPreviewHtml(this._parseDesignTemplate(tpl), activeTheme)
+        ? this._buildPreviewHtml(this._parseDesignTemplate(tpl, activeTheme), activeTheme)
         : blankHtml(activeTheme);
     };
 
-    /* ---- Theme dropdown ---- */
-    this.container.querySelector('#sgThemeSelect').addEventListener('change', e => {
-      const id = Number(e.target.value);
-      if (!id) return;
-      const theme = this._libraryThemes.find(t => t.id === id);
-      if (!theme) return;
-      this.container.querySelector('#sgTplLight').value = theme.light || '';
-      this.container.querySelector('#sgTplDark').value  = theme.dark  || '';
-      renderPreview();
-    });
-
-    /* ---- New button ---- */
-    this.container.querySelector('#sgNewBtn').addEventListener('click', () => {
-      this.container.querySelector('#sgTplLight').value = '';
-      this.container.querySelector('#sgTplDark').value  = '';
-      this.container.querySelector('#sgThemeSelect').value = '';
-      renderPreview();
-    });
+    /* ---- Theme dropdown (custom, matches AI Model picker) ---- */
+    this._renderPreview = renderPreview;
+    this._renderThemePicker();
 
     /* ---- Textarea live preview ---- */
     this.container.querySelector('#sgTplLight').addEventListener('input', () => { if (activeTheme === 'light') renderPreview(); });
@@ -464,42 +450,20 @@ export class StyleGuidePage {
       }, 2000);
     });
 
-    this._renderPreview = renderPreview;
+    /* ---- Save to Library (centered modal, consistent with Project Layers) ---- */
+    this.container.querySelector('#sgSaveToLibraryBtn').addEventListener('click', async () => {
+      const name = await Dialog.prompt('Name this theme to save it to the shared library.', {
+        title:       'Add to Library',
+        placeholder: 'Theme name (e.g. My Dark Indigo)…',
+        confirmText: 'Save',
+        maxLength:   60,
+      });
+      if (!name) return;
 
-    /* ---- Save to Library ---- */
-    const saveToLibBtn   = this.container.querySelector('#sgSaveToLibraryBtn');
-    const libSaveForm    = this.container.querySelector('#sgLibSaveForm');
-    const libNameInput   = this.container.querySelector('#sgLibNameInput');
-    const libSaveConfirm = this.container.querySelector('#sgLibSaveConfirm');
-    const libSaveCancel  = this.container.querySelector('#sgLibSaveCancel');
-
-    saveToLibBtn.addEventListener('click', () => {
-      libSaveForm.style.display = '';
-      libNameInput.value = '';
-      libNameInput.focus();
-    });
-
-    libSaveCancel.addEventListener('click', () => {
-      libSaveForm.style.display = 'none';
-    });
-
-    libSaveConfirm.addEventListener('click', async () => {
-      const name  = libNameInput.value.trim();
-      if (!name) { libNameInput.focus(); return; }
       const light = this.container.querySelector('#sgTplLight').value.trim();
       const dark  = this.container.querySelector('#sgTplDark').value.trim();
-      libSaveConfirm.disabled    = true;
-      libSaveConfirm.textContent = 'Saving…';
       await window.db.savedThemes.create({ name, light, dark });
-      libSaveConfirm.disabled    = false;
-      libSaveConfirm.textContent = 'Save';
-      libSaveForm.style.display  = 'none';
       await this._loadThemeDropdown();
-    });
-
-    libNameInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') libSaveConfirm.click();
-      if (e.key === 'Escape') libSaveCancel.click();
     });
 
     this._bindAiPane();
@@ -766,19 +730,98 @@ Rules:
   }
 
   async _loadThemeDropdown() {
-    const select = this.container.querySelector('#sgThemeSelect');
-    if (!select) return;
     this._libraryThemes = await window.db.savedThemes.list();
-    const current = select.value;
-    select.innerHTML = '<option value="">— Select a theme —</option>' +
-      this._libraryThemes.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
-    if (current && this._libraryThemes.some(t => String(t.id) === current)) select.value = current;
+    this._renderThemePicker();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Custom "Themes" dropdown — mirrors the AI Model picker so the       */
+  /* expanded list renders with app colors instead of the native <select> */
+  /* popup (which Chromium always paints with the OS light scheme).      */
+  /* ------------------------------------------------------------------ */
+  _renderThemePicker() {
+    const anchor = this.container.querySelector('#sgThemePickerAnchor');
+    if (!anchor) return;
+
+    const open = this._themeMenuOpen;
+    const selected = this._selectedThemeId === '__empty__'
+      ? 'Empty Template'
+      : this._libraryThemes.find(t => String(t.id) === String(this._selectedThemeId))?.name;
+
+    anchor.innerHTML = `
+      <div class="sg-theme-picker__wrap">
+        <button class="sg-theme-picker__trigger" type="button" id="sgThemeTrigger"
+                aria-haspopup="listbox" aria-expanded="${open}">
+          <span class="sg-theme-picker__label">${escHtml(selected || 'Themes')}</span>
+          <svg class="sg-theme-picker__caret${open ? ' sg-theme-picker__caret--open' : ''}"
+               width="10" height="10" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        ${open ? `
+          <div class="sg-theme-picker__menu" role="listbox">
+            <button class="sg-theme-picker__item${this._selectedThemeId === '__empty__' ? ' sg-theme-picker__item--active' : ''}"
+                    data-id="__empty__" role="option" type="button">Empty Template</button>
+            ${this._libraryThemes.map(t => `
+              <button class="sg-theme-picker__item${String(this._selectedThemeId) === String(t.id) ? ' sg-theme-picker__item--active' : ''}"
+                      data-id="${t.id}" role="option" type="button">${escHtml(t.name)}</button>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    anchor.querySelector('#sgThemeTrigger').addEventListener('click', e => {
+      e.stopPropagation();
+      this._themeMenuOpen = !this._themeMenuOpen;
+      if (this._themeMenuOpen) document.addEventListener('click', this._handleThemeMenuOutside, true);
+      else                     document.removeEventListener('click', this._handleThemeMenuOutside, true);
+      this._renderThemePicker();
+    });
+
+    if (open) {
+      anchor.querySelectorAll('.sg-theme-picker__item').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          this._pickTheme(btn.dataset.id);
+        });
+      });
+    }
+  }
+
+  _pickTheme(id) {
+    this._selectedThemeId = id;
+    this._themeMenuOpen   = false;
+    document.removeEventListener('click', this._handleThemeMenuOutside, true);
+
+    if (id === '__empty__') {
+      this.container.querySelector('#sgTplLight').value = '';
+      this.container.querySelector('#sgTplDark').value  = '';
+    } else {
+      const theme = this._libraryThemes.find(t => String(t.id) === String(id));
+      if (theme) {
+        this.container.querySelector('#sgTplLight').value = theme.light || '';
+        this.container.querySelector('#sgTplDark').value  = theme.dark  || '';
+      }
+    }
+    this._renderPreview?.();
+    this._renderThemePicker();
+  }
+
+  _handleThemeMenuOutside(e) {
+    const anchor = this.container.querySelector('#sgThemePickerAnchor');
+    if (anchor && !anchor.contains(e.target)) {
+      this._themeMenuOpen = false;
+      document.removeEventListener('click', this._handleThemeMenuOutside, true);
+      this._renderThemePicker();
+    }
   }
 
   /* ------------------------------------------------------------------ */
   /* Preview rendering                                                   */
   /* ------------------------------------------------------------------ */
-  _parseDesignTemplate(text) {
+  _parseDesignTemplate(text, theme = 'dark') {
     const lines = text.split('\n');
     const hexRe = /#[0-9a-fA-F]{6,8}\b|#[0-9a-fA-F]{3,4}\b/;
     const r = {
@@ -805,14 +848,34 @@ Rules:
         if (rx) r.borderRadius = `${rx[1]}px`;
       }
     }
+    const fallback = theme === 'light'
+      ? {
+          primary:       '#6366f1',
+          background:    '#ffffff',
+          surface:       '#f4f4f5',
+          textPrimary:   '#18181b',
+          textSecondary: '#52525b',
+          border:        '#d4d4d8',
+          danger:        '#ef4444',
+        }
+      : {
+          primary:       '#6366f1',
+          background:    '#0f1117',
+          surface:       '#1a1d27',
+          textPrimary:   '#f1f5f9',
+          textSecondary: '#94a3b8',
+          border:        '#2a2d3e',
+          danger:        '#ef4444',
+        };
+
     return {
-      primary:       r.primary       || '#6366f1',
-      background:    r.background    || '#0f1117',
-      surface:       r.surface       || '#1a1d27',
-      textPrimary:   r.textPrimary   || '#f1f5f9',
-      textSecondary: r.textSecondary || '#94a3b8',
-      border:        r.border        || '#2a2d3e',
-      danger:        r.danger        || '#ef4444',
+      primary:       r.primary       || fallback.primary,
+      background:    r.background    || fallback.background,
+      surface:       r.surface       || fallback.surface,
+      textPrimary:   r.textPrimary   || fallback.textPrimary,
+      textSecondary: r.textSecondary || fallback.textSecondary,
+      border:        r.border        || fallback.border,
+      danger:        r.danger        || fallback.danger,
       fontFamily:    r.fontFamily    || "'Segoe UI', system-ui, sans-serif",
       borderRadius:  r.borderRadius  || '8px',
     };
@@ -825,7 +888,9 @@ Rules:
       return [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16)).join(',');
     };
     const primaryRgb = toRgb(v.primary);
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    const scheme = contextTheme === 'light' ? 'light' : 'dark';
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="${scheme}"><style>
+:root{color-scheme:${scheme}}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{background:${v.background};color:${v.textPrimary};font-family:${v.fontFamily};font-size:13px;padding:16px;display:flex;flex-direction:column;gap:12px;min-height:100vh}
 .card{background:${v.surface};border:1px solid ${v.border};border-radius:${v.borderRadius};padding:14px}

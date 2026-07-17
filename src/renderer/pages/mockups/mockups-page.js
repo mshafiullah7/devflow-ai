@@ -3176,7 +3176,7 @@ export class MockupsPage {
   // ----------------------------------------------------------------
   // Design template parser + preview builder
   // ----------------------------------------------------------------
-  _parseDesignTemplate(text) {
+  _parseDesignTemplate(text, theme = 'dark') {
     const lines  = text.split('\n');
     const hexRe  = /#[0-9a-fA-F]{6,8}\b|#[0-9a-fA-F]{3,4}\b/;
     const r = {
@@ -3213,14 +3213,34 @@ export class MockupsPage {
       }
     }
 
+    const fallback = theme === 'light'
+      ? {
+          primary:       '#6366f1',
+          background:    '#ffffff',
+          surface:       '#f4f4f5',
+          textPrimary:   '#18181b',
+          textSecondary: '#52525b',
+          border:        '#d4d4d8',
+          danger:        '#ef4444',
+        }
+      : {
+          primary:       '#6366f1',
+          background:    '#0f1117',
+          surface:       '#1a1d27',
+          textPrimary:   '#f1f5f9',
+          textSecondary: '#94a3b8',
+          border:        '#2a2d3e',
+          danger:        '#ef4444',
+        };
+
     return {
-      primary:       r.primary       || '#6366f1',
-      background:    r.background    || '#0f1117',
-      surface:       r.surface       || '#1a1d27',
-      textPrimary:   r.textPrimary   || '#f1f5f9',
-      textSecondary: r.textSecondary || '#94a3b8',
-      border:        r.border        || '#2a2d3e',
-      danger:        r.danger        || '#ef4444',
+      primary:       r.primary       || fallback.primary,
+      background:    r.background    || fallback.background,
+      surface:       r.surface       || fallback.surface,
+      textPrimary:   r.textPrimary   || fallback.textPrimary,
+      textSecondary: r.textSecondary || fallback.textSecondary,
+      border:        r.border        || fallback.border,
+      danger:        r.danger        || fallback.danger,
       fontFamily:    r.fontFamily    || "'Segoe UI', system-ui, sans-serif",
       borderRadius:  r.borderRadius  || '8px',
     };
@@ -3235,12 +3255,15 @@ export class MockupsPage {
     const primaryRgb = toRgb(v.primary);
 
     const ctxBg = { dark: '#0f1117', light: '#f0ece6', midnight: '#08080f' }[contextTheme] || '#0f1117';
+    const scheme = contextTheme === 'light' ? 'light' : 'dark';
 
     return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="${scheme}">
 <style>
+  :root { color-scheme: ${scheme}; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: ${ctxBg};
@@ -3716,7 +3739,8 @@ Spacing:
 
     const blankHtml = theme => {
       const bg = { dark: '#0f1117', light: '#f0ece6' }[theme] || '#0f1117';
-      return `<html><body style="margin:0;height:100vh;background:${bg};display:flex;align-items:center;justify-content:center;font-family:system-ui"><p style="color:#6b7280;font-size:12px;text-align:center">No ${theme} template yet.<br>Add one on the left to see the preview.</p></body></html>`;
+      const scheme = theme === 'light' ? 'light' : 'dark';
+      return `<html><head><meta name="color-scheme" content="${scheme}"><style>:root{color-scheme:${scheme}}</style></head><body style="margin:0;height:100vh;background:${bg};display:flex;align-items:center;justify-content:center;font-family:system-ui"><p style="color:#6b7280;font-size:12px;text-align:center">No ${theme} template yet.<br>Add one on the left to see the preview.</p></body></html>`;
     };
 
     const getActiveTpl = () => (activeTheme === 'light'
@@ -3733,7 +3757,7 @@ Spacing:
       const tpl   = getActiveTpl();
       const frame = main.querySelector('#scrDsPreviewFrame');
       frame.srcdoc = tpl
-        ? this._buildPreviewHtml(this._parseDesignTemplate(tpl), activeTheme)
+        ? this._buildPreviewHtml(this._parseDesignTemplate(tpl, activeTheme), activeTheme)
         : blankHtml(activeTheme);
     };
 

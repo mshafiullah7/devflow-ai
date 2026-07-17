@@ -28,6 +28,39 @@ export class Dialog {
     });
   }
 
+  static prompt(message, { title = 'Input', placeholder = '', defaultValue = '', confirmText = 'OK', cancelText = 'Cancel', maxLength } = {}) {
+    Dialog._css();
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'dlg-overlay';
+      overlay.innerHTML = `
+        <div class="dlg-modal" role="dialog" aria-modal="true">
+          <div class="dlg-header"><span class="dlg-title">${escHtml(title)}</span></div>
+          <div class="dlg-body">
+            <p class="dlg-message">${escHtml(message)}</p>
+            <input type="text" class="dlg-input" data-input
+                   placeholder="${escHtml(placeholder)}" value="${escHtml(defaultValue)}"
+                   ${maxLength ? `maxlength="${maxLength}"` : ''} />
+          </div>
+          <div class="dlg-footer">
+            <button class="dlg-btn dlg-btn--ghost" data-cancel>${escHtml(cancelText)}</button>
+            <button class="dlg-btn dlg-btn--primary" data-confirm>${escHtml(confirmText)}</button>
+          </div>
+        </div>`;
+      const input = overlay.querySelector('[data-input]');
+      const close = val => { overlay.remove(); resolve(val); };
+      overlay.querySelector('[data-cancel]').addEventListener('click', () => close(null));
+      overlay.querySelector('[data-confirm]').addEventListener('click', () => close(input.value.trim() || null));
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') close(input.value.trim() || null);
+        if (e.key === 'Escape') close(null);
+      });
+      overlay.addEventListener('keydown', e => { if (e.key === 'Escape') close(null); });
+      document.body.appendChild(overlay);
+      input.focus();
+    });
+  }
+
   static confirm(message, { title = 'Confirm', confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
     Dialog._css();
     return new Promise(resolve => {

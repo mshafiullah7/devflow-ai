@@ -246,28 +246,24 @@
 }
 
 .scr-ds-theme-btn {
-  padding: 3px 9px;
-  font-size: 11px;
+  padding: 3px 14px;
+  font-size: 12px;
   font-weight: 500;
   border: none;
   border-radius: 4px;
-  background: none;
-  color: var(--text-secondary);
+  background: transparent;
+  color: var(--text-muted);
   cursor: pointer;
   font-family: inherit;
   transition: background 0.12s, color 0.12s;
 }
 
-.scr-ds-theme-btn:hover {
+.scr-ds-theme-btn:hover:not(.scr-ds-theme-btn--active) {
   color: var(--text-primary);
+  background: var(--surface-hover);
 }
 
 .scr-ds-theme-btn--active {
-  background: var(--accent);
-  color: #fff;
-}
-
-[data-theme="light"] .scr-ds-theme-btn--active {
   background: var(--accent);
   color: #fff;
 }
