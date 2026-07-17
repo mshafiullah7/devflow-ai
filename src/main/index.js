@@ -31,7 +31,8 @@ const isMac = process.platform === 'darwin';
 // renderer reports the user's actual stored theme via app:set-titlebar-overlay.
 const DEFAULT_TITLEBAR_OVERLAY = { color: '#21252b', symbolColor: '#dcdfe4', height: 40 };
 
-let mainWindow = null;
+let mainWindow  = null;
+let allowClose  = false;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -52,6 +53,14 @@ const createWindow = () => {
     event.preventDefault();
   });
 
+  // Give the renderer a chance to block close (e.g. an in-flight AI request)
+  // before the window actually goes away.
+  mainWindow.on('close', (event) => {
+    if (allowClose) return;
+    event.preventDefault();
+    mainWindow.webContents.send('app:close-requested');
+  });
+
   mainWindow.on('closed', () => { mainWindow = null; });
 };
 
@@ -62,6 +71,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:agent-cli-path', () =>
     path.join(app.getAppPath(), 'agent-cli', 'index.js')
   );
+
+  ipcMain.on('app:close-confirmed', () => {
+    allowClose = true;
+    mainWindow?.close();
+  });
 
   ipcMain.handle('app:set-titlebar-overlay', (_e, { color, symbolColor }) => {
     if (isMac || !mainWindow) return { ok: false };

@@ -232,6 +232,9 @@ contextBridge.exposeInMainWorld('db', {
 contextBridge.exposeInMainWorld('app', {
   agentCliPath:        () => invoke('app:agent-cli-path'),
   setTitleBarOverlay:  (colors) => invoke('app:set-titlebar-overlay', colors),
+  onCloseRequested:    (cb) => ipcRenderer.on('app:close-requested', () => cb()),
+  offCloseRequested:   ()   => ipcRenderer.removeAllListeners('app:close-requested'),
+  confirmClose:        ()   => ipcRenderer.send('app:close-confirmed'),
   config: {
     get: (key)        => invoke('app:config:get', key),
     set: (key, value) => invoke('app:config:set', key, value),

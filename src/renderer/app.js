@@ -22,6 +22,12 @@ window.addEventListener('app:ipc-error', (e) => {
   showToast(prefix ? FRIENDLY[prefix] : 'An unexpected error occurred.');
 });
 
+// The main process defers window close until we say it's safe — lets the
+// current page (e.g. Documents' AI Assist) block quitting mid-request.
+window.app.onCloseRequested(async () => {
+  if (await router.canLeave()) window.app.confirmClose();
+});
+
 router.register('launcher', LauncherPage);
 router.register('project-home', async () => {
   const { ProjectHomePage } = await import('./pages/project-home/project-home.js');
@@ -68,10 +74,6 @@ router.register('workflows', async () => {
 router.register('test-generator', async () => {
   const { TestGeneratorPage } = await import('./pages/test-generator/test-generator-page.js');
   return TestGeneratorPage;
-});
-router.register('test-generation', async () => {
-  const { TestGenerationPage } = await import('./pages/test-generation/test-generation-page.js');
-  return TestGenerationPage;
 });
 router.register('generate-workflows', async () => {
   const { GenerateWorkflowsPage } = await import('./pages/generate-workflows/generate-workflows-page.js');

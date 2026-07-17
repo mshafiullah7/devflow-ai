@@ -527,7 +527,6 @@ src/
   queue-runner.html        # Prompt queue runner window
   task-queue.html          # Task queue window
   generate-workflows.html  # AI workflow generation window
-  test-generation.html     # Test generation window
 
 agent/                       # Python agent layer (spawned as subprocesses by Electron)
   devflow_agent.py         # Full agentic coding agent (plan + execute loop)

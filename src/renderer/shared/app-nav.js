@@ -15,6 +15,7 @@ export const persistentHost = new PersistentPageHost(hostRoot);
  */
 export async function navigateTo(name, params = {}) {
   if (PERSISTENT_ROUTES.has(name)) {
+    if (!(await router.canLeave())) return;
     router.container.style.display = 'none';
     const loader = router.routes[name];
     if (!loader) throw new Error(`Route "${name}" is not registered.`);

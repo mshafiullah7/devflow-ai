@@ -34,7 +34,7 @@ export class WorkflowsPage {
   // Lifecycle
   // ----------------------------------------------------------------
   async mount() {
-    injectCss('pages/user-stories/user-stories.css');
+    injectCss('shared/project-workspace.css');
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     injectCss('pages/issues/issues-page.css');
     injectCss('pages/workflows/workflows-page.css');
@@ -74,7 +74,7 @@ export class WorkflowsPage {
     removeCss('pages/workflows/workflows-page.css');
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
-    removeCss('pages/user-stories/user-stories.css');
+    removeCss('shared/project-workspace.css');
     removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
   }

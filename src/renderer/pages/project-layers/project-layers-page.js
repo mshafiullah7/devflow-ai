@@ -16,13 +16,14 @@ export class ProjectLayersPage {
     this._pendingSave   = null;
     this._executing     = false;
     this._execTimer     = null;
+    this._generating     = false;
   }
 
   // ----------------------------------------------------------------
   // Lifecycle
   // ----------------------------------------------------------------
   async mount() {
-    injectCss('pages/user-stories/user-stories.css');
+    injectCss('shared/project-workspace.css');
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     injectCss('pages/issues/issues-page.css');
     injectCss('pages/project-layers/project-layers-page.css');
@@ -56,6 +57,8 @@ export class ProjectLayersPage {
     this._sidebar.loadCounts(this.container);
     this._initResizable();
 
+    this.router.setNavigationGuard(() => this._canLeaveNow());
+
     await Promise.all([
       this._loadDocuments(),
       this._loadLayers(),
@@ -64,6 +67,7 @@ export class ProjectLayersPage {
   }
 
   unmount() {
+    this.router.clearNavigationGuard();
     const fn = this._pendingSave;
     this._pendingSave = null;
     if (fn) fn();
@@ -74,7 +78,7 @@ export class ProjectLayersPage {
     removeCss('pages/project-layers/project-layers-page.css');
     removeCss('pages/issues/issues-page.css');
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
-    removeCss('pages/user-stories/user-stories.css');
+    removeCss('shared/project-workspace.css');
     removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
   }
@@ -687,6 +691,16 @@ export class ProjectLayersPage {
   }
 
   // ----------------------------------------------------------------
+  // Hard-blocks navigation/app-close while Generate Layers is running.
+  // No confirm dialog — the modal's Cancel button is the intended way out.
+  // ----------------------------------------------------------------
+  _canLeaveNow() {
+    if (!this._generating) return true;
+    window.showToast?.('Cannot close the app while Generate is running — please wait…', 'warning');
+    return false;
+  }
+
+  // ----------------------------------------------------------------
   // Generate Layers — modal with document list + editable prompt
   // ----------------------------------------------------------------
   _openGenerateModal() {
@@ -754,9 +768,9 @@ export class ProjectLayersPage {
       </div>`;
 
     document.body.appendChild(overlay);
+    this._generating = false;
 
     const selectedIds = new Set();
-    let generating    = false;
 
     const updatePrompt = () => {
       const selectedDocs = this._documents.filter(d => selectedIds.has(d.id));
@@ -767,7 +781,7 @@ export class ProjectLayersPage {
     // Document toggles
     overlay.querySelectorAll('.pl-modal-doc-item').forEach(item => {
       item.addEventListener('click', () => {
-        if (generating) return;
+        if (this._generating) return;
         const id = parseInt(item.dataset.docId);
         if (selectedIds.has(id)) {
           selectedIds.delete(id);
@@ -786,21 +800,21 @@ export class ProjectLayersPage {
 
     const close = () => {
       window.app.chat.offAll();
-      generating = false;
+      this._generating = false;
       overlay.remove();
     };
 
     overlay.querySelector('#plModalClose').addEventListener('click', () => {
-      if (!generating) close();
+      if (!this._generating) close();
     });
     overlay.querySelector('#plModalCancel').addEventListener('click', () => {
-      if (generating) { window.app.chat.cancel(); window.app.chat.offAll(); }
+      if (this._generating) { window.app.chat.cancel(); window.app.chat.offAll(); }
       close();
     });
-    overlay.addEventListener('keydown', e => { if (e.key === 'Escape' && !generating) close(); });
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape' && !this._generating) close(); });
 
     overlay.querySelector('#plModalGenerateBtn').addEventListener('click', async () => {
-      if (generating) return;
+      if (this._generating) return;
       if (selectedIds.size === 0) {
         this._setModalStatus(overlay, 'warning', 'Select at least one document first.');
         return;
@@ -816,12 +830,12 @@ export class ProjectLayersPage {
         return;
       }
 
-      generating = true;
+      this._generating = true;
       const generateBtn = overlay.querySelector('#plModalGenerateBtn');
       const cancelBtn   = overlay.querySelector('#plModalCancel');
 
       const resetBtn = (label = 'Generate') => {
-        generating = false;
+        this._generating = false;
         generateBtn.disabled = false;
         generateBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${label}`;
       };

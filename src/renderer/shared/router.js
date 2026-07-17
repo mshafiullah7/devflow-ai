@@ -14,7 +14,29 @@ export class Router {
     this.routes[name] = pageLoader;
   }
 
+  /**
+   * Lets the currently-mounted page block navigation/close while it's busy
+   * (e.g. an in-flight AI request). `fn` is called with no args and may
+   * return a boolean or a Promise<boolean> — false blocks the transition.
+   * Only one guard is active at a time (the current page's).
+   */
+  setNavigationGuard(fn) {
+    this._navGuard = fn;
+  }
+
+  clearNavigationGuard() {
+    this._navGuard = null;
+  }
+
+  /** Resolves true if it's safe to navigate away / close the app right now. */
+  async canLeave() {
+    if (!this._navGuard) return true;
+    return !!(await this._navGuard());
+  }
+
   async navigate(name, params = {}) {
+    if (!(await this.canLeave())) return;
+
     if (this.currentPage && typeof this.currentPage.unmount === 'function') {
       this.currentPage.unmount();
     }

@@ -19,6 +19,7 @@ export class DocumentsPage {
     this._aiModelConfig = null;
     this._layers        = [];
     this._chatHistory   = [];
+    this._aiRunning     = false;
   }
 
   async mount() {
@@ -64,15 +65,30 @@ export class DocumentsPage {
     this._sidebar.bindEvents(this.container);
     this._sidebar.loadCounts(this.container, { documents: this._docs, layers: this._layers });
 
+    this.router.setNavigationGuard(() => this._confirmLeaveIfBusy());
+
     if (this._activeId) this._selectDoc(this._activeId, false);
     else                this._showEmpty();
   }
 
   unmount() {
+    this.router.clearNavigationGuard();
     removeCss('pages/documents/documents-page.css');
     removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
     document.querySelector('.doc-attach-form-overlay')?.remove();
+  }
+
+  // ----------------------------------------------------------------
+  // AI-busy guard — blocks document switches, tab switches, page
+  // navigation, and app close while a request is streaming.
+  // ----------------------------------------------------------------
+  _confirmLeaveIfBusy() {
+    if (!this._aiRunning) return true;
+    return Dialog.confirm(
+      'AI Assist is still generating a response for this document. Leaving now will interrupt the process and you may lose unsaved changes.',
+      { title: 'AI Assist is running', confirmText: 'Leave Anyway', danger: true }
+    );
   }
 
   // ----------------------------------------------------------------
@@ -141,11 +157,15 @@ export class DocumentsPage {
       .addEventListener('click', () => this._addDoc());
 
     this.container.querySelector('#docList')
-      .addEventListener('click', e => {
+      .addEventListener('click', async e => {
         const delBtn = e.target.closest('[data-del]');
         if (delBtn) { e.stopPropagation(); this._deleteDoc(Number(delBtn.dataset.del)); return; }
         const item = e.target.closest('[data-id]');
-        if (item) this._selectDoc(Number(item.dataset.id));
+        if (!item) return;
+        const id = Number(item.dataset.id);
+        if (id === this._activeId) return;
+        if (!(await this._confirmLeaveIfBusy())) return;
+        this._selectDoc(id);
       });
   }
 
@@ -414,6 +434,8 @@ export class DocumentsPage {
 
     tabs.forEach(tab => {
       tab.addEventListener('click', async () => {
+        if (tab.classList.contains('doc-editor__tab--active')) return;
+        if (!(await this._confirmLeaveIfBusy())) return;
         tabs.forEach(t => t.classList.remove('doc-editor__tab--active'));
         tab.classList.add('doc-editor__tab--active');
         const attachActions = panel.querySelector('#docAttachActions');
@@ -1001,6 +1023,7 @@ export class DocumentsPage {
 
     sendBtn.disabled = true;
     inputEl.disabled = true;
+    this._aiRunning  = true;
 
     const contentTA      = this.container.querySelector('#docContentTA');
     const currentContent = contentTA?.value ?? doc.content ?? '';
@@ -1061,6 +1084,7 @@ export class DocumentsPage {
       sendBtn.disabled = false;
       inputEl.disabled = false;
       inputEl.focus();
+      this._aiRunning  = false;
     }
   }
 
@@ -1325,6 +1349,7 @@ export class DocumentsPage {
 
     sendBtn.disabled = true;
     inputEl.disabled = true;
+    this._aiRunning  = true;
 
     const contentTA      = this.container.querySelector('#docContentTA');
     const currentContent = contentTA?.value ?? doc.content ?? '';
@@ -1408,6 +1433,7 @@ export class DocumentsPage {
       sendBtn.disabled = false;
       inputEl.disabled = false;
       inputEl.focus();
+      this._aiRunning  = false;
     }
   }
 

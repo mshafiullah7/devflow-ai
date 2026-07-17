@@ -41,7 +41,7 @@ export class IssuesPage {
   }
 
   async mount() {
-    injectCss('pages/user-stories/user-stories.css');
+    injectCss('shared/project-workspace.css');
     injectCss('pages/extract-user-stories/extract-user-stories-page.css');
     injectCss('pages/issues/issues-page.css');
     injectCss('components/project-sidebar/project-sidebar.css');
@@ -90,7 +90,7 @@ export class IssuesPage {
     removeCss('pages/extract-user-stories/extract-user-stories-page.css');
     removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
-    removeCss('pages/user-stories/user-stories.css');
+    removeCss('shared/project-workspace.css');
   }
 
   // ----------------------------------------------------------------
