@@ -960,10 +960,10 @@ ${base}`;
 
   async _openWorkflowRunner(data) {
     const mode = await window.app.config.get('workflowRunnerOpenMode');
-    if (mode === 'integrated') {
-      this.router.navigateTo('workflow-runner', data);
-    } else {
+    if (mode === 'window') {
       window.app.openWorkflowWindow(data);
+    } else {
+      this.router.navigateTo('workflow-runner', data);
     }
   }
 

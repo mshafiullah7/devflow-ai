@@ -131,7 +131,7 @@ export class ProjectSidebar {
         </button>
 
         <div class="ph-sidebar-section">Tools</div>
-        <button class="ph-nav-item" id="psnTerminal">
+        <button class="ph-nav-item${a('terminal')}" id="psnTerminal">
           <span class="ph-nav-item__icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="4 17 10 11 4 5"/>
@@ -188,36 +188,36 @@ export class ProjectSidebar {
     const r   = this.router;
 
     container.querySelector('#psnDashboard')
-      ?.addEventListener('click', () => r.navigate('project-home', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('project-home', { projectId: pid }));
     container.querySelector('#psnDocuments')
-      ?.addEventListener('click', () => r.navigate('documents', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('documents', { projectId: pid }));
     container.querySelector('#psnLayers')
-      ?.addEventListener('click', () => r.navigate('project-layers', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('project-layers', { projectId: pid }));
     container.querySelector('#psnMockups')
-      ?.addEventListener('click', () => r.navigate('mockups', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('mockups', { projectId: pid }));
     container.querySelector('#psnWorkflows')
-      ?.addEventListener('click', () => r.navigate('workflows', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('workflows', { projectId: pid }));
     container.querySelector('#psnTests')
-      ?.addEventListener('click', () => r.navigate('test-generator', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('test-generator', { projectId: pid }));
     container.querySelector('#psnSecurityScans')
-      ?.addEventListener('click', () => r.navigate('security-scans', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('security-scans', { projectId: pid }));
     container.querySelector('#psnIssues')
-      ?.addEventListener('click', () => r.navigate('issues', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('issues', { projectId: pid }));
     container.querySelector('#psnTerminal')
       ?.addEventListener('click', async () => {
         const mode = await window.app.config.get('terminalOpenMode');
-        if (mode === 'integrated') {
-          r.navigateTo('terminal', { projectId: pid, returnRoute: this.activeRoute || 'project-home' });
-        } else {
+        if (mode === 'window') {
           window.app.openTerminalWindow(pid);
+        } else {
+          r.navigateTo('terminal', { projectId: pid, returnRoute: this.activeRoute || 'project-home' });
         }
       });
     container.querySelector('#psnGitChanges')
-      ?.addEventListener('click', () => r.navigate('git-changes', { projectId: pid, from: 'project-home' }));
+      ?.addEventListener('click', () => r.navigateTo('git-changes', { projectId: pid, from: 'project-home' }));
     container.querySelector('#psnAiConsole')
-      ?.addEventListener('click', () => r.navigate('ai-console', { projectId: pid }));
+      ?.addEventListener('click', () => r.navigateTo('ai-console', { projectId: pid }));
     container.querySelector('#psnSettings')
-      ?.addEventListener('click', () => r.navigate('settings', { from: 'project-home', fromParams: { projectId: pid } }));
+      ?.addEventListener('click', () => r.navigateTo('settings', { from: 'project-home', fromParams: { projectId: pid } }));
   }
 
   // ----------------------------------------------------------------

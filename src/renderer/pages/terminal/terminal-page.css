@@ -1,12 +1,11 @@
 /* ------------------------------------------------------------------ */
-/* Terminal Window — detached window                                    */
-/* Shares .wfr-* layout classes; adds terminal-specific overrides.     */
+/* Terminal — window and integrated-tab layout                          */
+/* .term-* classes are namespaced to this page only (not shared with     */
+/* workflow-runner-page.css) so both can stay loaded at once when the   */
+/* integrated tabs run side by side without overriding each other.      */
 /* ------------------------------------------------------------------ */
 
-/* Re-declare layout classes (same values as workflow-runner-page.css,
-   but scoped to this window's separate renderer process) */
-
-.wfr-page {
+.term-page {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -16,7 +15,7 @@
   font-size: 13px;
 }
 
-.wfr-header {
+.term-header {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -28,7 +27,7 @@
   -webkit-app-region: drag;
 }
 
-.wfr-back-btn {
+.term-back-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -43,16 +42,16 @@
   transition: background 0.15s, color 0.15s;
   -webkit-app-region: no-drag;
 }
-.wfr-back-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.term-back-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 
-.wfr-header__title {
+.term-header__title {
   font-weight: 600;
   font-size: 13px;
   color: var(--text-primary);
   -webkit-app-region: no-drag;
 }
 
-.wfr-header__actions {
+.term-header__actions {
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -60,13 +59,13 @@
   -webkit-app-region: no-drag;
 }
 
-.wfr-body {
+.term-body {
   display: flex;
   flex: 1;
   min-height: 0;
 }
 
-.wfr-sidebar {
+.term-sidebar {
   width: 280px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
@@ -78,30 +77,30 @@
   transition: width 0.2s ease;
 }
 
-.wfr-sidebar--collapsed {
+.term-sidebar--collapsed {
   width: 36px;
   overflow: hidden;
   padding-bottom: 0;
 }
 
-.wfr-sidebar--collapsed .wfr-layer-list {
+.term-sidebar--collapsed .term-layer-list {
   display: none;
 }
 
-.wfr-sidebar--collapsed .wfr-sidebar__hd-label {
+.term-sidebar--collapsed .term-sidebar__hd-label {
   display: none;
 }
 
-.wfr-sidebar--collapsed .wfr-sidebar__section-hd {
+.term-sidebar--collapsed .term-sidebar__section-hd {
   justify-content: center;
   padding: 10px 6px;
 }
 
-.wfr-sidebar--collapsed .wfr-sidebar__toggle svg {
+.term-sidebar--collapsed .term-sidebar__toggle svg {
   transform: rotate(180deg);
 }
 
-.wfr-sidebar__section-hd {
+.term-sidebar__section-hd {
   padding: 10px 10px 6px 12px;
   font-size: 11px;
   font-weight: 600;
@@ -114,7 +113,7 @@
   flex-shrink: 0;
 }
 
-.wfr-sidebar__toggle {
+.term-sidebar__toggle {
   flex-shrink: 0;
   background: none;
   border: none;
@@ -127,14 +126,14 @@
   transition: color 0.15s, background 0.15s;
 }
 
-.wfr-sidebar__toggle:hover {
+.term-sidebar__toggle:hover {
   color: var(--text-primary);
   background: var(--surface-hover);
 }
 
-.wfr-layer-list { display: flex; flex-direction: column; gap: 1px; }
+.term-layer-list { display: flex; flex-direction: column; gap: 1px; }
 
-.wfr-layer-row {
+.term-layer-row {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -143,19 +142,19 @@
   border-left: 3px solid transparent;
   transition: background 0.1s;
 }
-.wfr-layer-row:hover { background: var(--surface-hover); }
-.wfr-layer-row--active {
+.term-layer-row:hover { background: var(--surface-hover); }
+.term-layer-row--active {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   border-left-color: var(--accent);
 }
 
-.wfr-layer-top {
+.term-layer-top {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.wfr-layer-name {
+.term-layer-name {
   flex: 1;
   font-size: 12.5px;
   overflow: hidden;
@@ -164,7 +163,7 @@
   min-width: 0;
 }
 
-.wfr-layer-seq {
+.term-layer-seq {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
@@ -186,13 +185,13 @@
   padding-left: 2px;
 }
 
-.wfr-crit-empty {
+.term-crit-empty {
   font-size: 12px;
   color: var(--text-muted);
   padding: 6px 12px;
 }
 
-.wfr-output-panel {
+.term-output-panel {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -200,7 +199,7 @@
   background: var(--bg);
 }
 
-.wfr-output-header {
+.term-output-header {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -211,17 +210,17 @@
   background: var(--surface);
   flex-shrink: 0;
 }
-.wfr-output-header__top {
+.term-output-header__top {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.wfr-output-layer-name {
+.term-output-layer-name {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary);
 }
-.wfr-output-cwd {
+.term-output-cwd {
   font-size: 11px;
   color: var(--text-primary);
   font-family: var(--font-mono, monospace);
@@ -232,7 +231,7 @@
   align-items: center;
   gap: 6px;
 }
-.wfr-output-cwd__label {
+.term-output-cwd__label {
   font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
@@ -245,24 +244,33 @@
   font-family: var(--font-sans, system-ui);
 }
 
-.wfr-terminal-wrap {
-  flex: 1 1 auto;
+/* Row below the header: terminal + git panel, split within the terminal
+   area only (Layers sidebar and the outer project nav are unaffected). */
+.term-output-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.term-terminal-wrap {
+  flex: 1 1 50%;
+  min-width: 0;
   min-height: 0;
   background: var(--console-bg);
   padding: 6px 4px 4px 8px;
   overflow: hidden;
   position: relative;
 }
-.wfr-terminal-wrap .xterm {
+.term-terminal-wrap .xterm {
   height: 100%;
   width: 100%;
 }
-.wfr-terminal-wrap .xterm-viewport {
+.term-terminal-wrap .xterm-viewport {
   overflow-y: auto !important;
 }
 
 /* Git toggle button */
-.wfr-git-toggle-btn {
+.term-git-toggle-btn {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -278,14 +286,14 @@
   flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
-.wfr-git-toggle-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
-.wfr-git-toggle-btn--active {
+.term-git-toggle-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.term-git-toggle-btn--active {
   border-color: var(--accent);
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-.wfr-git-badge {
+.term-git-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -299,11 +307,13 @@
   font-weight: 700;
   line-height: 1;
 }
-.wfr-git-badge[hidden] { display: none; }
+.term-git-badge[hidden] { display: none; }
 
-/* Git panel — flex sibling of wfr-output-panel */
-.wfr-git-panel {
-  flex: 0 0 50%;
+/* Git panel — splits 50/50 with the terminal within .term-output-body, so
+   it's 50% of the terminal area, not the whole row (Layers sidebar / outer
+   project nav are outside .term-output-body and unaffected). */
+.term-git-panel {
+  flex: 1 1 50%;
   min-width: 0;
   min-height: 0;
   border-left: 1px solid var(--border);
@@ -313,30 +323,30 @@
   overflow: hidden;
   transition: flex-basis 0.2s ease;
 }
-.wfr-git-panel[hidden] { display: none; }
+.term-git-panel[hidden] { display: none; }
 
-.wfr-git-panel--collapsed {
+.term-git-panel--collapsed {
   flex: 0 0 36px;
 }
 
-.wfr-git-panel--collapsed .wfr-git-panel__title,
-.wfr-git-panel--collapsed .wfr-git-panel__badge,
-.wfr-git-panel--collapsed .wfr-git-panel__actions,
-.wfr-git-panel--collapsed .wfr-git-commit-bar,
-.wfr-git-panel--collapsed .wfr-git-panel__body {
+.term-git-panel--collapsed .term-git-panel__title,
+.term-git-panel--collapsed .term-git-panel__badge,
+.term-git-panel--collapsed .term-git-panel__actions,
+.term-git-panel--collapsed .term-git-commit-bar,
+.term-git-panel--collapsed .term-git-panel__body {
   display: none;
 }
 
-.wfr-git-panel--collapsed .wfr-git-panel__header {
+.term-git-panel--collapsed .term-git-panel__header {
   justify-content: center;
   padding: 9px 6px;
 }
 
-.wfr-git-panel--collapsed .wfr-git-panel__collapse-btn svg {
+.term-git-panel--collapsed .term-git-panel__collapse-btn svg {
   transform: rotate(180deg);
 }
 
-.wfr-git-panel__header {
+.term-git-panel__header {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -346,7 +356,7 @@
   flex-shrink: 0;
 }
 
-.wfr-git-panel__collapse-btn {
+.term-git-panel__collapse-btn {
   flex-shrink: 0;
   background: none;
   border: none;
@@ -359,18 +369,18 @@
   transition: color 0.15s, background 0.15s;
 }
 
-.wfr-git-panel__collapse-btn:hover {
+.term-git-panel__collapse-btn:hover {
   color: var(--text-primary);
   background: var(--surface-hover);
 }
-.wfr-git-panel__title {
+.term-git-panel__title {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.wfr-git-panel__badge {
+.term-git-panel__badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -383,15 +393,15 @@
   font-size: 10px;
   font-weight: 700;
 }
-.wfr-git-panel__badge[hidden] { display: none; }
-.wfr-git-panel__actions {
+.term-git-panel__badge[hidden] { display: none; }
+.term-git-panel__actions {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 2px;
 }
-.wfr-git-panel__refresh,
-.wfr-git-panel__icon-btn {
+.term-git-panel__refresh,
+.term-git-panel__icon-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -406,10 +416,10 @@
   transition: color 0.12s, background 0.12s;
   -webkit-app-region: no-drag;
 }
-.wfr-git-panel__refresh:hover,
-.wfr-git-panel__icon-btn:hover { color: var(--text-primary); background: var(--surface-hover); }
+.term-git-panel__refresh:hover,
+.term-git-panel__icon-btn:hover { color: var(--text-primary); background: var(--surface-hover); }
 
-.wfr-git-panel__body {
+.term-git-panel__body {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
@@ -418,7 +428,7 @@
 }
 
 /* Commit bar */
-.wfr-git-commit-bar {
+.term-git-commit-bar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -429,7 +439,7 @@
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
-.wfr-git-commit-msg {
+.term-git-commit-msg {
   flex: 1;
   min-width: 0;
   background: var(--bg);
@@ -443,8 +453,8 @@
   outline: none;
   transition: border-color 0.12s;
 }
-.wfr-git-commit-msg:focus { border-color: var(--accent); }
-.wfr-git-commit-btn {
+.term-git-commit-msg:focus { border-color: var(--accent); }
+.term-git-commit-btn {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -461,11 +471,11 @@
   white-space: nowrap;
   transition: opacity 0.12s, background 0.12s;
 }
-.wfr-git-commit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.wfr-git-commit-btn:not(:disabled):hover {
+.term-git-commit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.term-git-commit-btn:not(:disabled):hover {
   background: color-mix(in srgb, var(--accent, #6366f1) 85%, white);
 }
-.wfr-git-commit-btn--busy { opacity: 0.7; cursor: wait; }
+.term-git-commit-btn--busy { opacity: 0.7; cursor: wait; }
 
 /* Accordion */
 .git-accordion__item { border-bottom: 1px solid var(--border); }

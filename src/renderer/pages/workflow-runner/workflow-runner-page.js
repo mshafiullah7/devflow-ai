@@ -1,6 +1,7 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker } from '../../components/model-picker/model-picker.js';
+import { ProjectSidebar } from '../../components/project-sidebar/project-sidebar.js';
 
 const STATUS = {
   open:         { label: 'Open',         cls: 'wfr-status--open'    },
@@ -76,6 +77,7 @@ export class WorkflowRunnerPage {
   mount() {
     injectCss('pages/workflow-runner/workflow-runner-page.css');
     injectCss('components/git/git-diff.css');
+    if (this._embedded) injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
     this._renderLoading();
     if (this._embedded) {
@@ -705,20 +707,41 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
       </div>`;
   }
 
+  _renderShellHeader() {
+    const name    = this._project?.name || 'Project';
+    const initial = name.trim()[0]?.toUpperCase() || '?';
+    return `
+      <header class="project-home__header">
+        <button class="project-home__back" id="wfrBtnBack" aria-label="Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </button>
+        <div class="project-home__badge">
+          <div class="project-home__badge-initial">${escHtml(initial)}</div>
+          <span class="project-home__badge-name">${escHtml(name)}</span>
+        </div>
+        <span class="ph-header-page-chip">Workflow Runner</span>
+      </header>`;
+  }
+
   _render() {
     const wf     = this._workflow;
     const name   = wf ? escHtml(wf.feature || 'Workflow') : 'Workflow';
     const wfId   = wf?.id   || '';
     const wfName = wf?.feature || 'Workflow';
 
-    this.container.innerHTML = `
-      <div class="wfr-page">
-        <header class="wfr-header">
+    const closeBtnHtml = this._embedded ? '' : `
           <button class="wfr-back-btn" id="wfrBtnClose" aria-label="Close window">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
-          </button>
+          </button>`;
+
+    const body = `
+      <div class="wfr-page">
+        <header class="wfr-header">
+          ${closeBtnHtml}
           <span class="wfr-header__title">${name} — Run Layers</span>
           <div class="wfr-header__actions">
             <button class="wfr-perm-btn wfr-perm-btn--on" id="wfrBtnSkipPerms" aria-pressed="true" title="When ON: skips all tool permission prompts (--dangerously-skip-permissions). When OFF: Claude asks before each tool use.">
@@ -816,6 +839,24 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
           </section>
         </div>
       </div>`;
+
+    if (this._embedded) {
+      this._sidebar = new ProjectSidebar({ projectId: this._project?.id, router: this.router, activeRoute: 'workflows' });
+      this.container.innerHTML = `
+        <div class="ph-project-shell">
+          ${this._renderShellHeader()}
+          <div class="ph-page-with-nav">
+            ${this._sidebar.html()}
+            ${body}
+          </div>
+        </div>`;
+      this._sidebar.bindEvents(this.container);
+      this._sidebar.loadCounts(this.container);
+      this.container.querySelector('#wfrBtnBack')
+        ?.addEventListener('click', () => this._handleClose());
+    } else {
+      this.container.innerHTML = body;
+    }
 
     this._bindEvents();
   }

@@ -439,8 +439,8 @@ export class SettingsPage {
     ]);
 
     const modeOptions = (selected) => `
-      <option value="window"${selected !== 'integrated' ? ' selected' : ''}>Separate window</option>
-      <option value="integrated"${selected === 'integrated' ? ' selected' : ''}>Integrated tab</option>
+      <option value="window"${selected === 'window' ? ' selected' : ''}>Separate window</option>
+      <option value="integrated"${selected !== 'window' ? ' selected' : ''}>Integrated tab</option>
     `;
 
     main.innerHTML = `

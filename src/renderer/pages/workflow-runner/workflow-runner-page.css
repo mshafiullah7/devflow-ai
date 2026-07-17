@@ -236,7 +236,7 @@
 
 .wfr-layer-purpose {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   line-height: 1.45;
   white-space: normal;
   word-break: break-word;

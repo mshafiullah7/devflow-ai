@@ -1,5 +1,6 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+import { ProjectSidebar } from '../../components/project-sidebar/project-sidebar.js';
 
 const ANSI = {
   reset: '\x1b[0m',
@@ -37,6 +38,7 @@ export class TerminalPage {
   mount() {
     injectCss('pages/terminal/terminal-page.css');
     injectCss('components/git/git-diff.css');
+    if (this._embedded) injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
     this._renderLoading();
     if (this._embedded) {
@@ -268,22 +270,22 @@ export class TerminalPage {
     const list = this.container.querySelector('#termLayerList');
     if (!list) return;
     list.innerHTML = this._layerListHtml();
-    list.querySelectorAll('.wfr-layer-row').forEach(row => {
+    list.querySelectorAll('.term-layer-row').forEach(row => {
       row.addEventListener('click', () => this._selectLayer(+row.dataset.id));
     });
   }
 
   _layerListHtml() {
     if (!this._projectLayers.length) {
-      return '<div class="wfr-crit-empty">No layers defined.</div>';
+      return '<div class="term-crit-empty">No layers defined.</div>';
     }
     return this._projectLayers.map((l, idx) => {
       const sel = this._selectedId === l.id;
       return `
-        <div class="wfr-layer-row ${sel ? 'wfr-layer-row--active' : ''}" data-id="${l.id}">
-          <div class="wfr-layer-top">
-            <span class="wfr-layer-seq">${idx + 1}</span>
-            <span class="wfr-layer-name">${escHtml(l.name || 'Layer')}</span>
+        <div class="term-layer-row ${sel ? 'term-layer-row--active' : ''}" data-id="${l.id}">
+          <div class="term-layer-top">
+            <span class="term-layer-seq">${idx + 1}</span>
+            <span class="term-layer-name">${escHtml(l.name || 'Layer')}</span>
           </div>
           ${l.folder_path ? `<div class="term-layer-path">${escHtml(l.folder_path)}</div>` : ''}
         </div>`;
@@ -300,7 +302,7 @@ export class TerminalPage {
       cwdEl.hidden = !cwd;
       if (cwd) {
         cwdEl.title = cwd;
-        cwdEl.querySelector('.wfr-output-cwd__path').textContent = cwd;
+        cwdEl.querySelector('.term-output-cwd__path').textContent = cwd;
       }
     }
   }
@@ -315,20 +317,42 @@ export class TerminalPage {
       </div>`;
   }
 
+  _renderShellHeader() {
+    const name    = this._project?.name || 'Project';
+    const initial = name.trim()[0]?.toUpperCase() || '?';
+    return `
+      <header class="project-home__header">
+        <button class="project-home__back" id="termBtnBack" aria-label="Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </button>
+        <div class="project-home__badge">
+          <div class="project-home__badge-initial">${escHtml(initial)}</div>
+          <span class="project-home__badge-name">${escHtml(name)}</span>
+        </div>
+        <span class="ph-header-page-chip">Terminal</span>
+      </header>`;
+  }
+
   _render() {
     const projectName = escHtml(this._project?.name || 'Project');
 
-    this.container.innerHTML = `
-      <div class="wfr-page">
-        <header class="wfr-header">
-          <button class="wfr-back-btn" id="termBtnClose" aria-label="Close window">
+    const closeBtnHtml = this._embedded ? '' : `
+          <button class="term-back-btn" id="termBtnClose" aria-label="Close window">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
-          </button>
-          <span class="wfr-header__title">Terminal — ${projectName}</span>
-          <div class="wfr-header__actions">
-            <button class="wfr-git-toggle-btn${this._gitPanelVisible ? ' wfr-git-toggle-btn--active' : ''}" id="termBtnGitToggle" title="Toggle Git Changes">
+          </button>`;
+    const headerTitle = this._embedded ? 'Terminal' : `Terminal — ${projectName}`;
+
+    const body = `
+      <div class="term-page">
+        <header class="term-header">
+          ${closeBtnHtml}
+          <span class="term-header__title">${headerTitle}</span>
+          <div class="term-header__actions">
+            <button class="term-git-toggle-btn${this._gitPanelVisible ? ' term-git-toggle-btn--active' : ''}" id="termBtnGitToggle" title="Toggle Git Changes">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
                 <circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.4"/>
@@ -336,83 +360,104 @@ export class TerminalPage {
                 <path d="M5 5.5v5a1.5 1.5 0 001.5 1.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                 <path d="M11 5.5V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               </svg>
-              Git <span class="wfr-git-badge" id="termGitBadge" hidden></span>
+              Git <span class="term-git-badge" id="termGitBadge" hidden></span>
             </button>
           </div>
         </header>
 
-        <div class="wfr-body">
+        <div class="term-body">
           <!-- Left: project layer list -->
-          <aside class="wfr-sidebar${this._sidebarCollapsed ? ' wfr-sidebar--collapsed' : ''}">
-            <div class="wfr-sidebar__section-hd">
-              <span class="wfr-sidebar__hd-label">Layers</span>
-              <button class="wfr-sidebar__toggle" id="termSidebarToggle" aria-label="${this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
+          <aside class="term-sidebar${this._sidebarCollapsed ? ' term-sidebar--collapsed' : ''}">
+            <div class="term-sidebar__section-hd">
+              <span class="term-sidebar__hd-label">Layers</span>
+              <button class="term-sidebar__toggle" id="termSidebarToggle" aria-label="${this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M15 18l-6-6 6-6"/>
                 </svg>
               </button>
             </div>
-            <div class="wfr-layer-list" id="termLayerList">
+            <div class="term-layer-list" id="termLayerList">
               ${this._layerListHtml()}
             </div>
           </aside>
 
           <!-- Center: terminal panel -->
-          <section class="wfr-output-panel">
-            <div class="wfr-output-header">
-              <div class="wfr-output-header__top">
-                <span class="wfr-output-layer-name" id="termOutputLayerName">
+          <section class="term-output-panel">
+            <div class="term-output-header">
+              <div class="term-output-header__top">
+                <span class="term-output-layer-name" id="termOutputLayerName">
                   ${escHtml(this._projectLayers[0]?.name || '')}
                 </span>
               </div>
-              <div class="wfr-output-cwd" id="termOutputCwd" hidden>
-                <span class="wfr-output-cwd__label">cwd</span>
-                <span class="wfr-output-cwd__path"></span>
+              <div class="term-output-cwd" id="termOutputCwd" hidden>
+                <span class="term-output-cwd__label">cwd</span>
+                <span class="term-output-cwd__path"></span>
               </div>
             </div>
-            <div class="wfr-terminal-wrap" id="termTerminal"></div>
-          </section>
+            <div class="term-output-body">
+              <div class="term-terminal-wrap" id="termTerminal"></div>
 
-          <!-- Right: git panel (flex sibling, not overlay) -->
-          <aside class="wfr-git-panel${this._gitPanelCollapsed ? ' wfr-git-panel--collapsed' : ''}" id="termGitPanel" ${this._gitPanelVisible ? '' : 'hidden'}>
-            <div class="wfr-git-panel__header">
-              <button class="wfr-git-panel__collapse-btn" id="termBtnGitCollapse" title="${this._gitPanelCollapsed ? 'Expand' : 'Collapse'}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9 18l6-6-6-6"/>
-                </svg>
-              </button>
-              <span class="wfr-git-panel__title">Git Changes</span>
-              <span class="wfr-git-panel__badge" id="termGitPanelBadge" hidden></span>
-              <div class="wfr-git-panel__actions">
-                <button class="wfr-git-panel__icon-btn" id="termBtnGitExpandAll" title="Expand all">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-                <button class="wfr-git-panel__icon-btn" id="termBtnGitCollapseAll" title="Collapse all">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-                <button class="wfr-git-panel__refresh" id="termBtnGitRefresh" title="Refresh">↺</button>
-                <button class="wfr-git-panel__icon-btn" id="termBtnGitClose" title="Close">✕</button>
-              </div>
+              <!-- Git panel — sibling of the terminal wrap only, so its width
+                   is relative to the terminal area, not the whole page row -->
+              <aside class="term-git-panel${this._gitPanelCollapsed ? ' term-git-panel--collapsed' : ''}" id="termGitPanel" ${this._gitPanelVisible ? '' : 'hidden'}>
+                <div class="term-git-panel__header">
+                  <button class="term-git-panel__collapse-btn" id="termBtnGitCollapse" title="${this._gitPanelCollapsed ? 'Expand' : 'Collapse'}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                  </button>
+                  <span class="term-git-panel__title">Git Changes</span>
+                  <span class="term-git-panel__badge" id="termGitPanelBadge" hidden></span>
+                  <div class="term-git-panel__actions">
+                    <button class="term-git-panel__icon-btn" id="termBtnGitExpandAll" title="Expand all">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M2 5l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
+                    <button class="term-git-panel__icon-btn" id="termBtnGitCollapseAll" title="Collapse all">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M2 11l6-6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
+                    <button class="term-git-panel__refresh" id="termBtnGitRefresh" title="Refresh">↺</button>
+                    <button class="term-git-panel__icon-btn" id="termBtnGitClose" title="Close">✕</button>
+                  </div>
+                </div>
+                <div class="term-git-commit-bar">
+                  <input class="term-git-commit-msg" id="termGitCommitMsg" type="text" spellcheck="false" placeholder="Commit message…">
+                  <button class="term-git-commit-btn" id="termBtnGitCommit" disabled>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Commit
+                  </button>
+                </div>
+                <div class="term-git-panel__body" id="termGitAccordion">
+                  <div class="git-diff-empty">No changes yet.</div>
+                </div>
+              </aside>
             </div>
-            <div class="wfr-git-commit-bar">
-              <input class="wfr-git-commit-msg" id="termGitCommitMsg" type="text" spellcheck="false" placeholder="Commit message…">
-              <button class="wfr-git-commit-btn" id="termBtnGitCommit" disabled>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Commit
-              </button>
-            </div>
-            <div class="wfr-git-panel__body" id="termGitAccordion">
-              <div class="git-diff-empty">No changes yet.</div>
-            </div>
-          </aside>
+          </section>
         </div>
       </div>`;
+
+    if (this._embedded) {
+      this._sidebar = new ProjectSidebar({ projectId: this._project?.id, router: this.router, activeRoute: 'terminal' });
+      this.container.innerHTML = `
+        <div class="ph-project-shell">
+          ${this._renderShellHeader()}
+          <div class="ph-page-with-nav">
+            ${this._sidebar.html()}
+            ${body}
+          </div>
+        </div>`;
+      this._sidebar.bindEvents(this.container);
+      this._sidebar.loadCounts(this.container);
+      this.container.querySelector('#termBtnBack')
+        ?.addEventListener('click', () => this._handleClose());
+    } else {
+      this.container.innerHTML = body;
+    }
 
     this._bindEvents();
     this._updateLayerHeader();
@@ -425,7 +470,7 @@ export class TerminalPage {
     this.container.querySelector('#termSidebarToggle')
       ?.addEventListener('click', () => this._toggleSidebar());
 
-    this.container.querySelectorAll('.wfr-layer-row').forEach(row => {
+    this.container.querySelectorAll('.term-layer-row').forEach(row => {
       row.addEventListener('click', () => this._selectLayer(+row.dataset.id));
     });
 
@@ -439,7 +484,7 @@ export class TerminalPage {
       ?.addEventListener('click', () => {
         this._gitPanelVisible = false;
         this.container.querySelector('#termGitPanel')?.setAttribute('hidden', '');
-        this.container.querySelector('#termBtnGitToggle')?.classList.remove('wfr-git-toggle-btn--active');
+        this.container.querySelector('#termBtnGitToggle')?.classList.remove('term-git-toggle-btn--active');
       });
 
     this.container.querySelector('#termBtnGitRefresh')
@@ -456,18 +501,22 @@ export class TerminalPage {
 
   _toggleSidebar() {
     this._sidebarCollapsed = !this._sidebarCollapsed;
-    const sidebar = this.container.querySelector('.wfr-sidebar');
+    const sidebar = this.container.querySelector('.term-sidebar');
     const btn     = this.container.querySelector('#termSidebarToggle');
-    sidebar?.classList.toggle('wfr-sidebar--collapsed', this._sidebarCollapsed);
+    sidebar?.classList.toggle('term-sidebar--collapsed', this._sidebarCollapsed);
     if (btn) btn.setAttribute('aria-label', this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+    // Sidebar width animates via CSS transition — refit once it settles so
+    // xterm's column count matches the final size right away.
+    setTimeout(() => this._fitTerminal(), 220);
   }
 
   _toggleGitPanelCollapse() {
     this._gitPanelCollapsed = !this._gitPanelCollapsed;
     const panel = this.container.querySelector('#termGitPanel');
     const btn   = this.container.querySelector('#termBtnGitCollapse');
-    panel?.classList.toggle('wfr-git-panel--collapsed', this._gitPanelCollapsed);
+    panel?.classList.toggle('term-git-panel--collapsed', this._gitPanelCollapsed);
     if (btn) btn.title = this._gitPanelCollapsed ? 'Expand' : 'Collapse';
+    setTimeout(() => this._fitTerminal(), 220);
   }
 
   // ── Git diff panel ───────────────────────────────────────────────────────
@@ -477,7 +526,7 @@ export class TerminalPage {
     const panel = this.container.querySelector('#termGitPanel');
     const btn   = this.container.querySelector('#termBtnGitToggle');
     if (panel) panel.toggleAttribute('hidden', !this._gitPanelVisible);
-    if (btn)   btn.classList.toggle('wfr-git-toggle-btn--active', this._gitPanelVisible);
+    if (btn)   btn.classList.toggle('term-git-toggle-btn--active', this._gitPanelVisible);
     if (this._gitPanelVisible) {
       const wrap = this.container.querySelector('#termGitAccordion');
       if (wrap) wrap.innerHTML = '';
@@ -565,7 +614,7 @@ export class TerminalPage {
     const _updateBadges = (count) => {
       if (headerBadge) { headerBadge.textContent = String(count); headerBadge.hidden = count === 0; }
       if (panelBadge)  { panelBadge.textContent  = String(count); panelBadge.hidden  = count === 0; }
-      if (commitBtn && !commitBtn.classList.contains('wfr-git-commit-btn--busy')) {
+      if (commitBtn && !commitBtn.classList.contains('term-git-commit-btn--busy')) {
         commitBtn.disabled = count === 0;
       }
     };
@@ -720,7 +769,7 @@ export class TerminalPage {
     const msg = msgEl.value.trim();
     if (!msg || this._gitFiles.length === 0) return;
 
-    btn?.classList.add('wfr-git-commit-btn--busy');
+    btn?.classList.add('term-git-commit-btn--busy');
     if (btn) btn.disabled = true;
 
     try {
@@ -738,7 +787,7 @@ export class TerminalPage {
     } catch {
       await this._refreshGitPanel();
     } finally {
-      btn?.classList.remove('wfr-git-commit-btn--busy');
+      btn?.classList.remove('term-git-commit-btn--busy');
       if (btn) btn.disabled = false;
       if (msgEl) msgEl.value = '';
     }
