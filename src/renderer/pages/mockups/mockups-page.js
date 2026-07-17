@@ -6,6 +6,29 @@ import { ProjectSidebar }    from '../../components/project-sidebar/project-side
 
 const TECH = 'Plain HTML / CSS';
 
+// ── Target-platform look-and-feel guides ───────────────────────────────────
+// Output is always HTML/CSS (see TECH above) — these just steer the visual
+// language so a "Flutter" or "Android" project doesn't come back looking
+// like a generic website skinned with the theme's raw hex/CSS values.
+const PLATFORM_GUIDES = {
+  flutter: `
+
+TARGET PLATFORM — Flutter (Material 3) mobile app, mocked in HTML/CSS:
+- Frame the screen as a phone viewport (max-width ~420px, centered on the page) — not a wide desktop layout.
+- Use Material 3 component conventions: a top AppBar; ElevatedButton/FilledButton style buttons (fully rounded or 20px radius, tonal elevation shadow instead of a hard border); filled/outlined Material text fields with floating labels; Cards with 12–16px radius and a soft elevation shadow rather than a 1px border; a FloatingActionButton (56px circle, bottom-right, elevation shadow) where a primary add/action exists; BottomNavigationBar for tab navigation.
+- Translate the design system's Primary/Background/Surface colours into Material colour roles (primary, onPrimary, surface, onSurface) and use tonal elevation (layered surface shades) instead of borders to separate cards from the background.
+- Prefer Material-style type scale and spacing (4/8px grid, bold rounded headlines) over a generic web font stack, unless the design system explicitly specifies otherwise.
+- Use touch-sized targets (min 44px), single-column mobile-first layout, and bottom sheets instead of desktop dropdowns/hover menus.`,
+  android: `
+
+TARGET PLATFORM — Native Android (Material Design) app, mocked in HTML/CSS:
+- Frame the screen as a phone viewport (max-width ~420px, centered on the page) — not a wide desktop layout.
+- Use Android Material components: a Material top app bar, Material buttons/cards/text fields, ripple-style active states, a bottom navigation bar or FAB, and Snackbars (bottom, pill-shaped) instead of toasts/alerts.
+- Use Material elevation shadows (not borders) to separate cards, sheets, and app bars from the background; treat 1dp ≈ 1px spacing in this HTML mock and keep to Android's 8dp spacing grid.
+- Translate the design system's palette into Material colour roles (primary, onPrimary, surface, onSurface) rather than applying the hex values as flat, borderless web colours.
+- Use touch-sized targets (min 48dp), single-column mobile-first layout, and bottom sheets instead of desktop dropdowns/hover menus.`,
+};
+
 // ── Screen Design Templates ────────────────────────────────────────────────
 const SCREEN_TEMPLATES = [
   // ── Authentication ──────────────────────────────────────────────────────
@@ -1435,17 +1458,107 @@ Closing: exit animation; body scroll restored after animation completes
 - Drag handle (bottom sheet): width:40px; height:4px; border-radius:999px; bg:var(--border); margin:0 auto
 - Scrollbar in body: thin, styled (scrollbar-width:thin; scrollbar-color: var(--border) transparent)`,
   },
+
+  // ── Flutter & Android ────────────────────────────────────────────────────
+  {
+    group: 'Flutter & Android',
+    name: 'Home Dashboard (Material)',
+    description: `Screen: Home Dashboard — debt/finance tracker
+Platform: Flutter (Material 3) | Android (Material)
+Purpose: Central hub showing total debt, a breakdown of assets vs liabilities, active loans, quick actions, partner offers, and upcoming payments. First screen after login. Reference build: DebtLogic.
+
+━━ UI LAYOUT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. AppBar / hero (gradient, extends behind the status bar):
+   - Row: [Menu icon button, circular glass chip] — [App name, centered] — [Notification icon button, circular glass chip, red unread dot + count]
+   - Primary stat: "Total Debt Remaining" label (10px, uppercase, letter-spacing) + huge value (48–56px, extrabold)
+   - Trend chip: down-arrow icon + "3% decrease" (pill, tonal fill) + "vs last month" muted text
+   - Donut ring (small SVG) + "28% Paid" label, right-aligned on the trend row
+2. Wealth Breakdown card (frosted glass tile inside the AppBar, white/10 fill, blurred):
+   - Two-segment horizontal bar (assets vs liabilities, rounded ends)
+   - Three columns: Assets (value + %) | divider | Liabilities (value + %) | Net Worth (value)
+3. "Your Loans" section — horizontal snap-scrolling Material cards (220dp wide each):
+   - Each card: icon in tonal circle, loan name, type + APR subtitle, edit icon button (top-right)
+   - Balance value + "% Paid" chip, thin progress bar below
+4. Quick Actions — 3-column grid of Material icon buttons (tonal circle + label), last item ("Go Premium") uses an amber tonal variant to stand out
+5. Bank Offers — horizontal snap-scrolling cards (260dp), each a solid brand-gradient Card:
+   - Bank initial avatar + name + offer type, status chip ("Hot Deal"/"Low Rate"/"New")
+   - Large rate headline (e.g. "8.35% p.a.")
+   - Highlight chips (tonal, on-gradient)
+   - Filled white CTA button "Know More →" at the card bottom
+6. Upcoming Payments — Material Card containing a divided list (3 rows):
+   - Icon in tonal circle, title + status chip (Overdue/Due soon/neutral), due-date subtitle
+   - Trailing: amount (bold) + "Pay Now" text button
+7. BottomNavigationBar: 4–5 destinations, active destination shows filled icon + label in primary color
+
+━━ FLOW: NAVIGATION DRAWER ━━━━━━━━━━━━━━━━━━━━━━━━━
+Tap menu icon:
+→ Scrim fades in; Drawer slides in from left (80% width, max 320dp)
+→ Drawer surface: translucent dark fill + backdrop blur ("glass" look), thin primary-tinted border on the leading edge
+→ Drawer contents: close icon button (top-right) → profile row (avatar with online-status dot, name, email in primary color) → 2-tile mini-stats row (Total Debt, Active Loans, on scrim-dark tiles) → grouped nav list with section labels (MAIN / FREE TOOLS / PREMIUM / ACCOUNT), each item = icon + label + optional trailing badge (count pill in primary, overdue pill in red, "PRO" pill in amber gradient); active item gets a tonal highlight → footer: app version, centered, muted
+Tap a nav item: close drawer, navigate
+Tap scrim: drawer slides back out, scrim fades
+
+━━ FLOW: NOTIFICATIONS PANEL ━━━━━━━━━━━━━━━━━━━━━━━
+Tap notification icon:
+→ Scrim fades in; panel slides in from right (88% width, max 375dp) as an end Drawer
+→ Header: "Notifications" title + unread count badge (filled, red) + "Mark all read" text button + close icon button
+→ List grouped by day (Today / Yesterday / This Week), each group with a small-caps section label
+→ Each notification: tonal Card (color keyed to type — red=overdue, orange=due soon, violet=AI insight, blue=loan added, primary=progress), leading icon in matching tonal circle, title, description with bold amount, relative timestamp, unread indicator dot (top-right)
+Tap a notification: mark read (dot removed, card fill goes neutral), navigate to the relevant screen
+Tap "Mark all read": all dots cleared, badge count → 0
+
+━━ FLOW: CARD & QUICK ACTION TAPS ━━━━━━━━━━━━━━━━━━
+Tap a loan card: navigate to that loan's Detail screen
+Tap a card's edit icon: stop propagation, open Add/Edit Loan sheet pre-filled
+Tap "View All" (any section): navigate to that section's full List screen
+Tap a Quick Action: navigate to the matching tool screen (EMI Calculator, Net Worth, Payoff Planner, AI Advisor); "Go Premium" opens the paywall
+Tap an offer card / "Know More →": navigate to Bank Offers detail for that offer
+
+━━ FLOW: PAYMENTS BOTTOM SHEET ━━━━━━━━━━━━━━━━━━━━━
+Tap "View All" on Upcoming Payments:
+→ Modal bottom sheet slides up (showModalBottomSheet-style): scrim behind, rounded top corners (24dp), drag handle pill
+→ Header: "All Payments" title + count/total subtitle + close icon button
+→ List grouped by urgency (Overdue / Due Soon / Upcoming), each row = tonal icon, title, date/lateness subtitle, amount, "Pay Now" text button; overdue rows show a red "days late" subtitle
+→ "+ N more" outlined text button at the end of the Upcoming group
+→ Sticky footer: full-width filled button "Pay All Overdue (₹XX,XXX)"
+Drag handle down or tap scrim: sheet dismisses
+
+━━ FLOW: ADD EXPENSE BOTTOM SHEET ━━━━━━━━━━━━━━━━━━
+Triggered from a FAB or "+" action:
+→ Modal bottom sheet (taller, ~92% height), drag handle + header ("Add Expense" + subtitle + close icon button)
+→ Amount field: large filled Material text field, currency symbol prefix, numeric keyboard
+→ Category: horizontal wrap of choice chips (icon + label), single-select — selected chip switches to tonal-filled with primary border/text
+→ Note field: filled text field, optional
+→ Date field: filled text field with calendar leading icon, opens a Material date picker
+→ Footer: full-width filled button "Save Expense"
+On save: close sheet, show a Snackbar confirmation
+
+━━ STATES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Initial load: skeleton shimmer in hero stat, loan cards, and payments list
+Notification bell: red dot pulses while unread count > 0
+Empty loans: empty-state card with "Add your first loan" filled button
+Error loading a section: tonal error Card, "Retry" text button
+Payment action loading: button shows a circular progress indicator, disabled
+
+━━ STYLE NOTES (structure only — colours/type/shape come from the Style Guide) ━━
+- This template defines layout and behaviour only. Colours, typography, shape/radius scale, and elevation must come from the project's active Style Guide theme — pick the "DebtLogic Green" preset (or another Material preset) with Target platform set to Flutter or Android for a result matching the original reference build.
+- Icons: Material Symbols Outlined, variable FILL axis — FILL 0 (outline) for default/inactive state, FILL 1 (filled) for active/selected/emphasis icons
+- Drawer & notification panel: translucent surface + backdrop blur/saturation ("glass" treatment) rather than a flat Material surface — this is a structural/behavioural choice, independent of the active theme's colours
+- Status colour keying (roles, not literal hex — resolve each against the active theme): danger = overdue, warning = due-soon, an informational accent = AI insight, another informational accent = loan-added, primary = positive/progress
+- Touch targets: minimum 44dp; horizontal scroll sections use snap-x with no visible scrollbar`,
+  },
 ];
 
 
-function buildScreenPrompt(description, projectDescription, outputFile, designTemplate) {
-  const ctx    = projectDescription ? `\nProject context: ${projectDescription}` : '';
-  const save   = outputFile
+function buildScreenPrompt(description, projectDescription, outputFile, designTemplate, targetPlatform) {
+  const ctx      = projectDescription ? `\nProject context: ${projectDescription}` : '';
+  const save     = outputFile
     ? `\nWhen done, save the complete output to: ${outputFile}`
     : `\nDo NOT use any tools, write any files, or save anything — print the raw HTML directly to stdout.`;
-  const design = designTemplate
+  const design   = designTemplate
     ? `\n\nDESIGN SYSTEM — you MUST follow this for every element (colours, fonts, spacing, components):\n${designTemplate}`
     : '';
+  const platform = PLATFORM_GUIDES[targetPlatform] || '';
 
   return `You are an expert UI/UX developer. Generate a complete, self-contained HTML file for the screen described below using ${TECH}.
 Rules:
@@ -1454,7 +1567,7 @@ Rules:
 - Visually polished, modern design with realistic placeholder content
 - Fully responsive
 - No explanation, no markdown — raw HTML only
-- REQUIRED: Include a light/dark theme toggle button fixed in the top-right corner (position:fixed; top:1rem; right:1rem; z-index:9999). The button must toggle a "dark" class on <html> or <body> and switch all colours accordingly using CSS variables or a [data-theme] attribute. Default to light theme. The toggle must work standalone with no external dependencies.${ctx}${design}${save}
+- REQUIRED: Include a light/dark theme toggle button fixed in the top-right corner (position:fixed; top:1rem; right:1rem; z-index:9999). The button must toggle a "dark" class on <html> or <body> and switch all colours accordingly using CSS variables or a [data-theme] attribute. Default to light theme. The toggle must work standalone with no external dependencies.${ctx}${design}${platform}${save}
 
 Screen to design:
 ${description}`;
@@ -1540,12 +1653,10 @@ export class MockupsPage {
       window.db.modelMapping.get('mockups'),
     ]);
 
-    // Load templates from DB, seeding from hardcoded array on first run
-    let dbTemplates = await window.db.screenTemplates.list();
-    if (dbTemplates.length === 0) {
-      dbTemplates = await window.db.screenTemplates.seed(SCREEN_TEMPLATES);
-    }
-    this._screenTemplates = dbTemplates;
+    // Load templates from DB — seed() is idempotent (INSERT OR IGNORE by unique
+    // name), so calling it every mount picks up newly added built-ins without
+    // duplicating or overwriting ones the user already has.
+    this._screenTemplates = await window.db.screenTemplates.seed(SCREEN_TEMPLATES);
     const _mappedId = _mapping?.model_config_id ?? null;
 
     this._designTemplate = this._project?.design_template || '';
@@ -2106,7 +2217,7 @@ export class MockupsPage {
         previewText = `[Edit via diff patches — model returns JSON search-replace patches, not full HTML]\n\nInstruction:\n${desc}\n\nExisting HTML: ${screen.html_content.length} chars (sent inline)`;
       }
     } else {
-      const prompt = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt());
+      const prompt = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt(), project?.target_platform);
       generateArg  = { prompt, model };
       previewText  = prompt;
     }

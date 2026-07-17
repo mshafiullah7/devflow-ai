@@ -42,7 +42,7 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:projects:update', (_e, { id, name, description, is_active, design_template, project_path, start_date, end_date }) => {
+  safeHandle('db:projects:update', (_e, { id, name, description, is_active, design_template, project_path, start_date, end_date, target_platform }) => {
     db.prepare(
       `UPDATE projects
           SET name = coalesce(?, name),
@@ -52,6 +52,7 @@ function registerDbHandlers() {
               project_path = CASE WHEN ? IS NOT NULL THEN ? ELSE project_path END,
               start_date = CASE WHEN ? IS NOT NULL THEN ? ELSE start_date END,
               end_date = CASE WHEN ? IS NOT NULL THEN ? ELSE end_date END,
+              target_platform = coalesce(?, target_platform),
               updated_at = datetime('now')
         WHERE id = ?`
     ).run(
@@ -62,6 +63,7 @@ function registerDbHandlers() {
       project_path ?? null, project_path ?? null,
       start_date ?? null, start_date ?? null,
       end_date ?? null, end_date ?? null,
+      target_platform ?? null,
       id
     );
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
@@ -1162,10 +1164,10 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM saved_themes WHERE is_active = 1 ORDER BY created_at DESC').all();
   });
 
-  safeHandle('db:saved_themes:create', (_e, { name, light, dark }) => {
+  safeHandle('db:saved_themes:create', (_e, { name, light, dark, category }) => {
     const result = db
-      .prepare('INSERT INTO saved_themes (name, light, dark) VALUES (?, ?, ?)')
-      .run(name, light ?? '', dark ?? '');
+      .prepare('INSERT INTO saved_themes (name, light, dark, category) VALUES (?, ?, ?, ?)')
+      .run(name, light ?? '', dark ?? '', category || 'web');
     return db.prepare('SELECT * FROM saved_themes WHERE id = ?').get(result.lastInsertRowid);
   });
 

@@ -32,6 +32,10 @@ function applySchema(db) {
     `ALTER TABLE test_run_history  ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
     `ALTER TABLE projects ADD COLUMN start_date TEXT`,
     `ALTER TABLE projects ADD COLUMN end_date   TEXT`,
+    // Mockup generation target: 'web' | 'flutter' | 'android'
+    `ALTER TABLE projects ADD COLUMN target_platform TEXT NOT NULL DEFAULT 'web'`,
+    // Which platform a saved theme's component language was tuned for: 'web' | 'mobile'
+    `ALTER TABLE saved_themes ADD COLUMN category TEXT NOT NULL DEFAULT 'web'`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
