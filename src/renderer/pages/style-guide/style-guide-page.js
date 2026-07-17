@@ -527,8 +527,8 @@ export class StyleGuidePage {
               <div class="scr-ds-preview-bar">
                 <span class="scr-ds-preview-label">Preview</span>
                 <div class="scr-ds-theme-btns" id="sgThemeBtns">
-                  <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-theme="light">Light</button>
-                  <button class="scr-ds-theme-btn" data-theme="dark">Dark</button>
+                  <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-preview-theme="light">Light</button>
+                  <button class="scr-ds-theme-btn" data-preview-theme="dark">Dark</button>
                 </div>
                 <div class="scr-ds-theme-btns" id="sgWidthBtns" hidden>
                   <button class="scr-ds-theme-btn" data-width="full">Full width</button>
@@ -623,6 +623,14 @@ export class StyleGuidePage {
       this.container.querySelector('#sgTplColDark').classList.toggle('scr-ds-tpl-col--active',  activeTheme === 'dark');
     };
 
+    const syncThemeToggle = () => {
+      const wrap = this.container.querySelector('#sgThemeBtns');
+      if (!wrap) return;
+      wrap.querySelectorAll('.scr-ds-theme-btn').forEach(b =>
+        b.classList.toggle('scr-ds-theme-btn--active', b.dataset.previewTheme === activeTheme));
+      setActiveCol();
+    };
+
     const getActivePlatform = () => this.container.querySelector('#sgPlatformSelect')?.value || 'web';
 
     const getWidthMode = () => {
@@ -658,10 +666,8 @@ export class StyleGuidePage {
     /* ---- Theme toggle buttons ---- */
     this.container.querySelectorAll('#sgThemeBtns .scr-ds-theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        this.container.querySelectorAll('#sgThemeBtns .scr-ds-theme-btn').forEach(b => b.classList.remove('scr-ds-theme-btn--active'));
-        btn.classList.add('scr-ds-theme-btn--active');
-        activeTheme = btn.dataset.theme;
-        setActiveCol();
+        activeTheme = btn.dataset.previewTheme;
+        syncThemeToggle();
         renderPreview();
       });
     });
@@ -741,7 +747,7 @@ export class StyleGuidePage {
     });
 
     /* ---- Initial render ---- */
-    setActiveCol();
+    syncThemeToggle();
     syncWidthToggle();
     renderPreview();
   }

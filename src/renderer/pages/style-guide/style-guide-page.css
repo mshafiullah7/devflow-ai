@@ -454,3 +454,22 @@
 .sg-ai-card__send:hover    { opacity: 0.88; transform: scale(1.05); }
 .sg-ai-card__send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
+/* Preview Bar Custom Layout & Wrapping Overrides */
+.sg-page__preview .scr-ds-preview-bar {
+  flex-wrap: wrap;
+  gap: 6px;
+  height: auto;
+  min-height: 38px;
+  padding: 6px 10px;
+}
+
+.sg-page__preview .scr-ds-theme-btn {
+  white-space: nowrap;
+  padding: 3px 10px;
+}
+
+.sg-page__preview #sgWidthBtns[hidden] {
+  display: none !important;
+}
+
+

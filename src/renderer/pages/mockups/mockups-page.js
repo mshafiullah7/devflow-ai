@@ -3819,8 +3819,8 @@ Spacing:
               <div class="scr-ds-preview-bar">
                 <span class="scr-ds-preview-label">Preview</span>
                 <div class="scr-ds-theme-btns">
-                  <button class="scr-ds-theme-btn" data-theme="light">Light</button>
-                  <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-theme="dark">Dark</button>
+                  <button class="scr-ds-theme-btn" data-preview-theme="light">Light</button>
+                  <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-preview-theme="dark">Dark</button>
                 </div>
                 <button class="scr-btn scr-btn--sm" id="scrDsRefreshBtn" title="Refresh preview">
                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -3892,7 +3892,7 @@ Spacing:
       btn.addEventListener('click', () => {
         main.querySelectorAll('.scr-ds-theme-btn').forEach(b => b.classList.remove('scr-ds-theme-btn--active'));
         btn.classList.add('scr-ds-theme-btn--active');
-        activeTheme = btn.dataset.theme;
+        activeTheme = btn.dataset.previewTheme;
         setActiveCol();
         renderPreview();
       });
