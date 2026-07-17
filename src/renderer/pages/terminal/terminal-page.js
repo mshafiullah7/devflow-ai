@@ -7,8 +7,12 @@ const ANSI = {
 };
 
 export class TerminalPage {
-  constructor(container) {
+  constructor(container, params = null, router = null) {
     this.container      = container;
+    this.router         = router;
+    this._embedded      = !!router;
+    this._initParams    = params;
+    this._returnRoute   = params?.returnRoute || 'project-home';
     this._project       = null;
     this._projectLayers = [];
     this._selectedId    = null;
@@ -35,12 +39,43 @@ export class TerminalPage {
     injectCss('components/git/git-diff.css');
     applyStoredTheme();
     this._renderLoading();
-    window.app.terminalWindow.onInit((data) => this._init(data));
+    if (this._embedded) {
+      this._init(this._initParams);
+    } else {
+      window.app.terminalWindow.onInit((data) => this._init(data));
+    }
+  }
+
+  /**
+   * Called by the persistent-page host when this route is activated again.
+   * Mirrors the pop-out window's behavior: opening the terminal for a
+   * different project re-inits in place; just re-showing the same tab only
+   * needs a terminal refit.
+   */
+  onResume(params) {
+    if (params && params.projectId !== this._project?.id) {
+      this._returnRoute = params.returnRoute || this._returnRoute;
+      this._init(params);
+      return;
+    }
+    if (this._fitAddon) {
+      try { this._fitAddon.fit(); } catch (_) {}
+    }
+  }
+
+  _handleClose() {
+    if (this._embedded) {
+      const projectId = this._project?.id;
+      this.router?.closePersistentRoute?.('terminal');
+      this.router?.navigateTo?.(this._returnRoute, { projectId });
+    } else {
+      window.close();
+    }
   }
 
   unmount() {
-    window.app.wfrPty.offAll();
-    window.app.wfrPty.kill();
+    window.app.termPty.offAll();
+    window.app.termPty.kill();
     if (this._gitPollInterval) clearInterval(this._gitPollInterval);
     if (this._resizeObs)      this._resizeObs.disconnect();
     if (this._onWinResize)    window.removeEventListener('resize', this._onWinResize);
@@ -116,7 +151,7 @@ export class TerminalPage {
       // clipboardData.getData can return empty in Electron; fall back to navigator.clipboard
       const text = e.clipboardData?.getData('text/plain')
         || await navigator.clipboard.readText().catch(() => '');
-      if (text) window.app.wfrPty.write(text);
+      if (text) window.app.termPty.write(text);
     }, true);
 
     // Right-click: paste clipboard text into PTY (contextmenu doesn't fire a paste event)
@@ -124,12 +159,12 @@ export class TerminalPage {
       e.preventDefault();
       try {
         const text = await navigator.clipboard.readText();
-        if (text) window.app.wfrPty.write(text);
+        if (text) window.app.termPty.write(text);
       } catch (_) {}
     });
 
-    window.app.wfrPty.onData((data) => { if (this._term) this._term.write(data); });
-    window.app.wfrPty.onLayerDone(({ layerId }) => {
+    window.app.termPty.onData((data) => { if (this._term) this._term.write(data); });
+    window.app.termPty.onLayerDone(({ layerId }) => {
       if (layerId === 'shell' && this._term && !this._switchingShell) {
         this._term.writeln(`\r\n${ANSI.red}Shell exited.${ANSI.reset}`);
       }
@@ -147,7 +182,7 @@ export class TerminalPage {
       return true;
     });
 
-    this._term.onData((data) => window.app.wfrPty.write(data));
+    this._term.onData((data) => window.app.termPty.write(data));
 
     this._resizeObs = new ResizeObserver(() => this._fitTerminal());
     this._resizeObs.observe(el);
@@ -173,7 +208,7 @@ export class TerminalPage {
     if (!this._term) return;
     this._switchingShell = true;
     const cwd = this._getCwd();
-    await window.app.wfrPty.spawnShell({ cwd, cols: this._term.cols, rows: this._term.rows });
+    await window.app.termPty.spawnShell({ cwd, cols: this._term.cols, rows: this._term.rows });
     this._switchingShell = false;
   }
 
@@ -186,7 +221,7 @@ export class TerminalPage {
       if (cols === this._lastCols && rows === this._lastRows) return;
       this._lastCols = cols;
       this._lastRows = rows;
-      window.app.wfrPty.resize({ cols, rows });
+      window.app.termPty.resize({ cols, rows });
     } catch (_) {
       requestAnimationFrame(() => {
         try {
@@ -197,7 +232,7 @@ export class TerminalPage {
             if (cols === this._lastCols && rows === this._lastRows) return;
             this._lastCols = cols;
             this._lastRows = rows;
-            window.app.wfrPty.resize({ cols, rows });
+            window.app.termPty.resize({ cols, rows });
           }
         } catch (_2) {}
       });
@@ -224,7 +259,7 @@ export class TerminalPage {
       const layer = this._projectLayers.find(l => l.id === id);
       const newPath = layer?.folder_path || this._project?.project_path;
       if (newPath) {
-        window.app.wfrPty.write(`Set-Location "${newPath}"\r`);
+        window.app.termPty.write(`Set-Location "${newPath}"\r`);
       }
     }
   }
@@ -274,7 +309,7 @@ export class TerminalPage {
 
   _renderLoading() {
     this.container.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:center;height:100vh;
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;
                   font-family:var(--font-sans,system-ui);color:var(--text-muted,#888)">
         Loading terminal…
       </div>`;
@@ -385,7 +420,7 @@ export class TerminalPage {
 
   _bindEvents() {
     this.container.querySelector('#termBtnClose')
-      ?.addEventListener('click', () => window.close());
+      ?.addEventListener('click', () => this._handleClose());
 
     this.container.querySelector('#termSidebarToggle')
       ?.addEventListener('click', () => this._toggleSidebar());

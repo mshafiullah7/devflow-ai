@@ -949,13 +949,22 @@ ${base}`;
       if (!ok) return;
     }
 
-    window.app.openWorkflowWindow({
+    this._openWorkflowRunner({
       projectId:    this._projectId,
       workflowId:   this._activeId,
       modelConfig:  this._aiModelConfig,
       startLayerId: layerId,
       cwd,
     });
+  }
+
+  async _openWorkflowRunner(data) {
+    const mode = await window.app.config.get('workflowRunnerOpenMode');
+    if (mode === 'integrated') {
+      this.router.navigateTo('workflow-runner', data);
+    } else {
+      window.app.openWorkflowWindow(data);
+    }
   }
 
   // ----------------------------------------------------------------
@@ -1462,7 +1471,7 @@ ${base}`;
       );
       if (!ok) return;
     }
-    window.app.openWorkflowWindow({
+    this._openWorkflowRunner({
       projectId:   this._projectId,
       workflowId:  this._activeId,
       modelConfig: this._aiModelConfig,

@@ -445,6 +445,73 @@
 
 .ph-status-name { font-size: 12px; color: var(--text-secondary); flex: 1; }
 .ph-status-count { font-size: 12px; font-weight: 600; color: var(--text-primary); min-width: 24px; text-align: right; }
+
+/* ------------------------------------------------------------------ */
+/* Project Timeline card                                               */
+/* ------------------------------------------------------------------ */
+.ph-timeline-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  box-shadow: var(--card-shadow);
+}
+
+.ph-timeline-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.ph-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ph-timeline-dates {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ph-timeline-bar-wrap { margin-bottom: 10px; }
+
+.ph-timeline-bar {
+  position: relative;
+  height: 8px;
+  background: var(--surface-hover);
+  border-radius: 4px;
+  overflow: visible;
+}
+
+.ph-timeline-bar__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.2s;
+}
+
+.ph-timeline-bar__marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  background: var(--text-primary);
+  opacity: 0.5;
+  border-radius: 1px;
+  transform: translateX(-1px);
+}
+
+.ph-timeline-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.ph-timeline-foot b { color: var(--text-primary); font-weight: 700; }
 .ph-status-total { font-size: 12px; color: var(--text-muted); min-width: 24px; text-align: right; }
 
 .ph-status-bar-wrap {

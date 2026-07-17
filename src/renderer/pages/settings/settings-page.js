@@ -130,6 +130,15 @@ export class SettingsPage {
               </span>
               <span class="st-nav-item__label">Model Mapping</span>
             </button>
+            <div class="st-sidebar-section">Interface</div>
+            <button class="st-nav-item" id="stNavRunnerWindows">
+              <span class="st-nav-item__icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18"/>
+                </svg>
+              </span>
+              <span class="st-nav-item__label">Runner Windows</span>
+            </button>
             <div class="st-sidebar-section">Notifications</div>
             <button class="st-nav-item" id="stNavTelegram">
               <span class="st-nav-item__icon">
@@ -198,6 +207,12 @@ export class SettingsPage {
       .addEventListener('click', () => {
         this._setActiveNav('stNavModelMapping');
         this._renderModelMapping();
+      });
+
+    this.container.querySelector('#stNavRunnerWindows')
+      .addEventListener('click', () => {
+        this._setActiveNav('stNavRunnerWindows');
+        this._renderRunnerWindows();
       });
 
     this.container.querySelector('#stNavTelegram')
@@ -331,7 +346,7 @@ export class SettingsPage {
   async _renderModelMapping() {
     const main = this.container.querySelector('#stMainContent');
 
-    const PAGE_KEYS = ['mockups', 'documents', 'workflows', 'generate-workflows', 'project-layers', 'issues', 'test-generator', 'git-changes', 'ai-console'];
+    const PAGE_KEYS = ['documents', 'project-layers', 'mockups', 'workflows', 'generate-workflows', 'workflow-runner', 'issue-runner', 'issues', 'test-generator', 'git-changes', 'ai-console'];
 
     const [configs, ...mappings] = await Promise.all([
       window.db.modelConfigs.list(),
@@ -354,11 +369,13 @@ export class SettingsPage {
       {
         label: 'Pages',
         features: [
-          { key: 'mockups',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,                                                                               name: 'Mockups' },
           { key: 'documents',       icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,                                                  name: 'Documents' },
+          { key: 'project-layers',   icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,                                       name: 'Project Layers' },
+          { key: 'mockups',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,                                                                               name: 'Mockups' },
           { key: 'workflows',       icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,                                                                name: 'Workflows' },
           { key: 'generate-workflows', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>`, name: 'Generate Workflows' },
-          { key: 'project-layers',   icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,                                       name: 'Layers' },
+          { key: 'workflow-runner', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,                                                                                                                     name: 'Run Layers' },
+          { key: 'issue-runner',    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,                                                                                                                     name: 'Run Issues' },
         ],
       },
       {
@@ -408,6 +425,62 @@ export class SettingsPage {
       sel.addEventListener('change', () => {
         window.db.modelMapping.set(sel.dataset.key, Number(sel.value) || null);
       });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Runner Windows — Workflow Runner / Terminal open mode
+  // ----------------------------------------------------------------
+  async _renderRunnerWindows() {
+    const main = this.container.querySelector('#stMainContent');
+    const [workflowRunnerOpenMode, terminalOpenMode] = await Promise.all([
+      window.app.config.get('workflowRunnerOpenMode'),
+      window.app.config.get('terminalOpenMode'),
+    ]);
+
+    const modeOptions = (selected) => `
+      <option value="window"${selected !== 'integrated' ? ' selected' : ''}>Separate window</option>
+      <option value="integrated"${selected === 'integrated' ? ' selected' : ''}>Integrated tab</option>
+    `;
+
+    main.innerHTML = `
+      <div class="st-content-title">Runner Windows</div>
+      <div class="st-content-sub">Choose whether Workflow Runner and Terminal open as a tab inside the main window (and keep running in the background while you navigate elsewhere) or as a separate pop-out window.</div>
+
+      <div class="st-section-header">
+        <div class="st-section-label">Workflow Runner</div>
+      </div>
+      <div class="st-form__row">
+        <select class="st-form__input" id="stWorkflowRunnerMode">
+          ${modeOptions(workflowRunnerOpenMode)}
+        </select>
+      </div>
+
+      <div class="st-section-header" style="margin-top:28px">
+        <div class="st-section-label">Terminal</div>
+      </div>
+      <div class="st-form__row">
+        <select class="st-form__input" id="stTerminalMode">
+          ${modeOptions(terminalOpenMode)}
+        </select>
+      </div>
+      <span class="st-form__hint" id="stRunnerModeHint"></span>
+    `;
+
+    const hint = main.querySelector('#stRunnerModeHint');
+    const flashSaved = () => {
+      hint.textContent = 'Saved';
+      setTimeout(() => { hint.textContent = ''; }, 1500);
+    };
+
+    main.querySelector('#stWorkflowRunnerMode').addEventListener('change', async (e) => {
+      await window.app.config.set('workflowRunnerOpenMode', e.target.value);
+      flashSaved();
+    });
+
+    main.querySelector('#stTerminalMode').addEventListener('change', async (e) => {
+      await window.app.config.set('terminalOpenMode', e.target.value);
+      flashSaved();
     });
   }
 

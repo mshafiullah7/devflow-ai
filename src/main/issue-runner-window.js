@@ -5,10 +5,10 @@ const path                      = require('node:path');
 
 let _win = null;
 
-function openIssueRunnerWindow(projectId) {
+function openIssueRunnerWindow(data) {
   if (_win && !_win.isDestroyed()) {
     _win.focus();
-    _win.webContents.send('issueRunner:init', { projectId });
+    _win.webContents.send('issueRunner:init', data);
     return;
   }
 
@@ -26,7 +26,7 @@ function openIssueRunnerWindow(projectId) {
   _win.loadFile(path.join(__dirname, '../renderer/issue-runner.html'));
 
   _win.webContents.once('did-finish-load', () => {
-    _win.webContents.send('issueRunner:init', { projectId });
+    _win.webContents.send('issueRunner:init', data);
   });
 
   _win.on('closed', () => { _win = null; });

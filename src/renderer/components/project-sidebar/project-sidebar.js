@@ -204,7 +204,14 @@ export class ProjectSidebar {
     container.querySelector('#psnIssues')
       ?.addEventListener('click', () => r.navigate('issues', { projectId: pid }));
     container.querySelector('#psnTerminal')
-      ?.addEventListener('click', () => window.app.openTerminalWindow(pid));
+      ?.addEventListener('click', async () => {
+        const mode = await window.app.config.get('terminalOpenMode');
+        if (mode === 'integrated') {
+          r.navigateTo('terminal', { projectId: pid, returnRoute: this.activeRoute || 'project-home' });
+        } else {
+          window.app.openTerminalWindow(pid);
+        }
+      });
     container.querySelector('#psnGitChanges')
       ?.addEventListener('click', () => r.navigate('git-changes', { projectId: pid, from: 'project-home' }));
     container.querySelector('#psnAiConsole')

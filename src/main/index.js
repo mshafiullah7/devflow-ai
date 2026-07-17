@@ -69,8 +69,8 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
-  ipcMain.handle('app:openIssueRunnerWindow', (_e, projectId) => {
-    openIssueRunnerWindow(projectId);
+  ipcMain.handle('app:openIssueRunnerWindow', (_e, data) => {
+    openIssueRunnerWindow(data);
     return { ok: true };
   });
 

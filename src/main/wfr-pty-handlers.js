@@ -565,6 +565,7 @@ function registerPtyHandlers(prefix) {
 
 registerPtyHandlers('wfrPty');
 registerPtyHandlers('irPty');
+registerPtyHandlers('termPty');
 
 // Keep named export for the existing ipc/index.js call — now a no-op since
 // handlers are already registered by the two calls above.

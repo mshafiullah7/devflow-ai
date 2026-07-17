@@ -190,6 +190,15 @@ body {
   overflow: hidden;
 }
 
+/* Hosts Workflow Runner / Terminal instances that stay alive in the
+   background while the user is on a different tab (see shared/app-nav.js). */
+#bgTools {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
 /* ------------------------------------------------------------------ */
 /* Custom title bar — replaces the OS frame (see main/index.js)        */
 /* ------------------------------------------------------------------ */

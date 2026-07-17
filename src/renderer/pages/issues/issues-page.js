@@ -209,7 +209,7 @@ export class IssuesPage {
 
     this.container.querySelector('#isBtnRunner')
       .addEventListener('click', () => {
-        window.app.openIssueRunnerWindow(this._projectId);
+        window.app.openIssueRunnerWindow({ projectId: this._projectId, modelConfig: this._aiModelConfig });
       });
 
     const addMenu   = this.container.querySelector('#isAddMenu');

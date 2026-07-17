@@ -1,5 +1,6 @@
 import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
+import { ModelPicker } from '../../components/model-picker/model-picker.js';
 
 const STATUS = {
   open:         { label: 'Open',         cls: 'wfr-status--open'    },
@@ -32,8 +33,12 @@ function doneBanner(label, elapsed, ok) {
 }
 
 export class WorkflowRunnerPage {
-  constructor(container) {
+  constructor(container, params = null, router = null) {
     this.container      = container;
+    this.router         = router;
+    this._embedded      = !!router;
+    this._initParams    = params;
+    this._returnRoute   = 'workflows';
     this._workflow      = null;
     this._project       = null;
     this._projectLayers = [];
@@ -73,10 +78,40 @@ export class WorkflowRunnerPage {
     injectCss('components/git/git-diff.css');
     applyStoredTheme();
     this._renderLoading();
-    window.app.workflowWindow.onInit((data) => this._init(data));
+    if (this._embedded) {
+      this._init(this._initParams);
+    } else {
+      window.app.workflowWindow.onInit((data) => this._init(data));
+    }
+  }
+
+  /**
+   * Called by the persistent-page host when this route is activated again.
+   * Mirrors the pop-out window's behavior: opening the runner for a
+   * different workflow re-inits in place; just re-showing the same tab only
+   * needs a terminal refit.
+   */
+  onResume(params) {
+    if (params && params.workflowId !== this._workflow?.id) {
+      this._init(params);
+      return;
+    }
+    if (this._fitAddon) {
+      try { this._fitAddon.fit(); } catch (_) {}
+    }
+  }
+
+  _handleClose() {
+    if (this._embedded) {
+      this.router?.closePersistentRoute?.('workflow-runner');
+      this.router?.navigateTo?.(this._returnRoute, { projectId: this._project?.id });
+    } else {
+      window.close();
+    }
   }
 
   unmount() {
+    this._picker?.unmount();
     window.app.workflowChat.offAll();
     window.app.wfrPty.offAll();
     window.app.wfrPty.kill();
@@ -93,12 +128,13 @@ export class WorkflowRunnerPage {
 
   async _init({ projectId, workflowId, modelConfig, startLayerId }) {
     this._modelConfig = modelConfig;
-    const [workflow, layers, criteria, project, projectLayers] = await Promise.all([
+    const [workflow, layers, criteria, project, projectLayers, mapping] = await Promise.all([
       window.db.workflows.get(workflowId),
       window.db.layers.list(workflowId),
       window.db.successCriteria.list(workflowId),
       window.db.projects.get(projectId),
       window.db.projectLayers.list(projectId),
+      window.db.modelMapping.get('workflow-runner'),
     ]);
     this._workflow      = workflow;
     this._project       = project || null;
@@ -123,6 +159,14 @@ export class WorkflowRunnerPage {
     this._layers.forEach(l => { this._statuses[l.id] = l.status || 'open'; });
 
     this._render();
+
+    this._picker = new ModelPicker({
+      anchor:    this.container.querySelector('#wfrModelPicker'),
+      onSelect:  model => { this._modelConfig = model; },
+      initialId: modelConfig?.id ?? mapping?.model_config_id ?? null,
+    });
+    await this._picker.reload();
+
     this._initTerminal();
     this._startGitPolling();
     this._initLayoutObserver();
@@ -585,7 +629,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     const runAll      = this.container.querySelector('#wfrBtnRunAll');
     const runSelected = this.container.querySelector('#wfrBtnRunSelected');
     const hasOpen     = this._layers.some(l => this._statuses[l.id] === 'open');
-    if (runAll)      { runAll.hidden = false; runAll.disabled = this._running || !hasOpen; }
+    if (runAll)      { runAll.hidden = false; runAll.disabled = true; }
     if (runSelected) { runSelected.hidden = false; runSelected.disabled = this._running || !this._selectedId; }
   }
 
@@ -655,7 +699,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
   _renderLoading() {
     this.container.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:center;height:100vh;
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;
                   font-family:var(--font-sans,system-ui);color:var(--text-muted,#888)">
         Loading workflow…
       </div>`;
@@ -680,18 +724,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
             <button class="wfr-perm-btn wfr-perm-btn--on" id="wfrBtnSkipPerms" aria-pressed="true" title="When ON: skips all tool permission prompts (--dangerously-skip-permissions). When OFF: Claude asks before each tool use.">
               Skip Permissions: <span id="wfrSkipPermsLabel">ON</span>
             </button>
-            <button class="wfr-run-selected-btn" id="wfrBtnRunSelected" disabled>
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
-              </svg>
-              Run Selected
-            </button>
-            <button class="wfr-run-all-btn" id="wfrBtnRunAll">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
-              </svg>
-              Run All
-            </button>
+            <div class="project-page__model-group wfr-header__model" style="-webkit-app-region:no-drag;">
+              <div id="wfrModelPicker"></div>
+            </div>
 <button class="wfr-git-toggle-btn" id="wfrBtnGitToggle" title="Toggle Git Changes">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <circle cx="5" cy="4" r="1.5" stroke="currentColor" stroke-width="1.4"/>
@@ -723,6 +758,20 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
                   ${escHtml(this._layers[0]?.layer || '')}
                 </span>
                 <span class="wfr-elapsed" id="wfrElapsed"></span>
+                <div class="wfr-output-actions" id="wfrOutputActions">
+                  <button class="wfr-run-selected-btn" id="wfrBtnRunSelected" disabled>
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
+                    </svg>
+                    Run Selected
+                  </button>
+                  <button class="wfr-run-all-btn" id="wfrBtnRunAll">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 2l12 6-12 6V2z" fill="currentColor"/>
+                    </svg>
+                    Run All
+                  </button>
+                </div>
               </div>
               <div class="wfr-output-cwd" id="wfrOutputCwd" hidden>
                 <span class="wfr-output-cwd__label">cwd</span>
@@ -773,7 +822,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
 
   _bindEvents() {
     this.container.querySelector('#wfrBtnClose')
-      ?.addEventListener('click', () => window.close());
+      ?.addEventListener('click', () => this._handleClose());
 
     this.container.querySelector('#wfrBtnRunSelected')
       ?.addEventListener('click', () => this._runSelected());

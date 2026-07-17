@@ -233,6 +233,8 @@ export class ProjectHomePage {
 
             ${this._statsHtml()}
 
+            ${this._timelineHtml()}
+
             <div class="ph-section-label">Quick Links</div>
             <div class="ph-qlinks-grid" style="margin-bottom:28px">
               ${this._quickLinksHtml()}
@@ -246,6 +248,75 @@ export class ProjectHomePage {
         </div>
       </div>
     `;
+  }
+
+  // ----------------------------------------------------------------
+  // Project timeline card — date range vs. layer completion
+  // ----------------------------------------------------------------
+  _timelineHtml() {
+    const startDate = this._project?.start_date;
+    const endDate    = this._project?.end_date;
+
+    // Aggregate layer completion across every project layer's workflow stats
+    const rows       = this._layerStats || [];
+    const totalUnits  = rows.reduce((sum, r) => sum + (r.total    ?? 0), 0);
+    const doneUnits   = rows.reduce((sum, r) => sum + (r.executed ?? 0), 0);
+    const completedPct = totalUnits > 0 ? Math.round((doneUnits / totalUnits) * 100) : 0;
+
+    if (!startDate || !endDate) {
+      return `
+        <div class="ph-section-label">Project Timeline</div>
+        <div class="ph-timeline-card" style="margin-bottom:28px">
+          <div class="ph-timeline-empty">
+            No start/end date set for this project. Edit the project from the Home screen to track progress against a timeline.
+          </div>
+        </div>`;
+    }
+
+    const start = new Date(startDate);
+    const end   = new Date(endDate);
+    const today = new Date(new Date().toDateString());
+
+    const totalDays   = Math.max(1, Math.round((end - start) / 86400000));
+    const elapsedDays = Math.round((today - start) / 86400000);
+    const elapsedPct  = Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100)));
+
+    const notStarted = today < start;
+    const overdue     = today > end && completedPct < 100;
+
+    let statusCls, statusLabel;
+    if (completedPct >= 100) {
+      statusCls = 'done'; statusLabel = 'Completed';
+    } else if (notStarted) {
+      statusCls = 'open'; statusLabel = 'Not Started';
+    } else if (overdue) {
+      statusCls = 'failed'; statusLabel = 'Overdue';
+    } else if (completedPct >= elapsedPct - 5) {
+      statusCls = 'done'; statusLabel = 'On Track';
+    } else {
+      statusCls = 'failed'; statusLabel = 'Behind Schedule';
+    }
+
+    const fmt = d => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+    return `
+      <div class="ph-section-label">Project Timeline</div>
+      <div class="ph-timeline-card" style="margin-bottom:28px">
+        <div class="ph-timeline-head">
+          <div class="ph-timeline-dates">${fmt(start)} &ndash; ${fmt(end)}</div>
+          <span class="ph-wf-pill ph-wf-pill--${statusCls}">${statusLabel}</span>
+        </div>
+        <div class="ph-timeline-bar-wrap">
+          <div class="ph-timeline-bar">
+            <div class="ph-timeline-bar__fill" style="width:${completedPct}%"></div>
+            <div class="ph-timeline-bar__marker" style="left:${elapsedPct}%" title="${elapsedPct}% of timeline elapsed"></div>
+          </div>
+        </div>
+        <div class="ph-timeline-foot">
+          <span><b>${completedPct}%</b> complete</span>
+          <span>${elapsedPct}% of timeline elapsed</span>
+        </div>
+      </div>`;
   }
 
   // ----------------------------------------------------------------

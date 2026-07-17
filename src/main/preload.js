@@ -198,6 +198,7 @@ contextBridge.exposeInMainWorld('db', {
     set: (pageKey, modelConfigId) => invoke('db:model_mapping:set', pageKey, modelConfigId),
   },
   aiQuery: (sql) => invoke('db:ai-query', { sql }),
+  aiSchema: () => invoke('db:ai-schema'),
   savedThemes: {
     list:   ()     => invoke('db:saved_themes:list'),
     create: (data) => invoke('db:saved_themes:create', data),
@@ -280,7 +281,7 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('chat:validateDone');
     },
   },
-  openIssueRunnerWindow: (projectId) => ipcRenderer.invoke('app:openIssueRunnerWindow', projectId),
+  openIssueRunnerWindow: (data) => ipcRenderer.invoke('app:openIssueRunnerWindow', data),
   issueRunnerWindow: {
     onInit: (cb) => ipcRenderer.on('issueRunner:init', (_e, p) => cb(p)),
   },
@@ -333,6 +334,19 @@ contextBridge.exposeInMainWorld('app', {
     offAll:      ()    => {
       ipcRenderer.removeAllListeners('irPty:data');
       ipcRenderer.removeAllListeners('irPty:layerDone');
+    },
+  },
+  // PTY-backed terminal for the standalone terminal window (independent from wfrPty)
+  termPty: {
+    write:      (data) => ipcRenderer.invoke('termPty:write', data),
+    spawnShell: (data) => ipcRenderer.invoke('termPty:spawnShell', data),
+    resize:     (data) => ipcRenderer.invoke('termPty:resize', data),
+    kill:       ()     => ipcRenderer.invoke('termPty:kill'),
+    onData:      (cb)  => ipcRenderer.on('termPty:data',      (_e, p) => cb(p)),
+    onLayerDone: (cb)  => ipcRenderer.on('termPty:layerDone', (_e, p) => cb(p)),
+    offAll:      ()    => {
+      ipcRenderer.removeAllListeners('termPty:data');
+      ipcRenderer.removeAllListeners('termPty:layerDone');
     },
   },
   // Separate AI channel for the generate-workflows window.

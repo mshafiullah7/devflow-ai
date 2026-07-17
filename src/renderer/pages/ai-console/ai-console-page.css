@@ -268,37 +268,6 @@
 }
 
 /* ----------------------------------------------------------------
-   Action chips
----------------------------------------------------------------- */
-.aic-action-chip {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 3px 10px;
-  border-radius: 99px;
-  border: 1px solid var(--border-default);
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-}
-.aic-action-chip:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.aic-action-chip--preview {
-  cursor: default;
-  opacity: 0.45;
-}
-.aic-action-chip--preview:hover {
-  background: var(--bg-primary);
-  border-color: var(--border-default);
-  color: var(--text-secondary);
-}
-
-/* ----------------------------------------------------------------
    Input bar — Documents AI Edit style
 ---------------------------------------------------------------- */
 .aic-input-bar {
@@ -458,6 +427,25 @@
   font-size: 11px;
   color: var(--text-tertiary);
   line-height: 1.5;
+}
+
+/* Data-sharing warning — shown for any non-local (non-Ollama) model */
+.aic-privacy-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+  background: color-mix(in srgb, #f59e0b 10%, transparent);
+  color: color-mix(in srgb, #f59e0b 85%, var(--text-primary));
+  font-size: 11px;
+  line-height: 1.5;
+}
+.aic-privacy-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 /* Context slices list */
@@ -795,14 +783,6 @@
   max-height: 320px;
   overflow-y: auto;
   scrollbar-gutter: stable;
-}
-
-/* Apply actions legend */
-.aic-actions-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 6px;
 }
 
 /* ----------------------------------------------------------------

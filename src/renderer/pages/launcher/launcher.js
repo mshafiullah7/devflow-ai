@@ -106,6 +106,16 @@ export class LauncherPage {
               <label class="form-label" for="inputDesc">Description</label>
               <textarea class="form-textarea" id="inputDesc" rows="3" placeholder="Brief description of this project…"></textarea>
             </div>
+            <div class="form-row" style="display:flex;gap:12px;">
+              <div class="form-group" style="flex:1;">
+                <label class="form-label" for="inputStartDate">Start Date</label>
+                <input class="form-input" id="inputStartDate" type="date" />
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label class="form-label" for="inputEndDate">End Date</label>
+                <input class="form-input" id="inputEndDate" type="date" />
+              </div>
+            </div>
             <p class="form-error" id="formError" hidden></p>
           </div>
           <div class="modal__footer">
@@ -129,6 +139,8 @@ export class LauncherPage {
     this._btnConfirmRemove = document.getElementById('btnConfirmRemove');
     this._inputName        = document.getElementById('inputName');
     this._inputDesc        = document.getElementById('inputDesc');
+    this._inputStartDate   = document.getElementById('inputStartDate');
+    this._inputEndDate     = document.getElementById('inputEndDate');
     this._formError        = document.getElementById('formError');
     this._btnCreate        = document.getElementById('btnCreate');
   }
@@ -243,39 +255,77 @@ export class LauncherPage {
     document.querySelector('.proj-edit-overlay')?.remove();
 
     const overlay = document.createElement('div');
-    overlay.className = 'proj-edit-overlay';
+    overlay.className = 'modal-overlay proj-edit-overlay';
     overlay.innerHTML = `
-      <div class="proj-edit-dialog">
-        <h3 class="proj-edit-title">Edit Project</h3>
-        <div class="proj-edit-field">
-          <label class="proj-edit-label">Name</label>
-          <input class="proj-edit-input" id="projEditName" type="text" value="${escHtml(project.name)}" placeholder="Project name" autocomplete="off"/>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projEditTitle">
+        <div class="modal__header">
+          <h2 class="modal__title" id="projEditTitle">Edit Project</h2>
+          <button class="modal__close" id="projEditCloseBtn" aria-label="Close">&times;</button>
         </div>
-        <div class="proj-edit-field">
-          <label class="proj-edit-label">Description</label>
-          <textarea class="proj-edit-textarea" id="projEditDesc" placeholder="Optional description" rows="3">${escHtml(project.description || '')}</textarea>
+        <div class="modal__body">
+          <div class="form-group">
+            <label class="form-label" for="projEditName">Project Name <span class="required">*</span></label>
+            <input class="form-input" id="projEditName" type="text" value="${escHtml(project.name)}" placeholder="Project name" autocomplete="off"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="projEditDesc">Description</label>
+            <textarea class="form-textarea" id="projEditDesc" rows="3" placeholder="Optional description">${escHtml(project.description || '')}</textarea>
+          </div>
+          <div class="form-row" style="display:flex;gap:12px;">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label" for="projEditStartDate">Start Date</label>
+              <input class="form-input" id="projEditStartDate" type="date" value="${escHtml(project.start_date || '')}"/>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label class="form-label" for="projEditEndDate">End Date</label>
+              <input class="form-input" id="projEditEndDate" type="date" value="${escHtml(project.end_date || '')}"/>
+            </div>
+          </div>
+          <p class="form-error" id="projEditError" hidden></p>
         </div>
-        <div class="proj-edit-footer">
-          <button class="proj-edit-btn proj-edit-btn--cancel">Cancel</button>
-          <button class="proj-edit-btn proj-edit-btn--save">Save</button>
+        <div class="modal__footer">
+          <button class="btn-secondary" id="projEditCancelBtn">Cancel</button>
+          <button class="btn-primary" id="projEditSaveBtn">Save</button>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
 
-    const nameInput = overlay.querySelector('#projEditName');
-    const descInput = overlay.querySelector('#projEditDesc');
+    const nameInput      = overlay.querySelector('#projEditName');
+    const descInput      = overlay.querySelector('#projEditDesc');
+    const startDateInput = overlay.querySelector('#projEditStartDate');
+    const endDateInput   = overlay.querySelector('#projEditEndDate');
+    const errorEl        = overlay.querySelector('#projEditError');
     nameInput.focus();
     nameInput.select();
 
     const close = () => overlay.remove();
 
-    overlay.querySelector('.proj-edit-btn--cancel').addEventListener('click', close);
+    overlay.querySelector('#projEditCloseBtn').addEventListener('click', close);
+    overlay.querySelector('#projEditCancelBtn').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
 
-    overlay.querySelector('.proj-edit-btn--save').addEventListener('click', async () => {
+    overlay.querySelector('#projEditSaveBtn').addEventListener('click', async () => {
       const name = nameInput.value.trim();
       if (!name) { nameInput.focus(); return; }
-      await window.db.projects.update({ id: project.id, name, description: descInput.value.trim() || null });
+
+      const startDate = startDateInput.value || null;
+      const endDate   = endDateInput.value || null;
+      if (startDate && endDate && endDate < startDate) {
+        errorEl.textContent = 'End date cannot be before start date.';
+        errorEl.hidden      = false;
+        return;
+      }
+
+      await window.db.projects.update({
+        id: project.id,
+        name,
+        description: descInput.value.trim() || null,
+        start_date: startDate,
+        end_date: endDate,
+      });
 
       // Update row in place
       rowEl.querySelector('.launcher__proj-dot').textContent  = name.trim()[0]?.toUpperCase() || '?';
@@ -333,10 +383,12 @@ export class LauncherPage {
   // Modal
   // ----------------------------------------------------------------
   _openModal() {
-    this._inputName.value     = '';
-    this._inputDesc.value     = '';
-    this._formError.hidden    = true;
-    this._modalOverlay.hidden = false;
+    this._inputName.value      = '';
+    this._inputDesc.value      = '';
+    this._inputStartDate.value = '';
+    this._inputEndDate.value   = '';
+    this._formError.hidden     = true;
+    this._modalOverlay.hidden  = false;
     this._inputName.focus();
   }
 
@@ -353,6 +405,14 @@ export class LauncherPage {
       return;
     }
 
+    const startDate = this._inputStartDate.value || null;
+    const endDate   = this._inputEndDate.value || null;
+    if (startDate && endDate && endDate < startDate) {
+      this._formError.textContent = 'End date cannot be before start date.';
+      this._formError.hidden      = false;
+      return;
+    }
+
     this._btnCreate.disabled    = true;
     this._btnCreate.textContent = 'Creating…';
 
@@ -360,6 +420,8 @@ export class LauncherPage {
       const project = await window.db.projects.create({
         name,
         description: this._inputDesc.value.trim() || null,
+        start_date: startDate,
+        end_date: endDate,
       });
       await window.db.projects.open(project.id);
       this._closeModal();

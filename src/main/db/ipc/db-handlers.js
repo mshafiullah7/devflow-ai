@@ -35,14 +35,14 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
   });
 
-  safeHandle('db:projects:create', (_e, { name, description }) => {
+  safeHandle('db:projects:create', (_e, { name, description, start_date, end_date }) => {
     const result = db
-      .prepare('INSERT INTO projects (name, description) VALUES (?, ?)')
-      .run(name, description ?? null);
+      .prepare('INSERT INTO projects (name, description, start_date, end_date) VALUES (?, ?, ?, ?)')
+      .run(name, description ?? null, start_date ?? null, end_date ?? null);
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:projects:update', (_e, { id, name, description, is_active, design_template, project_path }) => {
+  safeHandle('db:projects:update', (_e, { id, name, description, is_active, design_template, project_path, start_date, end_date }) => {
     db.prepare(
       `UPDATE projects
           SET name = coalesce(?, name),
@@ -50,6 +50,8 @@ function registerDbHandlers() {
               is_active = coalesce(?, is_active),
               design_template = CASE WHEN ? IS NOT NULL THEN ? ELSE design_template END,
               project_path = CASE WHEN ? IS NOT NULL THEN ? ELSE project_path END,
+              start_date = CASE WHEN ? IS NOT NULL THEN ? ELSE start_date END,
+              end_date = CASE WHEN ? IS NOT NULL THEN ? ELSE end_date END,
               updated_at = datetime('now')
         WHERE id = ?`
     ).run(
@@ -58,6 +60,8 @@ function registerDbHandlers() {
       is_active ?? null,
       design_template ?? null, design_template ?? null,
       project_path ?? null, project_path ?? null,
+      start_date ?? null, start_date ?? null,
+      end_date ?? null, end_date ?? null,
       id
     );
     return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
@@ -1336,6 +1340,30 @@ function registerDbHandlers() {
     } catch (err) {
       throw new Error(`Query failed: ${err.message}`);
     }
+  });
+
+  // ----------------------------------------------------------------
+  // AI Chat — schema introspection (PK/FK) for the tables it may query.
+  // Keeps the schema prompt in sync with the real DDL automatically.
+  // ----------------------------------------------------------------
+  const AI_QUERY_TABLES = ['projects', 'issues', 'workflows', 'project_layers', 'project_documents', 'screen_designs'];
+
+  safeHandle('db:ai-schema', () => {
+    const schema = {};
+    for (const table of AI_QUERY_TABLES) {
+      const columns = db.pragma(`table_info(${table})`).map(c => ({
+        name: c.name,
+        type: c.type,
+        pk:   !!c.pk,
+      }));
+      const foreignKeys = db.pragma(`foreign_key_list(${table})`).map(fk => ({
+        column:    fk.from,
+        refTable:  fk.table,
+        refColumn: fk.to,
+      }));
+      schema[table] = { columns, foreignKeys };
+    }
+    return schema;
   });
 }
 

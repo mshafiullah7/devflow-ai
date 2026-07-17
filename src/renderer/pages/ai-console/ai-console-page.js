@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
 import { ProjectSidebar }                from '../../components/project-sidebar/project-sidebar.js';
+import { Dialog }                        from '../../components/dialog/dialog.js';
 
 // ----------------------------------------------------------------
 // Helpers
@@ -19,6 +20,32 @@ function escapeHtml(raw) {
     .replace(/>/g, '&gt;');
 }
 
+// Curated column allowlist per table — keeps the schema prompt minimal (no
+// internal audit columns). PK/FK annotations are derived at runtime from
+// window.db.aiSchema() so they always match the real DDL.
+const SCHEMA_TABLE_COLUMNS = {
+  projects:          ['id', 'name', 'description', 'project_path', 'is_active'],
+  issues:            ['id', 'project_id', 'layer_id', 'title', 'severity', 'status', 'description', 'steps_to_reproduce', 'expected_behavior', 'actual_behavior'],
+  workflows:         ['id', 'project_id', 'feature', 'description', 'status'],
+  project_layers:    ['id', 'project_id', 'name', 'description', 'folder_path'],
+  project_documents: ['id', 'project_id', 'title', 'content'],
+  screen_designs:    ['id', 'project_id', 'title', 'description', 'tech_stack', 'queued', 'executed'],
+};
+
+// Table names shown to the user in the app don't always match the SQL table name —
+// surface the app-facing name alongside the real one so the model still writes correct SQL.
+const SCHEMA_TABLE_LABELS = {
+  project_documents: 'Documents page',
+  screen_designs:    'Mockups page',
+};
+
+const SCHEMA_ENUM_NOTES = {
+  projects:       { is_active: '1 = active project, 0 = archived/inactive' },
+  issues:         { severity: 'critical | high | medium | low', status: 'open | in_progress | resolved | closed' },
+  workflows:      { status: 'open | in_progress | completed | differed' },
+  screen_designs: { queued: '0 | 1 (boolean)', executed: '0 | 1 (boolean)' },
+};
+
 // ----------------------------------------------------------------
 // Page class
 // ----------------------------------------------------------------
@@ -34,6 +61,8 @@ export class AiConsolePage {
     this._messages      = [];
     this._project       = null;
     this._loopAborted   = false;
+    this._dbSchema      = null;
+    this._consentedModelId = null;
   }
 
   get _selectedModel() { return this._picker?.selectedModel ?? null; }
@@ -47,16 +76,17 @@ export class AiConsolePage {
     applyStoredTheme();
 
     let _mapping;
-    [this._project, _mapping] = await Promise.all([
+    [this._project, _mapping, this._dbSchema] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.modelMapping.get('ai-console'),
+      window.db.aiSchema(),
     ]);
 
     this.container.innerHTML = this._template();
 
     this._picker = new ModelPicker({
       anchor:    this.container.querySelector('#aicModelPicker'),
-      onSelect:  () => {},
+      onSelect:  () => this._updatePrivacyWarning(),
       initialId: _mapping?.model_config_id ?? null,
     });
 
@@ -64,6 +94,7 @@ export class AiConsolePage {
     this._sidebar.bindEvents(this.container);
     this._sidebar.loadCounts(this.container);
     await this._picker.reload();
+    this._updatePrivacyWarning();
     this._enableUi();
     this._renderWelcome();
   }
@@ -90,6 +121,22 @@ export class AiConsolePage {
     });
   }
 
+  // ----------------------------------------------------------------
+  // Data-sharing warning — shown whenever the selected model isn't a
+  // local Ollama model, since the schema + query results leave the device.
+  // ----------------------------------------------------------------
+  _updatePrivacyWarning() {
+    const el = this.container.querySelector('#aicPrivacyWarning');
+    if (!el) return;
+    const model   = this._selectedModel;
+    const isLocal = model?.type === 'ollama';
+    el.hidden = !model || isLocal;
+    if (model && !isLocal) {
+      el.querySelector('.aic-privacy-warning__text').textContent =
+        `Project data (schema + query results) will be sent to "${model.label}" to answer this — only local Ollama models keep everything on-device.`;
+    }
+  }
+
   _renderWelcome() {
     const thread = this.container.querySelector('#aicThread');
     if (!thread) return;
@@ -101,25 +148,55 @@ export class AiConsolePage {
   }
 
   // ----------------------------------------------------------------
-  // Minimal schema prompt — key columns + enums only, no internals
+  // Minimal schema prompt — curated columns only, but PK/FK annotations
+  // are pulled live from window.db.aiSchema() so they can't drift from
+  // the real DDL (schema.js).
   // ----------------------------------------------------------------
   _buildSchemaPrompt() {
-    const pid  = this.projectId;
-    const name = this._project?.name || 'this project';
+    const pid    = this.projectId;
+    const name   = this._project?.name || 'this project';
+    const schema = this._dbSchema || {};
+
+    const tableBlocks = Object.keys(SCHEMA_TABLE_COLUMNS).map(table => {
+      const allowedCols = SCHEMA_TABLE_COLUMNS[table];
+      const def         = schema[table] || { columns: [], foreignKeys: [] };
+      const pkNames     = new Set(def.columns.filter(c => c.pk).map(c => c.name));
+      const fkByColumn  = new Map(
+        def.foreignKeys
+          // project_id already resolves to a known literal (${pid}) — never worth joining to "projects"
+          .filter(fk => fk.refTable !== 'projects')
+          .map(fk => [fk.column, fk])
+      );
+
+      const colList = allowedCols
+        .map(col => pkNames.has(col) ? `${col} (PK)` : col)
+        .join(', ');
+
+      const notes = [];
+      for (const col of allowedCols) {
+        const enumVals = SCHEMA_ENUM_NOTES[table]?.[col];
+        if (enumVals) notes.push(`                     ${col.padEnd(10)}: ${enumVals}`);
+        const fk = fkByColumn.get(col);
+        if (fk) notes.push(`                     ${col.padEnd(10)}: FK → ${fk.refTable}.${fk.refColumn}`);
+      }
+
+      const label = SCHEMA_TABLE_LABELS[table] ? `  -- ${SCHEMA_TABLE_LABELS[table]}` : '';
+      return `  ${table.padEnd(18)}(${colList})${label}${notes.length ? '\n' + notes.join('\n') : ''}`;
+    }).join('\n\n');
+
     return `You are a data assistant for the project "${name}".
 
-Available tables (always filter with project_id = ${pid}):
+Available tables — the "projects" table below describes the project itself and is filtered by
+id = ${pid}. Every other table has its own "id" (PK) and a "project_id" column; filter those
+directly with project_id = ${pid}. Never join to "projects" to look up project details — its
+values (name, description, project_path) are already retrievable with a direct query if needed:
 
-  issues            (title, severity, status, description, steps_to_reproduce, expected_behavior, actual_behavior)
-                     severity : critical | high | medium | low
-                     status   : open | in_progress | resolved | closed
+${tableBlocks}
 
-  workflows         (feature, description, status)
-                     status   : open | in_progress | completed | differed
-
-  project_layers    (name, description, folder_path)
-
-  project_documents (title, content)
+Rules:
+- For "projects", filter with id = ${pid}. For every other table, filter with project_id = ${pid}.
+- Never join to "projects" — filter directly using the literal id above instead.
+- Only join between the other tables listed above, using the FK column noted (e.g. issues.layer_id = project_layers.id).
 
 When you need data reply with ONLY a SQL block — no other text:
 \`\`\`sql
@@ -277,6 +354,15 @@ You may query up to 3 times. After receiving data give your final answer in plai
             </div>
             <p class="aic-context__desc">Model writes SELECT queries; data is fetched on-device and returned to the model. Minimal schema only — no internal columns exposed.</p>
 
+            <div id="aicPrivacyWarning" class="aic-privacy-warning" hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span class="aic-privacy-warning__text"></span>
+            </div>
+
             <div id="aicQueryStatus" class="aic-query-status aic-qs--idle">
               Send a message — queries will appear here.
             </div>
@@ -303,16 +389,6 @@ You may query up to 3 times. After receiving data give your final answer in plai
                 <span>Response from model</span>
               </button>
               <pre id="aicResponseText" class="aic-ctx-preview-pre" style="display:none"></pre>
-            </div>
-
-            <!-- Apply actions legend -->
-            <div class="aic-context__heading" style="margin-top:20px;">Apply actions</div>
-            <p class="aic-context__desc">After a response, use the action chips to write AI output back to your project.</p>
-            <div class="aic-actions-legend">
-              <span class="aic-action-chip aic-action-chip--preview">Save to doc</span>
-              <span class="aic-action-chip aic-action-chip--preview">Create issue</span>
-              <span class="aic-action-chip aic-action-chip--preview">Update story</span>
-              <span class="aic-action-chip aic-action-chip--preview">Queue prompt</span>
             </div>
           </aside>
 
@@ -572,6 +648,15 @@ You may query up to 3 times. After receiving data give your final answer in plai
     if (!this._selectedModel) {
       this._showThreadError('Please select a model first.');
       return;
+    }
+
+    if (this._selectedModel.type !== 'ollama' && this._consentedModelId !== this._selectedModel.id) {
+      const ok = await Dialog.confirm(
+        `This will send project data (schema + query results) to "${this._selectedModel.label}" to answer your question. Only local Ollama models keep everything on-device.`,
+        { title: 'Send data to external model?', confirmText: 'Continue', cancelText: 'Cancel' }
+      );
+      if (!ok) return;
+      this._consentedModelId = this._selectedModel.id;
     }
 
     this._loopAborted = false;

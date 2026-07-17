@@ -1,6 +1,6 @@
-import { Router } from './shared/router.js';
 import { LauncherPage } from './pages/launcher/launcher.js';
 import { showToast } from './utils/toast.js';
+import { router } from './shared/app-nav.js';
 
 window.showToast = showToast;
 
@@ -21,8 +21,6 @@ window.addEventListener('app:ipc-error', (e) => {
   const prefix = Object.keys(FRIENDLY).find(p => channel.startsWith(p));
   showToast(prefix ? FRIENDLY[prefix] : 'An unexpected error occurred.');
 });
-
-const router = new Router(document.getElementById('app'));
 
 router.register('launcher', LauncherPage);
 router.register('project-home', async () => {
@@ -82,5 +80,13 @@ router.register('generate-workflows', async () => {
 router.register('security-scans', async () => {
   const { SecurityScansPage } = await import('./pages/security-scans/security-scans-page.js');
   return SecurityScansPage;
+});
+router.register('workflow-runner', async () => {
+  const { WorkflowRunnerPage } = await import('./pages/workflow-runner/workflow-runner-page.js');
+  return WorkflowRunnerPage;
+});
+router.register('terminal', async () => {
+  const { TerminalPage } = await import('./pages/terminal/terminal-page.js');
+  return TerminalPage;
 });
 router.navigate('launcher');

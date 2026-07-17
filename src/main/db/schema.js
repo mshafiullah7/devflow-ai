@@ -30,6 +30,8 @@ function applySchema(db) {
     `ALTER TABLE issues            ADD COLUMN type     TEXT NOT NULL DEFAULT 'issue'`,
     `ALTER TABLE test_run_history  ADD COLUMN coverage REAL`,
     `ALTER TABLE test_run_history  ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
+    `ALTER TABLE projects ADD COLUMN start_date TEXT`,
+    `ALTER TABLE projects ADD COLUMN end_date   TEXT`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -60,7 +62,9 @@ function applySchema(db) {
       created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
       last_opened_at  TEXT,
-      project_path    TEXT
+      project_path    TEXT,
+      start_date      TEXT,
+      end_date        TEXT
     );
 
     CREATE TABLE IF NOT EXISTS workflows (

@@ -30,6 +30,7 @@ export class IssueRunnerPage {
     this.container  = container;
     this.router     = router;
     this._projectId = params.projectId;
+    this._passedModelConfig = params.modelConfig || null;
     this._project   = null;
     this._issues    = [];
     this._selectedId    = null;
@@ -75,7 +76,7 @@ export class IssueRunnerPage {
     [this._project, this._projectLayers, _mapping] = await Promise.all([
       window.db.projects.get(this._projectId),
       window.db.projectLayers.list(this._projectId),
-      window.db.modelMapping.get('issues'),
+      window.db.modelMapping.get('issue-runner'),
     ]);
 
     this.container.innerHTML = this._template();
@@ -83,7 +84,7 @@ export class IssueRunnerPage {
     this._picker = new ModelPicker({
       anchor:    this.container.querySelector('#irModelPicker'),
       onSelect:  model => { this._modelCfg = model; },
-      initialId: _mapping?.model_config_id ?? null,
+      initialId: this._passedModelConfig?.id ?? _mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
 
@@ -129,7 +130,7 @@ export class IssueRunnerPage {
 
           <button class="ir-perm-btn ir-perm-btn--on" id="irBtnSkipPerms" aria-pressed="true"
             title="Skip Permissions: passes --dangerously-skip-permissions to Claude when ON.">
-            Skip Perms: <span id="irSkipPermsLabel">ON</span>
+            Skip Permissions: <span id="irSkipPermsLabel">ON</span>
           </button>
 
           <div class="project-page__model-group ir-header__model" style="-webkit-app-region:no-drag;">
@@ -600,7 +601,7 @@ export class IssueRunnerPage {
       (i.status === 'open' || i.status === 'in_progress') &&
       (!this._runState[i.id] || this._runState[i.id] === 'idle')
     ).length;
-    if (runAll) runAll.disabled = runnable === 0 || this._isRunning;
+    if (runAll) runAll.disabled = true;
     if (runThis) {
       const si = this._selectedIssue;
       const selRunnable = si &&
