@@ -530,10 +530,6 @@ export class StyleGuidePage {
                   <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-preview-theme="light">Light</button>
                   <button class="scr-ds-theme-btn" data-preview-theme="dark">Dark</button>
                 </div>
-                <div class="scr-ds-theme-btns" id="sgWidthBtns" hidden>
-                  <button class="scr-ds-theme-btn" data-width="full">Full width</button>
-                  <button class="scr-ds-theme-btn" data-width="mobile">Mobile width</button>
-                </div>
                 <button class="scr-btn scr-btn--sm" id="sgRefreshBtn" title="Refresh preview">
                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                     <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -602,9 +598,6 @@ export class StyleGuidePage {
     /* ---- Preview state ---- */
     let activeTheme = 'light';
 
-    const WIDTH_KEY = 'sg_preview_width_mode';
-    let widthMode = localStorage.getItem(WIDTH_KEY) || 'full';
-
     const frame = this.container.querySelector('#sgPreviewFrame');
 
     const blankHtml = theme => {
@@ -633,24 +626,10 @@ export class StyleGuidePage {
 
     const getActivePlatform = () => this.container.querySelector('#sgPlatformSelect')?.value || 'web';
 
-    const getWidthMode = () => {
-      const platform = getActivePlatform();
-      return (platform === 'flutter' || platform === 'android') ? widthMode : 'full';
-    };
-
-    const syncWidthToggle = () => {
-      const platform = getActivePlatform();
-      const wrap = this.container.querySelector('#sgWidthBtns');
-      if (!wrap) return;
-      wrap.hidden = !(platform === 'flutter' || platform === 'android');
-      wrap.querySelectorAll('.scr-ds-theme-btn').forEach(b =>
-        b.classList.toggle('scr-ds-theme-btn--active', b.dataset.width === widthMode));
-    };
-
     const renderPreview = () => {
       const tpl = getActiveTpl();
       frame.srcdoc = tpl
-        ? this._buildPreviewHtml(this._parseDesignTemplate(tpl, activeTheme), activeTheme, getActivePlatform(), getWidthMode())
+        ? this._buildPreviewHtml(this._parseDesignTemplate(tpl, activeTheme), activeTheme, getActivePlatform(), 'full')
         : blankHtml(activeTheme);
     };
 
@@ -672,15 +651,7 @@ export class StyleGuidePage {
       });
     });
 
-    /* ---- Preview width toggle (Flutter/Android only) ---- */
-    this.container.querySelectorAll('#sgWidthBtns .scr-ds-theme-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        widthMode = btn.dataset.width;
-        localStorage.setItem(WIDTH_KEY, widthMode);
-        syncWidthToggle();
-        renderPreview();
-      });
-    });
+
 
     /* ---- Save Style Guide ---- */
     this.container.querySelector('#sgSaveBtn').addEventListener('click', async () => {
@@ -738,7 +709,6 @@ export class StyleGuidePage {
       };
       applyBlock(this.container.querySelector('#sgTplLight'));
       applyBlock(this.container.querySelector('#sgTplDark'));
-      syncWidthToggle();
       renderPreview();
       this._renderThemePicker();
 
@@ -748,7 +718,6 @@ export class StyleGuidePage {
 
     /* ---- Initial render ---- */
     syncThemeToggle();
-    syncWidthToggle();
     renderPreview();
   }
 
