@@ -1282,13 +1282,23 @@ function registerDbHandlers() {
   });
 
   safeHandle('db:screen_templates:seed', (_e, templates) => {
-    const insert = db.prepare(
-      'INSERT OR IGNORE INTO screen_templates (group_name, name, description, sort_order) VALUES (?, ?, ?, ?)'
-    );
-    const insertMany = db.transaction((rows) => {
-      rows.forEach((t, i) => insert.run(t.group, t.name, t.description, i));
+    // Built-ins are matched by name and kept in sync with the source file on
+    // every mount, so editing data/screen-templates.js takes effect on next
+    // launch without a manual DB reset. Any row whose name doesn't match a
+    // current built-in (i.e. user-created templates) is left untouched.
+    const upsert = db.prepare(`
+      INSERT INTO screen_templates (group_name, name, description, sort_order)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        group_name  = excluded.group_name,
+        description = excluded.description,
+        sort_order  = excluded.sort_order,
+        updated_at  = datetime('now')
+    `);
+    const upsertMany = db.transaction((rows) => {
+      rows.forEach((t, i) => upsert.run(t.group, t.name, t.description, i));
     });
-    insertMany(templates);
+    upsertMany(templates);
     return db.prepare('SELECT * FROM screen_templates WHERE is_active = 1 ORDER BY group_name, sort_order, name').all();
   });
 
