@@ -1,6 +1,7 @@
 import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
+import { ProjectSidebar }                from '../../components/project-sidebar/project-sidebar.js';
 
 const STATUS_META = {
   open:        { label: 'Open'        },
@@ -29,6 +30,8 @@ export class IssueRunnerPage {
   constructor(container, params, router) {
     this.container  = container;
     this.router     = router;
+    this._embedded  = !!router;
+    this._returnRoute = 'issues';
     this._projectId = params.projectId;
     this._passedModelConfig = params.modelConfig || null;
     this._project   = null;
@@ -70,8 +73,39 @@ export class IssueRunnerPage {
     injectCss('pages/issue-runner/issue-runner-page.css');
     injectCss('components/git/git-diff.css');
     injectCss('pages/issues/issues-page.css');
+    if (this._embedded) injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
+    await this._loadAndRender();
+  }
 
+  /**
+   * Called by the persistent-page host when this route is activated again.
+   * Mirrors the pop-out window's behavior: opening the runner for a
+   * different project re-loads in place; just re-showing the same tab only
+   * needs a terminal refit.
+   */
+  onResume(params) {
+    if (params && params.projectId !== this._projectId) {
+      this._projectId = params.projectId;
+      this._passedModelConfig = params.modelConfig || null;
+      this._loadAndRender();
+      return;
+    }
+    if (this._fitAddon) {
+      try { this._fitAddon.fit(); } catch (_) {}
+    }
+  }
+
+  _handleClose() {
+    if (this._embedded) {
+      this.router?.closePersistentRoute?.('issue-runner');
+      this.router?.navigateTo?.(this._returnRoute, { projectId: this._projectId });
+    } else {
+      window.close();
+    }
+  }
+
+  async _loadAndRender() {
     let _mapping;
     [this._project, this._projectLayers, _mapping] = await Promise.all([
       window.db.projects.get(this._projectId),
@@ -79,7 +113,7 @@ export class IssueRunnerPage {
       window.db.modelMapping.get('issue-runner'),
     ]);
 
-    this.container.innerHTML = this._template();
+    this._render();
 
     this._picker = new ModelPicker({
       anchor:    this.container.querySelector('#irModelPicker'),
@@ -96,10 +130,50 @@ export class IssueRunnerPage {
     await this._loadIssues();
   }
 
+  _render() {
+    const body = this._template();
+    if (this._embedded) {
+      this._sidebar = new ProjectSidebar({ projectId: this._project?.id, router: this.router, activeRoute: 'issues' });
+      this.container.innerHTML = `
+        <div class="ph-project-shell">
+          ${this._renderShellHeader()}
+          <div class="ph-page-with-nav">
+            ${this._sidebar.html()}
+            ${body}
+          </div>
+        </div>`;
+      this._sidebar.bindEvents(this.container);
+      this._sidebar.loadCounts(this.container);
+      this.container.querySelector('#irBtnShellBack')
+        ?.addEventListener('click', () => this._handleClose());
+    } else {
+      this.container.innerHTML = body;
+    }
+  }
+
+  _renderShellHeader() {
+    const name    = this._project?.name || 'Project';
+    const initial = name.trim()[0]?.toUpperCase() || '?';
+    return `
+      <header class="project-home__header">
+        <button class="project-home__back" id="irBtnShellBack" aria-label="Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </button>
+        <div class="project-home__badge">
+          <div class="project-home__badge-initial">${escHtml(initial)}</div>
+          <span class="project-home__badge-name">${escHtml(name)}</span>
+        </div>
+        <span class="ph-header-page-chip">Issue Runner</span>
+      </header>`;
+  }
+
   unmount() {
     removeCss('pages/issue-runner/issue-runner-page.css');
     removeCss('components/git/git-diff.css');
     removeCss('pages/issues/issues-page.css');
+    if (this._embedded) removeCss('components/project-sidebar/project-sidebar.css');
     this._picker?.unmount();
     if (this._isRunning) window.app.irPty.kill();
     window.app.irPty.offAll();
@@ -700,7 +774,7 @@ export class IssueRunnerPage {
     this._term.onData(data => {
       window.app.irPty.write(data);
       if (data === '\r' || data === '\n') {
-        if (_inputBuf.trim() === 'exit') window.close();
+        if (_inputBuf.trim() === 'exit') this._handleClose();
         _inputBuf = '';
       } else if (data === '\x7f' || data === '\b') {
         _inputBuf = _inputBuf.slice(0, -1);
@@ -1027,7 +1101,7 @@ export class IssueRunnerPage {
 
   _bindEvents() {
     this.container.querySelector('#irBtnBack')
-      ?.addEventListener('click', () => this.router.navigate('issues', { projectId: this._projectId }));
+      ?.addEventListener('click', () => this._handleClose());
 
     this.container.querySelector('#irBtnSkipPerms')
       ?.addEventListener('click', () => {

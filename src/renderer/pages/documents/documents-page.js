@@ -4,6 +4,11 @@ import { ModelPicker }       from '../../components/model-picker/model-picker.js
 import { Dialog }            from '../../components/dialog/dialog.js';
 import { ProjectSidebar }    from '../../components/project-sidebar/project-sidebar.js';
 
+const AI_MODE_HINTS = {
+  ask:  { placeholder: 'Ask a question about the document…', welcome: 'Ask a question about the document, or switch to Edit mode to make AI-driven changes.' },
+  edit: { placeholder: 'e.g. Add a deployment section based on the architecture diagram', welcome: 'Describe what changes to make. The AI has full context of the document and any attached diagrams.' },
+};
+
 export class DocumentsPage {
   constructor(container, params, router) {
     this.container      = container;
@@ -57,7 +62,15 @@ export class DocumentsPage {
 
     this._picker = new ModelPicker({
       anchor:    this.container.querySelector('#docModelPicker'),
-      onSelect:  model => { this._aiModelConfig = model; },
+      onSelect:  model => {
+        const prevType = this._aiModelConfig?.type;
+        this._aiModelConfig = model;
+        // Different provider families don't share prompt/response conventions —
+        // start the thread over rather than feeding one provider's history to another.
+        if (prevType && model?.type && model.type !== prevType && this._chatHistory.length > 0) {
+          this._resetAiChat();
+        }
+      },
       initialId: _mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
@@ -875,6 +888,15 @@ export class DocumentsPage {
   // ----------------------------------------------------------------
   // AI Assist pane (right panel)
   // ----------------------------------------------------------------
+  _resetAiChat() {
+    this._chatHistory = [];
+    const card   = this.container.querySelector('#docAiCard');
+    const msgsEl = card?.querySelector('#docAiMessages');
+    if (!msgsEl) return;
+    const mode = card.querySelector('.doc-ai-card__mode-btn--active')?.dataset.mode ?? 'ask';
+    msgsEl.innerHTML = `<p class="doc-ai-card__welcome">${AI_MODE_HINTS[mode].welcome}</p>`;
+  }
+
   _bindAiPane(doc) {
     const card    = this.container.querySelector('#docAiCard');
     const inputEl = card.querySelector('#docAiInput');
@@ -883,15 +905,11 @@ export class DocumentsPage {
     // Mode toggle
     const modeBtns = card.querySelectorAll('.doc-ai-card__mode-btn');
     const getMode  = () => card.querySelector('.doc-ai-card__mode-btn--active')?.dataset.mode ?? 'ask';
-    const modeHints = {
-      ask:  { placeholder: 'Ask a question about the document…', welcome: 'Ask a question about the document, or switch to Edit mode to make AI-driven changes.' },
-      edit: { placeholder: 'e.g. Add a deployment section based on the architecture diagram', welcome: 'Describe what changes to make. The AI has full context of the document and any attached diagrams.' },
-    };
     modeBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         modeBtns.forEach(b => b.classList.remove('doc-ai-card__mode-btn--active'));
         btn.classList.add('doc-ai-card__mode-btn--active');
-        const hint = modeHints[btn.dataset.mode];
+        const hint = AI_MODE_HINTS[btn.dataset.mode];
         inputEl.placeholder = hint.placeholder;
         if (msgsEl.querySelector('.doc-ai-card__welcome')) {
           msgsEl.querySelector('.doc-ai-card__welcome').textContent = hint.welcome;
@@ -906,11 +924,7 @@ export class DocumentsPage {
       inputEl.style.overflowY = inputEl.scrollHeight > 160 ? 'auto' : 'hidden';
     });
 
-    card.querySelector('#docAiClear').addEventListener('click', () => {
-      this._chatHistory = [];
-      const hint = modeHints[getMode()];
-      msgsEl.innerHTML = `<p class="doc-ai-card__welcome">${hint.welcome}</p>`;
-    });
+    card.querySelector('#docAiClear').addEventListener('click', () => this._resetAiChat());
 
     const submit = () => {
       const instruction = inputEl.value.trim();

@@ -1,7 +1,7 @@
 import { Router } from './router.js';
 import { PersistentPageHost } from './persistent-page-host.js';
 
-const PERSISTENT_ROUTES = new Set(['workflow-runner', 'terminal', 'generate-workflows']);
+const PERSISTENT_ROUTES = new Set(['workflow-runner', 'terminal', 'generate-workflows', 'issue-runner']);
 
 export const router = new Router(document.getElementById('app'));
 

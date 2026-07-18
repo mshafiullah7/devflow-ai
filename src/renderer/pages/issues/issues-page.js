@@ -203,13 +203,22 @@ export class IssuesPage {
     if (this._picker) await this._picker.reload();
   }
 
+  async _openIssueRunner(data) {
+    const mode = await window.app.config.get('issueRunnerOpenMode');
+    if (mode === 'window') {
+      window.app.openIssueRunnerWindow(data);
+    } else {
+      this.router.navigateTo('issue-runner', data);
+    }
+  }
+
   _bindHeaderEvents() {
     this.container.querySelector('#isBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
 
     this.container.querySelector('#isBtnRunner')
       .addEventListener('click', () => {
-        window.app.openIssueRunnerWindow({ projectId: this._projectId, modelConfig: this._aiModelConfig });
+        this._openIssueRunner({ projectId: this._projectId, modelConfig: this._aiModelConfig });
       });
 
     const addMenu   = this.container.querySelector('#isAddMenu');

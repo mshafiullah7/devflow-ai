@@ -433,9 +433,10 @@ export class SettingsPage {
   // ----------------------------------------------------------------
   async _renderRunnerWindows() {
     const main = this.container.querySelector('#stMainContent');
-    const [workflowRunnerOpenMode, terminalOpenMode] = await Promise.all([
+    const [workflowRunnerOpenMode, terminalOpenMode, issueRunnerOpenMode] = await Promise.all([
       window.app.config.get('workflowRunnerOpenMode'),
       window.app.config.get('terminalOpenMode'),
+      window.app.config.get('issueRunnerOpenMode'),
     ]);
 
     const modeOptions = (selected) => `
@@ -445,7 +446,7 @@ export class SettingsPage {
 
     main.innerHTML = `
       <div class="st-content-title">Runner Windows</div>
-      <div class="st-content-sub">Choose whether Workflow Runner and Terminal open as a tab inside the main window (and keep running in the background while you navigate elsewhere) or as a separate pop-out window.</div>
+      <div class="st-content-sub">Choose whether Workflow Runner, Terminal, and Run Issues open as a tab inside the main window (and keep running in the background while you navigate elsewhere) or as a separate pop-out window.</div>
 
       <div class="st-section-header">
         <div class="st-section-label">Workflow Runner</div>
@@ -464,6 +465,15 @@ export class SettingsPage {
           ${modeOptions(terminalOpenMode)}
         </select>
       </div>
+
+      <div class="st-section-header" style="margin-top:28px">
+        <div class="st-section-label">Run Issues</div>
+      </div>
+      <div class="st-form__row">
+        <select class="st-form__input" id="stIssueRunnerMode">
+          ${modeOptions(issueRunnerOpenMode)}
+        </select>
+      </div>
       <span class="st-form__hint" id="stRunnerModeHint"></span>
     `;
 
@@ -480,6 +490,11 @@ export class SettingsPage {
 
     main.querySelector('#stTerminalMode').addEventListener('change', async (e) => {
       await window.app.config.set('terminalOpenMode', e.target.value);
+      flashSaved();
+    });
+
+    main.querySelector('#stIssueRunnerMode').addEventListener('change', async (e) => {
+      await window.app.config.set('issueRunnerOpenMode', e.target.value);
       flashSaved();
     });
   }

@@ -87,6 +87,10 @@ router.register('workflow-runner', async () => {
   const { WorkflowRunnerPage } = await import('./pages/workflow-runner/workflow-runner-page.js');
   return WorkflowRunnerPage;
 });
+router.register('issue-runner', async () => {
+  const { IssueRunnerPage } = await import('./pages/issue-runner/issue-runner-page.js');
+  return IssueRunnerPage;
+});
 router.register('terminal', async () => {
   const { TerminalPage } = await import('./pages/terminal/terminal-page.js');
   return TerminalPage;

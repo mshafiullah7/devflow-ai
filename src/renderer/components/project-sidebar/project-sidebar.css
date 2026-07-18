@@ -30,6 +30,7 @@
 .ph-page-with-nav > .gw-page,
 .ph-page-with-nav > .wfr-page,
 .ph-page-with-nav > .term-page,
+.ph-page-with-nav > .ir-page,
 .ph-page-with-nav > .sg-page {
   flex: 1;
   min-width: 0;
