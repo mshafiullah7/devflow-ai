@@ -94,6 +94,7 @@ export class MockupsPage {
     this._designTemplate  = '';
     this._editingId       = null;
     this._screenTemplates = [];
+    this._aiRunning       = false;
   }
 
   async mount() {
@@ -151,11 +152,14 @@ export class MockupsPage {
     this._sidebar.loadCounts(this.container, { mockups: this._screens });
     await this._picker.reload();
 
+    this.router.setNavigationGuard(() => this._confirmLeaveIfBusy());
+
     if (this._activeId) this._selectScreen(this._activeId);
     else                this._showEmptyState();
   }
 
   unmount() {
+    this.router.clearNavigationGuard();
     removeCss('pages/mockups/mockups-page.css');
     removeCss('styles/screens.css');
     removeCss('components/project-sidebar/project-sidebar.css');
@@ -164,10 +168,29 @@ export class MockupsPage {
     window.app.chat.cancel();
     window.app.validate.offAll();
     window.app.validate.cancel();
+    this._aiRunning = false;
     if (this._ctrlSHandler) {
       document.removeEventListener('keydown', this._ctrlSHandler);
       this._ctrlSHandler = null;
     }
+  }
+
+  // ----------------------------------------------------------------
+  // AI-busy guard — blocks screen switches, page navigation, and app
+  // close while a chat generation is running. Confirming cancels it.
+  // ----------------------------------------------------------------
+  async _confirmLeaveIfBusy() {
+    if (!this._aiRunning) return true;
+    const ok = await Dialog.confirm(
+      'A screen is still generating. Leaving now will cancel the generation and it cannot be resumed.',
+      { title: 'Generation in progress', confirmText: 'Leave Anyway', danger: true }
+    );
+    if (ok) {
+      window.app.chat.offAll();
+      window.app.chat.cancel();
+      this._aiRunning = false;
+    }
+    return ok;
   }
 
   _getProject()      { return this._project; }
@@ -284,7 +307,10 @@ export class MockupsPage {
 
   _bindSidebarItems() {
     this.container.querySelectorAll('.scr-sidebar__item').forEach(el => {
-      el.addEventListener('click', () => this._selectScreen(Number(el.dataset.id)));
+      el.addEventListener('click', async () => {
+        if (!(await this._confirmLeaveIfBusy())) return;
+        this._selectScreen(Number(el.dataset.id));
+      });
     });
 
   }
@@ -698,6 +724,7 @@ export class MockupsPage {
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
     this._saveToHistory(desc);
+    this._aiRunning = true;
 
     const genStart = Date.now();
     const genTimer = setInterval(() => {
@@ -721,6 +748,7 @@ export class MockupsPage {
     window.app.chat.onDone(async ({ html, raw, usage, error }) => {
       clearInterval(genTimer);
       window.app.chat.offAll();
+      this._aiRunning = false;
       const rawText    = raw || '';
       const previousHtml = screen.html_content;  // capture before overwrite
 
@@ -796,6 +824,7 @@ export class MockupsPage {
       clearInterval(genTimer);
       window.app.chat.cancel();
       window.app.chat.offAll();
+      this._aiRunning = false;
       previewBubble.innerHTML = `<div class="scr-chat-msg__cancelled">Cancelled</div>`;
     });
 

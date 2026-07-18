@@ -20,6 +20,8 @@ export class DocumentsPage {
     this._layers        = [];
     this._chatHistory   = [];
     this._aiRunning     = false;
+    this._aiAbortController = null;
+    this._aiIsCli       = false;
   }
 
   async mount() {
@@ -83,12 +85,20 @@ export class DocumentsPage {
   // AI-busy guard — blocks document switches, tab switches, page
   // navigation, and app close while a request is streaming.
   // ----------------------------------------------------------------
-  _confirmLeaveIfBusy() {
+  async _confirmLeaveIfBusy() {
     if (!this._aiRunning) return true;
-    return Dialog.confirm(
-      'AI Assist is still generating a response for this document. Leaving now will interrupt the process and you may lose unsaved changes.',
+    const ok = await Dialog.confirm(
+      'AI Assist is still generating a response for this document. Leaving now will cancel the generation and it cannot be resumed.',
       { title: 'AI Assist is running', confirmText: 'Leave Anyway', danger: true }
     );
+    if (ok) this._cancelAiRequest();
+    return ok;
+  }
+
+  _cancelAiRequest() {
+    this._aiAbortController?.abort();
+    if (this._aiIsCli) window.db.terminal.killActive();
+    this._aiRunning = false;
   }
 
   // ----------------------------------------------------------------
@@ -1024,6 +1034,8 @@ export class DocumentsPage {
     sendBtn.disabled = true;
     inputEl.disabled = true;
     this._aiRunning  = true;
+    this._aiIsCli    = cfg.type !== 'ollama' && cfg.type !== 'api' && cfg.type !== 'anthropic';
+    this._aiAbortController = this._aiIsCli ? null : new AbortController();
 
     const contentTA      = this.container.querySelector('#docContentTA');
     const currentContent = contentTA?.value ?? doc.content ?? '';
@@ -1085,6 +1097,7 @@ export class DocumentsPage {
       inputEl.disabled = false;
       inputEl.focus();
       this._aiRunning  = false;
+      this._aiAbortController = null;
     }
   }
 
@@ -1094,8 +1107,9 @@ export class DocumentsPage {
 
     let res;
     try {
-      res = await fetch(`${baseUrl}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      res = await fetch(`${baseUrl}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: this._aiAbortController?.signal });
     } catch (err) {
+      if (err.name === 'AbortError') return null;
       this._updateChatMsg(aiMsgEl, `Ollama request failed: ${err.message}`, 'error');
       return null;
     }
@@ -1108,24 +1122,29 @@ export class DocumentsPage {
     const decoder = new TextDecoder();
     let buffer = '', fullText = '';
     const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const data  = JSON.parse(line);
-          const delta = data.message?.content || '';
-          if (delta) { fullText += delta; this._updateChatMsg(aiMsgEl, fullText); }
-          if (data.done) {
-            usage.input_tokens  = data.prompt_eval_count || 0;
-            usage.output_tokens = data.eval_count        || 0;
-          }
-        } catch { /* skip */ }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data  = JSON.parse(line);
+            const delta = data.message?.content || '';
+            if (delta) { fullText += delta; this._updateChatMsg(aiMsgEl, fullText); }
+            if (data.done) {
+              usage.input_tokens  = data.prompt_eval_count || 0;
+              usage.output_tokens = data.eval_count        || 0;
+            }
+          } catch { /* skip */ }
+        }
       }
+    } catch (err) {
+      if (err.name === 'AbortError') return null;
+      throw err;
     }
     if (!fullText.trim()) { this._updateChatMsg(aiMsgEl, 'No response from Ollama.', 'error'); return null; }
     this._appendTokenUsage(aiMsgEl, usage);
@@ -1143,8 +1162,9 @@ export class DocumentsPage {
 
     let res;
     try {
-      res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
+      res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body), signal: this._aiAbortController?.signal });
     } catch (err) {
+      if (err.name === 'AbortError') return null;
       this._updateChatMsg(aiMsgEl, `Request failed: ${err.message}`, 'error');
       return null;
     }
@@ -1157,26 +1177,31 @@ export class DocumentsPage {
     const decoder = new TextDecoder();
     let buffer = '', fullText = '';
     const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
-        try {
-          const chunk = JSON.parse(data);
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (delta) { fullText += delta; this._updateChatMsg(aiMsgEl, fullText); }
-          if (chunk.usage) {
-            usage.input_tokens  = chunk.usage.prompt_tokens     || 0;
-            usage.output_tokens = chunk.usage.completion_tokens || 0;
-          }
-        } catch { /* skip */ }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(data);
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (delta) { fullText += delta; this._updateChatMsg(aiMsgEl, fullText); }
+            if (chunk.usage) {
+              usage.input_tokens  = chunk.usage.prompt_tokens     || 0;
+              usage.output_tokens = chunk.usage.completion_tokens || 0;
+            }
+          } catch { /* skip */ }
+        }
       }
+    } catch (err) {
+      if (err.name === 'AbortError') return null;
+      throw err;
     }
     if (!fullText.trim()) { this._updateChatMsg(aiMsgEl, 'No response from model.', 'error'); return null; }
     this._appendTokenUsage(aiMsgEl, usage);
@@ -1209,8 +1234,10 @@ export class DocumentsPage {
           'anthropic-beta':    'prompt-caching-2024-07-31',
         },
         body,
+        signal: this._aiAbortController?.signal,
       });
     } catch (err) {
+      if (err.name === 'AbortError') return null;
       this._updateChatMsg(aiMsgEl, `Request failed: ${err.message}`, 'error');
       return null;
     }
@@ -1224,33 +1251,38 @@ export class DocumentsPage {
     const decoder = new TextDecoder();
     let buffer = '', fullText = '';
     const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
-        try {
-          const chunk = JSON.parse(data);
-          if (chunk.type === 'message_start') {
-            const u = chunk.message?.usage || {};
-            usage.input_tokens              = u.input_tokens              || 0;
-            usage.cache_read_input_tokens   = u.cache_read_input_tokens   || 0;
-            usage.cache_creation_input_tokens = u.cache_creation_input_tokens || 0;
-          }
-          if (chunk.type === 'message_delta') {
-            usage.output_tokens = chunk.usage?.output_tokens || 0;
-          }
-          if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
-            fullText += chunk.delta.text;
-            this._updateChatMsg(aiMsgEl, fullText);
-          }
-        } catch { /* skip malformed SSE chunk */ }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(data);
+            if (chunk.type === 'message_start') {
+              const u = chunk.message?.usage || {};
+              usage.input_tokens              = u.input_tokens              || 0;
+              usage.cache_read_input_tokens   = u.cache_read_input_tokens   || 0;
+              usage.cache_creation_input_tokens = u.cache_creation_input_tokens || 0;
+            }
+            if (chunk.type === 'message_delta') {
+              usage.output_tokens = chunk.usage?.output_tokens || 0;
+            }
+            if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+              fullText += chunk.delta.text;
+              this._updateChatMsg(aiMsgEl, fullText);
+            }
+          } catch { /* skip malformed SSE chunk */ }
+        }
       }
+    } catch (err) {
+      if (err.name === 'AbortError') return null;
+      throw err;
     }
 
     if (!fullText.trim()) { this._updateChatMsg(aiMsgEl, 'No response from Anthropic.', 'error'); return null; }
@@ -1350,6 +1382,8 @@ export class DocumentsPage {
     sendBtn.disabled = true;
     inputEl.disabled = true;
     this._aiRunning  = true;
+    this._aiIsCli    = cfg.type !== 'ollama' && cfg.type !== 'api' && cfg.type !== 'anthropic';
+    this._aiAbortController = this._aiIsCli ? null : new AbortController();
 
     const contentTA      = this.container.querySelector('#docContentTA');
     const currentContent = contentTA?.value ?? doc.content ?? '';
@@ -1434,6 +1468,7 @@ export class DocumentsPage {
       inputEl.disabled = false;
       inputEl.focus();
       this._aiRunning  = false;
+      this._aiAbortController = null;
     }
   }
 
@@ -1447,8 +1482,9 @@ export class DocumentsPage {
 
     let res;
     try {
-      res = await fetch(`${baseUrl}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      res = await fetch(`${baseUrl}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: this._aiAbortController?.signal });
     } catch (err) {
+      if (err.name === 'AbortError') return;
       this._updateChatMsg(aiMsgEl, `Ollama request failed: ${err.message}`, 'error');
       return;
     }
@@ -1466,28 +1502,33 @@ export class DocumentsPage {
     let charCount  = 0;
     const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const data  = JSON.parse(line);
-          const delta = data.message?.content || '';
-          if (delta) {
-            fullText  += delta;
-            charCount += delta.length;
-            this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
-          }
-          if (data.done) {
-            usage.input_tokens  = data.prompt_eval_count || 0;
-            usage.output_tokens = data.eval_count        || 0;
-          }
-        } catch { /* skip malformed NDJSON line */ }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data  = JSON.parse(line);
+            const delta = data.message?.content || '';
+            if (delta) {
+              fullText  += delta;
+              charCount += delta.length;
+              this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
+            }
+            if (data.done) {
+              usage.input_tokens  = data.prompt_eval_count || 0;
+              usage.output_tokens = data.eval_count        || 0;
+            }
+          } catch { /* skip malformed NDJSON line */ }
+        }
       }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      throw err;
     }
 
     if (fullText.trim()) {
@@ -1517,8 +1558,9 @@ export class DocumentsPage {
 
     let res;
     try {
-      res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
+      res = await fetch(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body), signal: this._aiAbortController?.signal });
     } catch (err) {
+      if (err.name === 'AbortError') return;
       this._updateChatMsg(aiMsgEl, `Request failed: ${err.message}`, 'error');
       return;
     }
@@ -1536,30 +1578,35 @@ export class DocumentsPage {
     let charCount = 0;
     const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
-        try {
-          const chunk = JSON.parse(data);
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (delta) {
-            fullText  += delta;
-            charCount += delta.length;
-            this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
-          }
-          if (chunk.usage) {
-            usage.input_tokens  = chunk.usage.prompt_tokens     || 0;
-            usage.output_tokens = chunk.usage.completion_tokens || 0;
-          }
-        } catch { /* skip malformed SSE chunk */ }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(data);
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (delta) {
+              fullText  += delta;
+              charCount += delta.length;
+              this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
+            }
+            if (chunk.usage) {
+              usage.input_tokens  = chunk.usage.prompt_tokens     || 0;
+              usage.output_tokens = chunk.usage.completion_tokens || 0;
+            }
+          } catch { /* skip malformed SSE chunk */ }
+        }
       }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      throw err;
     }
 
     if (fullText.trim()) {
@@ -1604,8 +1651,10 @@ export class DocumentsPage {
           'anthropic-beta':    'prompt-caching-2024-07-31',
         },
         body,
+        signal: this._aiAbortController?.signal,
       });
     } catch (err) {
+      if (err.name === 'AbortError') return;
       this._updateChatMsg(aiMsgEl, `Request failed: ${err.message}`, 'error');
       return;
     }
@@ -1623,34 +1672,39 @@ export class DocumentsPage {
     let charCount = 0;
     const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
-        try {
-          const chunk = JSON.parse(data);
-          if (chunk.type === 'message_start') {
-            const u = chunk.message?.usage || {};
-            usage.input_tokens                = u.input_tokens                || 0;
-            usage.cache_read_input_tokens     = u.cache_read_input_tokens     || 0;
-            usage.cache_creation_input_tokens = u.cache_creation_input_tokens || 0;
-          }
-          if (chunk.type === 'message_delta') {
-            usage.output_tokens = chunk.usage?.output_tokens || 0;
-          }
-          if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
-            fullText  += chunk.delta.text;
-            charCount += chunk.delta.text.length;
-            this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
-          }
-        } catch { /* skip malformed SSE chunk */ }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(data);
+            if (chunk.type === 'message_start') {
+              const u = chunk.message?.usage || {};
+              usage.input_tokens                = u.input_tokens                || 0;
+              usage.cache_read_input_tokens     = u.cache_read_input_tokens     || 0;
+              usage.cache_creation_input_tokens = u.cache_creation_input_tokens || 0;
+            }
+            if (chunk.type === 'message_delta') {
+              usage.output_tokens = chunk.usage?.output_tokens || 0;
+            }
+            if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+              fullText  += chunk.delta.text;
+              charCount += chunk.delta.text.length;
+              this._updateChatMsg(aiMsgEl, `Generating… ${charCount} chars`, 'thinking');
+            }
+          } catch { /* skip malformed SSE chunk */ }
+        }
       }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      throw err;
     }
 
     if (fullText.trim()) {
