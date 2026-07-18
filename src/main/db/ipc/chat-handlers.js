@@ -54,7 +54,6 @@ function createCtx() {
 }
 
 const _mainCtx       = createCtx();
-const _validateCtx   = createCtx();
 const _workflowCtx   = createCtx();
 const _genWfCtx      = createCtx();
 const _testGenCtx    = createCtx();
@@ -753,27 +752,6 @@ function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh
   }
 }
 
-function buildValidationPrompt(screenTitle, htmlContent, designTemplate) {
-  const trimmed = htmlContent.length > 60000 ? htmlContent.slice(0, 60000) + '\n<!-- truncated -->' : htmlContent;
-  return `You are a UI/UX quality auditor. Check whether the HTML screen below correctly implements the design system specification.
-
-Design System:
-${designTemplate}
-
-Screen: ${screenTitle}
-HTML:
-${trimmed}
-
-Check for violations in:
-- Colors (backgrounds, text, buttons, borders, links — must match design system values)
-- Typography (font-family, font sizes, font weights)
-- Spacing, border-radius, and component styling
-
-Respond with ONLY a raw JSON object. No explanation, no markdown fences.
-If compliant: {"valid":true,"issues":[]}
-If violations found: {"valid":false,"issues":["description of violation 1","description of violation 2"]}`;
-}
-
 // ----------------------------------------------------------------
 // Register IPC handlers
 // ----------------------------------------------------------------
@@ -785,17 +763,6 @@ function registerChatHandlers() {
     if (_mainCtx.proc || _mainCtx.req) killCtx(_mainCtx);
     _mainCtx.cancelled = false;
     dispatch(event.sender, prompt, editPayload, model, messages, _mainCtx, 'chat:token', 'chat:done', cwd, rawMode);
-    return { started: true };
-  });
-
-  // --- Style validation (chat:validateStyle) — separate subprocess slot ---
-  safeHandle('chat:validateCancel', () => killCtx(_validateCtx));
-
-  safeHandle('chat:validateStyle', (event, { screenTitle, htmlContent, designTemplate, model }) => {
-    if (_validateCtx.proc || _validateCtx.req) killCtx(_validateCtx);
-    _validateCtx.cancelled = false;
-    const prompt = buildValidationPrompt(screenTitle, htmlContent, designTemplate);
-    dispatch(event.sender, prompt, null, model, null, _validateCtx, 'chat:validateToken', 'chat:validateDone');
     return { started: true };
   });
 

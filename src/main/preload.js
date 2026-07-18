@@ -272,18 +272,6 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('chat:done');
     },
   },
-  // Separate channel for style validation — own subprocess slot so it never
-  // interrupts the main chat or queue chat.
-  validate: {
-    run:    (data) => ipcRenderer.invoke('chat:validateStyle', data),
-    cancel: ()     => ipcRenderer.invoke('chat:validateCancel'),
-    onToken: (cb)  => ipcRenderer.on('chat:validateToken', (_e, p) => cb(p)),
-    onDone:  (cb)  => ipcRenderer.on('chat:validateDone',  (_e, p) => cb(p)),
-    offAll:  ()    => {
-      ipcRenderer.removeAllListeners('chat:validateToken');
-      ipcRenderer.removeAllListeners('chat:validateDone');
-    },
-  },
   openIssueRunnerWindow: (data) => ipcRenderer.invoke('app:openIssueRunnerWindow', data),
   issueRunnerWindow: {
     onInit: (cb) => ipcRenderer.on('issueRunner:init', (_e, p) => cb(p)),
