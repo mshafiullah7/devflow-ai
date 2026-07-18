@@ -1205,6 +1205,25 @@
 }
 .scr-val-bar__fix:hover { opacity: 0.85; }
 
+.scr-val-bar__close {
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.scr-val-bar__close:hover { background: color-mix(in srgb, #000 8%, transparent); color: var(--text); }
+
 /* Sidebar validation dots */
 .scr-val-dot {
   display: inline-block;

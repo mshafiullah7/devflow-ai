@@ -120,6 +120,25 @@ function extractHtml(text) {
   return null;
 }
 
+// Best-effort salvage when the response was cut off (e.g. hit max_tokens)
+// before the closing </html> ever streamed — returns everything from
+// <!DOCTYPE html> onward, unclosed, so the caller can render *something*
+// instead of discarding a mostly-complete document.
+function extractPartialHtml(text) {
+  const clean = stripAnsi(text);
+  const start = clean.search(/<!DOCTYPE\s+html/i);
+  if (start === -1) return null;
+  const partial = clean.slice(start).trim();
+  return partial || null;
+}
+
+// Anthropic's real per-model output ceilings — not user-configurable, since
+// requesting above a model's actual max just 400s. Haiku models cap at 64K;
+// everything else current (Sonnet, Opus, Fable) caps at 128K.
+function resolveAnthropicMaxTokens(modelName) {
+  return /haiku/i.test(modelName || '') ? 64000 : 128000;
+}
+
 function buildDiffPromptInline(instruction, existingHtml, projectDescription) {
   const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
   return `Apply the instruction below to the existing HTML.${ctx}
@@ -163,28 +182,83 @@ Rules:
 - Multiple patches are fine and applied in order`;
 }
 
+// Walks from the array's opening '[' tracking bracket depth and string state
+// so stray '[' / ']' characters inside surrounding prose (or inside search/
+// replace values, e.g. CSS attribute selectors like a[href]) don't fool a
+// naive indexOf/lastIndexOf scan into slicing the wrong boundaries.
+function findJsonArrayEnd(text, start) {
+  let depth = 0, inString = false, escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === '\\') escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '[') depth++;
+    else if (ch === ']') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
 function extractPatches(text) {
   const clean = stripAnsi(text);
   const start = clean.indexOf('[');
-  const end   = clean.lastIndexOf(']');
-  if (start === -1 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(clean.slice(start, end + 1));
-    if (Array.isArray(parsed) && parsed.length > 0 &&
-        parsed.every(p => typeof p.search === 'string' && 'replace' in p)) {
-      return parsed;
-    }
-  } catch (_) {}
-  return null;
+  if (start === -1) return null;
+
+  const end = findJsonArrayEnd(clean, start);
+  if (end !== -1) {
+    try {
+      const parsed = JSON.parse(clean.slice(start, end + 1));
+      if (Array.isArray(parsed) && parsed.length > 0 &&
+          parsed.every(p => typeof p.search === 'string' && 'replace' in p)) {
+        return parsed;
+      }
+    } catch (_) {}
+  }
+
+  // Salvage: the array was cut off mid-stream (e.g. hit max_tokens) or is
+  // otherwise malformed — recover whichever complete {"search":...,"replace":...}
+  // objects did stream instead of discarding the whole response.
+  const patches = [];
+  const objRe = /\{\s*"search"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*"replace"\s*:\s*"(?:[^"\\]|\\.)*"\s*\}/g;
+  let m;
+  while ((m = objRe.exec(clean.slice(start))) !== null) {
+    try {
+      const obj = JSON.parse(m[0]);
+      if (typeof obj.search === 'string' && 'replace' in obj) patches.push(obj);
+    } catch (_) {}
+  }
+  return patches.length > 0 ? patches : null;
+}
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function applyPatches(html, patches) {
   let result = html;
   for (const { search, replace } of patches) {
-    if (!result.includes(search)) {
-      throw new Error(`Patch search string not found: "${search.slice(0, 80)}"`);
+    if (result.includes(search)) {
+      result = result.split(search).join(replace);
+      continue;
     }
-    result = result.split(search).join(replace);
+    // Fallback: models often echo HTML back with slightly different
+    // whitespace (re-indented, wrapped differently) than what's actually
+    // stored — tolerate runs-of-whitespace drift before giving up.
+    const pattern = escapeRegExp(search).replace(/\s+/g, '\\s+');
+    let re = null;
+    try { re = new RegExp(pattern); } catch (_) {}
+    if (re && re.test(result)) {
+      result = result.replace(re, () => replace);
+      continue;
+    }
+    throw new Error(`Patch search string not found: "${search.slice(0, 80)}"`);
   }
   return result;
 }
@@ -213,9 +287,10 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
     ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
     : undefined;
 
+  const modelName = model.model_name || 'claude-sonnet-4-6';
   const bodyObj = {
-    model:      model.model_name || 'claude-sonnet-4-6',
-    max_tokens: model.max_tokens || 8096,
+    model:      modelName,
+    max_tokens: resolveAnthropicMaxTokens(modelName),
     stream:     true,
     messages:   msgs,
   };
@@ -243,7 +318,22 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
     },
   }, (res) => {
     let accumulated = '';
+    let stopReason  = null;
     const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    // On a max_tokens cutoff, fall back to whatever HTML streamed so far
+    // instead of discarding a mostly-complete document.
+    const htmlOrPartial = () => {
+      const html = extractHtml(accumulated);
+      if (html) return { html, error: null };
+      if (stopReason === 'max_tokens') {
+        const partial = extractPartialHtml(accumulated);
+        if (partial) {
+          return { html: partial, error: 'Response was cut off (max tokens reached) — showing partial output. Raise Max Tokens in Model Settings to avoid this.' };
+        }
+        return { html: null, error: 'Response was cut off (max tokens reached) before any usable HTML streamed — raise Max Tokens in Model Settings.' };
+      }
+      return { html: null, error: 'Could not extract HTML from response' };
+    };
     res.on('data', (chunk) => {
       for (const line of chunk.toString('utf8').split('\n')) {
         if (!line.startsWith('data: ')) continue;
@@ -259,6 +349,7 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
           }
           if (data.type === 'message_delta') {
             usage.output_tokens = data.usage?.output_tokens || 0;
+            if (data.delta?.stop_reason) stopReason = data.delta.stop_reason;
           }
           if (data.type === 'content_block_delta' && data.delta?.text) {
             accumulated += data.delta.text;
@@ -282,8 +373,8 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
                 finish({ html, raw: accumulated, usage, error: html ? null : 'No patches or HTML found in response' });
               }
             } else {
-              const html = extractHtml(accumulated);
-              finish({ html, raw: accumulated, usage, error: html ? null : 'Could not extract HTML from response' });
+              const { html, error } = htmlOrPartial();
+              finish({ html, raw: accumulated, usage, error });
             }
           }
         } catch (_) {}
@@ -384,8 +475,21 @@ function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneC
     } else if (rawMode) {
       error = code !== 0 ? `Process exited with code ${code}` : null;
     } else {
-      html  = extractHtml(accumulated);
-      error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
+      html = extractHtml(accumulated);
+      if (!html && code === 0) {
+        // Process exited cleanly but no complete document ever streamed —
+        // most often the model's own output-length limit truncated it.
+        // Salvage whatever HTML did stream instead of discarding it.
+        const partial = extractPartialHtml(accumulated);
+        if (partial) {
+          html  = partial;
+          error = 'Response appears to be cut off — showing partial output. Try raising the model\'s output/token limit.';
+        } else {
+          error = 'Could not extract HTML from response';
+        }
+      } else {
+        error = html ? null : `Process exited with code ${code}`;
+      }
     }
 
     send(wc, doneCh, { html, raw: accumulated, error });
@@ -407,10 +511,14 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
   const modelName = model.model_name || DEFAULT_CLI_MODEL;
   _logAiCall('cli', modelName, exe, messages || prompt);
 
-  // Resolve flags template — fall back to Claude defaults for configs saved before this change
+  // Resolve flags template — fall back to Claude defaults for configs saved before this change.
+  // The skip-perms flag must be prepended whether or not a custom CLI Command
+  // is saved — otherwise the CLI runs with permission prompts enabled and
+  // stalls waiting for input that never arrives (stdin is piped/ignored here).
   const skipPermsFlag  = (model.skip_perms_flag != null) ? model.skip_perms_flag : '--dangerously-skip-permissions';
   const permsPrefix    = skipPermsFlag ? skipPermsFlag + ' ' : '';
-  const flagsTemplate  = (model.flags || '').trim() || `${permsPrefix}--model ${modelName} '@{{prompt}}'`;
+  const userFlags      = (model.flags || '').trim();
+  const flagsTemplate  = `${permsPrefix}${userFlags || `--model ${modelName} '@{{prompt}}'`}`;
   const resolvedFlags  = flagsTemplate.replace(/\{\{model\}\}/g, modelName);
   const hasInlinePrompt = resolvedFlags.includes('{{prompt}}');
 
@@ -512,8 +620,21 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
     } else if (rawMode) {
       error = code !== 0 ? `Process exited with code ${code}` : null;
     } else {
-      html  = extractHtml(accumulated);
-      error = html ? null : (code !== 0 ? `Process exited with code ${code}` : 'Could not extract HTML from response');
+      html = extractHtml(accumulated);
+      if (!html && code === 0) {
+        // Process exited cleanly but no complete document ever streamed —
+        // most often the model's own output-length limit truncated it.
+        // Salvage whatever HTML did stream instead of discarding it.
+        const partial = extractPartialHtml(accumulated);
+        if (partial) {
+          html  = partial;
+          error = 'Response appears to be cut off — showing partial output. Try raising the model\'s output/token limit.';
+        } else {
+          error = 'Could not extract HTML from response';
+        }
+      } else {
+        error = html ? null : `Process exited with code ${code}`;
+      }
     }
 
     send(wc, doneCh, { html, raw: accumulated, error });

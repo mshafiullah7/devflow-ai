@@ -1423,13 +1423,6 @@ export class SettingsPage {
                 </datalist>
                 <span class="st-form__error" id="stFAnthropicModelError" style="display:none">Model name is required</span>
               </div>
-              <div class="st-form__row">
-                <label class="st-form__label">Max Tokens</label>
-                <input class="st-form__input" id="stFAnthropicMaxTokens" type="number"
-                  placeholder="8096"
-                  value="${escHtml(config?.type === 'anthropic' ? String(config?.max_tokens || '') : '')}"/>
-                <span class="st-form__hint">Optional — defaults to 8096 if blank</span>
-              </div>
               <div class="st-form__row" style="margin-top:4px">
                 <label class="st-form__check-label">
                   <input type="checkbox" id="stFUseDevflow" ${config?.use_devflow_agent ? 'checked' : ''}/>
@@ -1757,8 +1750,7 @@ export class SettingsPage {
         data.model_name        = anthModel;
         const rawKey           = overlay.querySelector('#stFAnthropicKey')?.value.trim();
         if (rawKey) data.api_key = rawKey;
-        const maxTok           = overlay.querySelector('#stFAnthropicMaxTokens')?.value.trim();
-        if (maxTok) data.max_tokens = Number(maxTok);
+        data.max_tokens         = null; // always resolved from the model's real ceiling — see resolveAnthropicMaxTokens()
         data.use_devflow_agent = overlay.querySelector('#stFUseDevflow')?.checked ? 1 : 0;
       }
 

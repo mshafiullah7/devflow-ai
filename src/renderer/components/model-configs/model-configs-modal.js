@@ -225,10 +225,6 @@ export class ModelConfigsModal {
             <input class="mcfg-form__input" id="mcfgApiKey" type="password" placeholder="sk-ant-…" value="${escHtml(config?.type === 'anthropic' ? (config?.api_key || '') : '')}"/>
             <span class="mcfg-form__hint">Your Anthropic API key from console.anthropic.com</span>
           </div>
-          <div class="mcfg-form__row">
-            <label class="mcfg-form__label">Max tokens</label>
-            <input class="mcfg-form__input mcfg-form__input--short" id="mcfgMaxTokens" type="number" min="1" max="128000" placeholder="8192" value="${config?.type === 'anthropic' ? (config?.max_tokens || '') : ''}"/>
-          </div>
         </div>
 
         <div class="mcfg-form__row mcfg-form__row--check">
@@ -347,8 +343,7 @@ export class ModelConfigsModal {
       } else if (type === 'anthropic') {
         data.model_name = body.querySelector('#mcfgModelName')?.value.trim() || 'claude-sonnet-4-6';
         data.api_key    = body.querySelector('#mcfgApiKey')?.value || null;
-        data.max_tokens = body.querySelector('#mcfgMaxTokens')?.value
-                            ? Number(body.querySelector('#mcfgMaxTokens').value) : null;
+        data.max_tokens = null; // always resolved from the model's real ceiling in chat-handlers.js
       }
 
       if (isEdit) {

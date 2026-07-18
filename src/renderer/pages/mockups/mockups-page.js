@@ -656,10 +656,8 @@ export class MockupsPage {
     // For edit: pass structured payload so main process can write HTML to temp file (CLI)
     // or embed inline (API/Ollama). For create: full prompt string as before.
     let generateArg;
-    let previewText;
 
     if (hasHtml) {
-      const isCli = !model.type || model.type === 'cli';
       generateArg = {
         editPayload: {
           instruction:        desc,
@@ -668,15 +666,9 @@ export class MockupsPage {
         },
         model,
       };
-      if (isCli) {
-        previewText = `[Edit via diff patches — HTML will be written to a temp file on disk]\n\nInstruction:\n${desc}\n\nExisting HTML: ${screen.html_content.length} chars (passed via temp file)`;
-      } else {
-        previewText = `[Edit via diff patches — model returns JSON search-replace patches, not full HTML]\n\nInstruction:\n${desc}\n\nExisting HTML: ${screen.html_content.length} chars (sent inline)`;
-      }
     } else {
       const prompt = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt(), project?.target_platform);
       generateArg  = { prompt, model };
-      previewText  = prompt;
     }
 
     const messagesEl = main.querySelector('#scrChatMessages');
@@ -689,152 +681,125 @@ export class MockupsPage {
     userBubble.innerHTML = `<div class="scr-chat-msg__text">${escHtml(desc)}</div>`;
     messagesEl.appendChild(userBubble);
 
-    // Prompt preview bubble
+    // Generation bubble — runs immediately, no intermediate prompt-review step
     const previewBubble = document.createElement('div');
     previewBubble.className = 'scr-chat-msg scr-chat-msg--assistant';
     previewBubble.innerHTML = `
-      <div class="scr-chat-prompt-bubble">
-        <div class="scr-chat-prompt-bubble__header">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-            <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-            <path d="M4 6h5M4 9h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
-          <span>${hasHtml ? 'Edit Prompt' : 'Create Prompt'}</span>
+      <div class="scr-chat-msg__generating">
+        <span class="scr-chat-stream-dot"></span>
+        <div class="scr-chat-msg__gen-info">
+          <span class="scr-chat-msg__gen-label">Generating… 0s</span>
         </div>
-        <pre class="scr-chat-prompt-bubble__pre">${escHtml(previewText)}</pre>
-        <div class="scr-chat-prompt-bubble__actions">
-          <button class="scr-chat-approve-btn">
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.3"/>
-              <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Run
-          </button>
-          <button class="scr-chat-dismiss-btn">Dismiss</button>
-        </div>
+        <button class="scr-chat-cancel-btn">Cancel</button>
       </div>
+      <pre class="scr-chat-stream-preview"></pre>
     `;
     messagesEl.appendChild(previewBubble);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
-    previewBubble.querySelector('.scr-chat-dismiss-btn').addEventListener('click', () => previewBubble.remove());
+    this._saveToHistory(desc);
 
-    previewBubble.querySelector('.scr-chat-approve-btn').addEventListener('click', () => {
-      this._saveToHistory(desc);
-      previewBubble.innerHTML = `
-        <div class="scr-chat-msg__generating">
-          <span class="scr-chat-stream-dot"></span>
-          <div class="scr-chat-msg__gen-info">
-            <span class="scr-chat-msg__gen-label">Generating… 0s</span>
-          </div>
-          <button class="scr-chat-cancel-btn">Cancel</button>
-        </div>
-        <pre class="scr-chat-stream-preview"></pre>
-      `;
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+    const genStart = Date.now();
+    const genTimer = setInterval(() => {
+      const labelEl = previewBubble.querySelector('.scr-chat-msg__gen-label');
+      if (!labelEl) { clearInterval(genTimer); return; }
+      const elapsed = Math.floor((Date.now() - genStart) / 1000);
+      const display = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+      labelEl.textContent = `Generating… ${display}`;
+    }, 1000);
 
-      const genStart = Date.now();
-      const genTimer = setInterval(() => {
-        const labelEl = previewBubble.querySelector('.scr-chat-msg__gen-label');
-        if (!labelEl) { clearInterval(genTimer); return; }
-        const elapsed = Math.floor((Date.now() - genStart) / 1000);
-        const display = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
-        labelEl.textContent = `Generating… ${display}`;
-      }, 1000);
+    window.app.chat.offAll();
 
-      window.app.chat.offAll();
-
-      window.app.chat.onToken(({ text }) => {
-        const preview = previewBubble.querySelector('.scr-chat-stream-preview');
-        if (preview) {
-          preview.textContent += text;
-          messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
-      });
-
-      window.app.chat.onDone(async ({ html, raw, usage, error }) => {
-        clearInterval(genTimer);
-        window.app.chat.offAll();
-        const rawText    = raw || '';
-        const previousHtml = screen.html_content;  // capture before overwrite
-
-        if (html && !error) {
-          await window.db.screenDesigns.update({ id: screen.id, html_content: html, executed: 1 });
-          screen.html_content = html;
-          screen.executed = 1;
-          this._loadPreview(html);
-          previewBubble.innerHTML = `
-            <div class="scr-chat-response-bubble scr-chat-response-bubble--ok">
-              <div class="scr-chat-response-bubble__header">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.3"/>
-                  <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Preview updated
-                ${previousHtml ? `<button class="scr-chat-rollback-btn" title="Rollback to previous version">
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 6h7a5 5 0 0 1 0 10H4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M5 3L2 6l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Rollback
-                </button>` : ''}
-              </div>
-              <pre class="scr-chat-response-bubble__pre">${escHtml(rawText)}</pre>
-            </div>
-          `;
-          if (previousHtml) {
-            previewBubble.querySelector('.scr-chat-rollback-btn')?.addEventListener('click', () => {
-              this._showConfirmDialog(
-                'Rollback changes?',
-                'This will restore the previous version. Current changes will be lost.',
-                'Rollback',
-                async () => {
-                  await window.db.screenDesigns.update({ id: screen.id, html_content: previousHtml });
-                  screen.html_content = previousHtml;
-                  this._loadPreview(previousHtml);
-                  previewBubble.querySelector('.scr-chat-rollback-btn')?.remove();
-                }
-              );
-            });
-          }
-          if (usage && (usage.input_tokens || usage.output_tokens)) {
-            const parts = [
-              `in: ${(usage.input_tokens || 0).toLocaleString()}`,
-              `out: ${(usage.output_tokens || 0).toLocaleString()}`,
-            ];
-            if (usage.cache_read_input_tokens > 0)     parts.push(`${usage.cache_read_input_tokens.toLocaleString()} cached`);
-            if (usage.cache_creation_input_tokens > 0) parts.push(`${usage.cache_creation_input_tokens.toLocaleString()} cache write`);
-            const usageEl = document.createElement('div');
-            usageEl.className = 'scr-chat-usage';
-            usageEl.textContent = parts.join(' · ');
-            previewBubble.appendChild(usageEl);
-          }
-        } else {
-          previewBubble.innerHTML = `
-            <div class="scr-chat-response-bubble scr-chat-response-bubble--err">
-              <div class="scr-chat-response-bubble__header">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 2L14 13H2L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-                  <path d="M8 7v3M8 11.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                </svg>
-                ${escHtml(error || 'No HTML in response')}
-              </div>
-              <pre class="scr-chat-response-bubble__pre">${escHtml(rawText || '(no output received)')}</pre>
-            </div>
-          `;
-        }
+    window.app.chat.onToken(({ text }) => {
+      const preview = previewBubble.querySelector('.scr-chat-stream-preview');
+      if (preview) {
+        preview.textContent += text;
         messagesEl.scrollTop = messagesEl.scrollHeight;
-      });
-
-      previewBubble.querySelector('.scr-chat-cancel-btn').addEventListener('click', () => {
-        clearInterval(genTimer);
-        window.app.chat.cancel();
-        window.app.chat.offAll();
-        previewBubble.innerHTML = `<div class="scr-chat-msg__cancelled">Cancelled</div>`;
-      });
-
-      window.app.chat.generate(generateArg);
+      }
     });
+
+    window.app.chat.onDone(async ({ html, raw, usage, error }) => {
+      clearInterval(genTimer);
+      window.app.chat.offAll();
+      const rawText    = raw || '';
+      const previousHtml = screen.html_content;  // capture before overwrite
+
+      if (html && !error) {
+        await window.db.screenDesigns.update({ id: screen.id, html_content: html, executed: 1 });
+        screen.html_content = html;
+        screen.executed = 1;
+        this._loadPreview(html);
+        previewBubble.innerHTML = `
+          <div class="scr-chat-response-bubble scr-chat-response-bubble--ok">
+            <div class="scr-chat-response-bubble__header">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Preview updated
+              ${previousHtml ? `<button class="scr-chat-rollback-btn" title="Rollback to previous version">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 6h7a5 5 0 0 1 0 10H4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M5 3L2 6l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Rollback
+              </button>` : ''}
+            </div>
+            <pre class="scr-chat-response-bubble__pre">${escHtml(rawText)}</pre>
+          </div>
+        `;
+        if (previousHtml) {
+          previewBubble.querySelector('.scr-chat-rollback-btn')?.addEventListener('click', () => {
+            this._showConfirmDialog(
+              'Rollback changes?',
+              'This will restore the previous version. Current changes will be lost.',
+              'Rollback',
+              async () => {
+                await window.db.screenDesigns.update({ id: screen.id, html_content: previousHtml });
+                screen.html_content = previousHtml;
+                this._loadPreview(previousHtml);
+                previewBubble.querySelector('.scr-chat-rollback-btn')?.remove();
+              }
+            );
+          });
+        }
+        if (usage && (usage.input_tokens || usage.output_tokens)) {
+          const parts = [
+            `in: ${(usage.input_tokens || 0).toLocaleString()}`,
+            `out: ${(usage.output_tokens || 0).toLocaleString()}`,
+          ];
+          if (usage.cache_read_input_tokens > 0)     parts.push(`${usage.cache_read_input_tokens.toLocaleString()} cached`);
+          if (usage.cache_creation_input_tokens > 0) parts.push(`${usage.cache_creation_input_tokens.toLocaleString()} cache write`);
+          const usageEl = document.createElement('div');
+          usageEl.className = 'scr-chat-usage';
+          usageEl.textContent = parts.join(' · ');
+          previewBubble.appendChild(usageEl);
+        }
+      } else {
+        previewBubble.innerHTML = `
+          <div class="scr-chat-response-bubble scr-chat-response-bubble--err">
+            <div class="scr-chat-response-bubble__header">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2L14 13H2L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                <path d="M8 7v3M8 11.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+              ${escHtml(error || 'No HTML in response')}
+            </div>
+            <pre class="scr-chat-response-bubble__pre">${escHtml(rawText || '(no output received)')}</pre>
+          </div>
+        `;
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+
+    previewBubble.querySelector('.scr-chat-cancel-btn').addEventListener('click', () => {
+      clearInterval(genTimer);
+      window.app.chat.cancel();
+      window.app.chat.offAll();
+      previewBubble.innerHTML = `<div class="scr-chat-msg__cancelled">Cancelled</div>`;
+    });
+
+    window.app.chat.generate(generateArg);
   }
 
   async _loadInitialHistory(screenId, main) {
@@ -1164,6 +1129,7 @@ export class MockupsPage {
         </svg>
         ${issues.length} style issue${issues.length !== 1 ? 's' : ''} found
         <button class="scr-val-bar__fix" id="scrAutoFixBtn">Auto-fix</button>
+        <button class="scr-val-bar__close" id="scrValBarCloseBtn" title="Dismiss">&times;</button>
       </div>
       ${list ? `<ul class="scr-val-bar__list">${list}</ul>` : ''}
     </div>`;
@@ -1223,8 +1189,7 @@ export class MockupsPage {
 
   _bindValidationBarEvents(screen) {
     const fixBtn = this.container.querySelector('#scrAutoFixBtn');
-    if (!fixBtn) return;
-    fixBtn.addEventListener('click', () => {
+    fixBtn?.addEventListener('click', () => {
       let issues = [];
       try { issues = JSON.parse(screen.style_issues || '[]'); } catch (_) {}
       if (!issues.length) return;
@@ -1237,6 +1202,12 @@ export class MockupsPage {
         chatInput.style.height = chatInput.scrollHeight + 'px';
         chatInput.focus();
       }
+    });
+
+    const closeBtn = this.container.querySelector('#scrValBarCloseBtn');
+    closeBtn?.addEventListener('click', () => {
+      const bar = this.container.querySelector('#scrValidationBar');
+      if (bar) bar.innerHTML = '';
     });
   }
 
