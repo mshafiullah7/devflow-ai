@@ -530,13 +530,24 @@ export class StyleGuidePage {
                   <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-preview-theme="light">Light</button>
                   <button class="scr-ds-theme-btn" data-preview-theme="dark">Dark</button>
                 </div>
-                <button class="scr-btn scr-btn--sm" id="sgRefreshBtn" title="Refresh preview">
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                    <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                    <path d="M13.5 2.5v2.7H10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Refresh
-                </button>
+                <div class="scr-ds-theme-btns" id="sgLayoutBtns" style="${(this._project?.target_platform || 'web') !== 'web' ? 'display:none' : ''}">
+                  <button class="scr-ds-theme-btn" data-layout="dashboard">Dashboard</button>
+                  <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-layout="landing">Landing</button>
+                </div>
+                <div class="sg-preview-actions">
+                  <button class="scr-btn scr-btn--sm" id="sgRefreshBtn" title="Refresh preview">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                      <path d="M13.5 2.5v2.7H10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Refresh
+                  </button>
+                  <button class="scr-btn scr-btn--sm" id="sgExpandBtn" title="Focus preview — hide editor &amp; AI pane">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <path d="M10 2h4v4M6 14H2v-4M14 2l-5 5M2 14l5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <iframe class="scr-ds-preview-frame" id="sgPreviewFrame" sandbox="allow-scripts"></iframe>
             </div>
@@ -626,6 +637,8 @@ export class StyleGuidePage {
 
     const getActivePlatform = () => this.container.querySelector('#sgPlatformSelect')?.value || 'web';
 
+    let activeLayout = 'landing';
+
     const renderPreview = () => {
       const lightText = this.container.querySelector('#sgTplLight').value;
       const darkText = this.container.querySelector('#sgTplDark').value;
@@ -633,7 +646,7 @@ export class StyleGuidePage {
       const darkV = this._parseDesignTemplate(darkText, 'dark');
 
       frame.srcdoc = (lightText.trim() || darkText.trim())
-        ? this._buildPreviewHtml(lightV, darkV, activeTheme, getActivePlatform())
+        ? this._buildPreviewHtml(lightV, darkV, activeTheme, getActivePlatform(), activeLayout)
         : blankHtml(activeTheme);
     };
 
@@ -653,6 +666,33 @@ export class StyleGuidePage {
         syncThemeToggle();
         renderPreview();
       });
+    });
+
+    /* ---- Layout toggle buttons (web only) ---- */
+    this.container.querySelectorAll('#sgLayoutBtns .scr-ds-theme-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeLayout = btn.dataset.layout;
+        this.container.querySelectorAll('#sgLayoutBtns .scr-ds-theme-btn').forEach(b =>
+          b.classList.toggle('scr-ds-theme-btn--active', b.dataset.layout === activeLayout));
+        renderPreview();
+      });
+    });
+
+    /* ---- Expand / focus toggle ---- */
+    const editor    = this.container.querySelector('.sg-page__editor');
+    const expandBtn = this.container.querySelector('#sgExpandBtn');
+    let   expanded  = false;
+
+    const expandIcons = {
+      expand:   `<path d="M10 2h4v4M6 14H2v-4M14 2l-5 5M2 14l5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+      collapse: `<path d="M14 6h-4V2M2 10h4v4M10 6l-5 5M14 10l-5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+    };
+
+    expandBtn.addEventListener('click', () => {
+      expanded = !expanded;
+      editor.classList.toggle('sg-page__editor--expanded', expanded);
+      expandBtn.querySelector('svg').innerHTML = expandIcons[expanded ? 'collapse' : 'expand'];
+      expandBtn.title = expanded ? 'Restore editor panels' : 'Focus preview — hide editor & AI pane';
     });
 
 
@@ -713,6 +753,10 @@ export class StyleGuidePage {
       };
       applyBlock(this.container.querySelector('#sgTplLight'));
       applyBlock(this.container.querySelector('#sgTplDark'));
+
+      const layoutBtns = this.container.querySelector('#sgLayoutBtns');
+      if (layoutBtns) layoutBtns.style.display = target_platform === 'web' ? '' : 'none';
+
       renderPreview();
       this._renderThemePicker();
 
@@ -1153,10 +1197,13 @@ Rules:
     };
   }
 
-  _buildPreviewHtml(lightV, darkV, contextTheme = 'dark', platform = 'web', widthMode = 'full') {
+  _buildPreviewHtml(lightV, darkV, contextTheme = 'dark', platform = 'web', layout = 'dashboard', widthMode = 'full') {
     const activeV = contextTheme === 'light' ? lightV : darkV;
     if (platform === 'flutter' || platform === 'android') {
       return this._buildPhonePreviewHtml(activeV, contextTheme, platform, widthMode);
+    }
+    if (layout === 'landing') {
+      return this._buildLandingPreviewHtml(lightV, darkV, contextTheme);
     }
 
     const toRgb = hex => {
@@ -1198,13 +1245,10 @@ Rules:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MoilStack .md — AI-Powered Markdown Editor</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<title>Sample App — Dashboard</title>
 <style>
   :root {
     --primary: ${lightV.primary};
-    --primary-strong: ${lightV.primary};
     --text-on-primary: ${safeGetContrastColor(lightV.primary)};
     --bg: ${lightV.background};
     --surface: ${lightV.surface};
@@ -1212,20 +1256,15 @@ Rules:
     --text-secondary: ${lightV.textSecondary};
     --border: ${lightV.border};
     --danger: ${lightV.danger};
-    --hero: linear-gradient(135deg, ${safeAdjustColor(lightV.primary, -25)} 0%, ${lightV.primary} 60%, ${safeAdjustColor(lightV.primary, 10)} 100%);
     --chip-bg: rgba(${safeToRgb(lightV.primary)}, 0.12);
-    --input-bg: #f1f5f9;
-    --input-border: ${lightV.border};
-    --progress-bg: #f1f5f9;
-    --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-    --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.08);
+    --input-bg: ${safeAdjustColor(lightV.background, -3)};
+    --shadow: 0 1px 3px rgba(15,23,42,0.06);
+    --shadow-md: 0 4px 16px rgba(15,23,42,0.08);
     --radius: ${lightV.borderRadius};
-    --font-family: ${lightV.fontFamily};
+    --font: ${lightV.fontFamily};
   }
-
   html.dark {
     --primary: ${darkV.primary};
-    --primary-strong: ${darkV.primary};
     --text-on-primary: ${safeGetContrastColor(darkV.primary)};
     --bg: ${darkV.background};
     --surface: ${darkV.surface};
@@ -1233,901 +1272,893 @@ Rules:
     --text-secondary: ${darkV.textSecondary};
     --border: ${darkV.border};
     --danger: ${darkV.danger};
-    --hero: linear-gradient(135deg, ${safeAdjustColor(darkV.primary, -25)} 0%, ${darkV.primary} 60%, ${safeAdjustColor(darkV.primary, 10)} 100%);
     --chip-bg: rgba(${safeToRgb(darkV.primary)}, 0.18);
-    --input-bg: rgba(255, 255, 255, 0.05);
-    --input-border: ${darkV.border};
-    --progress-bg: rgba(255, 255, 255, 0.1);
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --input-bg: rgba(255,255,255,0.05);
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 20px rgba(0,0,0,0.4);
     --radius: ${darkV.borderRadius};
-    --font-family: ${darkV.fontFamily};
+    --font: ${darkV.fontFamily};
   }
+  *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); font-size: 13px; line-height: 1.5; background: var(--bg); color: var(--text-primary); min-height: 100vh; display: flex; flex-direction: column; }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* ── App shell ── */
+  .app { display: flex; flex: 1; min-height: 0; }
 
-  body {
-    font-family: var(--font-family);
-    font-weight: 500;
-    font-size: 14px;
-    line-height: 1.5;
-    background: var(--bg);
-    color: var(--text-primary);
-    transition: background 0.25s ease, color 0.25s ease;
-    overflow-x: hidden;
-  }
+  /* ── Sidebar ── */
+  .sidebar { width: 200px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 0; }
+  .sidebar-logo { display: flex; align-items: center; gap: 9px; padding: 16px 14px 14px; border-bottom: 1px solid var(--border); }
+  .sidebar-logo .mark { width: 28px; height: 28px; border-radius: calc(var(--radius) * 0.75); background: var(--primary); display: flex; align-items: center; justify-content: center; color: var(--text-on-primary); font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .sidebar-logo .name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .sidebar-logo .version { font-size: 10px; color: var(--text-secondary); }
+  .sidebar-nav { flex: 1; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: var(--radius); font-size: 13px; color: var(--text-secondary); cursor: pointer; transition: background 0.15s, color 0.15s; text-decoration: none; }
+  .nav-item:hover { background: var(--bg); color: var(--text-primary); }
+  .nav-item.active { background: var(--chip-bg); color: var(--primary); font-weight: 600; }
+  .nav-item svg { flex-shrink: 0; opacity: 0.8; }
+  .nav-section { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-secondary); padding: 12px 10px 4px; opacity: 0.6; }
+  .sidebar-footer { padding: 10px 8px 14px; border-top: 1px solid var(--border); }
+  .user-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius); }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--primary); color: var(--text-on-primary); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .user-info .uname { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .user-info .urole { font-size: 10px; color: var(--text-secondary); }
 
-  a { color: inherit; text-decoration: none; }
-  img { max-width: 100%; display: block; }
+  /* ── Main ── */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-  h1, h2, h3 {
-    font-weight: 800;
-    letter-spacing: -0.02em;
-  }
-
-  .container {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 0 24px;
-  }
-
-  /* Theme toggle */
-  #themeToggle {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 9999;
-    width: 44px;
-    height: 44px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: var(--shadow-md);
-    font-size: 18px;
-    transition: transform 0.2s ease, background 0.2s ease;
-  }
-  #themeToggle:hover { transform: scale(1.06); }
-  #themeToggle:active { transform: scale(0.94); }
-
-  /* Nav */
-  header.nav {
-    position: sticky;
-    top: 0;
-    z-index: 500;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(8px);
-  }
-  .nav-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 24px;
-    max-width: 1180px;
-    margin: 0 auto;
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 20px;
-    font-weight: 800;
-  }
-  .brand .logo-mark {
-    width: 34px;
-    height: 34px;
-    border-radius: calc(var(--radius) * 0.83);
-    background: var(--hero);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 16px;
-    font-weight: 800;
-  }
-  .nav-links {
-    display: flex;
-    gap: 28px;
-    align-items: center;
-  }
-  .nav-links a {
-    color: var(--text-secondary);
-    font-weight: 600;
-    font-size: 14px;
-    transition: color 0.2s ease;
-  }
-  .nav-links a:hover { color: var(--primary); }
-  .nav-cta {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
-  .btn {
-    border-radius: var(--radius);
-    padding: 10px 18px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    border: 1px solid transparent;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .btn-primary {
-    background: var(--primary);
-    color: var(--text-on-primary);
-  }
-  .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
-  .btn-ghost {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-  }
+  /* ── Top bar ── */
+  .topbar { flex-shrink: 0; height: 52px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; gap: 12px; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar h1 { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+  .breadcrumb { font-size: 12px; color: var(--text-secondary); }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .search-box { display: flex; align-items: center; gap: 6px; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 10px; font-size: 12px; color: var(--text-secondary); min-width: 160px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius); font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: filter 0.15s, transform 0.1s; }
+  .btn-primary { background: var(--primary); color: var(--text-on-primary); }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-primary); }
   .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
-  .menu-toggle { display: none; }
+  .icon-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius); background: transparent; border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; }
+  .icon-btn:hover { color: var(--text-primary); background: var(--bg); }
 
-  /* Hero */
-  .hero {
-    background: var(--hero);
-    color: #fff;
-    padding: 96px 24px 120px;
-    position: relative;
-    overflow: hidden;
-  }
-  .hero::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at 80% 20%, rgba(255,255,255,0.12), transparent 55%);
-  }
-  .hero-inner {
-    max-width: 1180px;
-    margin: 0 auto;
-    display: grid;
-    grid-template-columns: 1.1fr 0.9fr;
-    gap: 48px;
-    align-items: center;
-    position: relative;
-    z-index: 1;
-  }
-  .hero-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255,255,255,0.14);
-    border: 1px solid rgba(255,255,255,0.25);
-    padding: 6px 14px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    margin-bottom: 20px;
-  }
-  .hero h1 {
-    font-size: 46px;
-    line-height: 1.12;
-    margin-bottom: 18px;
-  }
-  .hero p {
-    font-size: 16px;
-    color: rgba(255,255,255,0.88);
-    max-width: 480px;
-    margin-bottom: 28px;
-  }
-  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
-  .hero .btn-primary {
-    background: #fff;
-    color: var(--primary);
-  }
-  .hero .btn-ghost {
-    border-color: rgba(255,255,255,0.4);
-    color: #fff;
-  }
-  .hero .btn-ghost:hover { border-color: #fff; color: #fff; background: rgba(255,255,255,0.1); }
+  /* ── Page content ── */
+  .content { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 18px; }
 
-  .hero-stats {
-    display: flex;
-    gap: 28px;
-    margin-top: 40px;
-  }
-  .hero-stats div strong {
-    display: block;
-    font-size: 24px;
-    font-weight: 800;
-  }
-  .hero-stats div span {
-    font-size: 12px;
-    color: rgba(255,255,255,0.7);
-  }
+  /* ── Stat tiles ── */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+  .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin-bottom: 6px; }
+  .stat-value { font-size: 24px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px; }
+  .stat-delta { font-size: 11px; color: var(--text-secondary); }
+  .stat-delta.up { color: #16a34a; }
+  .stat-delta.down { color: var(--danger); }
+  .stat-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 10px; overflow: hidden; }
+  .stat-bar-fill { height: 100%; background: var(--primary); border-radius: 2px; }
 
-  .hero-visual {
-    background: var(--surface);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 16px;
-    padding: 16px;
-    box-shadow: var(--shadow-md);
-    color: var(--text-primary);
-  }
-  .mock-window {
-    border-radius: var(--radius);
-    overflow: hidden;
-    border: 1px solid var(--border);
-    background: var(--bg);
-  }
-  .mock-titlebar {
-    display: flex;
-    gap: 6px;
-    padding: 10px 14px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-  }
-  .mock-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
-  .mock-body {
-    display: grid;
-    grid-template-columns: 100px 1fr 1fr;
-    min-height: 220px;
-  }
-  .mock-tree {
-    border-right: 1px solid var(--border);
-    padding: 12px 8px;
-    font-size: 11px;
-    color: var(--text-secondary);
-  }
-  .mock-tree div { padding: 5px 6px; border-radius: calc(var(--radius) * 0.67); margin-bottom: 2px; }
-  .mock-tree div.active { background: var(--chip-bg); color: var(--primary); font-weight: 700; }
-  .mock-editor {
-    padding: 14px;
-    font-size: 11px;
-    color: var(--text-secondary);
-    border-right: 1px solid var(--border);
-  }
-  .mock-editor .line { height: 8px; background: var(--border); opacity: 0.5; border-radius: 4px; margin-bottom: 8px; }
-  .mock-editor .line.w60 { width: 60%; }
-  .mock-editor .line.w80 { width: 80%; }
-  .mock-editor .line.w40 { width: 40%; }
-  .mock-chat { padding: 14px; font-size: 11px; }
-  .mock-bubble {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: calc(var(--radius) * 0.83);
-    padding: 8px 10px;
-    margin-bottom: 8px;
-    color: var(--text-secondary);
-  }
-  .mock-bubble.ai { background: var(--chip-bg); color: var(--primary); border-color: transparent; }
+  /* ── Two-col layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 340px; gap: 12px; min-height: 0; }
 
-  /* Sections */
-  section { padding: 88px 24px; }
-  .section-head {
-    text-align: center;
-    max-width: 620px;
-    margin: 0 auto 52px;
-  }
-  .eyebrow {
-    color: var(--primary);
-    font-weight: 700;
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-    display: block;
-  }
-  .section-head h2 { font-size: 32px; margin-bottom: 12px; }
-  .section-head p { color: var(--text-secondary); font-size: 15px; }
+  /* ── Table card ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .card-sub { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 9px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); border-bottom: 1px solid var(--border); background: rgba(${safeToRgb(lightV.primary)}, 0.04); }
+  html.dark th { background: rgba(${safeToRgb(darkV.primary)}, 0.07); }
+  td { padding: 10px 16px; font-size: 12px; color: var(--text-primary); border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--chip-bg); }
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+  .badge-success { background: rgba(22,163,74,0.12); color: #16a34a; }
+  .badge-warn    { background: rgba(245,158,11,0.12); color: #b45309; }
+  .badge-danger  { background: rgba(239,68,68,0.12);  color: var(--danger); }
+  .badge-info    { background: var(--chip-bg); color: var(--primary); }
+  .row-name { font-weight: 600; }
+  .row-sub  { font-size: 11px; color: var(--text-secondary); }
 
-  /* Feature grid */
-  .feature-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-  }
-  .card {
-    border-radius: var(--radius);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    padding: 24px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  .card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
-  .card .icon {
-    width: 42px;
-    height: 42px;
-    border-radius: calc(var(--radius) * 0.83);
-    background: var(--chip-bg);
-    color: var(--primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    margin-bottom: 16px;
-  }
-  .card h3 { font-size: 16px; margin-bottom: 8px; font-weight: 800; }
-  .card p { color: var(--text-secondary); font-size: 13.5px; }
+  /* ── Right panel ── */
+  .right-col { display: flex; flex-direction: column; gap: 12px; }
 
-  /* Workflow / how it works */
-  .workflow {
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-  }
-  .steps {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-  }
-  .step {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 22px;
-    position: relative;
-  }
-  .step .num {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: var(--primary);
-    color: var(--text-on-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 800;
-    font-size: 13px;
-    margin-bottom: 14px;
-  }
-  .step h3 { font-size: 14.5px; margin-bottom: 6px; }
-  .step p { color: var(--text-secondary); font-size: 13px; }
+  /* ── Form card ── */
+  .form-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+  .field input, .field select, .field textarea { background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 10px; font-size: 12px; font-family: var(--font); color: var(--text-primary); outline: none; width: 100%; transition: border-color 0.15s; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); }
+  .field textarea { resize: none; height: 64px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
 
-  /* Providers */
-  .providers {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-  .provider-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px 18px;
-  }
-  .provider-row .pname { font-weight: 700; font-size: 14px; }
-  .provider-row .ptag { font-size: 11px; color: var(--text-secondary); }
-  .chip {
-    background: var(--chip-bg);
-    color: var(--primary);
-    font-weight: 700;
-    font-size: 11px;
-    padding: 5px 10px;
-    border-radius: 999px;
-  }
-  .chip.danger { background: rgba(239,68,68,0.12); color: var(--danger); }
+  /* ── Activity card ── */
+  .activity-list { padding: 8px 0; }
+  .activity-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 16px; }
+  .activity-item:hover { background: var(--chip-bg); }
+  .act-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); flex-shrink: 0; margin-top: 4px; }
+  .act-dot.warn   { background: #f59e0b; }
+  .act-dot.danger { background: var(--danger); }
+  .act-text { font-size: 12px; color: var(--text-primary); flex: 1; }
+  .act-text span { color: var(--text-secondary); }
+  .act-time { font-size: 10px; color: var(--text-secondary); flex-shrink: 0; margin-top: 1px; }
 
-  /* Progress demo */
-  .progress-track {
-    height: 6px;
-    background: var(--progress-bg);
-    border-radius: 999px;
-    overflow: hidden;
-    margin-top: 10px;
-  }
-  .progress-fill {
-    height: 100%;
-    background: var(--primary-strong);
-    border-radius: 999px;
-  }
+  /* ── Bottom bar ── */
+  .bottombar { flex-shrink: 0; height: 36px; background: var(--surface); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+  .bottombar span { font-size: 11px; color: var(--text-secondary); }
 
-  /* Shortcuts */
-  .shortcut-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
-  .shortcut-table th, .shortcut-table td {
-    text-align: left;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13.5px;
-  }
-  .shortcut-table th {
-    color: var(--text-secondary);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    background: rgba(${safeToRgb(lightV.primary)}, 0.05);
-  }
-  .shortcut-table tr:last-child td { border-bottom: none; }
-  kbd {
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 3px 8px;
-    font-family: inherit;
-    font-weight: 700;
-    font-size: 12px;
-  }
-
-  /* CTA band */
-  .cta-band {
-    background: var(--hero);
-    color: #fff;
-    border-radius: 20px;
-    margin: 0 24px;
-    padding: 56px 32px;
-    text-align: center;
-  }
-  .cta-band h2 { font-size: 28px; margin-bottom: 10px; }
-  .cta-band p { color: rgba(255,255,255,0.85); margin-bottom: 26px; }
-  .cta-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
-  .cta-band .btn-primary { background: #fff; color: var(--primary); }
-  .cta-band .btn-ghost { border-color: rgba(255,255,255,0.4); color: #fff; }
-
-  /* Footer */
-  footer {
-    border-top: 1px solid var(--border);
-    padding: 56px 24px 28px;
-    margin-top: 40px;
-  }
-  .footer-grid {
-    display: grid;
-    grid-template-columns: 1.4fr 1fr 1fr 1fr;
-    gap: 32px;
-    padding-bottom: 36px;
-  }
-  .footer-brand p { color: var(--text-secondary); margin-top: 12px; font-size: 13px; max-width: 260px; }
-  .footer-col h4 { font-size: 13px; margin-bottom: 16px; }
-  .footer-col a {
-    display: block;
-    color: var(--text-secondary);
-    font-size: 13px;
-    margin-bottom: 10px;
-    transition: color 0.2s ease;
-  }
-  .footer-col a:hover { color: var(--primary); }
-  .footer-bottom {
-    border-top: 1px solid var(--border);
-    padding-top: 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    color: var(--text-secondary);
-    font-size: 12.5px;
-  }
-  .footer-badges { display: flex; gap: 8px; }
-  .footer-badges span {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  @media (max-width: 900px) {
-    .hero-inner { grid-template-columns: 1fr; }
-    .hero h1 { font-size: 34px; }
-    .feature-grid { grid-template-columns: repeat(2, 1fr); }
-    .steps { grid-template-columns: repeat(2, 1fr); }
-    .providers { grid-template-columns: 1fr; }
-    .footer-grid { grid-template-columns: 1fr 1fr; }
-    .nav-links { display: none; }
-  }
-  @media (max-width: 560px) {
-    .feature-grid { grid-template-columns: 1fr; }
-    .steps { grid-template-columns: 1fr; }
-    .hero { padding: 76px 20px 90px; }
-    .hero-stats { gap: 18px; flex-wrap: wrap; }
-    .footer-grid { grid-template-columns: 1fr; }
-    section { padding: 64px 18px; }
-  }
+  /* ── Theme toggle ── */
+  #themeToggle { position: fixed; bottom: 46px; right: 12px; z-index: 999; width: 28px; height: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; }
+  #themeToggle:hover { color: var(--text-primary); }
 </style>
 </head>
 <body>
 
-<button id="themeToggle" aria-label="Toggle theme">🌙</button>
+<div class="app">
 
-<header class="nav">
-  <div class="nav-inner">
-    <div class="brand">
-      <div class="logo-mark">M</div>
-      MoilStack .md
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="mark">S</div>
+      <div><div class="name">Sample App</div><div class="version">v2.4.1</div></div>
     </div>
-    <nav class="nav-links">
-      <a href="#features">Features</a>
-      <a href="#how-it-works">How it works</a>
-      <a href="#providers">AI Providers</a>
-      <a href="#shortcuts">Shortcuts</a>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <a class="nav-item active" href="#">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a class="nav-item" href="#">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Projects
+      </a>
+      <a class="nav-item" href="#">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Team
+      </a>
+      <div class="nav-section">Analytics</div>
+      <a class="nav-item" href="#">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Reports
+      </a>
+      <a class="nav-item" href="#">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Integrations
+      </a>
+      <div class="nav-section">System</div>
+      <a class="nav-item" href="#">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2"/></svg>
+        Settings
+      </a>
     </nav>
-    <div class="nav-cta">
-      <a href="#" class="btn btn-ghost">GitHub</a>
-      <a href="#" class="btn btn-primary">Download</a>
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="avatar">JD</div>
+        <div class="user-info"><div class="uname">Jane Doe</div><div class="urole">Admin</div></div>
+      </div>
     </div>
-  </div>
-</header>
+  </aside>
 
-<section class="hero">
-  <div class="hero-inner">
-    <div>
-      <span class="hero-badge">✨ Local-first · AI-powered · Free</span>
-      <h1>Write Markdown. Let AI do the heavy lifting.</h1>
-      <p>MoilStack .md is a desktop Markdown editor with a built-in AI assistant — syntax highlighting, live preview, and instant document edits, all running privately on your machine.</p>
-      <div class="hero-actions">
-        <a href="#" class="btn btn-primary">⬇ Download for Windows</a>
-        <a href="#features" class="btn btn-ghost">Explore Features</a>
-      </div>
-      <div class="hero-stats">
-        <div><strong>10+</strong><span>AI Providers</span></div>
-        <div><strong>100%</strong><span>Local Files</span></div>
-        <div><strong>MIT</strong><span>Open Source</span></div>
-      </div>
-    </div>
-    <div class="hero-visual">
-      <div class="mock-window">
-        <div class="mock-titlebar">
-          <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
-        </div>
-        <div class="mock-body">
-          <div class="mock-tree">
-            <div class="active">📄 draft.md</div>
-            <div>📄 notes.md</div>
-            <div>📄 ideas.md</div>
-            <div>📁 archive</div>
-          </div>
-          <div class="mock-editor">
-            <div class="line w80"></div>
-            <div class="line w60"></div>
-            <div class="line"></div>
-            <div class="line w40"></div>
-            <div class="line w80"></div>
-            <div class="line w60"></div>
-          </div>
-          <div class="mock-chat">
-            <div class="mock-bubble">Fix grammar in intro</div>
-            <div class="mock-bubble ai">✓ Edited 3 lines. Undo?</div>
-            <div class="mock-bubble">Summarise this doc</div>
-          </div>
+  <!-- Main area -->
+  <div class="main">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <div>
+          <div class="breadcrumb">Sample App / Dashboard</div>
+          <h1>Overview</h1>
         </div>
       </div>
-    </div>
-  </div>
-</section>
-
-<section id="features">
-  <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">Features</span>
-      <h2>Everything a writer actually needs</h2>
-      <p>A focused editor with the right amount of AI — powerful when you want it, invisible when you don't.</p>
-    </div>
-    <div class="feature-grid">
-      <div class="card">
-        <div class="icon">⌗</div>
-        <h3>Dual-Pane Editor</h3>
-        <p>Syntax-highlighted Markdown editing with a live preview pane. Toggle with <kbd>Ctrl+\`</kbd> anytime.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🗂</div>
-        <h3>File Explorer</h3>
-        <p>Browse, create, rename, and open <code>.md</code> files from any folder without leaving the app.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🤖</div>
-        <h3>AI Assistant</h3>
-        <p>Ask the AI to edit your document, answer questions, or improve your writing in plain language.</p>
-      </div>
-      <div class="card">
-        <div class="icon">⚡</div>
-        <h3>Smart AI Editing</h3>
-        <p>Document edits are applied silently and instantly — informational answers stream as chat instead.</p>
-      </div>
-      <div class="card">
-        <div class="icon">↺</div>
-        <h3>Undo AI Edits</h3>
-        <p>Every AI change is reversible with the Undo button on the chat bubble or <kbd>Ctrl+Z</kbd>.</p>
-      </div>
-      <div class="card">
-        <div class="icon">▦</div>
-        <h3>Visual Table Builder</h3>
-        <p>Insert Markdown tables with a point-and-click grid editor — no manual pipe counting.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🏷</div>
-        <h3>File Labels</h3>
-        <p>Colour-tag files in the explorer for quick visual navigation across large projects.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🛡</div>
-        <h3>Automatic Backups</h3>
-        <p>Every AI edit is snapshotted to <code>.markflow/backups/</code> before it touches your file.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🧩</div>
-        <h3>Multi-Model Support</h3>
-        <p>Connect any OpenAI-compatible API — Groq, OpenAI, Mistral, Together AI — or run Ollama locally.</p>
-      </div>
-      <div class="card">
-        <div class="icon">📄</div>
-        <h3>Export to PDF</h3>
-        <p>One-click export via the native save dialog, ready to share or print.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🌗</div>
-        <h3>Dark / Light Theme</h3>
-        <p>A polished theme for every hour of the day, persisted automatically across sessions.</p>
-      </div>
-      <div class="card">
-        <div class="icon">⚙</div>
-        <h3>Configurable Editor</h3>
-        <p>Tune font size and font family so the editor feels like yours.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="how-it-works" class="workflow">
-  <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">How it works</span>
-      <h2>From prompt to polished document</h2>
-      <p>Select, ask, and review — the AI handles the edit, you stay in control.</p>
-    </div>
-    <div class="steps">
-      <div class="step">
-        <div class="num">1</div>
-        <h3>Open a folder</h3>
-        <p>Point MoilStack .md at any folder of <code>.md</code> files to start browsing and editing.</p>
-      </div>
-      <div class="step">
-        <div class="num">2</div>
-        <h3>Select scope (optional)</h3>
-        <p>Highlight specific lines in the editor to scope the AI's next edit precisely.</p>
-      </div>
-      <div class="step">
-        <div class="num">3</div>
-        <h3>Prompt the assistant</h3>
-        <p>Type a request like "make the intro more concise" and press <kbd>Enter</kbd>.</p>
-      </div>
-      <div class="step">
-        <div class="num">4</div>
-        <h3>Review or undo</h3>
-        <p>Edits apply instantly with a change summary — revert anytime with <kbd>Ctrl+Z</kbd>.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="providers">
-  <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">AI Providers</span>
-      <h2>Bring your own model</h2>
-      <p>MoilStack .md speaks the OpenAI Chat Completions format — connect a cloud provider or run fully offline with Ollama.</p>
-    </div>
-    <div class="providers">
-      <div class="provider-row">
-        <div><div class="pname">Groq</div><div class="ptag">llama-3.3-70b-versatile</div></div>
-        <span class="chip">Free tier</span>
-      </div>
-      <div class="provider-row">
-        <div><div class="pname">Google Gemini</div><div class="ptag">gemini-2.0-flash</div></div>
-        <span class="chip">Free tier</span>
-      </div>
-      <div class="provider-row">
-        <div><div class="pname">OpenRouter</div><div class="ptag">Free models available</div></div>
-        <span class="chip">Free tier</span>
-      </div>
-      <div class="provider-row">
-        <div><div class="pname">Mistral AI</div><div class="ptag">Compatible endpoint</div></div>
-        <span class="chip">Free tier</span>
-      </div>
-      <div class="provider-row">
-        <div><div class="pname">Together AI</div><div class="ptag">$1 signup credit</div></div>
-        <span class="chip">Free tier</span>
-      </div>
-      <div class="provider-row">
-        <div><div class="pname">OpenAI</div><div class="ptag">gpt-4o-mini</div></div>
-        <span class="chip">Paid</span>
-      </div>
-      <div class="provider-row">
-        <div><div class="pname">Ollama (local)</div><div class="ptag">qwen2.5:7b · fully private</div></div>
-        <span class="chip">Free · Offline</span>
-      </div>
-      <div class="provider-row">
-        <div><div class="pname">Azure OpenAI</div><div class="ptag">Deployment-specific endpoint</div></div>
-        <span class="chip">Limited</span>
-      </div>
-      <div class="provider-row">
-        <div><div class="pname">Anthropic Claude</div><div class="ptag">Different API format</div></div>
-        <span class="chip danger">Unsupported</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="shortcuts">
-  <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">Keyboard Shortcuts</span>
-      <h2>Stay on the keyboard</h2>
-      <p>Every core action in MoilStack .md is one shortcut away.</p>
-    </div>
-    <table class="shortcut-table">
-      <thead>
-        <tr><th>Shortcut</th><th>Action</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><kbd>Ctrl+S</kbd></td><td>Save file</td></tr>
-        <tr><td><kbd>Ctrl+Z</kbd></td><td>Undo (AI edits first, then native undo)</td></tr>
-        <tr><td><kbd>Ctrl+\`</kbd></td><td>Toggle Edit / Preview mode</td></tr>
-        <tr><td><kbd>Ctrl+O</kbd></td><td>Open folder picker</td></tr>
-        <tr><td><kbd>Ctrl+N</kbd></td><td>New file in current folder</td></tr>
-        <tr><td><kbd>Ctrl+F</kbd></td><td>Find & replace</td></tr>
-        <tr><td><kbd>Enter</kbd></td><td>Send chat message</td></tr>
-        <tr><td><kbd>Alt+Enter</kbd></td><td>New line in chat input</td></tr>
-        <tr><td><kbd>Escape</kbd></td><td>Close any open modal or dropdown</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section>
-  <div class="cta-band">
-    <h2>Start writing with AI at your side</h2>
-    <p>Free, local-first, and open source under MIT. Windows installers available today.</p>
-    <div class="cta-actions">
-      <a href="#" class="btn btn-primary">⬇ Download for Windows</a>
-      <a href="#" class="btn btn-ghost">View on GitHub</a>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="container">
-    <div class="footer-grid">
-      <div class="footer-brand">
-        <div class="brand">
-          <div class="logo-mark">M</div>
-          MoilStack .md
+      <div class="topbar-right">
+        <div class="search-box">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Search…
         </div>
-        <p>A desktop Markdown editor with an integrated AI assistant, built with Electron. Write and edit locally — your files never leave your machine unless you choose a cloud model.</p>
-      </div>
-      <div class="footer-col">
-        <h4>Product</h4>
-        <a href="#features">Features</a>
-        <a href="#how-it-works">How it works</a>
-        <a href="#providers">AI Providers</a>
-        <a href="#shortcuts">Shortcuts</a>
-      </div>
-      <div class="footer-col">
-        <h4>Resources</h4>
-        <a href="#">Documentation</a>
-        <a href="#">Changelog</a>
-        <a href="#">Releases</a>
-        <a href="#">Report an issue</a>
-      </div>
-      <div class="footer-col">
-        <h4>Project</h4>
-        <a href="#">GitHub</a>
-        <a href="#">License (MIT)</a>
-        <a href="#">Branding Policy</a>
-        <a href="#">Contributing</a>
+        <div class="icon-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
+        <button class="btn btn-primary">+ New project</button>
       </div>
     </div>
-    <div class="footer-bottom">
-      <span>© 2026 MoilStack. Released under the MIT License.</span>
-      <div class="footer-badges">
-        <span>Windows</span>
-        <span>Electron</span>
-        <span>v1.1.0</span>
+
+    <!-- Page content -->
+    <div class="content">
+
+      <!-- Stat tiles -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total projects</div>
+          <div class="stat-value">24</div>
+          <div class="stat-delta up">↑ 4 this month</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:60%"></div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active tasks</div>
+          <div class="stat-value">138</div>
+          <div class="stat-delta up">↑ 12 this week</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:78%"></div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Team members</div>
+          <div class="stat-value">12</div>
+          <div class="stat-delta">2 pending invite</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:40%"></div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Completion</div>
+          <div class="stat-value">68%</div>
+          <div class="stat-delta down">↓ 3% vs last sprint</div>
+          <div class="stat-bar"><div class="stat-bar-fill" style="width:68%"></div></div>
+        </div>
       </div>
+
+      <!-- Two-column body -->
+      <div class="two-col">
+
+        <!-- Recent projects table -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Recent projects</div>
+              <div class="card-sub">Last updated today</div>
+            </div>
+            <button class="btn btn-ghost">View all</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Owner</th>
+                <th>Status</th>
+                <th>Due</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="row-name">Design System v2</div><div class="row-sub">UI / Components</div></td>
+                <td>Jane D.</td>
+                <td><span class="badge badge-success">Active</span></td>
+                <td>Aug 12</td>
+              </tr>
+              <tr>
+                <td><div class="row-name">API Gateway Refactor</div><div class="row-sub">Backend</div></td>
+                <td>Mark T.</td>
+                <td><span class="badge badge-warn">In review</span></td>
+                <td>Aug 18</td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Mobile Onboarding</div><div class="row-sub">Flutter · iOS</div></td>
+                <td>Sara K.</td>
+                <td><span class="badge badge-info">Planning</span></td>
+                <td>Sep 01</td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Analytics Dashboard</div><div class="row-sub">Data · Viz</div></td>
+                <td>Tom L.</td>
+                <td><span class="badge badge-danger">Blocked</span></td>
+                <td>Jul 30</td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Auth Service</div><div class="row-sub">Security</div></td>
+                <td>Jane D.</td>
+                <td><span class="badge badge-success">Active</span></td>
+                <td>Aug 25</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Right column -->
+        <div class="right-col">
+
+          <!-- Create task form -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Create task</div>
+            </div>
+            <div class="form-body">
+              <div class="field">
+                <label>Task name</label>
+                <input type="text" placeholder="e.g. Update landing page copy" />
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label>Priority</label>
+                  <select>
+                    <option>High</option>
+                    <option>Medium</option>
+                    <option>Low</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Assignee</label>
+                  <select>
+                    <option>Jane D.</option>
+                    <option>Mark T.</option>
+                    <option>Sara K.</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field">
+                <label>Notes</label>
+                <textarea placeholder="Optional context…"></textarea>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-primary">Create task</button>
+            </div>
+          </div>
+
+          <!-- Activity feed -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Activity</div>
+            </div>
+            <div class="activity-list">
+              <div class="activity-item">
+                <div class="act-dot"></div>
+                <div class="act-text">Design System v2 <span>moved to Active</span></div>
+                <div class="act-time">2m ago</div>
+              </div>
+              <div class="activity-item">
+                <div class="act-dot warn"></div>
+                <div class="act-text">Analytics Dashboard <span>status changed to Blocked</span></div>
+                <div class="act-time">1h ago</div>
+              </div>
+              <div class="activity-item">
+                <div class="act-dot"></div>
+                <div class="act-text">Sara K. <span>joined Mobile Onboarding</span></div>
+                <div class="act-time">3h ago</div>
+              </div>
+              <div class="activity-item">
+                <div class="act-dot danger"></div>
+                <div class="act-text">API Gateway deadline <span>is overdue</span></div>
+                <div class="act-time">Yesterday</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="bottombar">
+      <span>Sample App · Web preview</span>
+      <span>v2.4.1 · Connected</span>
     </div>
   </div>
-</footer>
+</div>
+
+<button id="themeToggle" title="Toggle theme">☀</button>
 
 <script>
-  (function () {
-    var root = document.documentElement;
-    var toggle = document.getElementById('themeToggle');
-
-    function applyTheme(isDark) {
-      if (isDark) {
-        root.classList.add('dark');
-        toggle.textContent = '☀️';
-      } else {
-        root.classList.remove('dark');
-        toggle.textContent = '🌙';
-      }
-    }
-
-    applyTheme(root.classList.contains('dark'));
-
-    toggle.addEventListener('click', function () {
-      applyTheme(!root.classList.contains('dark'));
-    });
-  })();
+(function(){
+  var root = document.documentElement;
+  var btn  = document.getElementById('themeToggle');
+  function apply(dark){ if(dark){ root.classList.add('dark'); btn.textContent='☀'; } else { root.classList.remove('dark'); btn.textContent='☾'; } }
+  apply(root.classList.contains('dark'));
+  btn.addEventListener('click', function(){ apply(!root.classList.contains('dark')); });
+})();
 </script>
-
 </body>
 </html>`;
   }
 
   _buildPhonePreviewHtml(v, contextTheme, platform, widthMode = 'full') {
-    const scheme     = contextTheme === 'light' ? 'light' : 'dark';
-    const stageBg    = contextTheme === 'light' ? '#e8e5df' : '#05070a';
-    const cardRadius = Math.max(parseInt(v.borderRadius, 10) || 8, 12) + 'px';
-    const isFull      = widthMode === 'full';
-    const label       = (platform === 'flutter' ? 'Flutter · Material 3' : 'Android · Material') + (isFull ? ' · Full width' : ' · Mobile');
-    const phoneRule   = isFull
-      ? `width:100%;min-height:520px;border-radius:${cardRadius};border:1px solid ${v.border};box-shadow:none;`
-      : `width:240px;height:440px;border-radius:26px;border:6px solid ${v.border};box-shadow:0 12px 28px rgba(0,0,0,.35);`;
+    const scheme  = contextTheme === 'light' ? 'light' : 'dark';
+    const stageBg = contextTheme === 'light' ? '#e2dfd9' : '#07090d';
+    const cr      = Math.max(parseInt(v.borderRadius, 10) || 8, 12) + 'px';
+    const label   = platform === 'flutter' ? 'Flutter · Material 3' : 'Android · Material Design';
 
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="${scheme}"><style>
-:root{color-scheme:${scheme}}
+    const toRgb = hex => {
+      const h = hex.replace('#', '');
+      const f = h.length <= 4 ? h.split('').map(c => c+c).join('') : h;
+      return [0,2,4].map(i => parseInt(f.slice(i,i+2),16)).join(',');
+    };
+    const safeRgb   = hex => (!hex || !hex.startsWith('#')) ? '99,102,241' : toRgb(hex);
+    const contrast  = hex => {
+      const rgb = toRgb(hex).split(',').map(Number);
+      return ((rgb[0]*299+rgb[1]*587+rgb[2]*114)/1000 >= 150) ? '#0f172a' : '#ffffff';
+    };
+    const onPrimary = contrast(v.primary);
+    const pRgb      = safeRgb(v.primary);
+    const tRgb      = safeRgb(v.textPrimary);
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="${scheme}">
+<style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{background:${stageBg};font-family:${v.fontFamily};min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-.stage{display:flex;flex-direction:column;align-items:center;gap:12px;width:${isFull ? '100%' : 'auto'}}
-.stage-label{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:${v.textSecondary}}
-.phone{${phoneRule}background:${v.background};overflow:hidden;display:flex;flex-direction:column;position:relative}
-.appbar{flex:none;height:44px;background:${v.surface};display:flex;align-items:center;padding:0 14px;box-shadow:0 1px 4px rgba(0,0,0,.2);z-index:2}
-.appbar-title{font-size:13px;font-weight:600;color:${v.textPrimary}}
-.body{flex:1;padding:12px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
-.card{background:${v.surface};border-radius:${cardRadius};padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,.18)}
-.line{height:6px;border-radius:3px;background:${v.textPrimary};margin-bottom:6px}
-.line.sub{background:${v.textSecondary};height:5px}
-.chip-row{display:flex;gap:6px;margin-top:6px}
-.chip{font-size:9px;padding:4px 10px;border-radius:999px;font-weight:600}
-.chip.filled{background:${v.primary};color:${v.background}}
-.chip.outline{border:1px solid ${v.primary};color:${v.primary}}
-.field{background:${v.background};border-radius:8px 8px 0 0;border-bottom:2px solid ${v.primary};padding:8px 10px;font-size:10px;color:${v.textSecondary}}
-.row{display:flex;align-items:center;gap:8px}
-.avatar{width:22px;height:22px;border-radius:50%;background:${v.primary};flex:none}
-.fab{position:absolute;right:14px;bottom:66px;width:44px;height:44px;border-radius:50%;background:${v.primary};box-shadow:0 4px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:${v.background};font-size:20px;font-weight:700;z-index:3}
-.navbar{flex:none;height:52px;background:${v.surface};border-top:1px solid ${v.border};display:flex;align-items:center;justify-content:space-around}
-.navdot{width:18px;height:18px;border-radius:6px}
-.navdot.active{background:${v.primary}}
-.navdot.inactive{background:${v.textSecondary};opacity:.4}
+body{background:${stageBg};font-family:${v.fontFamily};min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;gap:10px;color-scheme:${scheme}}
+.stage-label{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:${v.textSecondary};opacity:.7}
+.phone{width:min(400px,100%);min-height:580px;border-radius:24px;border:1px solid ${v.border};background:${v.background};overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+/* Status bar */
+.statusbar{flex:none;height:22px;background:${v.surface};display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:9px;font-weight:700;color:${v.textPrimary}}
+.sb-icons{display:flex;align-items:center;gap:4px}
+.sb-icon{width:10px;height:6px;border-radius:1px;background:${v.textPrimary};opacity:.6}
+.sb-icon.signal{width:6px;height:8px;clip-path:polygon(0 100%,100% 0,100% 100%)}
+.sb-battery{width:16px;height:8px;border:1.5px solid ${v.textPrimary};border-radius:2px;opacity:.7;position:relative;display:flex;align-items:center;padding:1px}
+.sb-battery::after{content:'';position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:2px;height:4px;background:${v.textPrimary};border-radius:0 1px 1px 0;opacity:.7}
+.sb-batt-fill{flex:1;background:${v.textPrimary};border-radius:1px;height:100%}
+/* AppBar */
+.appbar{flex:none;height:54px;background:${v.surface};display:flex;align-items:center;padding:0 14px;gap:10px;border-bottom:1px solid ${v.border}}
+.appbar-nav{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;color:${v.textPrimary};font-size:15px;flex-shrink:0}
+.appbar-title{flex:1;font-size:17px;font-weight:700;color:${v.textPrimary};letter-spacing:-.01em}
+.appbar-action{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;color:${v.textSecondary};font-size:17px;flex-shrink:0}
+/* Scrollable body */
+.body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;padding-bottom:88px}
+/* Hero card */
+.hero-card{background:${v.primary};border-radius:${cr};padding:18px;color:${onPrimary}}
+.hero-eyebrow{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;opacity:.75;margin-bottom:6px}
+.hero-title{font-size:20px;font-weight:800;letter-spacing:-.01em;margin-bottom:4px}
+.hero-sub{font-size:12.5px;opacity:.8;margin-bottom:14px}
+.progress-row{display:flex;align-items:center;gap:10px}
+.progress-track{flex:1;height:5px;background:rgba(${contrast(v.primary)==='#ffffff'?'255,255,255':'0,0,0'},.25);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:${onPrimary};border-radius:3px}
+.progress-pct{font-size:11px;font-weight:700;opacity:.9;flex-shrink:0}
+/* Chip row */
+.chip-row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font-size:11.5px;padding:5px 14px;border-radius:999px;font-weight:600}
+.chip.filled{background:${v.primary};color:${onPrimary}}
+.chip.outline{border:1.5px solid ${v.primary};color:${v.primary}}
+.chip.tonal{background:rgba(${pRgb},.13);color:${v.primary}}
+/* Material text field — filled style */
+.field-wrap{background:${v.surface};border-radius:${cr} ${cr} 0 0;padding:8px 14px 0;border-bottom:2px solid ${v.primary}}
+.field-label{font-size:10.5px;font-weight:600;color:${v.primary};margin-bottom:2px}
+.field-value{font-size:13px;color:${v.textSecondary};padding-bottom:8px}
+/* Section heading */
+.section-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${v.textSecondary};padding:0 2px}
+/* List card */
+.list-card{background:${v.surface};border-radius:${cr};overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.list-item{display:flex;align-items:center;gap:12px;padding:11px 14px}
+.divider{height:1px;background:${v.border};margin:0 14px}
+.avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;color:${onPrimary}}
+.av1{background:${v.primary}}
+.av2{background:rgba(${pRgb},.65)}
+.av3{background:rgba(${pRgb},.38)}
+.item-text{flex:1;min-width:0}
+.item-name{font-size:13px;font-weight:600;color:${v.textPrimary};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-sub{font-size:11px;color:${v.textSecondary};margin-top:1px}
+/* Snackbar */
+.snackbar{position:absolute;bottom:68px;left:12px;right:72px;background:${v.textPrimary};color:${v.background};border-radius:999px;padding:9px 16px;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;z-index:4;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.snackbar-action{font-weight:700;color:rgba(${pRgb},.9);font-size:11.5px;background:rgba(${pRgb},.15);padding:2px 8px;border-radius:4px}
+/* FAB — Material 3 medium shape */
+.fab{position:absolute;right:14px;bottom:70px;width:50px;height:50px;border-radius:16px;background:${v.primary};color:${onPrimary};display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;box-shadow:0 4px 12px rgba(${pRgb},.45);z-index:5}
+/* Bottom navbar */
+.navbar{flex:none;height:62px;background:${v.surface};border-top:1px solid ${v.border};display:flex;align-items:center;justify-content:space-around;padding:0 4px;z-index:2}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;padding:6px 0;cursor:pointer}
+.nav-pill{height:28px;display:flex;align-items:center;justify-content:center;border-radius:999px;min-width:56px}
+.nav-item.active .nav-pill{background:rgba(${pRgb},.15)}
+.nav-icon-dot{width:7px;height:7px;border-radius:50%}
+.nav-item.active .nav-icon-dot{background:${v.primary}}
+.nav-item:not(.active) .nav-icon-dot{background:${v.textSecondary};opacity:.45}
+.nav-label{font-size:10.5px;font-weight:600}
+.nav-item.active .nav-label{color:${v.primary}}
+.nav-item:not(.active) .nav-label{color:${v.textSecondary};opacity:.6}
 </style></head><body>
-<div class="stage">
 <div class="stage-label">${label}</div>
 <div class="phone">
-<div class="appbar"><span class="appbar-title">Preview</span></div>
-<div class="body">
-<div class="card">
-<div class="line" style="width:55%"></div>
-<div class="line sub" style="width:85%"></div>
-<div class="line sub" style="width:60%"></div>
-<div class="chip-row"><span class="chip filled">Primary</span><span class="chip outline">Outline</span></div>
-</div>
-<div class="card"><div class="field">Sample input field…</div></div>
-<div class="card row">
-<div class="avatar"></div>
-<div style="flex:1">
-<div class="line" style="width:70%;margin-bottom:4px"></div>
-<div class="line sub" style="width:40%;margin-bottom:0"></div>
-</div>
-</div>
-</div>
-<div class="fab">+</div>
-<div class="navbar">
-<div class="navdot active"></div>
-<div class="navdot inactive"></div>
-<div class="navdot inactive"></div>
-<div class="navdot inactive"></div>
-</div>
-</div>
+  <div class="statusbar">
+    <span>9:41</span>
+    <div class="sb-icons">
+      <div class="sb-icon signal"></div>
+      <div class="sb-icon" style="width:12px;height:6px;border-radius:2px"></div>
+      <div class="sb-battery"><div class="sb-batt-fill" style="width:70%"></div></div>
+    </div>
+  </div>
+  <div class="appbar">
+    <div class="appbar-nav">&#8592;</div>
+    <span class="appbar-title">Overview</span>
+    <div class="appbar-action">&#8942;</div>
+  </div>
+  <div class="body">
+    <div class="hero-card">
+      <div class="hero-eyebrow">Welcome back</div>
+      <div class="hero-title">My Dashboard</div>
+      <div class="hero-sub">3 tasks due today</div>
+      <div class="progress-row">
+        <div class="progress-track"><div class="progress-fill" style="width:68%"></div></div>
+        <span class="progress-pct">68%</span>
+      </div>
+    </div>
+    <div class="chip-row">
+      <span class="chip filled">Active</span>
+      <span class="chip outline">Pending</span>
+      <span class="chip tonal">Archived</span>
+    </div>
+    <div class="field-wrap">
+      <div class="field-label">Search projects</div>
+      <div class="field-value">e.g. Design System…</div>
+    </div>
+    <div class="section-head">Recent</div>
+    <div class="list-card">
+      <div class="list-item">
+        <div class="avatar av1">JD</div>
+        <div class="item-text">
+          <div class="item-name">Design System v2</div>
+          <div class="item-sub">Updated 2h ago</div>
+        </div>
+        <span class="chip filled" style="font-size:10px;padding:3px 10px">Active</span>
+      </div>
+      <div class="divider"></div>
+      <div class="list-item">
+        <div class="avatar av2">MT</div>
+        <div class="item-text">
+          <div class="item-name">API Gateway</div>
+          <div class="item-sub">Updated yesterday</div>
+        </div>
+        <span class="chip outline" style="font-size:10px;padding:3px 10px">Review</span>
+      </div>
+      <div class="divider"></div>
+      <div class="list-item">
+        <div class="avatar av3">SK</div>
+        <div class="item-text">
+          <div class="item-name">Mobile Onboarding</div>
+          <div class="item-sub">Updated 3 days ago</div>
+        </div>
+        <span class="chip tonal" style="font-size:10px;padding:3px 10px">Draft</span>
+      </div>
+    </div>
+  </div>
+  <div class="snackbar">3 tasks due today<span class="snackbar-action">View</span></div>
+  <div class="fab">+</div>
+  <div class="navbar">
+    <div class="nav-item active">
+      <div class="nav-pill"><div class="nav-icon-dot"></div></div>
+      <span class="nav-label">Home</span>
+    </div>
+    <div class="nav-item">
+      <div class="nav-pill"><div class="nav-icon-dot"></div></div>
+      <span class="nav-label">Projects</span>
+    </div>
+    <div class="nav-item">
+      <div class="nav-pill"><div class="nav-icon-dot"></div></div>
+      <span class="nav-label">Team</span>
+    </div>
+    <div class="nav-item">
+      <div class="nav-pill"><div class="nav-icon-dot"></div></div>
+      <span class="nav-label">Settings</span>
+    </div>
+  </div>
 </div>
 </body></html>`;
+  }
+
+  _buildLandingPreviewHtml(lightV, darkV, contextTheme = 'dark') {
+    const toRgb = hex => {
+      const h    = hex.replace('#', '');
+      const full = h.length <= 4 ? h.split('').map(c => c + c).join('') : h;
+      return [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16)).join(',');
+    };
+    const adjustColor = (hex, percent) => {
+      const num = parseInt(hex.replace('#',''), 16);
+      const amt = Math.round(2.55 * percent);
+      const R = (num >> 16) + amt;
+      const G = (num >> 8 & 0x00FF) + amt;
+      const B = (num & 0x0000FF) + amt;
+      return '#' + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
+    };
+    const getContrastColor = hex => {
+      const rgb = toRgb(hex).split(',').map(Number);
+      const yiq = ((rgb[0]*299)+(rgb[1]*587)+(rgb[2]*114))/1000;
+      return yiq >= 150 ? '#0f172a' : '#ffffff';
+    };
+    const safe = {
+      rgb:      hex => (!hex || !hex.startsWith('#')) ? '99,102,241' : toRgb(hex),
+      adjust:   (hex, p) => (!hex || !hex.startsWith('#')) ? (p < 0 ? '#1e1b4b' : '#a5b4fc') : adjustColor(hex, p),
+      contrast: hex => (!hex || !hex.startsWith('#')) ? '#ffffff' : getContrastColor(hex),
+    };
+
+    const lv = lightV, dv = darkV;
+    const isDark = contextTheme === 'dark';
+
+    return `<!DOCTYPE html>
+<html lang="en" class="${isDark ? 'dark' : ''}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sample Corp — Home</title>
+<style>
+  :root {
+    --primary: ${lv.primary};
+    --on-primary: ${safe.contrast(lv.primary)};
+    --bg: ${lv.background};
+    --surface: ${lv.surface};
+    --text: ${lv.textPrimary};
+    --text-sub: ${lv.textSecondary};
+    --border: ${lv.border};
+    --danger: ${lv.danger};
+    --chip-bg: rgba(${safe.rgb(lv.primary)}, 0.12);
+    --hero-gradient: linear-gradient(135deg, ${safe.adjust(lv.primary, -30)} 0%, ${lv.primary} 55%, ${safe.adjust(lv.primary, 15)} 100%);
+    --shadow: 0 1px 4px rgba(15,23,42,.07);
+    --shadow-md: 0 6px 20px rgba(15,23,42,.09);
+    --radius: ${lv.borderRadius};
+    --font: ${lv.fontFamily};
+  }
+  html.dark {
+    --primary: ${dv.primary};
+    --on-primary: ${safe.contrast(dv.primary)};
+    --bg: ${dv.background};
+    --surface: ${dv.surface};
+    --text: ${dv.textPrimary};
+    --text-sub: ${dv.textSecondary};
+    --border: ${dv.border};
+    --danger: ${dv.danger};
+    --chip-bg: rgba(${safe.rgb(dv.primary)}, 0.18);
+    --hero-gradient: linear-gradient(135deg, ${safe.adjust(dv.primary, -30)} 0%, ${dv.primary} 55%, ${safe.adjust(dv.primary, 15)} 100%);
+    --shadow: 0 1px 4px rgba(0,0,0,.3);
+    --shadow-md: 0 6px 24px rgba(0,0,0,.4);
+    --radius: ${dv.borderRadius};
+    --font: ${dv.fontFamily};
+  }
+  *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); font-size: 14px; line-height: 1.6; background: var(--bg); color: var(--text); }
+  a { color: inherit; text-decoration: none; }
+
+  /* Nav */
+  nav { position: sticky; top: 0; z-index: 100; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .nav-inner { max-width: 1100px; margin: 0 auto; padding: 0 24px; height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .nav-brand { display: flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 800; color: var(--text); }
+  .nav-mark { width: 30px; height: 30px; border-radius: calc(var(--radius) * 0.8); background: var(--primary); color: var(--on-primary); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; flex-shrink: 0; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-links a { font-size: 13.5px; font-weight: 500; color: var(--text-sub); transition: color .15s; }
+  .nav-links a:hover { color: var(--primary); }
+  .nav-actions { display: flex; gap: 8px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: filter .15s, transform .1s; }
+  .btn-primary { background: var(--primary); color: var(--on-primary); }
+  .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* Hero */
+  .hero { background: var(--hero-gradient); color: #fff; padding: 80px 24px 96px; position: relative; overflow: hidden; }
+  .hero::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 75% 30%, rgba(255,255,255,.1), transparent 60%); pointer-events: none; }
+  .hero-inner { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; position: relative; z-index: 1; }
+  .hero-eyebrow { display: inline-flex; align-items: center; gap: 7px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); padding: 5px 13px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-bottom: 18px; }
+  .hero h1 { font-size: 40px; font-weight: 800; line-height: 1.12; letter-spacing: -.02em; margin-bottom: 16px; }
+  .hero p { font-size: 15px; color: rgba(255,255,255,.88); max-width: 440px; margin-bottom: 28px; }
+  .hero-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+  .hero .btn-primary { background: #fff; color: var(--primary); }
+  .hero .btn-ghost { border-color: rgba(255,255,255,.4); color: #fff; }
+  .hero .btn-ghost:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+  .hero-stats { display: flex; gap: 28px; margin-top: 36px; flex-wrap: wrap; }
+  .hero-stats div strong { display: block; font-size: 22px; font-weight: 800; }
+  .hero-stats div span { font-size: 12px; color: rgba(255,255,255,.7); }
+  .hero-visual { background: var(--surface); border: 1px solid rgba(255,255,255,.18); border-radius: 14px; padding: 14px; box-shadow: var(--shadow-md); color: var(--text); }
+  .mock-bar-top { display: flex; gap: 5px; padding: 8px 10px; background: var(--bg); border-radius: calc(var(--radius)*0.8); border: 1px solid var(--border); margin-bottom: 10px; align-items: center; }
+  .mock-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .mock-url { flex: 1; height: 7px; background: var(--border); border-radius: 3px; opacity: .6; }
+  .mock-lines { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+  .mock-line { height: 7px; background: var(--border); border-radius: 3px; opacity: .45; }
+  .mock-line.accent { background: var(--primary); opacity: .5; width: 55%; }
+  .mock-line.w70 { width: 70%; }
+  .mock-line.w85 { width: 85%; }
+  .mock-line.w50 { width: 50%; }
+  .mock-btn-row { display: flex; gap: 6px; margin-top: 8px; }
+  .mock-btn { height: 22px; border-radius: calc(var(--radius)*.75); background: var(--primary); opacity: .55; width: 60px; }
+  .mock-btn.ghost { background: transparent; border: 1px solid var(--border); opacity: .8; width: 48px; }
+
+  /* Logos / trust bar */
+  .trust { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); padding: 20px 24px; }
+  .trust-inner { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .trust-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-sub); flex-shrink: 0; }
+  .trust-logos { display: flex; gap: 20px; flex-wrap: wrap; }
+  .trust-logo { font-size: 12px; font-weight: 700; color: var(--text-sub); opacity: .55; letter-spacing: .03em; }
+
+  /* Features */
+  .features { max-width: 1100px; margin: 0 auto; padding: 72px 24px; }
+  .section-head { text-align: center; margin-bottom: 44px; }
+  .eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); display: block; margin-bottom: 10px; }
+  .section-head h2 { font-size: 30px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 10px; }
+  .section-head p { font-size: 14px; color: var(--text-sub); max-width: 500px; margin: 0 auto; }
+  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); transition: transform .2s, box-shadow .2s; }
+  .card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  .card-icon { width: 38px; height: 38px; border-radius: calc(var(--radius)*.8); background: var(--chip-bg); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 14px; }
+  .card h3 { font-size: 15px; font-weight: 700; margin-bottom: 7px; }
+  .card p { font-size: 13px; color: var(--text-sub); }
+
+  /* CTA band */
+  .cta { max-width: 1100px; margin: 0 auto 72px; padding: 0 24px; }
+  .cta-inner { background: var(--hero-gradient); border-radius: 16px; padding: 52px 40px; text-align: center; color: #fff; }
+  .cta-inner h2 { font-size: 26px; font-weight: 800; margin-bottom: 10px; }
+  .cta-inner p { color: rgba(255,255,255,.85); margin-bottom: 24px; font-size: 14px; }
+  .cta-inner .btn-primary { background: #fff; color: var(--primary); }
+  .cta-inner .btn-ghost { border-color: rgba(255,255,255,.4); color: #fff; }
+  .cta-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+  /* Footer */
+  footer { border-top: 1px solid var(--border); background: var(--surface); }
+  .footer-inner { max-width: 1100px; margin: 0 auto; padding: 40px 24px 28px; display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 32px; }
+  .footer-brand p { font-size: 12.5px; color: var(--text-sub); margin-top: 10px; max-width: 220px; line-height: 1.6; }
+  .footer-col h4 { font-size: 12px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+  .footer-col a { display: block; font-size: 12.5px; color: var(--text-sub); margin-bottom: 8px; transition: color .15s; }
+  .footer-col a:hover { color: var(--primary); }
+  .footer-bottom { max-width: 1100px; margin: 0 auto; padding: 16px 24px 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--text-sub); }
+  .chip { background: var(--chip-bg); color: var(--primary); font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+
+  /* Theme toggle */
+  #themeToggle { position: fixed; bottom: 16px; right: 14px; z-index: 999; width: 28px; height: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-sub); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; }
+
+  @media (max-width: 760px) {
+    .hero-inner { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 28px; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .footer-inner { grid-template-columns: 1fr 1fr; }
+    .nav-links { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <div class="nav-mark">S</div>
+      SampleCorp
+    </div>
+    <div class="nav-links">
+      <a href="#">Product</a>
+      <a href="#">Solutions</a>
+      <a href="#">Pricing</a>
+      <a href="#">Docs</a>
+      <a href="#">Blog</a>
+    </div>
+    <div class="nav-actions">
+      <a href="#" class="btn btn-ghost">Sign in</a>
+      <a href="#" class="btn btn-primary">Get started free</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="hero-eyebrow">✦ Now in public beta</div>
+      <h1>Build better products, ship with confidence</h1>
+      <p>SampleCorp gives your team one place to plan, design, and deliver — from first sketch to production release.</p>
+      <div class="hero-btns">
+        <a href="#" class="btn btn-primary">Start for free</a>
+        <a href="#" class="btn btn-ghost">Watch demo →</a>
+      </div>
+      <div class="hero-stats">
+        <div><strong>12k+</strong><span>Teams</span></div>
+        <div><strong>99.9%</strong><span>Uptime</span></div>
+        <div><strong>4.9★</strong><span>Rating</span></div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="mock-bar-top">
+        <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+        <div class="mock-url"></div>
+      </div>
+      <div class="mock-lines">
+        <div class="mock-line accent"></div>
+        <div class="mock-line w85"></div>
+        <div class="mock-line w70"></div>
+        <div class="mock-line w50"></div>
+        <div class="mock-line w85"></div>
+        <div class="mock-line w70"></div>
+      </div>
+      <div class="mock-btn-row">
+        <div class="mock-btn"></div>
+        <div class="mock-btn ghost"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="trust">
+  <div class="trust-inner">
+    <span class="trust-label">Trusted by teams at</span>
+    <div class="trust-logos">
+      <span class="trust-logo">ACME Inc.</span>
+      <span class="trust-logo">Verge Systems</span>
+      <span class="trust-logo">Nordly</span>
+      <span class="trust-logo">Dataflow Co.</span>
+      <span class="trust-logo">Brightline</span>
+    </div>
+  </div>
+</div>
+
+<div class="features">
+  <div class="section-head">
+    <span class="eyebrow">Features</span>
+    <h2>Everything your team needs</h2>
+    <p>From requirements to release — one connected workflow for modern product teams.</p>
+  </div>
+  <div class="feature-grid">
+    <div class="card">
+      <div class="card-icon">◈</div>
+      <h3>Design system</h3>
+      <p>Define tokens once, apply them everywhere. Keep design and code in sync automatically.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <h3>Sprint planning</h3>
+      <p>Drag-and-drop backlogs, automatic velocity tracking, and retrospective templates built in.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">◎</div>
+      <h3>Analytics</h3>
+      <p>Real-time dashboards show deployment frequency, lead time, and bug escape rates at a glance.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⊞</div>
+      <h3>Integrations</h3>
+      <p>Connect GitHub, Jira, Figma, and 40+ tools. Your workflow, your way.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">☁</div>
+      <h3>Cloud or self-hosted</h3>
+      <p>Deploy on our managed cloud or run on your own infrastructure with full data control.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🛡</div>
+      <h3>Enterprise security</h3>
+      <p>SSO, RBAC, audit logs, and SOC 2 Type II compliance out of the box.</p>
+    </div>
+  </div>
+</div>
+
+<div class="cta">
+  <div class="cta-inner">
+    <h2>Ready to move faster?</h2>
+    <p>Join 12,000+ teams already shipping with SampleCorp. Free for up to 5 members.</p>
+    <div class="cta-actions">
+      <a href="#" class="btn btn-primary">Start for free</a>
+      <a href="#" class="btn btn-ghost">Talk to sales</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="nav-brand"><div class="nav-mark">S</div> SampleCorp</div>
+      <p>The modern platform for product teams — plan, design, and ship in one place.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <a href="#">Features</a>
+      <a href="#">Pricing</a>
+      <a href="#">Changelog</a>
+      <a href="#">Roadmap</a>
+    </div>
+    <div class="footer-col">
+      <h4>Developers</h4>
+      <a href="#">Docs</a>
+      <a href="#">API reference</a>
+      <a href="#">SDKs</a>
+      <a href="#">Status</a>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <a href="#">About</a>
+      <a href="#">Blog</a>
+      <a href="#">Careers</a>
+      <a href="#">Legal</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 SampleCorp. All rights reserved.</span>
+    <div style="display:flex;gap:8px">
+      <span class="chip">SOC 2</span>
+      <span class="chip">GDPR</span>
+      <span class="chip">ISO 27001</span>
+    </div>
+  </div>
+</footer>
+
+<button id="themeToggle" title="Toggle theme">☀</button>
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('themeToggle');
+  function apply(d){ if(d){root.classList.add('dark');btn.textContent='☀';}else{root.classList.remove('dark');btn.textContent='☾';} }
+  apply(root.classList.contains('dark'));
+  btn.addEventListener('click',function(){ apply(!root.classList.contains('dark')); });
+})();
+</script>
+</body>
+</html>`;
   }
 }

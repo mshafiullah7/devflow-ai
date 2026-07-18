@@ -468,5 +468,25 @@
   padding: 3px 10px;
 }
 
+/* Group Refresh + Expand together and push them to the right as one unit */
+.sg-page__preview .sg-preview-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sg-page__preview .sg-preview-actions .scr-btn {
+  margin-left: 0;
+}
+
+/* Expand / focus mode — hide editor panes, preview fills the editor */
+.sg-page__editor--expanded .scr-ds-templates,
+.sg-page__editor--expanded .sg-ai-card {
+  display: none !important;
+}
+.sg-page__editor--expanded .scr-ds-preview-panel {
+  flex: 1 1 auto !important;
+}
+
 
 
