@@ -9,25 +9,6 @@
   min-width: 180px;
 }
 
-/* CLI working-directory indicator, shown before the header's model picker */
-.pl-header-cwd {
-  display: inline-flex;
-  align-items: center;
-  max-width: 320px;
-  padding: 3px 9px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-hover);
-  color: var(--text-muted);
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  direction: rtl;
-  text-align: left;
-}
-
 #plPanelList .project-related__section-hd {
   height: 40px;
   padding: 0 10px;
@@ -159,6 +140,26 @@
   -webkit-app-region: no-drag;
 }
 .pl-browse-btn:hover { background: var(--surface-hover); color: var(--accent); border-color: var(--accent); }
+
+/* Header "Export" button, shown before the AI Model picker */
+.pl-header-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  -webkit-app-region: no-drag;
+}
+.pl-header-export-btn:hover { background: var(--surface-hover); color: var(--accent); border-color: var(--accent); }
 
 /* ── Generate Layers Modal ──────────────────────────────────────────── */
 .pl-modal-overlay {

@@ -262,6 +262,8 @@ contextBridge.exposeInMainWorld('app', {
   writeTempFiles:   (files)       => invoke('app:writeTempFiles', files),
   deleteTempDir:    (dirPath)     => invoke('app:deleteTempDir', dirPath),
   exportPdf:        (data)        => invoke('app:export-pdf', data),
+  exportPng:        (data)        => invoke('app:export-png', data),
+  exportPngBatch:   (data)        => invoke('app:export-png-batch', data),
   chat: {
     generate: (data) => ipcRenderer.invoke('chat:generate', data),
     cancel:   ()     => ipcRenderer.invoke('chat:cancel'),

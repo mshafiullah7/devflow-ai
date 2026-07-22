@@ -6,6 +6,53 @@ const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const { spawn } = require('node:child_process');
 
+// Loads `html` in a hidden window, hides off-screen/invisible elements (see
+// note in app:export-pdf below), resizes to the content's natural height so
+// the whole screen is captured in one shot (no scrolling/pagination), and
+// returns a PNG buffer.
+async function captureHtmlAsPng(html, width) {
+  const os   = require('node:os');
+  const path = require('node:path');
+  const tmpFile = path.join(os.tmpdir(), `_png_export_${Date.now()}_${Math.random().toString(36).slice(2)}.html`);
+  await fs.writeFile(tmpFile, html, 'utf-8');
+
+  const hidden = new BrowserWindow({
+    show: false,
+    width,
+    height: 800,
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  });
+  await hidden.loadFile(tmpFile);
+  await hidden.webContents.executeJavaScript(`
+    document.querySelectorAll('body *').forEach(el => {
+      const cs = getComputedStyle(el);
+      if (cs.opacity === '0' || cs.visibility === 'hidden') {
+        el.style.setProperty('display', 'none', 'important');
+        return;
+      }
+      if (cs.position === 'fixed' || cs.position === 'absolute') {
+        const r = el.getBoundingClientRect();
+        const offscreen = r.width > 0 && r.height > 0 &&
+          (r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth);
+        if (offscreen) el.style.setProperty('display', 'none', 'important');
+      }
+    });
+    true;
+  `);
+
+  const fullHeight = await hidden.webContents.executeJavaScript(
+    'Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)'
+  );
+  hidden.setContentSize(width, Math.max(200, Math.min(Math.ceil(fullHeight), 20000)));
+  // Give layout a moment to settle at the new size before capturing.
+  await new Promise(r => setTimeout(r, 80));
+
+  const image = await hidden.webContents.capturePage();
+  hidden.close();
+  try { await fs.unlink(tmpFile); } catch {}
+  return image.toPNG();
+}
+
 function registerDialogHandlers() {
   safeHandle('dialog:openFolder', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -83,6 +130,29 @@ function registerDialogHandlers() {
       webPreferences: { nodeIntegration: false, contextIsolation: true },
     });
     await hidden.loadFile(tmpFile);
+    // Dismissible modals/sheets/drawers in generated screens are usually kept
+    // out of view with opacity:0 or a transform pushing them past the
+    // viewport edge, not display:none. Chromium's print pagination renders
+    // the full document height rather than clipping to the viewport, so
+    // those "closed" elements can reappear as extra content near the bottom
+    // of the PDF. Hide anything that's invisible or fully off-screen before
+    // printing, mirroring what the live viewport already hides visually.
+    await hidden.webContents.executeJavaScript(`
+      document.querySelectorAll('body *').forEach(el => {
+        const cs = getComputedStyle(el);
+        if (cs.opacity === '0' || cs.visibility === 'hidden') {
+          el.style.setProperty('display', 'none', 'important');
+          return;
+        }
+        if (cs.position === 'fixed' || cs.position === 'absolute') {
+          const r = el.getBoundingClientRect();
+          const offscreen = r.width > 0 && r.height > 0 &&
+            (r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth);
+          if (offscreen) el.style.setProperty('display', 'none', 'important');
+        }
+      });
+      true;
+    `);
     const pdfData = await hidden.webContents.printToPDF({
       printBackground: true,
       pageSize: 'A4',
@@ -92,6 +162,39 @@ function registerDialogHandlers() {
     try { await fs.unlink(tmpFile); } catch {}
     await fs.writeFile(result.filePath, pdfData);
     return { success: true };
+  });
+
+  safeHandle('app:export-png', async (event, { html, filename, platform }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Export to PNG',
+      defaultPath: `${filename || 'screen'}.png`,
+      filters: [{ name: 'PNG Images', extensions: ['png'] }],
+    });
+    if (result.canceled || !result.filePath) return { success: false };
+
+    const width = (platform === 'flutter' || platform === 'android') ? 430 : 1280;
+    const png = await captureHtmlAsPng(html, width);
+    await fs.writeFile(result.filePath, png);
+    return { success: true };
+  });
+
+  safeHandle('app:export-png-batch', async (event, { screens, platform }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory'],
+      title: 'Choose Folder for Exported Screens',
+    });
+    if (result.canceled || result.filePaths.length === 0) return { success: false };
+
+    const path   = require('node:path');
+    const folder = result.filePaths[0];
+    const width  = (platform === 'flutter' || platform === 'android') ? 430 : 1280;
+    for (const s of screens) {
+      const png = await captureHtmlAsPng(s.html, width);
+      await fs.writeFile(path.join(folder, `${s.filename}.png`), png);
+    }
+    return { success: true, folder, count: screens.length };
   });
 
   safeHandle('shell:openVSCode', (_e, folderPath) => {

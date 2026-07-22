@@ -98,6 +98,8 @@ export class MockupsPage {
     this._editingId       = null;
     this._screenTemplates = [];
     this._aiRunning       = false;
+    this._exportMenuOpen  = false;
+    this._handleExportMenuOutside = this._handleExportMenuOutside.bind(this);
   }
 
   async mount() {
@@ -163,6 +165,7 @@ export class MockupsPage {
 
   unmount() {
     this.router.clearNavigationGuard();
+    document.removeEventListener('click', this._handleExportMenuOutside, true);
     removeCss('pages/mockups/mockups-page.css');
     removeCss('styles/screens.css');
     removeCss('components/project-sidebar/project-sidebar.css');
@@ -270,12 +273,13 @@ export class MockupsPage {
             <div class="mockups-page__body">
               <aside class="scr-sidebar">
                 <div class="scr-sidebar__toolbar">
-                  <button class="scr-sidebar__add" id="scrNewBtn">
+                  <button class="scr-sidebar__add scr-btn scr-btn--sm scr-btn--primary" id="scrNewBtn">
                     <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                       <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                     </svg>
                     New Screen
                   </button>
+                  <div class="scr-export-picker" id="scrExportPickerAnchor"></div>
                 </div>
                 <div class="scr-sidebar__list" id="scrList">${this._renderList()}</div>
               </aside>
@@ -313,6 +317,126 @@ export class MockupsPage {
     this._bindSidebarItems();
   }
 
+  // ----------------------------------------------------------------
+  // Export dropdown — "Current Screen" / "All Screens" to PNG
+  // ----------------------------------------------------------------
+  _renderExportPicker() {
+    const anchor = this.container.querySelector('#scrExportPickerAnchor');
+    if (!anchor) return;
+
+    const open = this._exportMenuOpen;
+    anchor.innerHTML = `
+      <div class="scr-export-picker__wrap">
+        <button class="scr-export-picker__trigger scr-btn scr-btn--sm scr-btn--secondary" type="button" id="scrExportTrigger"
+                aria-haspopup="listbox" aria-expanded="${open}">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Export</span>
+          <svg class="scr-export-picker__caret${open ? ' scr-export-picker__caret--open' : ''}"
+               width="10" height="10" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        ${open ? `
+          <div class="scr-export-picker__menu" role="listbox">
+            <button class="scr-export-picker__item" data-action="current" role="option" type="button">Current Screen (PNG)</button>
+            <button class="scr-export-picker__item" data-action="all" role="option" type="button">All Screens (PNG)</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    anchor.querySelector('#scrExportTrigger').addEventListener('click', e => {
+      e.stopPropagation();
+      this._exportMenuOpen = !this._exportMenuOpen;
+      if (this._exportMenuOpen) document.addEventListener('click', this._handleExportMenuOutside, true);
+      else                      document.removeEventListener('click', this._handleExportMenuOutside, true);
+      this._renderExportPicker();
+    });
+
+    if (open) {
+      anchor.querySelectorAll('.scr-export-picker__item').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          this._closeExportMenu();
+          if (btn.dataset.action === 'current') this._exportCurrentScreenPng();
+          else                                   this._exportAllScreensPng();
+        });
+      });
+    }
+  }
+
+  _handleExportMenuOutside(e) {
+    const anchor = this.container.querySelector('#scrExportPickerAnchor');
+    if (anchor && !anchor.contains(e.target)) this._closeExportMenu();
+  }
+
+  _closeExportMenu() {
+    this._exportMenuOpen = false;
+    document.removeEventListener('click', this._handleExportMenuOutside, true);
+    this._renderExportPicker();
+  }
+
+  async _exportCurrentScreenPng() {
+    if (!this._activeId) {
+      await Dialog.alert('No screen selected.');
+      return;
+    }
+    const screen = await window.db.screenDesigns.get(this._activeId);
+    if (!screen?.html_content) {
+      await Dialog.alert('No HTML content to export. Generate a mockup first.');
+      return;
+    }
+    await this._withExportSpinner(async () => {
+      const safe = (s) => (s || '').replace(/[^a-z0-9_\-]/gi, '_');
+      await window.app.exportPng({
+        html:     screen.html_content,
+        filename: safe(screen.title || 'screen'),
+        platform: this._project?.target_platform || 'web',
+      });
+    });
+  }
+
+  async _exportAllScreensPng() {
+    const screens     = await window.db.screenDesigns.list(this._projectId);
+    const withContent = screens
+      .filter(s => s.html_content && s.html_content.trim())
+      .sort((a, b) => a.id - b.id);
+    if (!withContent.length) {
+      await Dialog.alert('No generated screens to export. Generate at least one mockup first.');
+      return;
+    }
+    await this._withExportSpinner(async () => {
+      const safe = (s) => (s || '').replace(/[^a-z0-9_\-]/gi, '_');
+      const usedNames = new Set();
+      const pad = (n) => String(n).padStart(2, '0');
+      const payload = withContent.map((s, i) => {
+        let name = `${pad(i + 1)}_${safe(s.title || 'screen')}`;
+        while (usedNames.has(name)) name = `${name}_${s.id}`;
+        usedNames.add(name);
+        return { html: s.html_content, filename: name };
+      });
+      await window.app.exportPngBatch({
+        screens:  payload,
+        platform: this._project?.target_platform || 'web',
+      });
+    });
+  }
+
+  async _withExportSpinner(fn) {
+    const trigger = this.container.querySelector('#scrExportTrigger');
+    const origHtml = trigger?.innerHTML;
+    if (trigger) { trigger.disabled = true; trigger.textContent = 'Exporting…'; }
+    try {
+      await fn();
+    } finally {
+      if (trigger) { trigger.disabled = false; trigger.innerHTML = origHtml; }
+    }
+  }
+
   _bindSidebarItems() {
     this.container.querySelectorAll('.scr-sidebar__item').forEach(el => {
       el.addEventListener('click', async () => {
@@ -333,6 +457,8 @@ export class MockupsPage {
 
     this.container.querySelector('#scrNewBtn')
       .addEventListener('click', () => this._showNewScreenModal());
+
+    this._renderExportPicker();
 
     this.container.querySelector('#scrStyleGuideBtn')
       .addEventListener('click', () => {

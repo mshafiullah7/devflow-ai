@@ -1169,3 +1169,62 @@
   padding-bottom: 8px;
 }
 
+/* ------------------------------------------------------------------ */
+/* Sidebar export dropdown — "Current Screen" / "All Screens" to PNG   */
+/* Trigger reuses the shared .scr-btn look (same as "Export HTML" in    */
+/* the screen viewer toolbar) so it's as noticeable as other actions.  */
+/* ------------------------------------------------------------------ */
+.scr-export-picker {
+  flex-shrink: 0;
+}
+
+.scr-export-picker__wrap {
+  position: relative;
+  display: inline-flex;
+  height: 100%;
+}
+
+.scr-export-picker__trigger {
+  height: 100%;
+}
+
+.scr-export-picker__caret {
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: transform 0.15s;
+}
+.scr-export-picker__caret--open {
+  transform: rotate(180deg);
+}
+
+.scr-export-picker__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 300;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.24);
+}
+
+.scr-export-picker__item {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.scr-export-picker__item:hover {
+  background: rgba(var(--accent-rgb, 99, 102, 241), 0.1);
+  color: var(--accent);
+}
+

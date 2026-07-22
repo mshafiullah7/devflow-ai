@@ -87,27 +87,14 @@
 .scr-sidebar__toolbar {
   padding: 10px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .scr-sidebar__add {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  width: 100%;
-  padding: 5px 10px;
-  background: transparent;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.scr-sidebar__add:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: rgba(var(--accent-rgb, 99, 102, 241), 0.06);
+  flex: 1;
+  justify-content: center;
 }
 
 .scr-sidebar__list {

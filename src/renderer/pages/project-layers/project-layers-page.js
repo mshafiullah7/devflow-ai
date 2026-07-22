@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }      from '../../components/model-picker/model-picker.js';
 import { ProjectSidebar }   from '../../components/project-sidebar/project-sidebar.js';
+import { Dialog }           from '../../components/dialog/dialog.js';
 
 // scaffold_structure is stored as a JSON array of folder paths; the edit form
 // shows/accepts it as one path per line.
@@ -118,7 +119,13 @@ export class ProjectLayersPage {
           </div>
           <span class="ph-header-page-chip">Project Layers</span>
           <div class="ph-header-actions">
-            <span class="pl-header-cwd" id="plHeaderCwd" hidden title="The CLI will run in this folder"></span>
+            <button class="pl-header-export-btn" id="plExportBtn" type="button" title="Export the Edit Layer data as Markdown">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Export
+            </button>
             <div id="plModelPicker"></div>
           </div>
         </header>
@@ -196,6 +203,9 @@ export class ProjectLayersPage {
     this.container.querySelector('#plBtnAdd')
       .addEventListener('click', () => this._showAddDetail());
 
+    this.container.querySelector('#plExportBtn')
+      .addEventListener('click', () => this._exportLayerMarkdown());
+
     document.addEventListener('keydown', this._onKeyDown = (e) => {
       if (e.target.matches('input, textarea, select, [contenteditable]')) return;
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'n' || e.key === 'N')) {
@@ -203,6 +213,55 @@ export class ProjectLayersPage {
         this._showAddDetail();
       }
     });
+  }
+
+  // ----------------------------------------------------------------
+  // Header — export the currently open Edit/New Layer form as Markdown
+  // ----------------------------------------------------------------
+  async _exportLayerMarkdown() {
+    const nameEl     = this.container.querySelector('#plFormName');
+    const descEl     = this.container.querySelector('#plFormDesc');
+    const setupEl    = this.container.querySelector('#plFormSetup');
+    const scaffoldEl = this.container.querySelector('#plFormScaffold');
+    const folderEl   = this.container.querySelector('#plFolderValue');
+
+    if (!nameEl) {
+      await Dialog.alert('Open a layer (New Layer or an existing one) before exporting.');
+      return;
+    }
+
+    const name        = nameEl.value.trim();
+    const description = descEl?.value.trim()     || '';
+    const setup       = setupEl?.value.trim()     || '';
+    const scaffold    = scaffoldEl?.value.trim()  || '';
+    const folderPath  = folderEl?.value.trim()    || '';
+
+    if (!name) {
+      await Dialog.alert('Enter a Layer Name before exporting.');
+      return;
+    }
+
+    const md = `# ${name} — Layer Details\n\n`
+      + `## Description\n\n${description || '_None_'}\n\n`
+      + `## Project Setup Instructions\n\n\`\`\`\n${setup}\n\`\`\`\n\n`
+      + `## Scaffold Structure\n\n\`\`\`\n${scaffold}\n\`\`\`\n\n`
+      + `## Project Folder Path\n\n${folderPath || '_Not set_'}\n`;
+
+    const folder = await window.db.dialog.openFolder();
+    if (!folder) return;
+
+    const safeName = name.replace(/[^a-z0-9_\-]/gi, '_');
+    const fileName = `${safeName}_Layer.md`;
+    const filePath = `${folder}\\${fileName}`;
+
+    const existing = await window.shell.readFile(filePath);
+    if (existing) {
+      const overwrite = await Dialog.confirm(`${fileName} already exists. Overwrite it?`, { title: 'File Already Exists', confirmText: 'Overwrite', danger: true });
+      if (!overwrite) return;
+    }
+
+    await window.shell.writeFile(filePath, md);
+    await Dialog.alert(`File saved as ${fileName}`, { title: 'Export Successful' });
   }
 
   // ----------------------------------------------------------------
@@ -333,21 +392,6 @@ export class ProjectLayersPage {
   }
 
   // ----------------------------------------------------------------
-  // Header — CLI working-directory indicator, shown before the model picker
-  // ----------------------------------------------------------------
-  _updateHeaderCwd(folderPath) {
-    const el = this.container.querySelector('#plHeaderCwd');
-    if (!el) return;
-    if (folderPath) {
-      el.hidden = false;
-      el.textContent = folderPath;
-    } else {
-      el.hidden = true;
-      el.textContent = '';
-    }
-  }
-
-  // ----------------------------------------------------------------
   // Right panel — empty state
   // ----------------------------------------------------------------
   _showEmptyDetail() {
@@ -369,7 +413,6 @@ export class ProjectLayersPage {
       </div>`;
     const actions = this.container.querySelector('#plDetailHeaderActions');
     if (actions) actions.innerHTML = '';
-    this._updateHeaderCwd('');
   }
 
   // ----------------------------------------------------------------
@@ -391,7 +434,6 @@ export class ProjectLayersPage {
     if (actions) actions.innerHTML = `<button class="is-form__btn" id="plFormSave">Add Layer</button>`;
     this._bindDetailFormEvents(el, null);
     el.querySelector('#plFormName')?.focus();
-    this._updateHeaderCwd('');
   }
 
   // ----------------------------------------------------------------
@@ -405,7 +447,6 @@ export class ProjectLayersPage {
     el.innerHTML = this._detailFormHtml(layer);
     if (actions) actions.innerHTML = `<button class="is-form__btn" id="plFormSave">Save Changes</button>`;
     this._bindDetailFormEvents(el, layer);
-    this._updateHeaderCwd(layer?.folder_path || '');
   }
 
   // ----------------------------------------------------------------
@@ -512,7 +553,6 @@ export class ProjectLayersPage {
       folderText.textContent = folderPath;
       folderText.classList.remove('pl-folder-text--empty');
       folderPill.classList.add('pl-folder-pill--set');
-      this._updateHeaderCwd(folderPath);
     };
     browseBtn?.addEventListener('click', pickFolder);
     folderPill?.addEventListener('click', pickFolder);
