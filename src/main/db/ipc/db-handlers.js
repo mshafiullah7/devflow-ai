@@ -1206,20 +1206,21 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM project_layers WHERE id = ?').get(id);
   });
 
-  safeHandle('db:project_layers:create', (_e, { project_id, name, description, folder_path, setup_instructions, sort_order }) => {
+  safeHandle('db:project_layers:create', (_e, { project_id, name, description, folder_path, setup_instructions, scaffold_structure, sort_order }) => {
     const result = db
-      .prepare('INSERT INTO project_layers (project_id, name, description, folder_path, setup_instructions, sort_order) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(project_id, name, description ?? null, folder_path ?? null, setup_instructions ?? null, sort_order ?? 0);
+      .prepare('INSERT INTO project_layers (project_id, name, description, folder_path, setup_instructions, scaffold_structure, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(project_id, name, description ?? null, folder_path ?? null, setup_instructions ?? null, scaffold_structure ?? null, sort_order ?? 0);
     return db.prepare('SELECT * FROM project_layers WHERE id = ?').get(result.lastInsertRowid);
   });
 
-  safeHandle('db:project_layers:update', (_e, { id, name, description, folder_path, setup_instructions, sort_order }) => {
+  safeHandle('db:project_layers:update', (_e, { id, name, description, folder_path, setup_instructions, scaffold_structure, sort_order }) => {
     db.prepare(
       `UPDATE project_layers
           SET name               = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
               description        = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
               folder_path        = CASE WHEN ? IS NOT NULL THEN ? ELSE folder_path END,
               setup_instructions = CASE WHEN ? IS NOT NULL THEN ? ELSE setup_instructions END,
+              scaffold_structure = CASE WHEN ? IS NOT NULL THEN ? ELSE scaffold_structure END,
               sort_order         = CASE WHEN ? IS NOT NULL THEN ? ELSE sort_order END,
               updated_at         = datetime('now')
         WHERE id = ?`
@@ -1228,6 +1229,7 @@ function registerDbHandlers() {
       description ?? null, description ?? null,
       folder_path ?? null, folder_path ?? null,
       setup_instructions ?? null, setup_instructions ?? null,
+      scaffold_structure ?? null, scaffold_structure ?? null,
       sort_order ?? null, sort_order ?? null,
       id
     );

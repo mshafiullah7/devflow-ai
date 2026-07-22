@@ -5,42 +5,6 @@
  * @param {import('better-sqlite3').Database} db
  */
 function applySchema(db) {
-  // Safe column migrations — silently ignored if column already exists
-  const migrations = [
-    `ALTER TABLE projects ADD COLUMN design_template TEXT`,
-    `ALTER TABLE screen_designs ADD COLUMN queued       INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE screen_designs ADD COLUMN executed     INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE screen_designs ADD COLUMN style_valid  INTEGER`,
-    `ALTER TABLE screen_designs ADD COLUMN style_issues TEXT`,
-    `ALTER TABLE project_layers ADD COLUMN sort_order          INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE project_layers ADD COLUMN setup_instructions  TEXT`,
-    `ALTER TABLE prompt_queue ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
-    `ALTER TABLE issues       ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
-    `ALTER TABLE document_templates ADD COLUMN group_name TEXT NOT NULL DEFAULT 'General'`,
-    // Status tracking for workflow layers and workflows
-    `ALTER TABLE layers    ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
-    `ALTER TABLE workflows ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
-    // Dart file path generated from the UI Shell workflow
-    `ALTER TABLE screen_designs ADD COLUMN dart_file_path TEXT`,
-    // Workflow type: 'ui_shell' | 'feature'
-    `ALTER TABLE workflows ADD COLUMN workflow_type TEXT NOT NULL DEFAULT 'feature'`,
-    // CLI model config: batch-mode extra flags and configurable skip-permissions flag
-    `ALTER TABLE model_configs ADD COLUMN batch_flags     TEXT`,
-    `ALTER TABLE model_configs ADD COLUMN skip_perms_flag TEXT`,
-    `ALTER TABLE issues            ADD COLUMN type     TEXT NOT NULL DEFAULT 'issue'`,
-    `ALTER TABLE test_run_history  ADD COLUMN coverage REAL`,
-    `ALTER TABLE test_run_history  ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
-    `ALTER TABLE projects ADD COLUMN start_date TEXT`,
-    `ALTER TABLE projects ADD COLUMN end_date   TEXT`,
-    // Mockup generation target: 'web' | 'flutter' | 'android'
-    `ALTER TABLE projects ADD COLUMN target_platform TEXT NOT NULL DEFAULT 'web'`,
-    // Which platform a saved theme's component language was tuned for: 'web' | 'mobile'
-    `ALTER TABLE saved_themes ADD COLUMN category TEXT NOT NULL DEFAULT 'web'`,
-  ];
-  for (const sql of migrations) {
-    try { db.exec(sql); } catch {}
-  }
-
   db.exec(`
     PRAGMA foreign_keys = ON;
 
@@ -319,6 +283,7 @@ function applySchema(db) {
       description         TEXT,
       folder_path         TEXT,
       setup_instructions  TEXT,
+      scaffold_structure  TEXT,
       sort_order  INTEGER NOT NULL DEFAULT 0,
       is_active   INTEGER NOT NULL DEFAULT 1,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -424,6 +389,43 @@ function applySchema(db) {
     END;
 
   `);
+
+  // Safe column migrations — silently ignored if column already exists.
+  // Must run after the CREATE TABLE block above so ALTER TABLE targets exist on a fresh DB.
+  const migrations = [
+    `ALTER TABLE projects ADD COLUMN design_template TEXT`,
+    `ALTER TABLE screen_designs ADD COLUMN queued       INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE screen_designs ADD COLUMN executed     INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE screen_designs ADD COLUMN style_valid  INTEGER`,
+    `ALTER TABLE screen_designs ADD COLUMN style_issues TEXT`,
+    `ALTER TABLE project_layers ADD COLUMN sort_order          INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE project_layers ADD COLUMN setup_instructions  TEXT`,
+    `ALTER TABLE prompt_queue ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
+    `ALTER TABLE issues       ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
+    `ALTER TABLE document_templates ADD COLUMN group_name TEXT NOT NULL DEFAULT 'General'`,
+    // Status tracking for workflow layers and workflows
+    `ALTER TABLE layers    ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
+    `ALTER TABLE workflows ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`,
+    // Dart file path generated from the UI Shell workflow
+    `ALTER TABLE screen_designs ADD COLUMN dart_file_path TEXT`,
+    // Workflow type: 'ui_shell' | 'feature'
+    `ALTER TABLE workflows ADD COLUMN workflow_type TEXT NOT NULL DEFAULT 'feature'`,
+    // CLI model config: batch-mode extra flags and configurable skip-permissions flag
+    `ALTER TABLE model_configs ADD COLUMN batch_flags     TEXT`,
+    `ALTER TABLE model_configs ADD COLUMN skip_perms_flag TEXT`,
+    `ALTER TABLE issues            ADD COLUMN type     TEXT NOT NULL DEFAULT 'issue'`,
+    `ALTER TABLE test_run_history  ADD COLUMN coverage REAL`,
+    `ALTER TABLE test_run_history  ADD COLUMN layer_id INTEGER REFERENCES project_layers(id) ON DELETE SET NULL`,
+    `ALTER TABLE projects ADD COLUMN start_date TEXT`,
+    `ALTER TABLE projects ADD COLUMN end_date   TEXT`,
+    // Mockup generation target: 'web' | 'flutter' | 'android'
+    `ALTER TABLE projects ADD COLUMN target_platform TEXT NOT NULL DEFAULT 'web'`,
+    // Which platform a saved theme's component language was tuned for: 'web' | 'mobile'
+    `ALTER TABLE saved_themes ADD COLUMN category TEXT NOT NULL DEFAULT 'web'`,
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch {}
+  }
 }
 
 /**
@@ -435,20 +437,90 @@ function seedModelConfigs(db) {
   if (count > 0) return;
 
   const insert = db.prepare(`
-    INSERT INTO model_configs (label, type, executable, flags, input_mode, is_default, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const insertOllama = db.prepare(`
-    INSERT INTO model_configs (label, type, base_url, model_name, input_mode, is_default, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   db.transaction(() => {
-    insert.run('Claude CLI',  'cli', 'claude',  '--dangerously-skip-permissions --print', 'pipe', 1, 0);
-    insert.run('Gemini CLI',  'cli', 'gemini',  '', 'pipe', 0, 1);
-    insert.run('Mistral CLI', 'cli', 'mistral', '', 'pipe', 0, 2);
-    insertOllama.run('Ollama (phi4-mini)', 'ollama', 'http://localhost:11434', 'phi4-mini:latest', 'pipe', 0, 3);
+    const { lastInsertRowid: id } = insert.run(
+      'Claude Haiku General Purpose', 'cli', 'claude', 'claude-haiku-4-5',
+      `--model {{model}} '@{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`,
+      'pipe', 1, 0, '', ''
+    );
+
+    const upsertMapping = db.prepare(`
+      INSERT INTO model_mapping (page_key, model_config_id, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(page_key) DO UPDATE SET model_config_id = excluded.model_config_id, updated_at = excluded.updated_at
+    `);
+    for (const pageKey of ['documents', 'project-layers', 'ai-console', 'style-guide']) {
+      upsertMapping.run(pageKey, id);
+    }
+
+    const { lastInsertRowid: sonnetId } = insert.run(
+      'Claude Sonnet General Purpose', 'cli', 'claude', 'claude-sonnet-5',
+      `--model {{model}} '@{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`,
+      'pipe', 0, 1, '', ''
+    );
+    for (const pageKey of ['mockups', 'generate-workflows']) {
+      upsertMapping.run(pageKey, sonnetId);
+    }
+
+    // General coding configs — full tool access, unlike the tool-restricted Q&A
+    // defaults above. batch_flags/skip_perms_flag left NULL: Run All is disabled
+    // for now, and Run Layers/Run Issues already have their own per-run
+    // "skip permissions" toggle (falls back to --dangerously-skip-permissions
+    // when this field is NULL — see wfr-pty-handlers.js).
+    const CODE_FLAGS = `--model {{model}} '@{{prompt}}'`;
+
+    const { lastInsertRowid: haikuCodeId } = insert.run(
+      'Claude Haiku Code', 'cli', 'claude', 'claude-haiku-4-5',
+      CODE_FLAGS, 'pipe', 0, 2, null, null
+    );
+    for (const pageKey of ['test-generator']) {
+      upsertMapping.run(pageKey, haikuCodeId);
+    }
+
+    const { lastInsertRowid: sonnetCodeId } = insert.run(
+      'Claude Sonnet Code', 'cli', 'claude', 'claude-sonnet-5',
+      CODE_FLAGS, 'pipe', 0, 3, null, null
+    );
+    for (const pageKey of ['workflows', 'workflow-runner', 'issue-runner', 'issues']) {
+      upsertMapping.run(pageKey, sonnetCodeId);
+    }
+
+    // Gemini (agy CLI) configs — intentionally left unmapped to any page.
+    // Two labels are the same by design ("Gemini Flash High General Purpose" ×2,
+    // one --sandbox, one not), so they're inserted positionally, not by label lookup.
+    const geminiInsert = db.prepare(`
+      INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
+      VALUES (?, 'cli', 'agy', ?, ?, 'pipe', 0, ?, NULL, NULL)
+    `);
+    geminiInsert.run('Gemini Flash Medium General Purpose', 'Gemini 3.5 Flash (Medium)', `--sandbox -p "{{prompt}}" --model {{model}}`, 4);
+    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `--sandbox -p "{{prompt}}" --model {{model}}`, 5);
+    geminiInsert.run('Gemini Flash Medium Code',            'Gemini 3.5 Flash (Medium)', `-p "{{prompt}}" --model {{model}}`, 6);
+    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `-p "{{prompt}}" --model {{model}}`, 7);
+
+    // Non-CLI reference configs (Ollama / Groq via OpenAI-compatible API / Anthropic API) —
+    // intentionally left unmapped to any page; illustrate the range of supported
+    // configurations (local model, third-party API, first-party API, agentic
+    // devflow-agent loop vs single-shot prompt).
+    const nonCliInsert = db.prepare(`
+      INSERT INTO model_configs (label, type, base_url, model_name, max_tokens, input_mode, is_default, sort_order, use_devflow_agent)
+      VALUES (?, ?, ?, ?, ?, 'pipe', 0, ?, ?)
+    `);
+    nonCliInsert.run('Ollama General Purpose', 'ollama', 'http://localhost:11434', 'phi4-mini:latest', null, 8,  0);
+    nonCliInsert.run('Ollama Code',            'ollama', 'http://localhost:11434', 'qwen2.5-coder:7b', null, 9,  1);
+    nonCliInsert.run('Groq General Purpose',   'api',    'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile', null, 10, 0);
+    nonCliInsert.run('Groq Code',              'api',    'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile', null, 11, 1);
+    nonCliInsert.run('[API] Claude Haiku General Purpose',    'anthropic', null, 'claude-haiku-4-5', null, 12, 0);
+    nonCliInsert.run('[API] Claude Sonnet 5 General Purpose', 'anthropic', null, 'claude-sonnet-5',  null, 13, 0);
+    nonCliInsert.run('[API] Claude Sonnet 5 Code',            'anthropic', null, 'claude-sonnet-5',  null, 14, 1);
+
+    // Heavy-code-tier gap fillers — strongest Groq/Ollama picks for the agentic
+    // Run Layers/Run Issues workload, distinct from the general-purpose 70B picks above.
+    nonCliInsert.run('Groq Code (DeepSeek R1 70B)',     'api',    'https://api.groq.com/openai/v1', 'deepseek-r1-distill-llama-70b', null, 15, 1);
+    nonCliInsert.run('Ollama Code (DeepSeek Coder V2)', 'ollama', 'http://localhost:11434',          'deepseek-coder-v2',             null, 16, 1);
   })();
 }
 

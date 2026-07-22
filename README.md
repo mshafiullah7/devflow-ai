@@ -29,8 +29,10 @@ DevFlow AI helps you structure, document, and execute software projects with AI 
 - Track **bugs and issues** with severity, status, and AI-assisted analysis
 - **Generate and run tests** across Flutter, Python, .NET, Java, Go, Ruby, and JS/TS
 - View **git changes** across all layers from a single screen
-- Chat with AI in the context of your project's documents and issues
-- Queue and batch-run **AI prompts** with plan-and-approve execution
+- Chat with AI using **Smart Context** — the model queries your project data on-device via generated SQL
+- Run **security scans** per layer with history tracking
+- Batch-run AI fixes across issues with the **Issue Runner**
+- Work in an embedded **Terminal** with live git status per project layer
 
 Everything runs locally. Data is stored in a SQLite database on your machine. No account or internet connection is required unless using a cloud AI API.
 
@@ -45,9 +47,10 @@ DevFlow AI covers **6 of the 7 standard SDLC phases**. CI/CD (automated pipeline
 | **Planning** | Full | Projects, layers, documents, AI architecture generation |
 | **Requirements** | Full | Documents (PRD, specs), issues, templates |
 | **System Design** | Full | Architecture docs, mockups, style guide, draw.io diagrams |
-| **Implementation** | Full | Prompt queue, AI workflows, AI console, git integration |
-| **Testing** | Full | Test generator (multi-language), test runner (multi-framework) |
-| **Maintenance** | Full | Issue tracker (severity/status), AI-assisted bug analysis |
+| **Implementation** | Full | AI workflows, AI console (Smart Context), git integration, embedded terminal |
+| **Testing** | Full | Test generator with built-in multi-framework test execution |
+| **Security** | Full | Per-layer security scans with history tracking |
+| **Maintenance** | Full | Issue tracker (severity/status/type), Issue Runner for batch AI fixes |
 | **CI/CD / Deployment** | Not covered | Use GitHub Actions, GitLab CI, or similar external tools |
 
 ---
@@ -84,7 +87,7 @@ Define the sub-projects or deployment units that make up your system (e.g. Front
 - Each layer stores: name, description, setup instructions, folder path
 - **AI generation**: select project documents → AI analyses them and suggests architectural layers with full setup instructions per technology (scaffold commands, install steps, env vars, run commands)
 - Per-layer folder path picker used by the Git Changes and Test Generator pages
-- Layers feed into: Workflows, Test Generator, Git Changes, Issues, Prompt Queue
+- Layers feed into: Workflows, Test Generator, Git Changes, Issues, Security Scans
 
 ---
 
@@ -125,9 +128,8 @@ AI-generated HTML/CSS screen mockups from natural-language descriptions.
   - Finance (Wallet, Transaction history, Send money)
   - Healthcare, Education, Real Estate, Travel, Food Delivery
   - Settings, Onboarding, Notifications, Search
-- Live HTML preview in-app
-- Queue screens for bulk AI generation
-- Style guide enforcement per project
+- Live HTML preview in-app, one screen generated at a time (chat-style, not batched)
+- Project's saved **Style Guide** design template is injected into every generation prompt
 - Mockups can be linked to Workflows (scope a workflow to a specific screen)
 
 ---
@@ -140,10 +142,10 @@ Define reusable multi-step AI workflows for recurring development tasks (e.g. co
 - Workflow **layers** (steps): name, purpose, inputs, outputs, AI prompt
 - Drag-and-drop reorder of steps
 - Run one layer at a time (with preview drawer showing purpose/prompt)
-- **Run All** opens a dedicated runner window with live streaming output and "Run Next" chaining
+- **Run All** executes with live streaming output and "Run Next" chaining — opens as an in-app tab by default, or a separate pop-out window if configured in **Settings → Runner Windows**
 - Navigation guard prevents leaving while a run is in progress
 - **Success criteria** tab per workflow
-- **AI generation**: click Generate → describe the feature → AI creates a full workflow with steps
+- **AI generation**: the **Generate Workflows** page turns a mockup + project docs into a full set of implementation workflows in one AI call — a UI-shell workflow first, then one workflow per discrete feature, each ending in a "Wire Up" and "Integration Build & Fix" step
 
 ---
 
@@ -153,6 +155,7 @@ Lightweight per-project issue tracker with AI assistance.
 
 | Field | Values |
 |---|---|
+| Type | Bug / Feature / Change |
 | Severity | Critical / High / Medium / Low |
 | Status | Open → In Progress → Resolved / Closed / Won't Fix |
 | Detail | Title, description, steps to reproduce, expected vs actual behavior |
@@ -160,7 +163,7 @@ Lightweight per-project issue tracker with AI assistance.
 
 - Grouped list view with collapsible status sections (Resolved/Closed collapse by default)
 - AI-assisted analysis and next-step suggestions
-- Queue issues for batch AI processing
+- **Issue Runner**: run AI fixes across multiple open issues in sequence, with live terminal-style output per issue and run-all
 - Live git badge in header
 
 ---
@@ -181,13 +184,15 @@ View and manage git changes across all project layers from a single screen.
 
 ### AI Console — Project-Aware Chat
 
-Full conversation AI chat with your project loaded as context.
+Full conversation AI chat with **Smart Context**: instead of dumping project data into the prompt, the model writes `SELECT` queries against a minimal schema (`projects`, `issues`, `workflows`, `project_layers`, `project_documents`, `screen_designs`), the app runs them on-device, and only the query results are returned to the model — no internal columns are exposed.
 
-- Automatically loads project documents and open issues as context
-- Multi-turn conversation history with token count estimate
+- Live query log showing every SQL query the model issued
+- Privacy warning surfaced before sending query results back to a cloud model
+- Collapsible "Request sent to API" / "Response from model" inspector panels
+- Multi-turn conversation history
 - Streaming response display
 - Clear conversation button
-- Works with all configured AI models (Ollama, Claude CLI, Gemini, API)
+- Works with all configured AI models (Ollama, Claude CLI, Gemini CLI, Anthropic API, OpenAI-compatible API)
 
 ---
 
@@ -207,33 +212,63 @@ Generate tests for any project layer using AI, with automatic language/framework
 
 - Detects UI layers (React, Angular, Flutter, SwiftUI, Jetpack Compose, etc.) and generates appropriate UI/widget tests
 - Git integration shows generated test files
-
----
-
-### Test Runner — Multi-Framework Test Execution
-
-Run and track test suites per project layer.
-
-- Configurable test command per layer
-- Live output streaming in-app
-- **Auto-parses results from:** Cypress, Jest, Flutter, Playwright, pytest, Go test, RSpec, MSTest, Vitest, PHPUnit
-- Shows pass / fail / skip counts and duration
+- **Built-in test execution** (no separate page): configurable test command per layer, live output streaming, **auto-parses results from** Cypress, Jest, Flutter, Playwright, pytest, Go test, RSpec, MSTest, Vitest, PHPUnit — shows pass/fail/skip counts and duration
 - Test run history per project — last run's fail count shown as sidebar badge
 - Model configs manager accessible inline
 
 ---
 
-### Prompt Queue — Batch AI Task Runner
+### Security Scans — Per-Layer Security Scanning
 
-Queue up AI prompts for sequential execution with full conversation history per item.
+Run security scanners against any project layer and track results over time.
 
-- Each item: title, prompt, per-layer association, status (pending / running / done / failed / skipped)
-- **Planning mode**: AI first generates a step-by-step plan → user approves → AI executes
-  - Plan step progress bar shown during execution
-- Run all pending items sequentially in one click
-- Per-item conversation history preserved across runs
-- Separate **Queue Runner window** for distraction-free execution
-- Timer and elapsed time shown while running
+- Auto-detects the appropriate scan command per layer, with manual command override
+- Live output streaming in-app
+- Parses results into critical / high / medium / low severity counts
+- Scan history retained per project
+
+---
+
+### Issue Runner — Batch AI Issue Fixing
+
+Run AI against multiple open issues sequentially, either from the Issues page or as a standalone window.
+
+- Filter issues by status (e.g. open + in progress) before running
+- Run one issue at a time or **Run All** in sequence
+- Live terminal-style output per issue with elapsed timer
+- Opens as an in-app tab or a separate pop-out window, per **Settings → Runner Windows**
+
+---
+
+### Terminal — Embedded Shell
+
+A full terminal embedded in the app, scoped to a project and layer.
+
+- Real shell (via `xterm.js` + `node-pty`) with per-layer working directory switching
+- Side git panel: changed files, inline diffs, stage/commit, live-polled status
+- Opens as an in-app tab or a separate pop-out window, per **Settings → Runner Windows**
+
+---
+
+### Style Guide — Project Design System
+
+Define the visual language used to generate Mockups.
+
+- Color palette, typography, and component specs, separately for **Light** and **Dark** themes
+- Target-platform-aware presets (web / mobile)
+- Built-in presets (e.g. "DevFlow Default", "Ocean Blue") as starting points, fully editable
+- High-fidelity interactive HTML preview with expand/focus mode
+- Saved style guide is injected into every Mockup generation prompt
+
+---
+
+### Generate Workflows — AI Implementation Planner
+
+Turns a Mockup screen plus project documents into a complete, ready-to-run set of Workflows in a single AI call.
+
+- First workflow: static "UI Shell" — the mockup converted to real UI code with no backend wiring
+- One additional workflow per discrete feature identified in the screen, each ending in "Wire Up" then "Integration Build & Fix" steps
+- Generated workflows are scoped to the project's actual layer names and immediately usable in Workflows
 
 ---
 
@@ -243,21 +278,23 @@ Queue up AI prompts for sequential execution with full conversation history per 
 |---|---|
 | **AI Config** | Add, edit, and delete AI model configurations |
 | **Model Mapping** | Assign specific models to specific pages (Documents, Workflows, Issues, etc.) |
+| **Runner Windows** | Choose whether Workflow Runner, Terminal, and Issue Runner open as an in-app tab or a separate pop-out window |
 | **Document Templates** | Create, edit, group, and reorder templates used in Documents |
 | **Cloud Sync** | Configure remote backup destination |
-| **Telegram** | Configure a Telegram bot for run notifications |
+| **Telegram** | Configure a Telegram bot for run notifications (Workflow Runner, Issue Runner) — note: the "Prompt Queue" notification entries still shown here are leftover from the removed Prompt Queue feature and no longer fire |
 | **Backup** | Export, restore, or backup the SQLite database |
 | **Quick Commands** | Manage saved shell commands used in Git Changes |
 
 #### AI Config — Supported Model Types
 
+The underlying `type` values are `cli`, `ollama`, `api`, and `anthropic`. "Claude CLI" / "Gemini CLI" / "Aider" are not separate types — they're all `type: cli`, distinguished only by the free-text executable name.
+
 | Type | Executable / Endpoint | Notes |
 |---|---|---|
-| Claude CLI | `claude` | Pipe or heredoc input modes; choose model (Haiku, Sonnet, Opus) |
-| Gemini CLI | `gemini` | 2.5 Flash, 2.5 Pro, 2.0 Flash, 1.5 Pro |
-| Aider | `aider` | GPT-4o, Claude, DeepSeek Coder |
+| CLI | `claude`, `gemini`, `aider`, `agy`, `copilot`, or any binary in `PATH` | Pipe or heredoc input modes; model name set per config |
 | Ollama | `http://localhost:11434` | Any locally pulled model |
-| OpenAI-compatible API | Any base URL | OpenRouter, LM Studio, Anthropic API, llama.cpp server |
+| OpenAI-compatible API | Any base URL | OpenRouter, LM Studio, llama.cpp server, etc. |
+| Anthropic API | Anthropic's API directly | Separate from the generic OpenAI-compatible API type |
 
 ---
 
@@ -283,7 +320,7 @@ The `agent/` folder is a Python layer that the Electron app spawns as subprocess
 |---|---|---|
 | `ollama_proxy.py` | Thin streaming proxy for Ollama models | `chat-handlers.js` — used by every page that calls an Ollama model (Documents AI Edit, Workflows runner, AI Console, etc.) |
 | `openai_proxy.py` | Thin streaming proxy for OpenAI-compatible API models | `chat-handlers.js` — used by every page calling an API model |
-| `devflow_agent.py` | Full agentic coding agent (plan + execute loop) | `queue-handlers.js` — Prompt Queue when DevFlow Agent is enabled |
+| `devflow_agent.py` | Full agentic coding agent (plan + execute loop) | `db-handlers.js`, `wfr-pty-handlers.js` — used where DevFlow Agent mode is enabled on a model config |
 | `agent.py` | Provider-agnostic agent (Ollama, OpenAI, Anthropic, Groq) | Standalone CLI — not yet wired to Electron |
 | `context_builder.py` | Builds repo map (file tree + signatures) for agent context | `devflow_agent.py` at startup |
 | `tools.py` | Tool schemas and executors the agent uses | `devflow_agent.py` agentic loop |
@@ -503,13 +540,16 @@ src/
       project-layers/      # Architectural layer management
       documents/           # Markdown editor + AI editing + diagrams
       mockups/             # HTML screen design generator
-      workflows/           # AI workflow orchestration + runner
+      workflows/           # AI workflow orchestration
+      workflow-runner/     # Workflow run execution UI (tab or pop-out)
+      generate-workflows/  # AI-generated workflow sets from a mockup
       issues/              # Bug & issue tracker
+      issue-runner/        # Batch AI issue fixing (tab or pop-out)
       git-changes/         # Multi-repo git viewer + commit UI
-      ai-console/          # Project-aware AI chat
-      test-generator/      # AI test generation (multi-language)
-      test-runner/         # Multi-framework test runner + history
-      prompt-queue/        # Batch AI prompt runner (plan + execute)
+      ai-console/          # Project-aware AI chat (Smart Context)
+      test-generator/      # AI test generation + built-in test execution
+      security-scans/      # Per-layer security scanning + history
+      terminal/            # Embedded shell + git panel (tab or pop-out)
       settings/            # AI config, model mapping, templates, backup
       style-guide/         # Project design system / style token editor
     components/
@@ -522,11 +562,10 @@ src/
       helpers.js           # escHtml, timeAgo, Markdown renderer, etc.
       theme-manager.js     # Light / Dark / Midnight theme management
 
-  # Standalone BrowserWindow pages
-  workflow-runner.html     # Full-screen workflow layer execution
-  queue-runner.html        # Prompt queue runner window
-  task-queue.html          # Task queue window
-  generate-workflows.html  # AI workflow generation window
+  # Standalone BrowserWindow pages (pop-out mode; also usable as in-app tabs)
+  workflow-runner.html     # Workflow layer execution
+  issue-runner.html        # Batch AI issue fixing
+  terminal.html             # Embedded shell + git panel
 
 agent/                       # Python agent layer (spawned as subprocesses by Electron)
   devflow_agent.py         # Full agentic coding agent (plan + execute loop)
@@ -552,8 +591,8 @@ agent-cli/
 | `workflows` | AI workflows (feature-level task sequences) |
 | `layers` | Workflow steps (purpose, inputs, outputs, prompt) |
 | `success_criteria` | Acceptance criteria per workflow |
-| `issues` | Bug and issue tracker entries |
-| `prompt_queue` | Queued AI prompts for batch execution |
+| `issues` | Bug, feature, and change tracker entries |
+| `prompt_queue`, `prompt_queue_messages` | *Dead — backend-only.* Schema and IPC handlers remain from the removed Prompt Queue feature; no UI reads or writes these tables |
 | `screen_designs` | AI-generated HTML mockups |
 | `screen_prompt_history` | Mockup generation history |
 | `project_documents` | Markdown documents per project |
@@ -571,7 +610,7 @@ agent-cli/
 |---|---|
 | `db:*` | All database CRUD operations |
 | `chat:*` | AI streaming responses (Ollama, API, CLI pipe/heredoc) |
-| `queue:*` | Prompt queue run / plan / approve / cancel |
+| `queue:*` | *Dead — backend-only.* Handlers remain from the removed Prompt Queue feature; nothing in the UI invokes them |
 | `ollama:*` | Model detection + direct Ollama inference |
 | `terminal:*` | Shell command execution and streaming output |
 | `dialog:*` | Native OS file/folder pickers |

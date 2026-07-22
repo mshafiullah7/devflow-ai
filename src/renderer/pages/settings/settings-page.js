@@ -85,6 +85,11 @@ export class SettingsPage {
     removeCss('pages/settings/settings-page.css');
     removeCss('components/project-sidebar/project-sidebar.css');
     document.querySelector('.st-overlay')?.remove();
+    document.querySelector('.st-mapping-popover')?.remove();
+    if (this._mappingOutsideClick) {
+      document.removeEventListener('click', this._mappingOutsideClick, true);
+      this._mappingOutsideClick = null;
+    }
   }
 
   // ----------------------------------------------------------------
@@ -346,7 +351,7 @@ export class SettingsPage {
   async _renderModelMapping() {
     const main = this.container.querySelector('#stMainContent');
 
-    const PAGE_KEYS = ['documents', 'project-layers', 'mockups', 'workflows', 'generate-workflows', 'workflow-runner', 'issue-runner', 'issues', 'test-generator', 'git-changes', 'ai-console'];
+    const PAGE_KEYS = ['style-guide', 'documents', 'project-layers', 'mockups', 'workflows', 'generate-workflows', 'workflow-runner', 'issue-runner', 'issues', 'test-generator', 'ai-console'];
 
     const [configs, ...mappings] = await Promise.all([
       window.db.modelConfigs.list(),
@@ -355,6 +360,9 @@ export class SettingsPage {
 
     const mapped = {};
     PAGE_KEYS.forEach((k, i) => { mapped[k] = mappings[i]?.model_config_id ?? null; });
+
+    const TYPE_LABEL = { cli: 'CLI', api: 'API', ollama: 'Ollama', anthropic: 'Anthropic' };
+    const configById = new Map(configs.map(c => [c.id, c]));
 
     const modelOptions = (key, f = {}) => {
       const allowed = configs.filter(c => !(f.excludeTypes || []).includes(c.type));
@@ -365,36 +373,102 @@ export class SettingsPage {
         allowed.map(c => `<option value="${c.id}"${String(c.id) === cur ? ' selected' : ''}>${escHtml(c.label)}</option>`).join('');
     };
 
+    // Type badge shown in front of each dropdown — reflects the currently mapped model's type.
+    const typeBadge = (key) => {
+      const model = configById.get(mapped[key]);
+      const type  = model?.type;
+      return type
+        ? `<span class="st-mapping-row__type-badge st-model-item__badge st-model-item__badge--${type}" data-badge-key="${key}">${TYPE_LABEL[type] || type}</span>`
+        : `<span class="st-mapping-row__type-badge st-mapping-row__type-badge--empty" data-badge-key="${key}">Default</span>`;
+    };
+
+    // Full cross-provider breakdown per workload tier — shown in the info popover
+    // since the row itself doesn't have room for more than the short "Suggested" note.
+    const TIER_DETAILS = {
+      light: {
+        title: 'Light — fast, cheap, general Q&A',
+        rows: [
+          ['Claude',  'Haiku 4.5'],
+          ['OpenAI',  'GPT-5.4 mini'],
+          ['Gemini',  'Gemini 3.5 Flash (medium thinking)'],
+          ['Groq',    'Llama 3.1 8B Instant'],
+          ['Ollama',  'phi4-mini / qwen2.5:7b'],
+        ],
+      },
+      mediumCoding: {
+        title: 'Medium coding — narrow, repetitive code tasks',
+        rows: [
+          ['Claude',  'Haiku 4.5'],
+          ['OpenAI',  'GPT-5.4 mini'],
+          ['Gemini',  'Gemini 3.5 Flash (high thinking)'],
+          ['Groq',    'Llama 3.3 70B Versatile'],
+          ['Ollama',  'qwen2.5-coder:7b'],
+        ],
+      },
+      heavyGeneration: {
+        title: 'Heavy generation — large single-shot creative/structural output',
+        rows: [
+          ['Claude',  'Sonnet 5'],
+          ['OpenAI',  'GPT-5.5'],
+          ['Gemini',  'Gemini 3.1 Pro'],
+          ['Groq',    'Llama 3.3 70B Versatile'],
+          ['Ollama',  'qwen2.5:14b (or mistral if hardware-limited)'],
+        ],
+      },
+      heavyCode: {
+        title: 'Heavy code execution — multi-step agentic, actually edits/runs code',
+        rows: [
+          ['Claude',  'Sonnet 5 (CLI, preferred) — or Sonnet 5 (API) with Devflow Agent loop enabled; Opus 4.8 (CLI) for the hardest cases'],
+          ['OpenAI',  'GPT-5.3-Codex'],
+          ['Gemini',  'Gemini 3.1 Pro'],
+          ['Groq',    'DeepSeek R1 Distill Llama 70B (or Llama 3.3 70B)'],
+          ['Ollama',  'qwen2.5-coder:32b or deepseek-coder-v2'],
+        ],
+      },
+    };
+
+    // Second-line hint — just the Claude pick, pulled from the same TIER_DETAILS
+    // the popover renders so the two never drift out of sync.
+    const claudePick = (tierKey) => TIER_DETAILS[tierKey]?.rows.find(([provider]) => provider === 'Claude')?.[1] || '';
+
+    const infoIcon = (tierKey) => {
+      if (!tierKey) return '';
+      const tier  = TIER_DETAILS[tierKey];
+      const tip   = `Suggested models for this workload (${tier?.title || tierKey}) — Claude, OpenAI, Gemini, Groq, Ollama`;
+      return `
+      <button type="button" class="st-mapping-row__info" data-tier="${tierKey}" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+        <span class="st-mapping-row__info-label">Suggested Models</span>
+      </button>`;
+    };
+
     const sections = [
       {
         label: 'Pages',
         features: [
-          { key: 'documents',       icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,                                                  name: 'Documents' },
-          { key: 'project-layers',   icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,                                       name: 'Project Layers' },
-          { key: 'mockups',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,                                                                               name: 'Mockups' },
-          { key: 'workflows',       icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,                                                                name: 'Workflows' },
-          { key: 'generate-workflows', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>`, name: 'Generate Workflows' },
-          { key: 'workflow-runner', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,                                                                                                                     name: 'Run Layers' },
-          { key: 'issue-runner',    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,                                                                                                                     name: 'Run Issues' },
+          { key: 'style-guide',     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>`, name: 'Styles',             note: 'Haiku, Flash Medium, Groq (Llama 8B)', tier: 'light' },
+          { key: 'documents',       icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,                                                  name: 'Documents',          note: 'Haiku, Flash Medium, Groq (Llama 8B)', tier: 'light' },
+          { key: 'project-layers',   icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,                                       name: 'Project Layers',     note: 'Haiku, Flash Medium, Groq (Llama 8B)', tier: 'light' },
+          { key: 'mockups',         icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,                                                                               name: 'Mockups',             note: 'Sonnet, Flash High, Groq (Llama 70B)', tier: 'heavyGeneration' },
+          { key: 'workflows',       icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,                                                                name: 'Workflows',           note: 'Sonnet Code, Flash High, Groq Code (Llama 70B)', tier: 'heavyCode' },
+          { key: 'generate-workflows', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>`, name: 'Generate Workflows', note: 'Sonnet, Flash High, Groq (Llama 70B)', tier: 'heavyGeneration' },
+          { key: 'workflow-runner', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,                                                                                                                     name: 'Run Layers',         note: 'Sonnet Code, Flash High, Groq Code (Llama 70B)', tier: 'heavyCode' },
+          { key: 'issue-runner',    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,                                                                                                                     name: 'Run Issues',         note: 'Sonnet Code, Flash High, Groq Code (Llama 70B)', tier: 'heavyCode' },
         ],
       },
       {
         label: 'Quality',
         features: [
-          { key: 'issues',          icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,                                          name: 'Issues' },
-          { key: 'test-generator',  icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`, name: 'Unit Test Generator' },
-        ],
-      },
-      {
-        label: 'Git',
-        features: [
-          { key: 'git-changes',     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v3a6 6 0 0 0 6 6h3"/></svg>`,                                                            name: 'Git Changes', disabled: true, note: 'Feature will be enabled soon...' },
+          { key: 'issues',          icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,                                          name: 'Issues',             note: 'Sonnet Code, Flash High, Groq Code (Llama 70B)', tier: 'heavyCode' },
+          { key: 'test-generator',  icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`, name: 'Unit Test Generator', note: 'Haiku Code, Flash Medium, Groq Code (Llama 70B)', tier: 'mediumCoding' },
         ],
       },
       {
         label: 'Tools',
         features: [
-          { key: 'ai-console',      icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,                                                                                name: 'AI Chat' },
+          { key: 'ai-console',      icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,                                                                                name: 'AI Chat',            note: 'Haiku, Flash Medium, Groq (Llama 8B)', tier: 'light' },
         ],
       },
     ];
@@ -410,8 +484,13 @@ export class SettingsPage {
             ${s.features.map(f => `
               <div class="st-mapping-row">
                 <span class="st-mapping-row__icon">${f.icon}</span>
-                <span class="st-mapping-row__name">${escHtml(f.name)}${f.note ? ` <span class="st-form__hint">(${escHtml(f.note)})</span>` : ''}</span>
-                <select class="st-form__select st-mapping-row__select" data-key="${f.key}"${(configs.length === 0 || f.disabled || (f.excludeTypes && configs.length > 0 && configs.filter(c => !(f.excludeTypes).includes(c.type)).length === 0)) ? ' disabled' : ''}>
+                <span class="st-mapping-row__namewrap" title="${escHtml(f.name)}${claudePick(f.tier) ? ' — Claude: ' + escHtml(claudePick(f.tier)) : ''}">
+                  <span class="st-mapping-row__name">${escHtml(f.name)}</span>
+                  ${claudePick(f.tier) ? `<span class="st-mapping-row__note">Claude: ${escHtml(claudePick(f.tier))}</span>` : ''}
+                </span>
+                ${infoIcon(f.tier)}
+                ${typeBadge(f.key)}
+                <select class="st-form__select st-mapping-row__select" data-key="${f.key}" title="${escHtml(configById.get(mapped[f.key])?.label || 'Use default')}"${(configs.length === 0 || f.disabled || (f.excludeTypes && configs.length > 0 && configs.filter(c => !(f.excludeTypes).includes(c.type)).length === 0)) ? ' disabled' : ''}>
                   ${modelOptions(f.key, f)}
                 </select>
               </div>
@@ -423,9 +502,75 @@ export class SettingsPage {
 
     main.querySelectorAll('.st-mapping-row__select').forEach(sel => {
       sel.addEventListener('change', () => {
-        window.db.modelMapping.set(sel.dataset.key, Number(sel.value) || null);
+        const key   = sel.dataset.key;
+        const id    = Number(sel.value) || null;
+        window.db.modelMapping.set(key, id);
+
+        const model = id != null ? configById.get(id) : null;
+        sel.title = model?.label || 'Use default';
+
+        const badge = main.querySelector(`.st-mapping-row__type-badge[data-badge-key="${key}"]`);
+        if (badge) {
+          if (model) {
+            badge.className   = `st-mapping-row__type-badge st-model-item__badge st-model-item__badge--${model.type}`;
+            badge.textContent = TYPE_LABEL[model.type] || model.type;
+          } else {
+            badge.className   = 'st-mapping-row__type-badge st-mapping-row__type-badge--empty';
+            badge.textContent = 'Default';
+          }
+        }
       });
     });
+
+    // ── Info popover: full cross-provider breakdown per workload tier ──────
+    document.querySelector('.st-mapping-popover')?.remove();
+    const popover = document.createElement('div');
+    popover.className = 'st-mapping-popover';
+    popover.hidden = true;
+    document.body.appendChild(popover);
+
+    let openBtn = null;
+    const closePopover = () => { popover.hidden = true; popover.innerHTML = ''; openBtn = null; };
+
+    const renderPopover = (btn, tierKey) => {
+      const tier = TIER_DETAILS[tierKey];
+      if (!tier) return;
+      popover.innerHTML = `
+        <div class="st-mapping-popover__title">${escHtml(tier.title)}</div>
+        <table class="st-mapping-popover__table">
+          ${tier.rows.map(([provider, model]) => `
+            <tr><td class="st-mapping-popover__provider">${escHtml(provider)}</td><td>${escHtml(model)}</td></tr>
+          `).join('')}
+        </table>
+      `;
+      popover.hidden = false;
+
+      const btnRect   = btn.getBoundingClientRect();
+      const popRect   = popover.getBoundingClientRect();
+      let left = btnRect.left;
+      if (left + popRect.width > window.innerWidth - 8) left = window.innerWidth - popRect.width - 8;
+      let top = btnRect.bottom + 6;
+      if (top + popRect.height > window.innerHeight - 8) top = btnRect.top - popRect.height - 6;
+      popover.style.left = `${Math.max(8, left)}px`;
+      popover.style.top  = `${Math.max(8, top)}px`;
+    };
+
+    main.querySelectorAll('.st-mapping-row__info').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const alreadyOpenForThis = !popover.hidden && openBtn === btn;
+        closePopover();
+        if (alreadyOpenForThis) return;
+        openBtn = btn;
+        renderPopover(btn, btn.dataset.tier);
+      });
+    });
+
+    if (this._mappingOutsideClick) document.removeEventListener('click', this._mappingOutsideClick, true);
+    this._mappingOutsideClick = (e) => {
+      if (!popover.hidden && !popover.contains(e.target) && !e.target.closest('.st-mapping-row__info')) closePopover();
+    };
+    document.addEventListener('click', this._mappingOutsideClick, true);
   }
 
   // ----------------------------------------------------------------
@@ -1655,16 +1800,27 @@ export class SettingsPage {
         if (!cur || allKnownFlags.includes(cur)) cliFlagsInput.value = KNOWN_CLI_FLAGS[name];
       }
 
-      // Auto-fill Batch Flags
+      // Suggest Batch Flags as a placeholder (not a real value) so it's visually
+      // distinct from actually-saved data and doesn't get persisted unless typed.
       if (cliBatchInput && KNOWN_CLI_BATCH_FLAGS[name] !== undefined) {
         const cur = (cliBatchInput.value || '').trim();
-        if (!cur || allKnownBatch.includes(cur)) cliBatchInput.value = KNOWN_CLI_BATCH_FLAGS[name];
+        if (!cur) {
+          cliBatchInput.value = '';
+          cliBatchInput.placeholder = KNOWN_CLI_BATCH_FLAGS[name] || '--print -c';
+        } else if (allKnownBatch.includes(cur)) {
+          cliBatchInput.value = KNOWN_CLI_BATCH_FLAGS[name];
+        }
       }
 
-      // Auto-fill Skip Permissions Flag
+      // Suggest Skip Permissions Flag as a placeholder (not a real value) — same reasoning.
       if (cliSkipPermsInput && KNOWN_CLI_SKIP_PERMS_FLAGS[name] !== undefined) {
         const cur = (cliSkipPermsInput.value || '').trim();
-        if (!cur || allKnownSkipPerms.includes(cur)) cliSkipPermsInput.value = KNOWN_CLI_SKIP_PERMS_FLAGS[name];
+        if (!cur) {
+          cliSkipPermsInput.value = '';
+          cliSkipPermsInput.placeholder = KNOWN_CLI_SKIP_PERMS_FLAGS[name] || '--dangerously-skip-permissions';
+        } else if (allKnownSkipPerms.includes(cur)) {
+          cliSkipPermsInput.value = KNOWN_CLI_SKIP_PERMS_FLAGS[name];
+        }
       }
     };
 

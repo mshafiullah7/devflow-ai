@@ -12,6 +12,7 @@
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
     "agent": "node agent-cli/index.js",
+    "clear-settings": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/clear-settings.js",
     "pretest": "cd node_modules/better-sqlite3 && node ../../node_modules/prebuild-install/bin.js --runtime electron --target 41.2.0 --platform win32 --arch x64 --tag-prefix v",
     "test": "playwright test",
     "test:watch": "cross-env PW_HEADED=1 PW_SLOW_MO=800 playwright test",
@@ -24,7 +25,7 @@
     "name": "Shafiullah",
     "email": "sms.shafi@gmail.com"
   },
-  "license": "MIT",
+  "license": "UNLICENSED",
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "electron-squirrel-startup": "^1.0.1",

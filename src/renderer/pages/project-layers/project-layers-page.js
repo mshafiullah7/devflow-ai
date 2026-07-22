@@ -3,6 +3,25 @@ import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker }      from '../../components/model-picker/model-picker.js';
 import { ProjectSidebar }   from '../../components/project-sidebar/project-sidebar.js';
 
+// scaffold_structure is stored as a JSON array of folder paths; the edit form
+// shows/accepts it as one path per line.
+function scaffoldStructureToLines(scaffoldStructure) {
+  if (!scaffoldStructure) return '';
+  try {
+    const parsed = JSON.parse(scaffoldStructure);
+    if (Array.isArray(parsed)) return parsed.join('\n');
+  } catch { /* not JSON — fall through and show as-is */ }
+  return scaffoldStructure;
+}
+
+function linesToScaffoldStructure(text) {
+  const paths = (text || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+  return paths.length ? JSON.stringify(paths) : null;
+}
+
 export class ProjectLayersPage {
   constructor(container, params, router) {
     this.container      = container;
@@ -14,8 +33,6 @@ export class ProjectLayersPage {
     this._activeId      = null;
     this._aiModelConfig = null;
     this._pendingSave   = null;
-    this._executing     = false;
-    this._execTimer     = null;
     this._generating     = false;
   }
 
@@ -42,11 +59,6 @@ export class ProjectLayersPage {
       anchor:    this.container.querySelector('#plModelPicker'),
       onSelect:  model => {
         this._aiModelConfig = model;
-        // Keep the Execute button in sync — requires CLI model + folder path both set
-        const execBtn     = this.container.querySelector('#plExecBtn');
-        const folderInput = this.container.querySelector('#plFolderValue');
-        if (execBtn && !this._executing)
-          execBtn.disabled = !(model?.type === 'cli' && !!folderInput?.value?.trim());
       },
       initialId: _mapping?.model_config_id ?? null,
     });
@@ -71,8 +83,6 @@ export class ProjectLayersPage {
     const fn = this._pendingSave;
     this._pendingSave = null;
     if (fn) fn();
-    if (this._execTimer) { clearInterval(this._execTimer); this._execTimer = null; }
-    this._executing = false;
     window.app.chat.offAll();
     if (this._onKeyDown) document.removeEventListener('keydown', this._onKeyDown);
     removeCss('pages/project-layers/project-layers-page.css');
@@ -407,6 +417,12 @@ export class ProjectLayersPage {
           </div>
 
           <div class="is-form__field">
+            <label class="is-form__label" for="plFormScaffold">Scaffold Structure</label>
+            <textarea class="is-form__textarea" id="plFormScaffold" rows="6"
+              placeholder="One folder path per line — e.g. src/domain, src/application, src/infrastructure…">${escHtml(scaffoldStructureToLines(layer?.scaffold_structure))}</textarea>
+          </div>
+
+          <div class="is-form__field">
             <label class="is-form__label">Project Folder Path</label>
             <div class="pl-folder-row">
               <div class="pl-folder-pill${hasPath ? ' pl-folder-pill--set' : ''}" id="plFolderPill">
@@ -426,30 +442,6 @@ export class ProjectLayersPage {
               </button>
             </div>
             <input type="hidden" id="plFolderValue" value="${escHtml(folderPath)}"/>
-            <div class="pl-exec-bar" id="plExecBar">
-              <button class="pl-exec-btn" id="plExecBtn" type="button" disabled>
-                <svg class="pl-exec-icon" width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-                <svg class="pl-spinner" width="11" height="11" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="display:none;">
-                  <path d="M12 2a10 10 0 0 1 10 10" opacity="0.3"/>
-                  <path d="M12 2a10 10 0 0 1 10 10"/>
-                </svg>
-                Execute
-              </button>
-              <button class="pl-exec-cancel-btn" id="plExecCancelBtn" type="button" style="display:none;">
-                Cancel
-              </button>
-              <span class="pl-exec-timer" id="plExecTimer" style="display:none;">0s</span>
-            </div>
-            <p class="pl-exec-hint">
-              Sends the setup instructions above to the configured CLI tool (e.g. claude, gemini, aider)
-              running inside the selected project folder — the AI agent can read, write, and scaffold
-              files directly in your codebase.
-              Requires a <strong>CLI</strong> model and a <strong>project folder</strong> to be set.
-            </p>
-            <div class="pl-exec-output" id="plExecOutput" style="display:none;"></div>
           </div>
 
         </div>
@@ -463,127 +455,12 @@ export class ProjectLayersPage {
     const nameEl      = el.querySelector('#plFormName');
     const descEl      = el.querySelector('#plFormDesc');
     const setupEl     = el.querySelector('#plFormSetup');
+    const scaffoldEl  = el.querySelector('#plFormScaffold');
     const folderInput = el.querySelector('#plFolderValue');
     const folderPill  = el.querySelector('#plFolderPill');
     const folderText  = el.querySelector('#plFolderText');
     const browseBtn   = el.querySelector('#plBrowseBtn');
     const saveBtn     = this.container.querySelector('#plFormSave');
-
-    // ── Execute button ──────────────────────────────────────────────
-    const execBtn    = el.querySelector('#plExecBtn');
-    const cancelBtn  = el.querySelector('#plExecCancelBtn');
-    const timerEl    = el.querySelector('#plExecTimer');
-    const outputEl   = el.querySelector('#plExecOutput');
-
-    // Execute is enabled only when: CLI model selected AND folder path set
-    const _execEnabled = () =>
-      this._aiModelConfig?.type === 'cli' && !!folderInput?.value?.trim();
-
-    // Reflect initial state when panel renders
-    if (execBtn) execBtn.disabled = !_execEnabled();
-
-    const _fmtElapsed = (s) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
-
-    const _resetExecUi = () => {
-      this._executing = false;
-      if (this._execTimer) { clearInterval(this._execTimer); this._execTimer = null; }
-      if (execBtn) {
-        execBtn.disabled = !_execEnabled();
-        execBtn.querySelector('.pl-exec-icon').style.display  = '';
-        execBtn.querySelector('.pl-spinner').style.display    = 'none';
-      }
-      if (cancelBtn) cancelBtn.style.display = 'none';
-      if (timerEl)   timerEl.style.display   = 'none';
-    };
-
-    execBtn?.addEventListener('click', () => {
-      if (this._executing) return;
-
-      const cwd    = folderInput?.value?.trim();
-      const prompt = setupEl?.value?.trim();
-
-      if (!cwd) {
-        outputEl.style.display = 'block';
-        outputEl.className     = 'pl-exec-output pl-exec-output--warn';
-        outputEl.textContent   = '⚠ Set a Project Folder Path before executing.';
-        return;
-      }
-      if (!prompt) {
-        outputEl.style.display  = 'block';
-        outputEl.className      = 'pl-exec-output pl-exec-output--warn';
-        outputEl.textContent    = '⚠ Setup instructions are empty — nothing to execute.';
-        return;
-      }
-
-      this._executing = true;
-      execBtn.disabled = true;
-      execBtn.querySelector('.pl-exec-icon').style.display = 'none';
-      execBtn.querySelector('.pl-spinner').style.display   = '';
-
-      cancelBtn.style.display = 'inline-flex';
-      timerEl.style.display   = 'inline';
-      timerEl.textContent     = '0s';
-
-      outputEl.className   = 'pl-exec-output pl-exec-output--running';
-      outputEl.style.display = 'block';
-      outputEl.textContent = '';
-
-      let elapsed = 0;
-      this._execTimer = setInterval(() => {
-        elapsed++;
-        if (timerEl) timerEl.textContent = _fmtElapsed(elapsed);
-      }, 1000);
-
-      let accumulated = '';
-      window.app.chat.offAll();
-
-      window.app.chat.onToken(({ text }) => {
-        accumulated += text;
-        // Stream tokens into output area, auto-scroll
-        outputEl.textContent = accumulated;
-        outputEl.scrollTop   = outputEl.scrollHeight;
-      });
-
-      window.app.chat.onDone(({ raw, error }) => {
-        window.app.chat.offAll();
-        _resetExecUi();
-
-        const finalText = raw || accumulated;
-        outputEl.textContent = finalText;
-        outputEl.scrollTop   = outputEl.scrollHeight;
-
-        // 'Could not extract HTML from response' is expected here — Execute
-        // returns plain CLI output, not HTML. Treat it as a clean success.
-        const realError = (error && error !== 'Could not extract HTML from response')
-          ? error : null;
-
-        // Append status banner
-        const banner = document.createElement('div');
-        if (realError) {
-          banner.className   = 'pl-exec-banner pl-exec-banner--error';
-          banner.textContent = `✕ Error: ${realError}`;
-        } else {
-          banner.className   = 'pl-exec-banner pl-exec-banner--success';
-          banner.textContent = '✓ Execution complete';
-        }
-        outputEl.appendChild(banner);
-        outputEl.scrollTop = outputEl.scrollHeight;
-      });
-
-      window.app.chat.generate({ prompt, model: this._aiModelConfig, cwd });
-    });
-
-    cancelBtn?.addEventListener('click', () => {
-      window.app.chat.cancel();
-      window.app.chat.offAll();
-      _resetExecUi();
-
-      const banner = document.createElement('div');
-      banner.className   = 'pl-exec-banner pl-exec-banner--warn';
-      banner.textContent = '⊘ Cancelled';
-      outputEl.appendChild(banner);
-      outputEl.scrollTop = outputEl.scrollHeight;
-    });
 
     // Browse for folder
     const pickFolder = async () => {
@@ -593,8 +470,6 @@ export class ProjectLayersPage {
       folderText.textContent = folderPath;
       folderText.classList.remove('pl-folder-text--empty');
       folderPill.classList.add('pl-folder-pill--set');
-      // Re-evaluate Execute button now that folder is set
-      if (execBtn && !this._executing) execBtn.disabled = !_execEnabled();
     };
     browseBtn?.addEventListener('click', pickFolder);
     folderPill?.addEventListener('click', pickFolder);
@@ -615,6 +490,7 @@ export class ProjectLayersPage {
         name,
         description:        descEl.value.trim() || null,
         setup_instructions: setupEl.value.trim() || null,
+        scaffold_structure: linesToScaffoldStructure(scaffoldEl.value),
         folder_path:        folderInput.value.trim() || null,
       };
 
@@ -673,17 +549,18 @@ export class ProjectLayersPage {
       'Use each name EXACTLY as written in the YAML (same casing, same underscores/spaces).',
       'Example: if the YAML has 3 entries named "layer_a", "layer_b", "layer_c" — your JSON must have exactly 3 objects with those exact names.',
       '',
+      'For each layer also provide "scaffold_structure": a JSON array of the FULL nested project folder based on clean architecture paths for that layer (relative paths only, no file names). Do not stop at the top-level clean-architecture split — go at least one level deeper into each of those folders, and name the sub-folders after the ACTUAL entities, features, screens, and external services described in the project documentation below (not generic placeholders like "module1" or "feature_a"). For example, a "domain" folder should be broken down by real entities (e.g. models, repositories for the entities actually mentioned in the docs), an "application" folder by real services/use-cases, an "infrastructure" folder by the actual external services/integrations mentioned (e.g. a specific database, auth provider, or API), and a "presentation" folder by the actual screens/pages/views described. Derive the exact names and depth from the tech stack and documentation — the breakdown for a mobile app, a web frontend, and a backend API will each look different. Use folder names that a junior developer can immediately understand without prior architecture knowledge. Just Scaffolds no code blocks or file changes.',
+      '',
       'For each layer provide "setup_instructions": a numbered, step-by-step guide that:',
       '  1. Creates the project with the appropriate scaffold command for the technology stack (e.g. "dotnet new webapi -n MyApi", "ng new my-app", "npx create-react-app my-app", "npm init -y").',
-      '  2. Scaffolds the clean architecture folder structure using explicit mkdir commands — include folders like src/domain, src/application, src/infrastructure, src/presentation (or the equivalent for the tech stack). Use folder names that a junior developer can immediately understand without prior architecture knowledge. Just Scaffolds no code blocks or file changes.',
-      '  3. Installs all required dependencies with the package manager install command (include the exact version for every package, e.g. npm install express@4.18.2). Also provide the full dependency block as a ready-to-paste snippet in the format native to the tech stack — every entry must include its pinned version number: for Node.js write the "dependencies" and "devDependencies" JSON blocks (e.g. "express": "4.18.2") to copy into package.json; for Flutter/Dart write the "dependencies" and "dev_dependencies" YAML block (e.g. http: ^1.2.0) to copy into pubspec.yaml; for .NET write the <PackageReference> XML lines with Version attribute to copy into the .csproj file; for Python write the requirements.txt lines (e.g. flask==3.0.2) or the [tool.poetry.dependencies] TOML block. For each snippet clearly state the exact file name and the section/line where it must be pasted.',
-      '  4. Sets up environment variables — provide the path where to create the env file. And values need to included in it. And guide where to include the env variables in the file.',
-      '  5. Runs the layer locally with the start/serve command.',
-      '  6. Sets up any external dependent services or libraries the layer relies on (e.g. Firebase, Supabase, Auth0, Stripe)',
+      '  2. Installs all required dependencies with the package manager install command (include the exact version for every package, e.g. npm install express@4.18.2). Also provide the full dependency block as a ready-to-paste snippet in the format native to the tech stack — every entry must include its pinned version number: for Node.js write the "dependencies" and "devDependencies" JSON blocks (e.g. "express": "4.18.2") to copy into package.json; for Flutter/Dart write the "dependencies" and "dev_dependencies" YAML block (e.g. http: ^1.2.0) to copy into pubspec.yaml; for .NET write the <PackageReference> XML lines with Version attribute to copy into the .csproj file; for Python write the requirements.txt lines (e.g. flask==3.0.2) or the [tool.poetry.dependencies] TOML block. For each snippet clearly state the exact file name and the section/line where it must be pasted.',
+      '  3. Sets up environment variables — provide the path where to create the env file. And values need to included in it. And guide where to include the env variables in the file.',
+      '  4. Runs the layer locally with the start/serve command.',
+      '  5. Sets up any external dependent services or libraries the layer relies on (e.g. Firebase, Supabase, Auth0, Stripe)',
       'Keep the language plain and explicit — assume the reader has never set up this type of project before.',
       '',
       'Return ONLY a valid JSON array — no markdown, no explanation, nothing else.',
-      'Format: [{"name":"layer_a","description":"Description of layer_a","setup_instructions":"1. Step one\\n2. Step two\\n3. Step three"},{"name":"layer_b","description":"Description of layer_b","setup_instructions":"1. Step one\\n2. Step two"}]',
+      'Format: [{"name":"layer_a","description":"Description of layer_a","scaffold_structure":["src/domain/models","src/domain/repositories","src/application/services","src/presentation/screens/login"],"setup_instructions":"1. Step one\\n2. Step two\\n3. Step three"},{"name":"layer_b","description":"Description of layer_b","scaffold_structure":["src/domain/models","src/application/services"],"setup_instructions":"1. Step one\\n2. Step two"}]',
       '',
       '--- PROJECT DOCUMENTS ---',
       docsText,
@@ -886,11 +763,15 @@ export class ProjectLayersPage {
         for (const item of generated) {
           const nameLower = (item.name || '').toLowerCase().trim();
           if (!nameLower || existingNames.has(nameLower)) continue;
+          const scaffoldStructure = Array.isArray(item.scaffold_structure)
+            ? JSON.stringify(item.scaffold_structure)
+            : (item.scaffold_structure || '').trim() || null;
           const layer = await window.db.projectLayers.create({
             project_id:         this._projectId,
             name:               item.name.trim(),
             description:        (item.description || '').trim() || null,
             setup_instructions: (item.setup_instructions || '').trim() || null,
+            scaffold_structure: scaffoldStructure,
             sort_order:         this._layers.length + added,
           });
           this._layers.push(layer);

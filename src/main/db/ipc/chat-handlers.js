@@ -317,6 +317,7 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
     },
   }, (res) => {
     let accumulated = '';
+    let rawBody     = '';
     let stopReason  = null;
     const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
     // On a max_tokens cutoff, fall back to whatever HTML streamed so far
@@ -334,7 +335,10 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
       return { html: null, error: 'Could not extract HTML from response' };
     };
     res.on('data', (chunk) => {
-      for (const line of chunk.toString('utf8').split('\n')) {
+      const text = chunk.toString('utf8');
+      rawBody += text;
+      if (res.statusCode < 200 || res.statusCode >= 300) return;
+      for (const line of text.split('\n')) {
         if (!line.startsWith('data: ')) continue;
         const raw = line.slice(6).trim();
         if (raw === '[DONE]') continue;
@@ -380,6 +384,22 @@ function runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, do
       }
     });
     res.on('error', (err) => finish({ html: null, raw: '', error: err.message }));
+
+    res.on('end', () => {
+      if (finished) return;
+      // Stream ended without a message_stop — either a non-2xx error response
+      // (Anthropic sends a plain JSON error body, not SSE) or a dropped connection.
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        let msg = `Anthropic API error (HTTP ${res.statusCode})`;
+        try {
+          const parsed = JSON.parse(rawBody);
+          if (parsed?.error?.message) msg = parsed.error.message;
+        } catch (_) {}
+        finish({ html: null, raw: accumulated, error: msg });
+      } else {
+        finish({ html: null, raw: accumulated, error: 'Connection closed before response completed' });
+      }
+    });
   });
 
   req.on('error', (err) => {

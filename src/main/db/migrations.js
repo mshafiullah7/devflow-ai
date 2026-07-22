@@ -444,6 +444,12 @@ function runMigrations(db) {
     db.exec('ALTER TABLE workflows ADD COLUMN screen_design_id INTEGER REFERENCES screen_designs(id) ON DELETE SET NULL');
   }
 
+  // Add scaffold_structure to project_layers for existing databases
+  const plCols = db.prepare("PRAGMA table_info(project_layers)").all().map(c => c.name);
+  if (!plCols.includes('scaffold_structure')) {
+    db.exec('ALTER TABLE project_layers ADD COLUMN scaffold_structure TEXT');
+  }
+
   // Remove obsolete templates; 'Solution Architecture' is seeded separately via seedDocumentTemplates
   const tplTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='document_templates'").get();
   if (tplTables) {
@@ -453,6 +459,221 @@ function runMigrations(db) {
     const newProjectOverview = `# MacroStore Movie App — Project Context\n\n## Overview\nTwo-role (Admin/User) movie catalogue with approval-based registration,\nsearch, and CRUD management. Runs on-prem, IIS hosted, Oracle 19c database.\n\n**In scope:** registration with admin approval, movie CRUD, movie search  \n**Out of scope:** payments, media hosting, mobile app\n\n---\n\n## Users & Roles\n\n| Role  | Capabilities                              |\n|-------|-------------------------------------------|\n| Admin | Approve users, manage movies, view all    |\n| User  | Browse movies, search, view details       |\n\n---\n\n## System Structure\n\n\`\`\`yaml\nlayers:\n  - name: ui\n    tech: Angular 17\n    communicates_with: [api_gateway]\n\n  - name: api_gateway\n    tech: YARP (.NET 8)\n    routes:\n      - /auth/**    → identity_service   # no auth required\n      - /movies/**  → movie_service      # JWT required\n\n  - name: identity_service\n    tech: .NET 8, Oracle 19c\n    schema: MSI_AUTH\n    responsibilities: [registration, approval, JWT issuance]\n\n  - name: movie_service\n    tech: .NET 8, Oracle 19c\n    schema: MS_MACRO\n    responsibilities: [movie CRUD, search]\n\nauth:\n  header: Authorization\n  mechanism: JWT Bearer\n  issuer: identity_service\n  roles: [Admin, User]\n  token_expiry: 30m access / 7d refresh\n\nconventions:\n  api_prefix: /api/v1\n  error_format: "{ code, message, details }"\n  dates: UTC ISO 8601\n\n\`\`\`\n`;
     db.prepare(`UPDATE document_templates SET template_text = ? WHERE name = 'Project Overview'`).run(newProjectOverview);
   }
+
+  // Replace the old bundled default model configs with a single lean default:
+  // a Claude Haiku CLI config restricted from touching the local filesystem/shell,
+  // mapped by default to Documents, Project Layers, and AI Chat.
+  const NEW_DEFAULT_LABEL = 'Claude Haiku General Purpose';
+  const NEW_DEFAULT_MODEL_NAME = 'claude-haiku-4-5';
+  const NEW_DEFAULT_FLAGS = `--model {{model}} '@{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`;
+
+  const existing = db.prepare(`
+    SELECT id FROM model_configs WHERE label IN (?, 'Claude Haiku General CLI')
+  `).get(NEW_DEFAULT_LABEL);
+
+  if (existing) {
+    // Already created by an earlier run of this migration — bring field values in line
+    // (label may have been the earlier draft name, flags may still carry an inline --model).
+    db.prepare(`
+      UPDATE model_configs
+         SET label            = ?,
+             model_name        = ?,
+             flags             = ?,
+             batch_flags       = '',
+             skip_perms_flag   = ''
+       WHERE id = ?
+    `).run(NEW_DEFAULT_LABEL, NEW_DEFAULT_MODEL_NAME, NEW_DEFAULT_FLAGS, existing.id);
+  } else {
+    const oldDefaults = db.prepare(`
+      SELECT id FROM model_configs
+       WHERE label IN ('Claude CLI', 'Gemini CLI', 'Mistral CLI', 'Ollama (phi4-mini)')
+    `).all().map(r => r.id);
+
+    db.transaction(() => {
+      if (oldDefaults.length) {
+        const placeholders = oldDefaults.map(() => '?').join(',');
+        db.prepare(`DELETE FROM model_mapping WHERE model_config_id IN (${placeholders})`).run(...oldDefaults);
+        db.prepare(`DELETE FROM model_configs WHERE id IN (${placeholders})`).run(...oldDefaults);
+      }
+
+      db.prepare('UPDATE model_configs SET is_default = 0').run();
+      const { lastInsertRowid: newId } = db.prepare(`
+        INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
+        VALUES (?, 'cli', 'claude', ?, ?, 'pipe', 1, 0, '', '')
+      `).run(NEW_DEFAULT_LABEL, NEW_DEFAULT_MODEL_NAME, NEW_DEFAULT_FLAGS);
+
+      const upsertMapping = db.prepare(`
+        INSERT INTO model_mapping (page_key, model_config_id, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(page_key) DO UPDATE SET model_config_id = excluded.model_config_id, updated_at = excluded.updated_at
+      `);
+      for (const pageKey of ['documents', 'project-layers', 'ai-console']) {
+        upsertMapping.run(pageKey, newId);
+      }
+    })();
+  }
+
+  // Styles page — map to the Haiku General Purpose CLI config regardless of
+  // whether it was just (re)inserted above or already existed.
+  const haikuGpId = db.prepare(`SELECT id FROM model_configs WHERE label = ? AND type = 'cli'`).get(NEW_DEFAULT_LABEL)?.id;
+  if (haikuGpId) {
+    db.prepare(`
+      INSERT INTO model_mapping (page_key, model_config_id, updated_at)
+      VALUES ('style-guide', ?, datetime('now'))
+      ON CONFLICT(page_key) DO UPDATE SET model_config_id = excluded.model_config_id, updated_at = excluded.updated_at
+    `).run(haikuGpId);
+  }
+
+  // Second general-purpose default: Sonnet 5, same tool-restricted flags as the
+  // Haiku config above, mapped to Mockups and Generate Workflows.
+  const SONNET_LABEL      = 'Claude Sonnet General Purpose';
+  const SONNET_MODEL_NAME = 'claude-sonnet-5';
+  const SONNET_FLAGS      = `--model {{model}} '@{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`;
+
+  const sonnetExisting = db.prepare('SELECT id FROM model_configs WHERE label = ?').get(SONNET_LABEL);
+  if (sonnetExisting) {
+    db.prepare(`
+      UPDATE model_configs
+         SET model_name      = ?,
+             flags            = ?,
+             batch_flags      = '',
+             skip_perms_flag  = ''
+       WHERE id = ?
+    `).run(SONNET_MODEL_NAME, SONNET_FLAGS, sonnetExisting.id);
+  } else {
+    db.transaction(() => {
+      const nextSort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM model_configs').get().n;
+      const { lastInsertRowid: sonnetId } = db.prepare(`
+        INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
+        VALUES (?, 'cli', 'claude', ?, ?, 'pipe', 0, ?, '', '')
+      `).run(SONNET_LABEL, SONNET_MODEL_NAME, SONNET_FLAGS, nextSort);
+
+      const upsertSonnetMapping = db.prepare(`
+        INSERT INTO model_mapping (page_key, model_config_id, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(page_key) DO UPDATE SET model_config_id = excluded.model_config_id, updated_at = excluded.updated_at
+      `);
+      for (const pageKey of ['mockups', 'generate-workflows']) {
+        upsertSonnetMapping.run(pageKey, sonnetId);
+      }
+    })();
+  }
+
+  // General coding configs — unlike the Q&A defaults above these keep full tool
+  // access (Read/Write/Edit/Bash) since they need to actually touch project files.
+  // batch_flags/skip_perms_flag are left NULL (not '') so Run Layers / Run Issues'
+  // own per-run "skip permissions" toggle keeps driving that behavior via its
+  // built-in fallback (wfr-pty-handlers.js) instead of a hardcoded config value;
+  // Run All is currently disabled so batch_flags isn't in play either way.
+  const CODE_FLAGS = `--model {{model}} '@{{prompt}}'`;
+
+  const upsertCodeConfig = (label, modelName, pageKeys) => {
+    const row = db.prepare('SELECT id FROM model_configs WHERE label = ?').get(label);
+    if (row) {
+      db.prepare(`
+        UPDATE model_configs
+           SET model_name      = ?,
+               flags            = ?,
+               batch_flags      = NULL,
+               skip_perms_flag  = NULL
+         WHERE id = ?
+      `).run(modelName, CODE_FLAGS, row.id);
+      return row.id;
+    }
+
+    const nextSort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM model_configs').get().n;
+    const { lastInsertRowid: id } = db.prepare(`
+      INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
+      VALUES (?, 'cli', 'claude', ?, ?, 'pipe', 0, ?, NULL, NULL)
+    `).run(label, modelName, CODE_FLAGS, nextSort);
+
+    const upsertMapping = db.prepare(`
+      INSERT INTO model_mapping (page_key, model_config_id, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(page_key) DO UPDATE SET model_config_id = excluded.model_config_id, updated_at = excluded.updated_at
+    `);
+    for (const pageKey of pageKeys) upsertMapping.run(pageKey, id);
+    return id;
+  };
+
+  db.transaction(() => {
+    upsertCodeConfig('Claude Haiku Code', 'claude-haiku-4-5', ['test-generator']);
+    upsertCodeConfig('Claude Sonnet Code', 'claude-sonnet-5', ['workflows', 'workflow-runner', 'issue-runner', 'issues']);
+  })();
+
+  // Gemini (agy CLI) configs — intentionally left unmapped to any page.
+  // Two labels collide by design (both "Gemini Flash High General Purpose"),
+  // so identity here is (label, flags) rather than label alone.
+  const geminiConfigs = [
+    { label: 'Gemini Flash Medium General Purpose', modelName: 'Gemini 3.5 Flash (Medium)', flags: `--sandbox -p "{{prompt}}" --model {{model}}` },
+    { label: 'Gemini Flash High General Purpose',   modelName: 'Gemini 3.5 Flash (High)',   flags: `--sandbox -p "{{prompt}}" --model {{model}}` },
+    { label: 'Gemini Flash Medium Code',            modelName: 'Gemini 3.5 Flash (Medium)', flags: `-p "{{prompt}}" --model {{model}}` },
+    { label: 'Gemini Flash High General Purpose',   modelName: 'Gemini 3.5 Flash (High)',   flags: `-p "{{prompt}}" --model {{model}}` },
+  ];
+
+  db.transaction(() => {
+    for (const { label, modelName, flags } of geminiConfigs) {
+      const row = db.prepare('SELECT id FROM model_configs WHERE label = ? AND flags = ?').get(label, flags);
+      if (row) {
+        db.prepare(`UPDATE model_configs SET model_name = ?, executable = 'agy' WHERE id = ?`).run(modelName, row.id);
+        continue;
+      }
+      const nextSort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM model_configs').get().n;
+      db.prepare(`
+        INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
+        VALUES (?, 'cli', 'agy', ?, ?, 'pipe', 0, ?, NULL, NULL)
+      `).run(label, modelName, flags, nextSort);
+    }
+  })();
+
+  // Non-CLI reference configs (Ollama / Groq via OpenAI-compatible API / Anthropic API) —
+  // intentionally left unmapped to any page; these exist to illustrate the range of
+  // supported configurations (local model, third-party API, first-party API,
+  // agentic devflow-agent loop vs single-shot prompt).
+  const upsertNonCliConfig = (label, type, { baseUrl = null, modelName, maxTokens = null, useDevflowAgent }) => {
+    const row = db.prepare('SELECT id FROM model_configs WHERE label = ? AND type = ?').get(label, type);
+    if (row) {
+      db.prepare(`
+        UPDATE model_configs
+           SET base_url          = ?,
+               model_name        = ?,
+               max_tokens        = ?,
+               use_devflow_agent = ?
+         WHERE id = ?
+      `).run(baseUrl, modelName, maxTokens, useDevflowAgent ? 1 : 0, row.id);
+      return;
+    }
+    const nextSort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM model_configs').get().n;
+    db.prepare(`
+      INSERT INTO model_configs (label, type, base_url, model_name, max_tokens, input_mode, is_default, sort_order, use_devflow_agent)
+      VALUES (?, ?, ?, ?, ?, 'pipe', 0, ?, ?)
+    `).run(label, type, baseUrl, modelName, maxTokens, nextSort, useDevflowAgent ? 1 : 0);
+  };
+
+  db.transaction(() => {
+    // Ollama — local model server
+    upsertNonCliConfig('Ollama General Purpose', 'ollama', { baseUrl: 'http://localhost:11434', modelName: 'phi4-mini:latest', useDevflowAgent: false });
+    upsertNonCliConfig('Ollama Code',            'ollama', { baseUrl: 'http://localhost:11434', modelName: 'qwen2.5-coder:7b', useDevflowAgent: true });
+
+    // Groq — OpenAI-compatible API
+    upsertNonCliConfig('Groq General Purpose', 'api', { baseUrl: 'https://api.groq.com/openai/v1', modelName: 'llama-3.3-70b-versatile', useDevflowAgent: false });
+    upsertNonCliConfig('Groq Code',            'api', { baseUrl: 'https://api.groq.com/openai/v1', modelName: 'llama-3.3-70b-versatile', useDevflowAgent: true });
+
+    // Anthropic — first-party API ("[API] " prefix to avoid colliding with the CLI configs of the same name)
+    const renameAnthropic = db.prepare(`UPDATE model_configs SET label = ? WHERE label = ? AND type = 'anthropic'`);
+    renameAnthropic.run('[API] Claude Haiku General Purpose',    'Claude Haiku General Purpose (Anthropic API)');
+    renameAnthropic.run('[API] Claude Sonnet 5 General Purpose', 'Claude Sonnet 5 General Purpose (Anthropic API)');
+    renameAnthropic.run('[API] Claude Sonnet 5 Code',            'Claude Sonnet 5 Code (Anthropic API)');
+
+    upsertNonCliConfig('[API] Claude Haiku General Purpose',    'anthropic', { modelName: 'claude-haiku-4-5', useDevflowAgent: false });
+    upsertNonCliConfig('[API] Claude Sonnet 5 General Purpose', 'anthropic', { modelName: 'claude-sonnet-5',  useDevflowAgent: false });
+    upsertNonCliConfig('[API] Claude Sonnet 5 Code',            'anthropic', { modelName: 'claude-sonnet-5',  useDevflowAgent: true });
+
+    // Heavy-code-tier gap fillers — strongest Groq/Ollama picks for the agentic
+    // Run Layers/Run Issues workload, distinct from the general-purpose 70B picks above.
+    upsertNonCliConfig('Groq Code (DeepSeek R1 70B)',    'api',    { baseUrl: 'https://api.groq.com/openai/v1', modelName: 'deepseek-r1-distill-llama-70b', useDevflowAgent: true });
+    upsertNonCliConfig('Ollama Code (DeepSeek Coder V2)', 'ollama', { baseUrl: 'http://localhost:11434', modelName: 'deepseek-coder-v2', useDevflowAgent: true });
+  })();
 }
 
 /**

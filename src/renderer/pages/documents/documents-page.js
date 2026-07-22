@@ -110,7 +110,7 @@ export class DocumentsPage {
 
   _cancelAiRequest() {
     this._aiAbortController?.abort();
-    if (this._aiIsCli) window.db.terminal.killActive();
+    if (this._aiIsCli) window.app.chat.cancel();
     this._aiRunning = false;
   }
 
@@ -1104,7 +1104,7 @@ export class DocumentsPage {
         const reply = await this._runAiAskAnthropic(cfg, contextParts.join('\n'), instruction, aiMsgEl);
         if (reply) this._chatHistory.push({ role: 'user', content: instruction }, { role: 'assistant', content: reply });
       } else {
-        await this._runAiAskCli(cfg, contextParts.join('\n'), tailParts.join('\n'), aiMsgEl);
+        await this._runAiAskCli(cfg, fullPrompt, aiMsgEl);
       }
     } finally {
       sendBtn.disabled = false;
@@ -1333,47 +1333,28 @@ export class DocumentsPage {
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
 
-  async _runAiAskCli(cfg, contextContent, instructionContent, aiMsgEl) {
-    const exe       = cfg.executable || 'claude';
-    const flags     = cfg.flags ? ` ${cfg.flags}` : '';
-    const modelFlag = cfg.model_name ? ` --model ${cfg.model_name}` : '';
-
-    let contextFilePath;
-    try {
-      const paths    = await window.app.writeTempFiles([{ name: 'doc-context.txt', content: contextContent }]);
-      contextFilePath = paths[0];
-    } catch (err) {
-      this._updateChatMsg(aiMsgEl, `Failed to write context file: ${err.message}`, 'error');
-      return;
-    }
-
-    const cwd = contextFilePath.replace(/[\\/][^\\/]+$/, '');
-
-    const shortPrompt = `The document context (title, content, and any diagram attachments) is saved in the file below. Read it for context, then answer the question.\n\nContext file: ${contextFilePath}\n\n${instructionContent}`;
-    this._appendCliPromptPreview(shortPrompt);
-    const safePrompt  = shortPrompt.replace(/'/g, "''");
-    const command     = cfg.input_mode === 'heredoc'
-      ? `$p = @'\n${safePrompt}\n'@\n${exe}${flags}${modelFlag} $p`
-      : `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}${modelFlag}`;
+  async _runAiAskCli(cfg, prompt, aiMsgEl) {
+    this._appendCliPromptPreview(prompt);
 
     return new Promise(resolve => {
-      let fullOutput = '';
-      window.db.terminal.removeListeners();
-      window.db.terminal.onData(({ text }) => {
-        fullOutput += text;
-        this._updateChatMsg(aiMsgEl, fullOutput);
+      let fullText = '';
+      window.app.chat.offAll();
+      window.app.chat.onToken(({ text }) => {
+        fullText += text;
+        this._updateChatMsg(aiMsgEl, fullText);
       });
-      window.db.terminal.onDone(({ exitCode }) => {
-        window.db.terminal.removeListeners();
-        window.app.deleteTempDir(cwd);
-        if (exitCode !== 0 || !fullOutput.trim()) {
-          this._updateChatMsg(aiMsgEl, `Failed — exit code ${exitCode}`, 'error');
+      window.app.chat.onDone(({ raw, error }) => {
+        window.app.chat.offAll();
+        const finalText = (raw || fullText).trim();
+        if (finalText) {
+          this._updateChatMsg(aiMsgEl, finalText);
+        } else {
+          this._updateChatMsg(aiMsgEl, error ? `Error: ${error}` : 'No response from CLI.', 'error');
         }
         resolve();
       });
-      window.db.terminal.execStart({ command, cwd }).catch(err => {
-        window.db.terminal.removeListeners();
-        window.app.deleteTempDir(cwd);
+      window.app.chat.generate({ prompt, model: cfg, rawMode: true }).catch(err => {
+        window.app.chat.offAll();
         this._updateChatMsg(aiMsgEl, `CLI error: ${err.message}`, 'error');
         resolve();
       });
@@ -1456,7 +1437,7 @@ export class DocumentsPage {
       } else if (cfg.type === 'anthropic') {
         await this._runAiEditAnthropic(cfg, contextParts.join('\n'), tailParts.join('\n'), aiMsgEl, contentTA, prevContent);
       } else {
-        await this._runAiEditCli(cfg, contextParts.join('\n'), tailParts.join('\n'), aiMsgEl, contentTA, prevContent);
+        await this._runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent);
       }
       if (this._dirty) {
         const panel      = this.container.querySelector('#docPanel');
@@ -1733,55 +1714,32 @@ export class DocumentsPage {
     }
   }
 
-  async _runAiEditCli(cfg, contextContent, instructionContent, aiMsgEl, contentTA, prevContent) {
-    const exe       = cfg.executable || 'claude';
-    const flags     = cfg.flags ? ` ${cfg.flags}` : '';
-    const modelFlag = cfg.model_name ? ` --model ${cfg.model_name}` : '';
-
-    let contextFilePath;
-    try {
-      const paths    = await window.app.writeTempFiles([{ name: 'doc-context.txt', content: contextContent }]);
-      contextFilePath = paths[0];
-    } catch (err) {
-      this._updateChatMsg(aiMsgEl, `Failed to write context file: ${err.message}`, 'error');
-      return;
-    }
-
-    const cwd = contextFilePath.replace(/[\\/][^\\/]+$/, '');
-
-    const shortPrompt = `The document context (title, current content, and any diagram attachments) is saved in the file below. Read it for context, then complete the editing task.\n\nContext file: ${contextFilePath}\n\n${instructionContent}`;
-    this._appendCliPromptPreview(shortPrompt);
-    const safePrompt  = shortPrompt.replace(/'/g, "''");
-    const command     = cfg.input_mode === 'heredoc'
-      ? `$p = @'\n${safePrompt}\n'@\n${exe}${flags}${modelFlag} $p`
-      : `$p = @'\n${safePrompt}\n'@\nWrite-Output $p | ${exe}${flags}${modelFlag}`;
+  async _runAiEditCli(cfg, prompt, aiMsgEl, contentTA, prevContent) {
+    this._appendCliPromptPreview(prompt);
 
     return new Promise(resolve => {
-      let fullOutput = '';
-
-      window.db.terminal.removeListeners();
-      window.db.terminal.onData(({ text }) => {
-        fullOutput += text;
-        this._updateChatMsg(aiMsgEl, `Generating… ${fullOutput.length} chars`, 'thinking');
+      let fullText = '';
+      window.app.chat.offAll();
+      window.app.chat.onToken(({ text }) => {
+        fullText += text;
+        this._updateChatMsg(aiMsgEl, `Generating… ${fullText.length} chars`, 'thinking');
       });
-      window.db.terminal.onDone(({ exitCode }) => {
-        window.db.terminal.removeListeners();
-        window.app.deleteTempDir(cwd);
-        if (exitCode === 0 && fullOutput.trim()) {
-          if (contentTA) { contentTA.value = fullOutput.trim(); this._dirty = true; }
+      window.app.chat.onDone(({ raw, error }) => {
+        window.app.chat.offAll();
+        const finalText = (raw || fullText).trim();
+        if (finalText) {
+          if (contentTA) { contentTA.value = finalText; this._dirty = true; }
           const activeDoc = this._docs.find(d => d.id === this._activeId);
-          if (activeDoc) activeDoc.content = fullOutput.trim();
+          if (activeDoc) activeDoc.content = finalText;
           this._refreshPreviewIfActive();
-          this._setChatMsgApplied(aiMsgEl, fullOutput, prevContent);
+          this._setChatMsgApplied(aiMsgEl, finalText, prevContent);
         } else {
-          this._updateChatMsg(aiMsgEl, `Failed — exit code ${exitCode}`, 'error');
+          this._updateChatMsg(aiMsgEl, error ? `Error: ${error}` : 'No content returned by CLI.', 'error');
         }
         resolve();
       });
-
-      window.db.terminal.execStart({ command, cwd }).catch(err => {
-        window.db.terminal.removeListeners();
-        window.app.deleteTempDir(cwd);
+      window.app.chat.generate({ prompt, model: cfg, rawMode: true }).catch(err => {
+        window.app.chat.offAll();
         this._updateChatMsg(aiMsgEl, `CLI error: ${err.message}`, 'error');
         resolve();
       });

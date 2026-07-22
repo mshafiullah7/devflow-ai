@@ -405,12 +405,17 @@ export class StyleGuidePage {
     injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
-    this._project = await window.db.projects.get(this._projectId);
+    const [project, mapping] = await Promise.all([
+      window.db.projects.get(this._projectId),
+      window.db.modelMapping.get('style-guide'),
+    ]);
+    this._project = project;
     this.container.innerHTML = this._template();
 
     this._picker = new ModelPicker({
-      anchor:   this.container.querySelector('#sgModelPicker'),
-      onSelect: model => { this._aiModelConfig = model; },
+      anchor:    this.container.querySelector('#sgModelPicker'),
+      onSelect:  model => { this._aiModelConfig = model; },
+      initialId: mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
 
