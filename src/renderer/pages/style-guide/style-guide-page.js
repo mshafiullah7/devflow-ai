@@ -500,6 +500,9 @@ export class StyleGuidePage {
               </select>
             </label>
             <div class="sg-theme-picker" id="sgThemePickerAnchor"></div>
+            <button class="scr-btn scr-btn--sm scr-btn--secondary" id="sgExportBtn" type="button" title="Export design tokens as Markdown">
+              Export
+            </button>
           </div>
 
           <div class="sg-page__editor">
@@ -658,6 +661,9 @@ export class StyleGuidePage {
     /* ---- Theme dropdown (custom, matches AI Model picker) ---- */
     this._renderPreview = renderPreview;
     this._renderThemePicker();
+
+    /* ---- Export design tokens as Markdown ---- */
+    this.container.querySelector('#sgExportBtn').addEventListener('click', () => this._exportMarkdown());
 
     /* ---- Textarea live preview ---- */
     this.container.querySelector('#sgTplLight').addEventListener('input', () => { if (activeTheme === 'light') renderPreview(); });
@@ -1033,6 +1039,35 @@ Rules:
       if (existingNames.has(preset.label)) continue;
       await window.db.savedThemes.create({ name: preset.label, light: preset.light, dark: preset.dark, category: 'mobile' });
     }
+  }
+
+  async _exportMarkdown() {
+    const light = this.container.querySelector('#sgTplLight')?.value.trim() || '';
+    const dark  = this.container.querySelector('#sgTplDark')?.value.trim() || '';
+    if (!light && !dark) {
+      await Dialog.alert('No design tokens to export. Add some light/dark theme content first.');
+      return;
+    }
+
+    const md = `# ${this._project?.name || 'Project'} — Style Guide\n\n`
+      + `## Light Theme\n\n\`\`\`\n${light}\n\`\`\`\n\n`
+      + `## Dark Theme\n\n\`\`\`\n${dark}\n\`\`\`\n`;
+
+    const folderPath = await window.db.dialog.openFolder();
+    if (!folderPath) return;
+
+    const safeTitle = (this._project?.name || 'style-guide').replace(/[^a-z0-9_\-]/gi, '_');
+    const fileName  = `${safeTitle}_Styles.md`;
+    const filePath  = `${folderPath}\\${fileName}`;
+
+    const existing = await window.shell.readFile(filePath);
+    if (existing) {
+      const overwrite = await Dialog.confirm(`${fileName} already exists. Overwrite it?`, { title: 'File Already Exists', confirmText: 'Overwrite', danger: true });
+      if (!overwrite) return;
+    }
+
+    await window.shell.writeFile(filePath, md);
+    await Dialog.alert(`File saved as ${fileName}`, { title: 'Export Successful' });
   }
 
   async _loadThemeDropdown() {
