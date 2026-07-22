@@ -340,6 +340,21 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('termPty:layerDone');
     },
   },
+  // PTY-backed terminal for the Project Layers "run setup instructions" modal
+  // (independent from termPty so it doesn't collide with the standalone Terminal window/page)
+  plPty: {
+    write:      (data) => ipcRenderer.invoke('plPty:write', data),
+    spawnShell: (data) => ipcRenderer.invoke('plPty:spawnShell', data),
+    resize:     (data) => ipcRenderer.invoke('plPty:resize', data),
+    kill:       ()     => ipcRenderer.invoke('plPty:kill'),
+    runInShell: (data) => ipcRenderer.invoke('plPty:runInShell', data),
+    onData:      (cb)  => ipcRenderer.on('plPty:data',      (_e, p) => cb(p)),
+    onLayerDone: (cb)  => ipcRenderer.on('plPty:layerDone', (_e, p) => cb(p)),
+    offAll:      ()    => {
+      ipcRenderer.removeAllListeners('plPty:data');
+      ipcRenderer.removeAllListeners('plPty:layerDone');
+    },
+  },
   // Separate AI channel for the generate-workflows window.
   genWorkflowChat: {
     generate: (data) => ipcRenderer.invoke('genWorkflowChat:generate', data),

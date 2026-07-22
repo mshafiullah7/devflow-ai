@@ -38,6 +38,24 @@ function cleanOldTempFiles() {
   } catch (_) {}
 }
 
+// Same cleanup, but for the per-project ".devflow-tmp" folder used by
+// runInShell prompt files (must live inside cwd for Claude Code's sandbox).
+function cleanOldTempFilesIn(dir) {
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  const now = Date.now();
+  try {
+    const entries = fs.readdirSync(dir);
+    for (const name of entries) {
+      if (!/^prompt-/.test(name)) continue;
+      const full = path.join(dir, name);
+      try {
+        const { mtimeMs } = fs.statSync(full);
+        if (now - mtimeMs > TWO_HOURS) fs.unlinkSync(full);
+      } catch (_) {}
+    }
+  } catch (_) {}
+}
+
 // ---------------------------------------------------------------------------
 // Factory — creates an isolated PTY context for a given IPC channel prefix.
 // Call registerPtyHandlers('wfrPty') for Workflow Runner and
@@ -364,8 +382,16 @@ function registerPtyHandlers(prefix) {
 
     const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${prompt}` : (prompt || '');
     const ts         = Date.now();
-    const tmpFile    = path.join(os.tmpdir(), `wfr-layer-${layerId}-${ts}.txt`);
+    // Claude Code CLI sandboxes file reads to within its working directory —
+    // a prompt file under the OS temp dir (outside cwd) gets rejected with
+    // "outside the allowed working directory". Write it inside cwd instead,
+    // in a hidden subfolder, so `@<file>` resolves within the sandbox.
+    const tmpDir  = path.join(spawnCwd, '.devflow-tmp');
+    let tmpFile;
     try {
+      fs.mkdirSync(tmpDir, { recursive: true });
+      cleanOldTempFilesIn(tmpDir);
+      tmpFile = path.join(tmpDir, `prompt-${layerId}-${ts}.txt`);
       fs.writeFileSync(tmpFile, fullPrompt, 'utf8');
     } catch (err) {
       return { ok: false, error: err.message };
@@ -566,6 +592,7 @@ function registerPtyHandlers(prefix) {
 registerPtyHandlers('wfrPty');
 registerPtyHandlers('irPty');
 registerPtyHandlers('termPty');
+registerPtyHandlers('plPty');
 
 // Keep named export for the existing ipc/index.js call — now a no-op since
 // handlers are already registered by the two calls above.

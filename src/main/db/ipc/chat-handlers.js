@@ -58,9 +58,9 @@ const _workflowCtx   = createCtx();
 const _genWfCtx      = createCtx();
 const _testGenCtx    = createCtx();
 
-function _logAiCall(type, modelName, exe, promptOrMessages) {
+function _logAiCall(type, modelName, exe, promptOrMessages, flags) {
   const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const label = exe ? `${exe} --model ${modelName}` : `model=${modelName}`;
+  const label = flags ? `${exe} ${flags}` : (exe ? `${exe} --model ${modelName}` : `model=${modelName}`);
   let preview = '';
   if (typeof promptOrMessages === 'string') {
     preview = promptOrMessages.trimStart();
@@ -155,27 +155,6 @@ Format:
 
 Rules:
 - Each "search" must be an exact, unique substring of the HTML above
-- Include at least 20 surrounding characters so the string is unambiguous
-- Replace the smallest snippet that achieves the change — do not repeat unchanged content
-- Multiple patches are fine and applied in order`;
-}
-
-function buildDiffPromptWithRef(instruction, htmlFilePath, projectDescription) {
-  const ctx = projectDescription ? `\nProject context: ${projectDescription}` : '';
-  return `You are an expert UI/UX developer. Apply the instruction below to the HTML file.
-
-Read the existing HTML from: ${htmlFilePath}${ctx}
-
-Instruction: ${instruction}
-
-Output ONLY a raw JSON array of search-replace patches. No explanation, no markdown, no HTML.
-The output must start with [ and end with ].
-
-Format:
-[{"search":"exact substring copied from the HTML","replace":"new content"}]
-
-Rules:
-- Each "search" must be an exact, unique substring of the HTML in the file
 - Include at least 20 surrounding characters so the string is unambiguous
 - Replace the smallest snippet that achieves the change — do not repeat unchanged content
 - Multiple patches are fine and applied in order`;
@@ -528,7 +507,6 @@ function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneC
 function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode) {
   const exe       = model.executable || 'claude';
   const modelName = model.model_name || DEFAULT_CLI_MODEL;
-  _logAiCall('cli', modelName, exe, messages || prompt);
 
   // Resolve flags template — fall back to Claude defaults for configs saved before this change.
   // The skip-perms flag must be prepended whether or not a custom CLI Command
@@ -543,19 +521,27 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
 
   const ts = Date.now();
 
+  // Claude Code CLI sandboxes file reads (including the '@promptfile' context
+  // reference below) to within its working directory — a path under the OS
+  // temp dir sits outside that sandbox and gets rejected with "outside the
+  // allowed working directory". Write the temp prompt file inside the same
+  // directory the CLI is spawned in instead (cwd, or process.cwd() when no
+  // cwd is passed — that's what the spawn below inherits).
+  const tmpDir = path.join(cwd || process.cwd(), '.devflow-tmp');
+  try { fs.mkdirSync(tmpDir, { recursive: true }); } catch (_) {}
+
   let promptText;
-  let htmlTmpFile = null;
   let isDiffMode  = false;
 
   if (editPayload) {
-    htmlTmpFile = path.join(os.tmpdir(), `ai-sdlc-html-${ts}.html`);
-    try {
-      fs.writeFileSync(htmlTmpFile, editPayload.htmlContent, 'utf8');
-    } catch (err) {
-      send(wc, doneCh, { html: null, raw: '', error: `Failed to write HTML temp file: ${err.message}` });
-      return;
-    }
-    promptText = buildDiffPromptWithRef(editPayload.instruction, htmlTmpFile, editPayload.projectDescription);
+    // Embed the HTML directly in the prompt file (same as the API/Ollama
+    // backends) instead of writing a second file and telling the model to
+    // Read it — that required an actual Read tool call, which a model
+    // config with --disallowedTools "Read,..." (e.g. the default "General
+    // Purpose" configs) blocks outright, and read as a suspicious embedded
+    // instruction besides. Inline content only needs the same '@promptfile'
+    // context reference already used to pass the instruction itself.
+    promptText = buildDiffPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
     isDiffMode = true;
   } else if (messages && messages.length > 1) {
     const lines = messages.slice(0, -1).map(m =>
@@ -569,11 +555,12 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
     promptText = prompt;
   }
 
-  const tmpFile = path.join(os.tmpdir(), `ai-sdlc-chat-${ts}.txt`);
+  _logAiCall('cli', modelName, exe, promptText, resolvedFlags);
+
+  const tmpFile = path.join(tmpDir, `ai-sdlc-chat-${ts}.txt`);
   try {
     fs.writeFileSync(tmpFile, promptText, 'utf8');
   } catch (err) {
-    if (htmlTmpFile) { try { fs.unlinkSync(htmlTmpFile); } catch (_) {} }
     send(wc, doneCh, { html: null, raw: '', error: `Failed to write temp file: ${err.message}` });
     return;
   }
@@ -600,7 +587,6 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
 
   const cleanup = () => {
     try { fs.unlinkSync(tmpFile); } catch (_) {}
-    if (htmlTmpFile) { try { fs.unlinkSync(htmlTmpFile); } catch (_) {} }
   };
 
   ctx.proc = spawn(

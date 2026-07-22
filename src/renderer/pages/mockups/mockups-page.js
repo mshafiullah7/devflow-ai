@@ -7,13 +7,16 @@ import { TECH, PLATFORM_GUIDES } from './data/platform-guides.js';
 import { SCREEN_TEMPLATES }      from './data/screen-templates.js';
 
 
-function buildScreenPrompt(description, projectDescription, outputFile, designTemplate, targetPlatform) {
+function buildScreenPrompt(description, projectDescription, outputFile, designTemplate, targetPlatform, referenceScreen) {
   const ctx      = projectDescription ? `\nProject context: ${projectDescription}` : '';
   const save     = outputFile
     ? `\nWhen done, save the complete output to: ${outputFile}`
     : `\nDo NOT use any tools, write any files, or save anything — print the raw HTML directly to stdout.`;
   const design   = designTemplate
     ? `\n\nDESIGN SYSTEM — you MUST follow this for every element (colours, fonts, spacing, components):\n${designTemplate}`
+    : '';
+  const reference = referenceScreen
+    ? `\n\nREFERENCE SCREEN — "${referenceScreen.title}". Use it as a reference for visual style and structure (colours, typography, spacing, component patterns, layout conventions) and to stay consistent with related content already defined for this screen where relevant. Adapt these patterns to the new screen described below — do not just copy the reference verbatim:\n${referenceScreen.html_content || referenceScreen.description || ''}`
     : '';
   const platform = PLATFORM_GUIDES[targetPlatform] || '';
 
@@ -24,7 +27,7 @@ Rules:
 - Visually polished, modern design with realistic placeholder content
 - Fully responsive
 - No explanation, no markdown — raw HTML only
-- REQUIRED: Include a light/dark theme toggle button fixed in the top-right corner (position:fixed; top:1rem; right:1rem; z-index:9999). The button must toggle a "dark" class on <html> or <body> and switch all colours accordingly using CSS variables or a [data-theme] attribute. Default to light theme. The toggle must work standalone with no external dependencies.${ctx}${design}${platform}${save}
+- REQUIRED: Include a light/dark theme toggle button fixed in the top-right corner (position:fixed; top:1rem; right:1rem; z-index:9999). The button must toggle a "dark" class on <html> or <body> and switch all colours accordingly using CSS variables or a [data-theme] attribute. Default to light theme. The toggle must work standalone with no external dependencies.${ctx}${design}${reference}${platform}${save}
 
 Screen to design:
 ${description}`;
@@ -240,6 +243,15 @@ export class MockupsPage {
           </div>
           <span class="ph-header-page-chip">Mockups</span>
           <div class="ph-header-actions">
+            <button class="mockups-cwd-pill${this._project?.project_path ? '' : ' mockups-cwd-pill--empty'}"
+              id="mockupsCwdBtn" type="button"
+              title="${this._project?.project_path ? escHtml(this._project.project_path) + ' — click to change' : 'No project folder set — click to select one'}">
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
+                <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              </svg>
+              <span id="mockupsCwdText">${this._project?.project_path ? escHtml(this._project.project_path) : 'Select project folder'}</span>
+            </button>
             <div id="mockupsModelPicker"></div>
             <button class="mockups-page__style-btn scr-btn scr-btn--sm${this._hasAnyTemplate() ? ' scr-btn--ds-active' : ''}" id="scrStyleGuideBtn" title="Open Project Style Guide page">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -327,9 +339,34 @@ export class MockupsPage {
         this.router.navigate('style-guide', { projectId: this._projectId, from: 'mockups' });
       });
 
-
+    this.container.querySelector('#mockupsCwdBtn')
+      ?.addEventListener('click', () => this._pickProjectFolder());
 
     this._bindSidebarItems();
+  }
+
+  // ----------------------------------------------------------------
+  // Project folder — where the CLI runs for AI generation/edits.
+  // Persisted on the project itself (projects.project_path) so it's shared
+  // with other pages (Workflows, Terminal, Git Changes) that already fall
+  // back to this same field.
+  // ----------------------------------------------------------------
+  async _pickProjectFolder() {
+    const folderPath = await window.db.dialog.openFolder();
+    if (!folderPath) return;
+    await window.db.projects.setPath({ id: this._projectId, project_path: folderPath });
+    if (this._project) this._project.project_path = folderPath;
+    this._updateCwdPill();
+  }
+
+  _updateCwdPill() {
+    const btn  = this.container.querySelector('#mockupsCwdBtn');
+    const text = this.container.querySelector('#mockupsCwdText');
+    if (!btn || !text) return;
+    const path = this._project?.project_path || '';
+    btn.classList.toggle('mockups-cwd-pill--empty', !path);
+    btn.title = path ? `${path} — click to change` : 'No project folder set — click to select one';
+    text.textContent = path || 'Select project folder';
   }
 
   _updateStyleGuideBtn() {
@@ -604,6 +641,13 @@ export class MockupsPage {
               ${templateOptions}
             </select>
           </div>
+          <div class="scr-form__row">
+            <label class="scr-form__label">Reference screen <span style="font-weight:400;opacity:.6">(optional — used as a design/content reference for the first generation only)</span></label>
+            <select class="scr-form__select" id="scrNsReference">
+              <option value="">— No reference —</option>
+              ${this._screens.map(s => `<option value="${escHtml(String(s.id))}">${escHtml(s.title)}</option>`).join('')}
+            </select>
+          </div>
           <div class="scr-form__row scr-form__row--grow">
             <label class="scr-form__label">Description <span style="font-weight:400;opacity:.6">(used as AI prompt)</span></label>
             <textarea class="scr-form__textarea" id="scrNsDesc" rows="10"
@@ -645,6 +689,8 @@ export class MockupsPage {
       const title = dlg.querySelector('#scrNsTitle').value.trim();
       if (!title) { dlg.querySelector('#scrNsTitle').focus(); return; }
       const description = dlg.querySelector('#scrNsDesc').value.trim();
+      const referenceId = dlg.querySelector('#scrNsReference').value;
+      const referenceScreen = referenceId ? this._screens.find(s => String(s.id) === referenceId) : null;
 
       const screen = await window.db.screenDesigns.create({
         project_id:   this._projectId,
@@ -658,6 +704,7 @@ export class MockupsPage {
       this._screens  = await window.db.screenDesigns.list(this._projectId);
       this._activeId = screen.id;
       this._refreshSidebar();
+      screen._referenceScreen = referenceScreen || null;
       this._showScreenViewer(screen);
     });
   }
@@ -669,10 +716,21 @@ export class MockupsPage {
     const model = this._getSelectedModel();
     if (!model) { await Dialog.alert('No model selected.'); return; }
 
+    const project = this._getProject();
+
+    // CLI models actually spawn a subprocess with a real working directory —
+    // without a project folder there's nowhere for the CLI to run (and temp
+    // files it's told to Read would fall outside whatever directory it
+    // inherits by default). API/Ollama models embed content inline and don't
+    // need this.
+    if (model.type === 'cli' && !project?.project_path) {
+      await Dialog.alert('No project folder set. Click the folder path in the header to select one before generating with a CLI model.');
+      return;
+    }
+
     chatInput.value = '';
     chatInput.style.height = 'auto';
 
-    const project = this._getProject();
     const hasHtml = !!screen.html_content;
 
     // For edit: pass structured payload so main process can write HTML to temp file (CLI)
@@ -687,10 +745,11 @@ export class MockupsPage {
           projectDescription: project?.description || '',
         },
         model,
+        cwd: project?.project_path || undefined,
       };
     } else {
-      const prompt = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt(), project?.target_platform);
-      generateArg  = { prompt, model };
+      const prompt = buildScreenPrompt(desc, project?.description || '', '', this._getDesignTemplateForPrompt(), project?.target_platform, screen._referenceScreen);
+      generateArg  = { prompt, model, cwd: project?.project_path || undefined };
     }
 
     const messagesEl = main.querySelector('#scrChatMessages');

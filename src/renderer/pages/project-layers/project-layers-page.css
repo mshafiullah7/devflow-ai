@@ -9,6 +9,25 @@
   min-width: 180px;
 }
 
+/* CLI working-directory indicator, shown before the header's model picker */
+.pl-header-cwd {
+  display: inline-flex;
+  align-items: center;
+  max-width: 320px;
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
 #plPanelList .project-related__section-hd {
   height: 40px;
   padding: 0 10px;
@@ -189,6 +208,11 @@
   transition: color 0.1s, background 0.1s;
 }
 .pl-modal__close:hover { color: var(--text-primary); background: var(--surface-hover); }
+.pl-modal__close:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.pl-modal__close:disabled:hover { background: none; }
 
 .pl-modal__body {
   flex: 1;
@@ -358,4 +382,45 @@
 }
 .pl-modal-prompt-textarea:focus { border-color: var(--accent); }
 .pl-modal-prompt-textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
+
+/* ── "Run" play button next to the Project Setup Instructions label ─── */
+.pl-setup-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pl-run-setup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+.pl-run-setup-btn:hover { opacity: 0.85; }
+
+/* ── Run Setup modal — embedded interactive terminal ──────────────────── */
+.pl-term-modal {
+  width: 920px;
+  height: 88vh;
+}
+.pl-term-modal__body {
+  flex: 1;
+  min-height: 0;
+  background: var(--console-bg);
+  padding: 6px 4px 4px 8px;
+  overflow: hidden;
+  position: relative;
+}
+.pl-term-modal__body .xterm { height: 100%; width: 100%; }
+.pl-term-modal__body .xterm-viewport { overflow-y: auto !important; }
 

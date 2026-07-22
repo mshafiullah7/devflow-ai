@@ -118,6 +118,40 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Header — project folder (CLI working directory) pill                 */
+/* ------------------------------------------------------------------ */
+.mockups-cwd-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: border-color 0.12s, color 0.12s;
+}
+.mockups-cwd-pill:hover { border-color: var(--accent); color: var(--text-primary); }
+.mockups-cwd-pill span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+.mockups-cwd-pill--empty {
+  border-color: #c8a020;
+  color: #c8a020;
+  background: color-mix(in srgb, #c8a020 8%, transparent);
+}
+.mockups-cwd-pill--empty:hover { border-color: #c8a020; color: #c8a020; }
+
+/* ------------------------------------------------------------------ */
 /* Header — style guide button                                          */
 /* ------------------------------------------------------------------ */
 .mockups-page__style-btn {

@@ -33,6 +33,7 @@ export class ProjectLayersPage {
     this._activeId      = null;
     this._aiModelConfig = null;
     this._pendingSave   = null;
+    this._detailKeyHandler = null;
     this._generating     = false;
   }
 
@@ -84,6 +85,8 @@ export class ProjectLayersPage {
     this._pendingSave = null;
     if (fn) fn();
     window.app.chat.offAll();
+    window.app.plPty.offAll();
+    window.app.plPty.kill();
     if (this._onKeyDown) document.removeEventListener('keydown', this._onKeyDown);
     removeCss('pages/project-layers/project-layers-page.css');
     removeCss('pages/issues/issues-page.css');
@@ -115,6 +118,7 @@ export class ProjectLayersPage {
           </div>
           <span class="ph-header-page-chip">Project Layers</span>
           <div class="ph-header-actions">
+            <span class="pl-header-cwd" id="plHeaderCwd" hidden title="The CLI will run in this folder"></span>
             <div id="plModelPicker"></div>
           </div>
         </header>
@@ -329,11 +333,30 @@ export class ProjectLayersPage {
   }
 
   // ----------------------------------------------------------------
+  // Header — CLI working-directory indicator, shown before the model picker
+  // ----------------------------------------------------------------
+  _updateHeaderCwd(folderPath) {
+    const el = this.container.querySelector('#plHeaderCwd');
+    if (!el) return;
+    if (folderPath) {
+      el.hidden = false;
+      el.textContent = folderPath;
+    } else {
+      el.hidden = true;
+      el.textContent = '';
+    }
+  }
+
+  // ----------------------------------------------------------------
   // Right panel — empty state
   // ----------------------------------------------------------------
   _showEmptyDetail() {
     this._pendingSave = null;
     const el = this.container.querySelector('#plLayerDetail');
+    if (el && this._detailKeyHandler) {
+      el.removeEventListener('keydown', this._detailKeyHandler);
+      this._detailKeyHandler = null;
+    }
     if (el) el.innerHTML = `
       <div class="project-panel__empty">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -346,6 +369,7 @@ export class ProjectLayersPage {
       </div>`;
     const actions = this.container.querySelector('#plDetailHeaderActions');
     if (actions) actions.innerHTML = '';
+    this._updateHeaderCwd('');
   }
 
   // ----------------------------------------------------------------
@@ -367,6 +391,7 @@ export class ProjectLayersPage {
     if (actions) actions.innerHTML = `<button class="is-form__btn" id="plFormSave">Add Layer</button>`;
     this._bindDetailFormEvents(el, null);
     el.querySelector('#plFormName')?.focus();
+    this._updateHeaderCwd('');
   }
 
   // ----------------------------------------------------------------
@@ -380,6 +405,7 @@ export class ProjectLayersPage {
     el.innerHTML = this._detailFormHtml(layer);
     if (actions) actions.innerHTML = `<button class="is-form__btn" id="plFormSave">Save Changes</button>`;
     this._bindDetailFormEvents(el, layer);
+    this._updateHeaderCwd(layer?.folder_path || '');
   }
 
   // ----------------------------------------------------------------
@@ -411,13 +437,29 @@ export class ProjectLayersPage {
           </div>
 
           <div class="is-form__field">
-            <label class="is-form__label" for="plFormSetup">Project Setup Instructions</label>
+            <div class="pl-setup-label-row">
+              <label class="is-form__label" for="plFormSetup">Project Setup Instructions</label>
+              <button class="pl-run-setup-btn" id="plRunSetupBtn" type="button" title="Run these instructions in a terminal">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                Run
+              </button>
+            </div>
             <textarea class="is-form__textarea" id="plFormSetup" rows="12"
               placeholder="Steps to set up this layer locally — install dependencies, environment variables, run commands…">${escHtml(layer?.setup_instructions || '')}</textarea>
           </div>
 
           <div class="is-form__field">
-            <label class="is-form__label" for="plFormScaffold">Scaffold Structure</label>
+            <div class="pl-setup-label-row">
+              <label class="is-form__label" for="plFormScaffold">Scaffold Structure</label>
+              <button class="pl-run-setup-btn" id="plRunScaffoldBtn" type="button" title="Create these folders in a terminal">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                Run
+              </button>
+            </div>
             <textarea class="is-form__textarea" id="plFormScaffold" rows="6"
               placeholder="One folder path per line — e.g. src/domain, src/application, src/infrastructure…">${escHtml(scaffoldStructureToLines(layer?.scaffold_structure))}</textarea>
           </div>
@@ -470,9 +512,56 @@ export class ProjectLayersPage {
       folderText.textContent = folderPath;
       folderText.classList.remove('pl-folder-text--empty');
       folderPill.classList.add('pl-folder-pill--set');
+      this._updateHeaderCwd(folderPath);
     };
     browseBtn?.addEventListener('click', pickFolder);
     folderPill?.addEventListener('click', pickFolder);
+
+    // Run setup instructions in an embedded terminal
+    const runSetupBtn = el.querySelector('#plRunSetupBtn');
+    runSetupBtn?.addEventListener('click', () => {
+      if (this._aiModelConfig?.type !== 'cli') {
+        window.showToast?.('Select a CLI model before running setup instructions.', 'warning');
+        return;
+      }
+      if (!setupEl?.value?.trim()) {
+        window.showToast?.('Setup instructions are empty — nothing to run.', 'warning');
+        return;
+      }
+      this._openRunSetupPrepModal({
+        layerId:     layer?.id ?? 'new',
+        rootFolder:  folderInput?.value?.trim() || '',
+        instructions: setupEl.value,
+      });
+    });
+
+    // Run scaffold structure (create the folders) in an embedded terminal
+    const runScaffoldBtn = el.querySelector('#plRunScaffoldBtn');
+    runScaffoldBtn?.addEventListener('click', () => {
+      if (this._aiModelConfig?.type !== 'cli') {
+        window.showToast?.('Select a CLI model before running the scaffold structure.', 'warning');
+        return;
+      }
+      const folders = (scaffoldEl?.value || '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+      if (!folders.length) {
+        window.showToast?.('Scaffold Structure is empty — nothing to run.', 'warning');
+        return;
+      }
+      const instructions = [
+        'Create the following project folder structure, relative to the current directory.',
+        'Create each folder (and any missing parent folders) as an empty directory — do not create any files inside them.',
+        '',
+        ...folders,
+      ].join('\n');
+      this._openRunSetupPrepModal({
+        layerId:      layer?.id ?? 'new',
+        rootFolder:   folderInput?.value?.trim() || '',
+        instructions,
+      });
+    });
 
     // Save
     const save = async (silent = false) => {
@@ -496,11 +585,15 @@ export class ProjectLayersPage {
 
       try {
         if (layer) {
+          // Update in place — do NOT tear down/rebuild the form (that would
+          // reset scroll position, cursor, and any edits made mid-save).
           const updated = await window.db.projectLayers.update({ id: layer.id, ...payload });
+          layer = updated;
           const idx = this._layers.findIndex(l => l.id === layer.id);
           if (idx !== -1) this._layers[idx] = updated;
           this._renderList();
-          this._selectLayer(layer.id);
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
+          this._pendingSave = () => save(true);
         } else {
           const created = await window.db.projectLayers.create({
             ...payload,
@@ -520,9 +613,16 @@ export class ProjectLayersPage {
 
     this._pendingSave = () => save(true);
     saveBtn?.addEventListener('click', () => save());
-    el.addEventListener('keydown', (e) => {
+
+    // `el` (#plLayerDetail) is a persistent node whose innerHTML gets replaced
+    // on re-render — it is NOT recreated. Without removing the previous
+    // handler first, every re-bind stacks another keydown listener on it,
+    // so a single Ctrl+S eventually fires many stale handlers at once.
+    if (this._detailKeyHandler) el.removeEventListener('keydown', this._detailKeyHandler);
+    this._detailKeyHandler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
-    });
+    };
+    el.addEventListener('keydown', this._detailKeyHandler);
   }
 
   // ----------------------------------------------------------------
@@ -575,6 +675,227 @@ export class ProjectLayersPage {
     if (!this._generating) return true;
     window.showToast?.('Cannot close the app while Generate is running — please wait…', 'warning');
     return false;
+  }
+
+  // ----------------------------------------------------------------
+  // Run Setup — prep modal: pick/confirm the root folder and review/edit
+  // the instructions before they're typed into the terminal.
+  // ----------------------------------------------------------------
+  _openRunSetupPrepModal({ layerId, rootFolder, instructions }) {
+    const overlay = document.createElement('div');
+    overlay.className = 'pl-modal-overlay';
+
+    const hasPath = !!rootFolder;
+    overlay.innerHTML = `
+      <div class="pl-modal">
+        <div class="pl-modal__header">
+          <span class="pl-modal__title">Setup Project</span>
+          <button class="pl-modal__close" id="plPrepModalClose">✕</button>
+        </div>
+        <div class="pl-modal__body">
+          <div class="pl-modal-section">
+            <div class="pl-modal-section-label">Root Folder</div>
+            <div class="pl-folder-row">
+              <div class="pl-folder-pill${hasPath ? ' pl-folder-pill--set' : ''}" id="plPrepFolderPill">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                  <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                    stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                </svg>
+                <span id="plPrepFolderText" class="${hasPath ? '' : 'pl-folder-text--empty'}"
+                >${hasPath ? escHtml(rootFolder) : 'No folder selected'}</span>
+              </div>
+              <button class="pl-browse-btn" id="plPrepBrowseBtn" type="button">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
+                  <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                    stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                </svg>
+                Browse…
+              </button>
+            </div>
+          </div>
+          <div class="pl-modal-section">
+            <div class="pl-modal-section-label">Setup Instructions</div>
+            <textarea class="pl-modal-prompt-textarea" id="plPrepInstructions" rows="14">${escHtml(instructions || '')}</textarea>
+          </div>
+          <button class="pl-modal-generate-btn" id="plPrepSetupBtn" type="button">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Setup Project
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    let folderValue = rootFolder || '';
+    const folderPill = overlay.querySelector('#plPrepFolderPill');
+    const folderText = overlay.querySelector('#plPrepFolderText');
+    const instrEl    = overlay.querySelector('#plPrepInstructions');
+
+    const pickFolder = async () => {
+      const picked = await window.db.dialog.openFolder();
+      if (!picked) return;
+      folderValue = picked;
+      folderText.textContent = picked;
+      folderText.classList.remove('pl-folder-text--empty');
+      folderPill.classList.add('pl-folder-pill--set');
+    };
+    overlay.querySelector('#plPrepBrowseBtn').addEventListener('click', pickFolder);
+    folderPill.addEventListener('click', pickFolder);
+
+    const close = () => overlay.remove();
+    overlay.querySelector('#plPrepModalClose').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    overlay.querySelector('#plPrepSetupBtn').addEventListener('click', () => {
+      if (!folderValue) {
+        window.showToast?.('Select a root folder before setting up the project.', 'warning');
+        return;
+      }
+      const prompt = instrEl.value.trim();
+      if (!prompt) {
+        window.showToast?.('Setup instructions are empty — nothing to run.', 'warning');
+        return;
+      }
+      close();
+      this._openRunSetupModal({ layerId, cwd: folderValue, prompt });
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Run Setup Instructions — modal with an embedded interactive terminal.
+  // Spawns a shell in `cwd`, then types the setup instructions in via a
+  // temp file + the selected CLI model's --model/prompt flags (same
+  // mechanism as Workflow Runner's runInShell), left running interactively.
+  // ----------------------------------------------------------------
+  _openRunSetupModal({ layerId, cwd, prompt }) {
+    const overlay = document.createElement('div');
+    overlay.className = 'pl-modal-overlay';
+    overlay.innerHTML = `
+      <div class="pl-modal pl-term-modal">
+        <div class="pl-modal__header">
+          <span class="pl-modal__title">Run Setup — ${escHtml(cwd)}</span>
+          <button class="pl-modal__close" id="plTermModalClose" disabled title="Exit the CLI session to close">✕</button>
+        </div>
+        <div class="pl-term-modal__body" id="plTermModalBody"></div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    let term, fitAddon, resizeObs, onWinResize, lastCols = 0, lastRows = 0;
+    const runLayerId = `pl-setup-${layerId}`;
+    let sessionDone = false;
+
+    const fit = () => {
+      if (!fitAddon || !term) return;
+      try {
+        fitAddon.fit();
+        const cols = term.cols, rows = term.rows;
+        if (cols === lastCols && rows === lastRows) return;
+        lastCols = cols; lastRows = rows;
+        window.app.plPty.resize({ cols, rows });
+      } catch (_) {}
+    };
+
+    const closeBtn = overlay.querySelector('#plTermModalClose');
+
+    const cleanup = () => {
+      window.app.plPty.offAll();
+      window.app.plPty.kill();
+      if (resizeObs)   resizeObs.disconnect();
+      if (onWinResize) window.removeEventListener('resize', onWinResize);
+      if (term)        term.dispose();
+      overlay.remove();
+    };
+
+    closeBtn.addEventListener('click', () => { if (sessionDone) cleanup(); });
+
+    // Only the exit of the CLI session (its runInShell layerDone sentinel)
+    // unlocks Close — clicking the backdrop or the X beforehand does nothing,
+    // so an in-progress interactive session is never killed accidentally.
+    window.app.plPty.onLayerDone(({ layerId: doneId }) => {
+      if (doneId !== runLayerId) return;
+      sessionDone = true;
+      closeBtn.disabled = false;
+      closeBtn.title = 'Close';
+    });
+
+    const mountEl = overlay.querySelector('#plTermModalBody');
+    if (!window.Terminal) {
+      mountEl.textContent = 'xterm.js failed to load — check DevTools console';
+      return;
+    }
+
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    fitAddon = new window.FitAddon.FitAddon();
+    term = new window.Terminal({
+      fontFamily:  'Consolas, "Cascadia Code", "Courier New", monospace',
+      fontSize:    12,
+      lineHeight:  1.4,
+      theme: {
+        background:          css('--console-bg')     || '#0d0d0d',
+        foreground:          css('--console-output') || '#d4d4d4',
+        cursor:              css('--console-caret')  || '#c0c0c0',
+        selectionBackground: 'rgba(255,255,255,0.18)',
+      },
+      scrollback:  5000,
+      convertEol:  false,
+      cursorBlink: true,
+      allowProposedApi: true,
+    });
+    term.loadAddon(fitAddon);
+    term.open(mountEl);
+    term.onData((data) => window.app.plPty.write(data));
+
+    resizeObs = new ResizeObserver(fit);
+    resizeObs.observe(mountEl);
+    onWinResize = fit;
+    window.addEventListener('resize', onWinResize);
+
+    window.app.plPty.onData((data) => { if (term) term.write(data); });
+
+    requestAnimationFrame(() => requestAnimationFrame(async () => {
+      fit();
+      await window.app.plPty.spawnShell({ cwd, cols: term.cols, rows: term.rows });
+
+      // Print the resolved cwd directly into the transcript so it's
+      // unambiguous which folder the CLI is about to run in — spawnShell's
+      // `cwd` should match the layer's own folder_path, not the DevFlow
+      // app's own repo, unless that was deliberately chosen as the target.
+      // Single-quoted so a literal '$' in the path isn't expanded by PowerShell.
+      const safeCwdEcho = cwd.replace(/'/g, "''");
+      window.app.plPty.write(`Write-Host ('==> Layer working directory: ' + '${safeCwdEcho}') -ForegroundColor Cyan\r`);
+
+      // Run Setup needs real filesystem/shell access (mkdir, write, install
+      // commands) to actually execute the instructions — strip any
+      // --disallowedTools restriction the page's default model config carries
+      // (e.g. the lean Haiku config used by Documents/AI Chat) just for this run.
+      const runModel = this._aiModelConfig?.flags
+        ? {
+            ...this._aiModelConfig,
+            flags: this._aiModelConfig.flags
+              .replace(/--disallowedTools\s+(?:"[^"]*"|'[^']*'|\S+)/g, '')
+              .replace(/\s{2,}/g, ' ')
+              .trim(),
+          }
+        : this._aiModelConfig;
+
+      window.app.plPty.runInShell({
+        layerId: `pl-setup-${layerId}`,
+        systemPrompt:
+          'You are setting up this project. Execute the numbered setup instructions below yourself, ' +
+          'step by step, in the current working directory — run the actual shell commands ' +
+          '(scaffold, mkdir, dependency installs, writing config/env files, etc.) rather than just ' +
+          'describing or summarizing them. Do not stop to ask what to do; start executing now. ' +
+          'Only pause for input if a step truly requires a decision only the user can make (e.g. a ' +
+          'missing secret value).',
+        prompt,
+        model: runModel,
+        cwd,
+        // Without this, Claude pauses for a y/n approval before every
+        // Bash/Write/Edit tool call — easy to miss in this compact terminal,
+        // so the session just sits there waiting forever, never reaching the
+        // trailing Write-Host sentinel that unlocks Close.
+        skipPermissions: true,
+      });
+    }));
   }
 
   // ----------------------------------------------------------------
