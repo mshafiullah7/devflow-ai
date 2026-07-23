@@ -273,6 +273,8 @@ export class SettingsPage {
                 <div class="st-model-item__top">
                   <span class="st-model-item__label">${escHtml(c.label)}</span>
                   <span class="st-model-item__badge st-model-item__badge--${c.type}">${c.type === 'cli' ? 'CLI' : c.type === 'ollama' ? 'Ollama' : c.type === 'anthropic' ? 'Anthropic' : 'API'}</span>
+                  <span class="st-model-item__badge st-model-item__badge--effort-${c.effort || 'medium'}">${c.effort || 'medium'}</span>
+                  <span class="st-model-item__badge st-model-item__badge--purpose-${c.purpose || 'general'}">${c.purpose || 'general'}</span>
                   ${c.is_default ? `<span class="st-model-item__badge st-model-item__badge--default">default</span>` : ''}
                 </div>
                 <div class="st-model-item__sub">
@@ -1439,6 +1441,26 @@ export class SettingsPage {
               <span class="st-type-hint" id="stFTypeHint"></span>
             </div>
 
+            <div class="st-form__row st-form__row--inline">
+              <div>
+                <label class="st-form__label">Effort</label>
+                <select class="st-form__input" id="stFEffort">
+                  <option value="low"    ${(config?.effort ?? 'medium') === 'low'    ? 'selected' : ''}>Low</option>
+                  <option value="medium" ${(config?.effort ?? 'medium') === 'medium' ? 'selected' : ''}>Medium</option>
+                  <option value="high"   ${(config?.effort ?? 'medium') === 'high'   ? 'selected' : ''}>High</option>
+                </select>
+                <span class="st-form__hint">Used to pick a fast/cheap model automatically (e.g. screen analysis)</span>
+              </div>
+              <div>
+                <label class="st-form__label">Purpose</label>
+                <select class="st-form__input" id="stFPurpose">
+                  <option value="general" ${(config?.purpose ?? 'general') === 'general' ? 'selected' : ''}>General</option>
+                  <option value="coding"  ${(config?.purpose ?? 'general') === 'coding'  ? 'selected' : ''}>Coding</option>
+                </select>
+                <span class="st-form__hint">Coding = full file/tool access; General = read-only Q&amp;A</span>
+              </div>
+            </div>
+
             <div id="stFFieldsCli">
               <div class="st-form__row">
                 <label class="st-form__label">Executable *</label>
@@ -1872,9 +1894,11 @@ export class SettingsPage {
       const type      = overlay.querySelector('#stFType').value;
       const label     = overlay.querySelector('#stFLabel').value.trim();
       const isDefault = overlay.querySelector('#stFIsDefault').checked;
+      const effort    = overlay.querySelector('#stFEffort').value;
+      const purpose   = overlay.querySelector('#stFPurpose').value;
       if (!label) return;
 
-      let data = { label, type, is_default: isDefault, input_mode: 'pipe' };
+      let data = { label, type, is_default: isDefault, input_mode: 'pipe', effort, purpose };
 
       if (type === 'cli') {
         const cliModel = overlay.querySelector('#stFCliModel')?.value.trim() || '';

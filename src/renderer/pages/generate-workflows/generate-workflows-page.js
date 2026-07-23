@@ -22,7 +22,7 @@ const FULL_WORKFLOWS_PROMPT_TEMPLATE = (screenSection, docsSection, layersSectio
 Output ALL workflows for this screen in ONE response — the UI Shell first, then one workflow per feature.
 
 ## Inputs:
-- UI/UX Mockup (Screen text) — functional elements, labels, field names, and interactions (HTML tags stripped; full HTML is injected at runtime for the UI Shell layer)
+- UI/UX Mockup (Functional description) — a model-generated bullet list of the screen's interactive elements and what each one does, with visually-identical controls disambiguated by context (full HTML is injected at runtime for the UI Shell layer)
 - Project overview and manifest (YAML) — system layers, tech stack, conventions
 
 ${screenSection}
@@ -161,6 +161,147 @@ function extractTextPreview(html) {
     .trim();
 }
 
+// ── Functional inventory: walk the mockup DOM and list interactive/semantic
+// elements (tag, id/name, label, and action-relevant attributes) instead of
+// flattening everything to prose. Plain text-stripping loses exactly the
+// signal the LLM needs to plan workflows — whether something is a button vs
+// a link vs a static label, what a field's type/placeholder is, form
+// groupings, etc. This stays roughly as compact as the old stripped text but
+// keeps that structure.
+const FUNCTIONAL_TAGS = new Set([
+  'button', 'a', 'input', 'select', 'textarea', 'option', 'form',
+  'label', 'img', 'table', 'th', 'td',
+]);
+
+function elLabel(el) {
+  const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+  if (text) return text.slice(0, 80);
+  return el.getAttribute('aria-label') || el.getAttribute('placeholder')
+    || el.getAttribute('title') || el.getAttribute('alt') || '';
+}
+
+function elAttrs(el) {
+  const tag = el.tagName.toLowerCase();
+  const parts = [];
+  const type = el.getAttribute('type');
+  if (type) parts.push(`type=${type}`);
+  if (tag === 'input' || tag === 'textarea') {
+    const ph = el.getAttribute('placeholder');
+    if (ph) parts.push(`placeholder="${ph}"`);
+    if (el.hasAttribute('required')) parts.push('required');
+    if (el.hasAttribute('disabled')) parts.push('disabled');
+    if (el.hasAttribute('checked')) parts.push('checked');
+  }
+  if (tag === 'a') {
+    const href = el.getAttribute('href');
+    if (href) parts.push(`href=${href}`);
+  }
+  if (tag === 'button' && el.hasAttribute('disabled')) parts.push('disabled');
+  const dataAttrs = Array.from(el.attributes)
+    .filter(a => a.name.startsWith('data-'))
+    .map(a => `${a.name}=${a.value}`);
+  parts.push(...dataAttrs);
+  return parts;
+}
+
+function extractFunctionalInventory(html) {
+  if (!html) return '';
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('style, script').forEach(n => n.remove());
+
+  const lines = [];
+  const forms = new Map(); // form element -> index, for grouping labels
+
+  const walk = (el, formCtx) => {
+    const tag = el.tagName ? el.tagName.toLowerCase() : null;
+    let nextFormCtx = formCtx;
+
+    if (tag === 'form') {
+      const idx = forms.size + 1;
+      forms.set(el, idx);
+      nextFormCtx = idx;
+      const name = el.getAttribute('id') || el.getAttribute('name') || `form-${idx}`;
+      lines.push(`- form#${name}${formCtx ? ` (nested in form-${formCtx})` : ''}`);
+    } else if (FUNCTIONAL_TAGS.has(tag)) {
+      const id = el.getAttribute('id') || el.getAttribute('name');
+      const label = elLabel(el);
+      const attrs = elAttrs(el);
+      const idPart = id ? `#${id}` : '';
+      const labelPart = label ? ` "${label}"` : '';
+      const attrPart = attrs.length ? ` (${attrs.join(', ')})` : '';
+      const ctxPart = formCtx ? ` [in form-${formCtx}]` : '';
+      lines.push(`- ${tag}${idPart}${labelPart}${attrPart}${ctxPart}`);
+    }
+
+    // Skip descending into elements whose full text we already captured as a label
+    // (e.g. don't re-list a <span> inside a <button>).
+    if (tag === 'button' || tag === 'a' || tag === 'option' || tag === 'label') return;
+
+    for (const child of el.children) walk(child, nextFormCtx);
+  };
+
+  const body = doc.body;
+  if (body) {
+    for (const child of body.children) walk(child, null);
+  }
+
+  return lines.join('\n');
+}
+
+// ── Model-based functional analysis ──────────────────────────────────────
+// The DOM inventory above can't disambiguate visually-identical controls
+// (e.g. a column of icon-only "edit" buttons in a list all render as
+// `button "edit"`), because the semantics live in surrounding context a
+// person would read, not in any attribute. A small model call reasons about
+// the raw HTML instead and returns a plain bullet list distinguishing them.
+const SCREEN_ANALYSIS_PROMPT_TEMPLATE = (html) => `You are analyzing a UI mockup screen (raw HTML below, including any <script>) to describe its functionality for a developer who will implement it.
+
+Output ONLY a flat bullet list — no prose, no headers, no markdown fences. Cover BOTH of the following categories; do not limit yourself to clickable controls:
+
+1. Interactive controls — every button, link, input, toggle, etc.
+   - When multiple elements look identical (e.g. several icon-only "edit" or "delete" buttons in a list), disambiguate each one using its surrounding context — which row/item it belongs to, nearby text, position, or data attributes. Never output the same bare label twice without context.
+   - Describe WHAT each element does functionally (e.g. "Edit button — opens edit form for the 'Groceries' expense row"), not just its visual label.
+   - Note field types and constraints for inputs (e.g. required, placeholder, validation-looking patterns).
+2. Non-interactive data displays that still need to be built — summary/total cards, charts/graphs, computed or aggregated values, badges, progress indicators. These often have empty containers in the static markup that get populated by inline <script> at runtime (e.g. a chart div filled in by a JS loop) — read the <script> to describe what data they render and how (e.g. "Daily Spending chart — bar chart of each day's total spend for the selected month, peak day highlighted with a tooltip showing its amount").
+
+Only skip elements that are truly decorative with no data or meaning (backgrounds, spacer divs, dividers). A card or chart that shows real data is NOT decorative even if nothing on it is clickable.
+
+Keep each bullet on one line, under ~30 words.
+
+HTML:
+${html}`;
+
+function providerFamily(model) {
+  const s = `${model?.executable || ''} ${model?.model_name || ''} ${model?.label || ''}`.toLowerCase();
+  if (s.includes('claude') || s.includes('anthropic')) return 'anthropic';
+  if (s.includes('gemini')) return 'gemini';
+  if (s.includes('gpt') || s.includes('openai')) return 'openai';
+  if (s.includes('grok')) return 'grok';
+  if (s.includes('llama') || s.includes('ollama')) return 'ollama';
+  return null;
+}
+
+// Picks a model for the screen-analysis call using the explicit effort/purpose
+// fields set in Settings -> AI Configuration, rather than guessing tier/purpose
+// from the label text (which broke once two config names shared a keyword —
+// e.g. every seeded "Gemini Flash *" config matches "flash" regardless of tier).
+// Prefers a 'low' effort match from the SAME provider family as the main
+// selected model, then any 'low' effort match, then falls back to the main
+// model itself if nothing low-effort is configured at all. Among candidates,
+// prefers 'general' purpose over 'coding' — this is a read-only analysis call,
+// it doesn't need Code's full file/tool access.
+function pickLightModel(modelConfigs, fallback) {
+  const low = (modelConfigs || []).filter(m => m.is_active !== 0 && m.effort === 'low');
+  if (low.length === 0) return fallback || null;
+
+  const fallbackFamily = providerFamily(fallback);
+  const pool = fallbackFamily ? low.filter(m => providerFamily(m) === fallbackFamily) : [];
+  const candidates = pool.length ? pool : low;
+
+  return candidates.find(m => m.purpose !== 'coding') || candidates[0];
+}
+
 function stripAnsi(str) {
   return str
     .replace(/\x1B\[[0-9;]*[mGKHFJA-Za-z]/g, '')
@@ -254,6 +395,10 @@ export class GenerateWorkflowsPage {
     this._startTime        = null;
     this._timerInt         = null;
     this._lastPrompt       = '';
+    // Cache of model-generated functional descriptions per screen, keyed by screen id.
+    // Invalidated when the screen's html_content no longer matches what was analyzed.
+    this._screenAnalysisCache = new Map();
+    this._analyzing           = false;
   }
 
   // ----------------------------------------------------------------
@@ -282,9 +427,11 @@ export class GenerateWorkflowsPage {
   /** Fully stops the running generation and tears down the page (explicit close, not a tab switch). */
   unmount() {
     if (this._generating) window.app.genWorkflowChat.cancel();
+    if (this._analyzing)  window.app.screenAnalysisChat.cancel();
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     if (this._picker)   { this._picker.unmount(); this._picker = null; }
     window.app.genWorkflowChat.offAll();
+    window.app.screenAnalysisChat.offAll();
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
     removeCss('pages/generate-workflows/generate-workflows-page.css');
     removeCss('components/project-sidebar/project-sidebar.css');
@@ -300,6 +447,7 @@ export class GenerateWorkflowsPage {
   // ----------------------------------------------------------------
   async _init({ projectId, modelConfig }) {
     window.app.genWorkflowChat.offAll();
+    window.app.screenAnalysisChat.offAll();
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     if (this._picker)   { this._picker.unmount(); this._picker = null; }
 
@@ -311,6 +459,8 @@ export class GenerateWorkflowsPage {
     this._outputBuf        = '';
     this._parsedWorkflows  = null;
     this._lastPrompt       = '';
+    this._screenAnalysisCache = new Map();
+    this._analyzing           = false;
 
     const [project, screens, documents, projectLayers, mapping] = await Promise.all([
       window.db.projects.get(projectId),
@@ -338,11 +488,6 @@ export class GenerateWorkflowsPage {
       initialId: mapping?.model_config_id ?? modelConfig?.id ?? null,
     });
     await this._picker.reload();
-
-    // Auto-select first screen
-    if (this._screens.length > 0) {
-      this._onScreenSelect(this._screens[0].id);
-    }
   }
 
   // ----------------------------------------------------------------
@@ -432,6 +577,7 @@ export class GenerateWorkflowsPage {
                 <span class="gw-panel-hd__label">Prompt</span>
                 <span class="gw-panel-hd__hint">Editable — select a screen to populate</span>
               </div>
+              <div class="gw-analysis-status" id="gwAnalysisStatus" hidden></div>
               ${this._screens.length === 0
                 ? '<div class="gw-prompt-empty">No screens found for this project.</div>'
                 : `<textarea class="gw-prompt-textarea" id="gwPromptTextarea"
@@ -571,6 +717,11 @@ export class GenerateWorkflowsPage {
     this.container.querySelectorAll('[data-screen-id]').forEach(el => {
       el.classList.toggle('gw-item--selected', +el.dataset.screenId === id);
     });
+    // _analyzeScreen runs synchronously up to its first await, which is enough to
+    // set this._analyzing (or short-circuit on a cache hit) BEFORE _buildPrompt
+    // reads that flag — so the raw DOM inventory never flashes on screen while
+    // waiting; _buildPrompt shows a placeholder instead until analysis finishes.
+    this._analyzeScreen(id);
     this._buildPrompt();
     this._refreshGenerateBtn();
   }
@@ -591,9 +742,83 @@ export class GenerateWorkflowsPage {
 
   _refreshGenerateBtn() {
     const btn = this.container.querySelector('#gwBtnGenerate');
-    if (!btn) return;
-    const ok = this._selectedScreenId !== null && this._selectedDocIds.size > 0;
-    btn.disabled = !ok || this._generating;
+    if (btn) {
+      const ok = this._selectedScreenId !== null && this._selectedDocIds.size > 0;
+      btn.disabled = !ok || this._generating || this._analyzing;
+    }
+    // Lock the prompt textarea while analysis is in flight so edits typed during
+    // that window can't get silently overwritten when the result comes back.
+    const textarea = this.container.querySelector('#gwPromptTextarea');
+    if (textarea) {
+      textarea.readOnly = this._analyzing;
+      textarea.classList.toggle('gw-prompt-textarea--busy', this._analyzing);
+    }
+  }
+
+  _setAnalysisStatus(text, isError = false) {
+    const el = this.container.querySelector('#gwAnalysisStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.hidden = !text;
+    el.classList.toggle('gw-analysis-status--error', !!isError);
+  }
+
+  // ----------------------------------------------------------------
+  // Model-based functional analysis
+  // ----------------------------------------------------------------
+  async _analyzeScreen(id) {
+    const screen = this._screens.find(s => s.id === id);
+    if (!screen || !screen.html_content) return;
+
+    const cached = this._screenAnalysisCache.get(id);
+    if (cached && cached.html === screen.html_content) return; // already have a fresh result
+
+    this._analyzing = true;
+    this._setAnalysisStatus('Analyzing screen functionality…');
+    this._refreshGenerateBtn();
+
+    let modelConfigs = [];
+    try {
+      modelConfigs = await window.db.modelConfigs.list();
+    } catch (_) { /* fall through to fallback model */ }
+    const model = pickLightModel(modelConfigs, this._modelConfig);
+
+    if (!model) {
+      this._analyzing = false;
+      this._setAnalysisStatus('');
+      this._buildPrompt(); // falls back to the static DOM inventory
+      this._refreshGenerateBtn();
+      return;
+    }
+
+    // Clear any listener from a previous (possibly still in-flight) analysis call
+    // before registering this one — avoids stacking listeners if the user
+    // switches screens faster than an analysis completes.
+    window.app.screenAnalysisChat.offAll();
+    window.app.screenAnalysisChat.onDone(({ raw, error }) => {
+      window.app.screenAnalysisChat.offAll();
+      this._analyzing = false;
+
+      // Stale guard — user may have selected a different screen while this ran.
+      if (this._selectedScreenId !== id) { this._refreshGenerateBtn(); return; }
+
+      if (error || !raw || !raw.trim()) {
+        this._setAnalysisStatus('Automatic analysis failed — using basic extraction.', true);
+        setTimeout(() => this._setAnalysisStatus(''), 4000);
+      } else {
+        this._screenAnalysisCache.set(id, { html: screen.html_content, text: raw.trim() });
+        this._setAnalysisStatus('');
+      }
+      // Rebuild on both success (uses the fresh cache entry) and failure
+      // (falls back to the static DOM inventory) — never leave stale text behind.
+      this._buildPrompt();
+      this._refreshGenerateBtn();
+    });
+
+    window.app.screenAnalysisChat.generate({
+      prompt: SCREEN_ANALYSIS_PROMPT_TEMPLATE(screen.html_content),
+      model,
+    });
   }
 
   // ----------------------------------------------------------------
@@ -616,13 +841,23 @@ export class GenerateWorkflowsPage {
     let screenSection = '';
     let docsSection   = '';
 
-    // Strip HTML tags/styles/scripts down to readable text for the generation phase.
-    // The full HTML is not needed here — the LLM only needs to identify features,
-    // field names, and interactions to plan workflows. Full HTML is injected by the
-    // runner at execution time for the UI Shell layer.
-    const screenText = extractTextPreview(screen.html_content || '');
+    // Prefer the model-generated functional description (disambiguates repeated
+    // controls like a column of icon-only "edit" buttons by context) when a fresh
+    // one has been analyzed for this screen's current HTML. While analysis is still
+    // running, show a placeholder rather than the raw DOM inventory — that inventory
+    // is a last-resort fallback only, used when analysis has actually failed. Full
+    // HTML is injected by the runner at execution time for the UI Shell layer.
+    const cached = this._screenAnalysisCache.get(screen.id);
+    let screenText;
+    if (cached && cached.html === screen.html_content) {
+      screenText = cached.text;
+    } else if (this._analyzing) {
+      screenText = '(Analyzing screen functionality — this will populate automatically once done…)';
+    } else {
+      screenText = extractFunctionalInventory(screen.html_content || '');
+    }
 
-    // Embed stripped text directly rather than writing it to a separate temp file
+    // Embed the inventory directly rather than writing it to a separate temp file
     // and pointing at it with "See file: <path>" — CLI configs for this page run
     // with Read (and other tools) disallowed, so the model has no way to open a
     // referenced file; the content has to already be inside the one prompt it's given.

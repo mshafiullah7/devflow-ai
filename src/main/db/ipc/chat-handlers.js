@@ -53,10 +53,11 @@ function createCtx() {
   return { proc: null, req: null, cancelled: false };
 }
 
-const _mainCtx       = createCtx();
-const _workflowCtx   = createCtx();
-const _genWfCtx      = createCtx();
-const _testGenCtx    = createCtx();
+const _mainCtx           = createCtx();
+const _workflowCtx       = createCtx();
+const _genWfCtx          = createCtx();
+const _testGenCtx        = createCtx();
+const _screenAnalysisCtx = createCtx();
 
 function _logAiCall(type, modelName, exe, promptOrMessages, flags) {
   const ts    = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -799,6 +800,16 @@ function registerChatHandlers() {
     if (_testGenCtx.proc || _testGenCtx.req) killCtx(_testGenCtx);
     _testGenCtx.cancelled = false;
     dispatch(event.sender, prompt, null, model, null, _testGenCtx, 'testGenChat:token', 'testGenChat:done', null, true);
+    return { started: true };
+  });
+
+  // --- Screen functional-analysis chat (screenAnalysisChat:*) — separate subprocess slot ---
+  safeHandle('screenAnalysisChat:cancel', () => killCtx(_screenAnalysisCtx));
+
+  safeHandle('screenAnalysisChat:generate', (event, { prompt, model }) => {
+    if (_screenAnalysisCtx.proc || _screenAnalysisCtx.req) killCtx(_screenAnalysisCtx);
+    _screenAnalysisCtx.cancelled = false;
+    dispatch(event.sender, prompt, null, model, null, _screenAnalysisCtx, 'screenAnalysisChat:token', 'screenAnalysisChat:done', null, true);
     return { started: true };
   });
 

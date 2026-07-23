@@ -266,6 +266,19 @@
   font-style: italic;
 }
 
+.gw-analysis-status {
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-bottom: 1px solid var(--border);
+}
+
+.gw-analysis-status--error {
+  color: #dc2626;
+  background: rgba(239, 68, 68, .08);
+}
+
 /* ── Prompt area ────────────────────────────────────────────────── */
 #gwPromptArea {
   display: flex;
@@ -290,6 +303,12 @@
   outline: none;
   overflow-y: auto;
   box-sizing: border-box;
+}
+
+.gw-prompt-textarea--busy {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: not-allowed;
 }
 
 .gw-prompt-empty {

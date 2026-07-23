@@ -266,6 +266,32 @@
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
+.st-model-item__badge--effort-low {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+.st-model-item__badge--effort-medium {
+  background: rgba(234, 179, 8, 0.12);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}
+.st-model-item__badge--effort-high {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.st-model-item__badge--purpose-general {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+.st-model-item__badge--purpose-coding {
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
 .st-model-item__sub {
   font-size: 11px;
   color: var(--text-muted);

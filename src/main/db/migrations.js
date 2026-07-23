@@ -294,6 +294,43 @@ function runMigrations(db) {
     db.exec('ALTER TABLE model_configs ADD COLUMN use_devflow_agent INTEGER NOT NULL DEFAULT 0');
   }
 
+  // Explicit effort/purpose fields — replaces regex-guessing a model's tier/purpose
+  // from its label (see generate-workflows-page.js's pickLightModel), which broke
+  // once two config names happened to share a keyword. New rows get the column
+  // defaults; existing seeded rows are backfilled explicitly by label below rather
+  // than with another LIKE/regex guess, which would just reintroduce the same
+  // fragility this change removes.
+  if (!mcCols.includes('effort'))  db.exec("ALTER TABLE model_configs ADD COLUMN effort  TEXT NOT NULL DEFAULT 'medium'");
+  if (!mcCols.includes('purpose')) db.exec("ALTER TABLE model_configs ADD COLUMN purpose TEXT NOT NULL DEFAULT 'general'");
+
+  const effortPurposeByLabel = {
+    'Claude Haiku General Purpose':          ['low',    'general'],
+    'Claude Sonnet General Purpose':         ['medium', 'general'],
+    'Claude Haiku Code':                     ['low',    'coding'],
+    'Claude Sonnet Code':                    ['medium', 'coding'],
+    'Gemini Flash Medium General Purpose':   ['low',    'general'],
+    'Gemini Flash High General Purpose':     ['medium', 'general'],
+    'Gemini Flash Medium Code':              ['low',    'coding'],
+    'Gemini Flash High Code':                ['medium', 'coding'],
+    'Ollama General Purpose':                ['low',    'general'],
+    'Ollama Code':                           ['low',    'coding'],
+    'Groq General Purpose':                  ['low',    'general'],
+    'Groq Code':                             ['low',    'coding'],
+    '[API] Claude Haiku General Purpose':    ['low',    'general'],
+    '[API] Claude Sonnet 5 General Purpose': ['medium', 'general'],
+    '[API] Claude Sonnet 5 Code':            ['medium', 'coding'],
+    'Groq Code (DeepSeek R1 70B)':           ['high',   'coding'],
+    'Ollama Code (DeepSeek Coder V2)':       ['medium', 'coding'],
+  };
+  const backfillEffortPurpose = db.prepare(
+    `UPDATE model_configs SET effort = ?, purpose = ? WHERE label = ?`
+  );
+  db.transaction(() => {
+    for (const [label, [effort, purpose]] of Object.entries(effortPurposeByLabel)) {
+      backfillEffortPurpose.run(effort, purpose, label);
+    }
+  })();
+
   // Recreate prompt_queue if it still has stale FKs to dropped tables (prompts, user_stories)
   const pqSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='prompt_queue'").get()?.sql ?? '';
   if (pqSql.includes('REFERENCES prompts') || pqSql.includes('REFERENCES user_stories')) {
@@ -605,13 +642,21 @@ function runMigrations(db) {
   })();
 
   // Gemini (agy CLI) configs — intentionally left unmapped to any page.
-  // Two labels collide by design (both "Gemini Flash High General Purpose"),
-  // so identity here is (label, flags) rather than label alone.
+  // Identity here is (label, flags) rather than label alone, since the Medium/High
+  // General-Purpose/Code variants only differ by flags (sandboxed vs not).
+  // {{model}} MUST be quoted — model_name values for agy (e.g. "Gemini 3.5 Flash
+  // (Medium)") contain spaces/parens that a shell would otherwise split into
+  // multiple arguments. This has to match the format schema.js's own idempotent
+  // fixup normalizes existing rows to (schema.js ~line 441) — applySchema() runs
+  // before runMigrations() on every launch, so an unquoted literal here would
+  // never match an already-quoted row and would re-insert a fresh duplicate
+  // every single startup (which is exactly how this table ended up with dozens
+  // of duplicate Gemini rows).
   const geminiConfigs = [
-    { label: 'Gemini Flash Medium General Purpose', modelName: 'Gemini 3.5 Flash (Medium)', flags: `--sandbox -p "{{prompt}}" --model {{model}}` },
-    { label: 'Gemini Flash High General Purpose',   modelName: 'Gemini 3.5 Flash (High)',   flags: `--sandbox -p "{{prompt}}" --model {{model}}` },
-    { label: 'Gemini Flash Medium Code',            modelName: 'Gemini 3.5 Flash (Medium)', flags: `-p "{{prompt}}" --model {{model}}` },
-    { label: 'Gemini Flash High General Purpose',   modelName: 'Gemini 3.5 Flash (High)',   flags: `-p "{{prompt}}" --model {{model}}` },
+    { label: 'Gemini Flash Medium General Purpose', modelName: 'Gemini 3.5 Flash (Medium)', flags: `--sandbox -p "{{prompt}}" --model "{{model}}"` },
+    { label: 'Gemini Flash High General Purpose',   modelName: 'Gemini 3.5 Flash (High)',   flags: `--sandbox -p "{{prompt}}" --model "{{model}}"` },
+    { label: 'Gemini Flash Medium Code',            modelName: 'Gemini 3.5 Flash (Medium)', flags: `-p "{{prompt}}" --model "{{model}}"` },
+    { label: 'Gemini Flash High Code',              modelName: 'Gemini 3.5 Flash (High)',   flags: `-p "{{prompt}}" --model "{{model}}"` },
   ];
 
   db.transaction(() => {
@@ -627,6 +672,32 @@ function runMigrations(db) {
         VALUES (?, 'cli', 'agy', ?, ?, 'pipe', 0, ?, NULL, NULL)
       `).run(label, modelName, flags, nextSort);
     }
+  })();
+
+  // One-time cleanup: an earlier iteration of the block above lacked this exact
+  // (label, flags) dedup — and, separately, mislabeled the non-sandboxed "High"
+  // variant as "...High General Purpose" instead of "...High Code" — so existing
+  // databases can carry many duplicate/mislabeled Gemini rows. Fix the mislabel,
+  // then collapse exact (label, executable, flags) duplicates down to the oldest
+  // row. model_mapping.model_config_id is ON DELETE SET NULL, and Gemini configs
+  // are never mapped to a page by design, so this is safe.
+  db.prepare(`
+    UPDATE model_configs SET label = 'Gemini Flash High Code'
+     WHERE executable = 'agy' AND label = 'Gemini Flash High General Purpose'
+       AND flags NOT LIKE '%--sandbox%'
+  `).run();
+  db.transaction(() => {
+    const dupGroups = db.prepare(`
+      SELECT label, executable, flags, MIN(id) AS keepId
+        FROM model_configs
+       WHERE executable = 'agy'
+       GROUP BY label, executable, flags
+      HAVING COUNT(*) > 1
+    `).all();
+    const del = db.prepare(`
+      DELETE FROM model_configs WHERE label = ? AND executable = ? AND flags = ? AND id != ?
+    `);
+    for (const g of dupGroups) del.run(g.label, g.executable, g.flags, g.keepId);
   })();
 
   // Non-CLI reference configs (Ollama / Groq via OpenAI-compatible API / Anthropic API) —

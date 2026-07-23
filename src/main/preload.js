@@ -383,6 +383,17 @@ contextBridge.exposeInMainWorld('app', {
       ipcRenderer.removeAllListeners('testGenChat:done');
     },
   },
+  // Separate AI channel for screen functional-analysis (used by the generate-workflows window).
+  screenAnalysisChat: {
+    generate: (data) => ipcRenderer.invoke('screenAnalysisChat:generate', data),
+    cancel:   ()     => ipcRenderer.invoke('screenAnalysisChat:cancel'),
+    onToken:  (cb)   => ipcRenderer.on('screenAnalysisChat:token', (_e, p) => cb(p)),
+    onDone:   (cb)   => ipcRenderer.on('screenAnalysisChat:done',  (_e, p) => cb(p)),
+    offAll:   ()     => {
+      ipcRenderer.removeAllListeners('screenAnalysisChat:token');
+      ipcRenderer.removeAllListeners('screenAnalysisChat:done');
+    },
+  },
   testGenerationWindow: {
     onFileSaved:    (cb) => ipcRenderer.on('testGen:fileSaved', (_e, p) => cb(p)),
     offFileSaved:   ()   => ipcRenderer.removeAllListeners('testGen:fileSaved'),

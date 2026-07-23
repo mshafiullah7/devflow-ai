@@ -796,24 +796,25 @@ function registerDbHandlers() {
   });
 
   safeHandle('db:model_configs:create', (_e, data) => {
-    const { label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent } = data;
+    const { label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent, effort, purpose } = data;
     // Clear existing default if setting new default
     if (is_default) db.prepare('UPDATE model_configs SET is_default = 0').run();
     const result = db.prepare(`
-      INSERT INTO model_configs (label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO model_configs (label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent, effort, purpose)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       label, type ?? 'cli',
       executable ?? null, flags ?? null, input_mode ?? 'pipe',
       base_url ?? null, api_key ?? null, model_name ?? null, max_tokens ?? null,
       is_default ? 1 : 0, sort_order ?? 0,
-      use_devflow_agent ? 1 : 0
+      use_devflow_agent ? 1 : 0,
+      effort ?? 'medium', purpose ?? 'general'
     );
     return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(result.lastInsertRowid);
   });
 
   safeHandle('db:model_configs:update', (_e, data) => {
-    const { id, label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent } = data;
+    const { id, label, type, executable, flags, input_mode, base_url, api_key, model_name, max_tokens, is_default, sort_order, use_devflow_agent, effort, purpose } = data;
     if (is_default) db.prepare('UPDATE model_configs SET is_default = 0 WHERE id != ?').run(id);
     db.prepare(`
       UPDATE model_configs
@@ -829,6 +830,8 @@ function registerDbHandlers() {
              is_default        = coalesce(?, is_default),
              sort_order        = coalesce(?, sort_order),
              use_devflow_agent = coalesce(?, use_devflow_agent),
+             effort            = coalesce(?, effort),
+             purpose           = coalesce(?, purpose),
              updated_at        = datetime('now')
        WHERE id = ?
     `).run(
@@ -838,6 +841,7 @@ function registerDbHandlers() {
       is_default != null ? (is_default ? 1 : 0) : null,
       sort_order ?? null,
       use_devflow_agent != null ? (use_devflow_agent ? 1 : 0) : null,
+      effort ?? null, purpose ?? null,
       id
     );
     return db.prepare('SELECT * FROM model_configs WHERE id = ?').get(id);

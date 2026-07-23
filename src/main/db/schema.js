@@ -137,6 +137,8 @@ function applySchema(db) {
       is_active   INTEGER NOT NULL DEFAULT 1,
       is_default  INTEGER NOT NULL DEFAULT 0,
       sort_order  INTEGER NOT NULL DEFAULT 0,
+      effort      TEXT    NOT NULL DEFAULT 'medium',  -- 'low' | 'medium' | 'high' — user-declared, not inferred from label
+      purpose     TEXT    NOT NULL DEFAULT 'general',  -- 'general' | 'coding'
       created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
@@ -455,15 +457,15 @@ function seedModelConfigs(db) {
   if (count > 0) return;
 
   const insert = db.prepare(`
-    INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag, effort, purpose)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   db.transaction(() => {
     const { lastInsertRowid: id } = insert.run(
       'Claude Haiku General Purpose', 'cli', 'claude', 'claude-haiku-4-5',
       `--model {{model}} 'Follow the instructions in the attached file exactly and respond accordingly. @{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`,
-      'pipe', 1, 0, '', ''
+      'pipe', 1, 0, '', '', 'low', 'general'
     );
 
     const upsertMapping = db.prepare(`
@@ -478,7 +480,7 @@ function seedModelConfigs(db) {
     const { lastInsertRowid: sonnetId } = insert.run(
       'Claude Sonnet General Purpose', 'cli', 'claude', 'claude-sonnet-5',
       `--model {{model}} 'Follow the instructions in the attached file exactly and respond accordingly. @{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`,
-      'pipe', 0, 1, '', ''
+      'pipe', 0, 1, '', '', 'medium', 'general'
     );
     for (const pageKey of ['mockups', 'generate-workflows']) {
       upsertMapping.run(pageKey, sonnetId);
@@ -493,7 +495,7 @@ function seedModelConfigs(db) {
 
     const { lastInsertRowid: haikuCodeId } = insert.run(
       'Claude Haiku Code', 'cli', 'claude', 'claude-haiku-4-5',
-      CODE_FLAGS, 'pipe', 0, 2, null, null
+      CODE_FLAGS, 'pipe', 0, 2, null, null, 'low', 'coding'
     );
     for (const pageKey of ['test-generator']) {
       upsertMapping.run(pageKey, haikuCodeId);
@@ -501,7 +503,7 @@ function seedModelConfigs(db) {
 
     const { lastInsertRowid: sonnetCodeId } = insert.run(
       'Claude Sonnet Code', 'cli', 'claude', 'claude-sonnet-5',
-      CODE_FLAGS, 'pipe', 0, 3, null, null
+      CODE_FLAGS, 'pipe', 0, 3, null, null, 'medium', 'coding'
     );
     for (const pageKey of ['workflows', 'workflow-runner', 'issue-runner', 'issues']) {
       upsertMapping.run(pageKey, sonnetCodeId);
@@ -509,34 +511,34 @@ function seedModelConfigs(db) {
 
     // Gemini (agy CLI) configs — intentionally left unmapped to any page.
     const geminiInsert = db.prepare(`
-      INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
-      VALUES (?, 'cli', 'agy', ?, ?, 'pipe', 0, ?, NULL, NULL)
+      INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag, effort, purpose)
+      VALUES (?, 'cli', 'agy', ?, ?, 'pipe', 0, ?, NULL, NULL, ?, ?)
     `);
-    geminiInsert.run('Gemini Flash Medium General Purpose', 'Gemini 3.5 Flash (Medium)', `--sandbox -p "{{prompt}}" --model "{{model}}"`, 4);
-    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `--sandbox -p "{{prompt}}" --model "{{model}}"`, 5);
-    geminiInsert.run('Gemini Flash Medium Code',            'Gemini 3.5 Flash (Medium)', `-p "{{prompt}}" --model "{{model}}"`, 6);
-    geminiInsert.run('Gemini Flash High Code',              'Gemini 3.5 Flash (High)',   `-p "{{prompt}}" --model "{{model}}"`, 7);
+    geminiInsert.run('Gemini Flash Medium General Purpose', 'Gemini 3.5 Flash (Medium)', `--sandbox -p "{{prompt}}" --model "{{model}}"`, 4, 'low',    'general');
+    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `--sandbox -p "{{prompt}}" --model "{{model}}"`, 5, 'medium', 'general');
+    geminiInsert.run('Gemini Flash Medium Code',            'Gemini 3.5 Flash (Medium)', `-p "{{prompt}}" --model "{{model}}"`, 6, 'low',    'coding');
+    geminiInsert.run('Gemini Flash High Code',              'Gemini 3.5 Flash (High)',   `-p "{{prompt}}" --model "{{model}}"`, 7, 'medium', 'coding');
 
     // Non-CLI reference configs (Ollama / Groq via OpenAI-compatible API / Anthropic API) —
     // intentionally left unmapped to any page; illustrate the range of supported
     // configurations (local model, third-party API, first-party API, agentic
     // devflow-agent loop vs single-shot prompt).
     const nonCliInsert = db.prepare(`
-      INSERT INTO model_configs (label, type, base_url, model_name, max_tokens, input_mode, is_default, sort_order, use_devflow_agent)
-      VALUES (?, ?, ?, ?, ?, 'pipe', 0, ?, ?)
+      INSERT INTO model_configs (label, type, base_url, model_name, max_tokens, input_mode, is_default, sort_order, use_devflow_agent, effort, purpose)
+      VALUES (?, ?, ?, ?, ?, 'pipe', 0, ?, ?, ?, ?)
     `);
-    nonCliInsert.run('Ollama General Purpose', 'ollama', 'http://localhost:11434', 'phi4-mini:latest', null, 8,  0);
-    nonCliInsert.run('Ollama Code',            'ollama', 'http://localhost:11434', 'qwen2.5-coder:7b', null, 9,  1);
-    nonCliInsert.run('Groq General Purpose',   'api',    'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile', null, 10, 0);
-    nonCliInsert.run('Groq Code',              'api',    'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile', null, 11, 1);
-    nonCliInsert.run('[API] Claude Haiku General Purpose',    'anthropic', null, 'claude-haiku-4-5', null, 12, 0);
-    nonCliInsert.run('[API] Claude Sonnet 5 General Purpose', 'anthropic', null, 'claude-sonnet-5',  null, 13, 0);
-    nonCliInsert.run('[API] Claude Sonnet 5 Code',            'anthropic', null, 'claude-sonnet-5',  null, 14, 1);
+    nonCliInsert.run('Ollama General Purpose', 'ollama', 'http://localhost:11434', 'phi4-mini:latest', null, 8,  0, 'low', 'general');
+    nonCliInsert.run('Ollama Code',            'ollama', 'http://localhost:11434', 'qwen2.5-coder:7b', null, 9,  1, 'low', 'coding');
+    nonCliInsert.run('Groq General Purpose',   'api',    'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile', null, 10, 0, 'low', 'general');
+    nonCliInsert.run('Groq Code',              'api',    'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile', null, 11, 1, 'low', 'coding');
+    nonCliInsert.run('[API] Claude Haiku General Purpose',    'anthropic', null, 'claude-haiku-4-5', null, 12, 0, 'low',    'general');
+    nonCliInsert.run('[API] Claude Sonnet 5 General Purpose', 'anthropic', null, 'claude-sonnet-5',  null, 13, 0, 'medium', 'general');
+    nonCliInsert.run('[API] Claude Sonnet 5 Code',            'anthropic', null, 'claude-sonnet-5',  null, 14, 1, 'medium', 'coding');
 
     // Heavy-code-tier gap fillers — strongest Groq/Ollama picks for the agentic
     // Run Layers/Run Issues workload, distinct from the general-purpose 70B picks above.
-    nonCliInsert.run('Groq Code (DeepSeek R1 70B)',     'api',    'https://api.groq.com/openai/v1', 'deepseek-r1-distill-llama-70b', null, 15, 1);
-    nonCliInsert.run('Ollama Code (DeepSeek Coder V2)', 'ollama', 'http://localhost:11434',          'deepseek-coder-v2',             null, 16, 1);
+    nonCliInsert.run('Groq Code (DeepSeek R1 70B)',     'api',    'https://api.groq.com/openai/v1', 'deepseek-r1-distill-llama-70b', null, 15, 1, 'high',   'coding');
+    nonCliInsert.run('Ollama Code (DeepSeek Coder V2)', 'ollama', 'http://localhost:11434',          'deepseek-coder-v2',             null, 16, 1, 'medium', 'coding');
   })();
 }
 
