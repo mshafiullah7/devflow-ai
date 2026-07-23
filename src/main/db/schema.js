@@ -55,6 +55,7 @@ function applySchema(db) {
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       workflow_id INTEGER NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
       description TEXT    NOT NULL,
+      passed      INTEGER NOT NULL DEFAULT 0,
       is_active   INTEGER NOT NULL DEFAULT 1,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -426,6 +427,9 @@ function applySchema(db) {
     // Page display order in the Workflows list — set via the "Reorder Pages"
     // modal, independent of the page's own created_at / mockup ordering.
     `ALTER TABLE screen_designs ADD COLUMN workflow_order INTEGER NOT NULL DEFAULT 0`,
+    // Manual "mark as success" toggle for a success criterion — shared between
+    // the Workflows Criteria tab and the Run Layers Success Criteria section.
+    `ALTER TABLE success_criteria ADD COLUMN passed INTEGER NOT NULL DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}

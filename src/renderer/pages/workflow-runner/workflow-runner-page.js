@@ -585,17 +585,8 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   // ── Criteria ─────────────────────────────────────────────────────────────
 
   async _evaluateCriteria() {
-    // Criteria evaluation still works via DB statuses since we track them
-    let allPassed = true;
-    this._criteria.forEach(c => {
-      const el = this.container.querySelector(`[data-crit="${c.id}"]`);
-      if (!el) return;
-      const passed = this._statuses ? true : false; // simplified — status-based
-      if (!passed) allPassed = false;
-      el.className = `wfr-crit-row ${passed ? 'wfr-crit-row--pass' : 'wfr-crit-row--fail'}`;
-      el.querySelector('.wfr-crit-icon').textContent = passed ? '✔' : '✗';
-    });
-
+    // Criteria pass/fail is now a manual, persisted toggle (see _toggleCriterion)
+    // — this no longer auto-marks criteria on run completion.
     if (this._workflow) {
       const anyFailed = this._layers.some(l => this._statuses[l.id] === 'failed');
       const allDone   = this._layers.every(l => ['executed', 'needs_review', 'failed'].includes(this._statuses[l.id]));
@@ -728,10 +719,32 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   _criteriaHtml() {
     if (!this._criteria.length) return '<div class="wfr-crit-empty">No success criteria defined</div>';
     return this._criteria.map(c => `
-      <div class="wfr-crit-row" data-crit="${c.id}">
-        <span class="wfr-crit-icon">○</span>
+      <div class="wfr-crit-row${c.passed ? ' wfr-crit-row--pass' : ''}" data-crit="${c.id}" title="Mark as success">
+        <span class="wfr-crit-icon">${c.passed ? '✔' : '○'}</span>
         <span class="wfr-crit-text">${escHtml(c.description)}</span>
       </div>`).join('');
+  }
+
+  async _toggleCriterion(id) {
+    const c = this._criteria.find(x => x.id === id);
+    if (!c) return;
+    const passed = c.passed ? 0 : 1;
+    await window.db.successCriteria.setPassed({ id, passed });
+    c.passed = passed;
+    this._refreshCriteriaSection();
+  }
+
+  _refreshCriteriaSection() {
+    const list = this.container.querySelector('.wfr-criteria-list');
+    if (!list) return;
+    list.innerHTML = this._criteriaHtml();
+    this._bindCriteriaEvents();
+  }
+
+  _bindCriteriaEvents() {
+    this.container.querySelectorAll('.wfr-crit-row[data-crit]').forEach(row => {
+      row.addEventListener('click', () => this._toggleCriterion(+row.dataset.crit));
+    });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -962,6 +975,8 @@ this.container.querySelector('#wfrBtnSkipPerms')
       ?.addEventListener('click', () => this._expandCollapseAll(false));
     this.container.querySelector('#wfrBtnGitCommit')
       ?.addEventListener('click', () => this._commitChanges());
+
+    this._bindCriteriaEvents();
   }
 
   // ── Git diff panel ───────────────────────────────────────────────────────

@@ -611,7 +611,8 @@
 .wf-crit-row:hover { background: var(--surface-hover); }
 .wf-crit-row:hover .wf-icon-btn { opacity: 1; }
 
-.wf-crit-check { flex-shrink: 0; color: var(--accent); }
+.wf-crit-check { flex-shrink: 0; color: var(--text-muted); cursor: pointer; }
+.wf-crit-row--passed .wf-crit-check { color: #16a34a; }
 .wf-crit-text {
   flex: 1;
   font-size: 12.5px;

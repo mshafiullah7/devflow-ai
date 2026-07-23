@@ -183,6 +183,26 @@ function registerDbHandlers() {
     return { success: true };
   });
 
+  safeHandle('db:success_criteria:setPassed', (_e, { id, passed }) => {
+    db.prepare(`UPDATE success_criteria SET passed = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(passed ? 1 : 0, id);
+    return db.prepare('SELECT * FROM success_criteria WHERE id = ?').get(id);
+  });
+
+  safeHandle('db:success_criteria:countByProject', (_e, project_id) => {
+    const row = db.prepare(
+      `SELECT
+         COUNT(*)                       AS total,
+         COALESCE(SUM(sc.passed), 0)    AS passed
+       FROM success_criteria sc
+       JOIN workflows w ON w.id = sc.workflow_id
+       WHERE sc.is_active = 1 AND w.is_active = 1 AND w.project_id = ?`
+    ).get(project_id);
+    const total  = row?.total  ?? 0;
+    const passed = row?.passed ?? 0;
+    return { total, passed, remaining: total - passed };
+  });
+
   // ----------------------------------------------------------------
   // layers (workflow layers)
   // ----------------------------------------------------------------

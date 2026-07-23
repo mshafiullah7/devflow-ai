@@ -37,10 +37,12 @@ contextBridge.exposeInMainWorld('db', {
     updateStatus: (data)       => invoke('db:workflows:updateStatus', data),
   },
   successCriteria: {
-    list:   (workflow_id) => invoke('db:success_criteria:list', workflow_id),
-    create: (data)        => invoke('db:success_criteria:create', data),
-    update: (data)        => invoke('db:success_criteria:update', data),
-    delete: (id)          => invoke('db:success_criteria:delete', id),
+    list:      (workflow_id) => invoke('db:success_criteria:list', workflow_id),
+    create:    (data)        => invoke('db:success_criteria:create', data),
+    update:    (data)        => invoke('db:success_criteria:update', data),
+    delete:    (id)          => invoke('db:success_criteria:delete', id),
+    setPassed: (data)        => invoke('db:success_criteria:setPassed', data),
+    countByProject: (project_id) => invoke('db:success_criteria:countByProject', project_id),
   },
   layers: {
     list:                (workflow_id) => invoke('db:layers:list', workflow_id),

@@ -124,7 +124,7 @@ export class WorkflowsPage {
           this._criteria = criteria  || [];
           this._renderDetail();
         } else if (this._workflows.length > 0) {
-          await this._selectWorkflow(this._workflows[0].id);
+          await this._selectWorkflow(this._defaultWorkflowId());
         } else {
           this._activeId = null;
           this._layers   = [];
@@ -142,10 +142,42 @@ export class WorkflowsPage {
     this._workflows = (await window.db.workflows.list(this._projectId)) || [];
     this._renderList();
     if (this._workflows.length > 0) {
-      await this._selectWorkflow(this._workflows[0].id);
+      await this._selectWorkflow(this._defaultWorkflowId());
     } else {
       this._renderDetail();
     }
+  }
+
+  // Workflows in the same order they're displayed in the list: page groups
+  // first (sorted by the Reorder Pages "workflow_order"), then ungrouped.
+  _orderedWorkflows() {
+    const grouped   = new Map();
+    const ungrouped = [];
+    for (const w of this._workflows) {
+      if (w.screen_design_id) {
+        if (!grouped.has(w.screen_design_id)) grouped.set(w.screen_design_id, []);
+        grouped.get(w.screen_design_id).push(w);
+      } else {
+        ungrouped.push(w);
+      }
+    }
+    const orderedPageIds = Array.from(grouped.keys()).sort((a, b) => {
+      const pa = (this._pages || []).find(p => p.id === a);
+      const pb = (this._pages || []).find(p => p.id === b);
+      return (pa?.workflow_order ?? 0) - (pb?.workflow_order ?? 0);
+    });
+    const ordered = [];
+    for (const pageId of orderedPageIds) ordered.push(...grouped.get(pageId));
+    ordered.push(...ungrouped);
+    return ordered;
+  }
+
+  // Picks the workflow to auto-select: first "open"/"in_progress" workflow in
+  // display order, falling back to the first workflow overall.
+  _defaultWorkflowId() {
+    const ordered = this._orderedWorkflows();
+    const active = ordered.find(w => (w.status || 'open') === 'open' || w.status === 'in_progress');
+    return (active || ordered[0])?.id;
   }
 
   async _selectWorkflow(id) {
@@ -816,10 +848,10 @@ export class WorkflowsPage {
 
   _critRowHtml(c) {
     return `
-      <div class="wf-crit-row" data-cid="${c.id}">
-        <svg class="wf-crit-check" width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <div class="wf-crit-row${c.passed ? ' wf-crit-row--passed' : ''}" data-cid="${c.id}">
+        <svg class="wf-crit-check" data-cid="${c.id}" width="14" height="14" viewBox="0 0 16 16" fill="none" title="Mark as success">
           <rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M4 8l3 3 5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          ${c.passed ? '<path d="M4 8l3 3 5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' : ''}
         </svg>
         <span class="wf-crit-text">${escHtml(c.description)}</span>
         <button class="wf-icon-btn wf-edit-btn" data-cid="${c.id}" title="Edit">
@@ -1312,6 +1344,15 @@ ${base}`;
     this._refreshCriteriaTab();
   }
 
+  async _toggleCritPassed(id) {
+    const c = this._criteria.find(x => x.id === id);
+    if (!c) return;
+    const passed = c.passed ? 0 : 1;
+    await window.db.successCriteria.setPassed({ id, passed });
+    c.passed = passed;
+    this._refreshCriteriaTab();
+  }
+
   // ----------------------------------------------------------------
   // Partial re-render helpers
   // ----------------------------------------------------------------
@@ -1537,6 +1578,9 @@ ${base}`;
       });
       list.querySelectorAll('.wf-del-btn[data-cid]').forEach(btn => {
         btn.addEventListener('click', () => this._deleteCrit(+btn.dataset.cid));
+      });
+      list.querySelectorAll('.wf-crit-check[data-cid]').forEach(el => {
+        el.addEventListener('click', () => this._toggleCritPassed(+el.dataset.cid));
       });
       list.querySelectorAll('[data-action="cancel-crit"]').forEach(btn => {
         btn.addEventListener('click', () => { this._editingCritId = null; this._refreshCriteriaTab(); });

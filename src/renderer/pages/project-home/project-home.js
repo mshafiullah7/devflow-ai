@@ -15,7 +15,7 @@ export class ProjectHomePage {
     await injectCss('pages/project-home/project-home.css');
     applyStoredTheme();
 
-    const [project, workflows, documents, mockups, issueCount, testRunHistory, layers, layerStats] = await Promise.all([
+    const [project, workflows, documents, mockups, issueCount, testRunHistory, layers, layerStats, successCriteriaCount] = await Promise.all([
       window.db.projects.get(this.projectId),
       window.db.workflows.list(this.projectId),
       window.db.documents.list(this.projectId),
@@ -24,16 +24,18 @@ export class ProjectHomePage {
       window.db.testRunHistory.list(this.projectId),
       window.db.projectLayers.list(this.projectId),
       window.db.layers.statsByProjectLayer(this.projectId),
+      window.db.successCriteria.countByProject(this.projectId),
     ]);
 
-    this._project        = project;
-    this._workflows      = workflows ?? [];
-    this._documents      = documents;
-    this._mockups        = mockups;
-    this._issueCount     = issueCount;
-    this._testRunHistory = testRunHistory;
-    this._layers         = layers ?? [];
-    this._layerStats     = layerStats ?? [];
+    this._project             = project;
+    this._workflows           = workflows ?? [];
+    this._documents           = documents;
+    this._mockups             = mockups;
+    this._issueCount          = issueCount;
+    this._testRunHistory      = testRunHistory;
+    this._layers              = layers ?? [];
+    this._layerStats          = layerStats ?? [];
+    this._successCriteriaCount = successCriteriaCount ?? { total: 0, passed: 0, remaining: 0 };
 
     this.container.innerHTML = this._template();
 
@@ -81,20 +83,13 @@ export class ProjectHomePage {
     const wfCompleted = workflows.filter(w => w.status === 'completed').length;
     const wfDiffered  = workflows.filter(w => w.status === 'differed').length;
     const wfTotal     = workflows.length;
-    const wfCompPct   = wfTotal ? Math.round((wfCompleted / wfTotal) * 100) : 0;
-
-    const kpi = (value, label, cls = '') => `
-      <div class="ph-stat-box ${cls}">
-        <div class="ph-stat-box__value">${value}</div>
-        <div class="ph-stat-box__label">${label}</div>
-      </div>`;
 
     const workflowDonut = this._donutCard('Workflow Status', wfTotal, [
       { label: 'Completed',   count: wfCompleted, color: '#16a34a' },
       { label: 'In Progress', count: wfInProg,    color: 'var(--accent)' },
       { label: 'Open',        count: wfOpen,      color: 'var(--border)' },
       { label: 'Differed',    count: wfDiffered,  color: '#9333ea' },
-    ]);
+    ], { completed: wfCompleted });
 
     const issueDonut = this._donutCard('Issue Status', totalIssues, [
       { label: 'Open',        count: openIssues,       color: 'var(--danger)' },
@@ -102,27 +97,37 @@ export class ProjectHomePage {
       { label: 'Resolved',    count: resolvedIssues,   color: '#16a34a' },
     ]);
 
+    const scTotal     = this._successCriteriaCount?.total     ?? 0;
+    const scPassed    = this._successCriteriaCount?.passed    ?? 0;
+    const scRemaining = this._successCriteriaCount?.remaining ?? 0;
+
+    const successCriteriaDonut = this._donutCard('Success Criteria', scTotal, [
+      { label: 'Completed', count: scPassed,    color: '#16a34a' },
+      { label: 'Remaining', count: scRemaining, color: 'var(--border)' },
+    ], { completed: scPassed });
+
     return `
-      <div class="ph-stats-strip ph-stats-strip--3">
-        ${kpi(wfTotal, 'Workflows Total')}
-        ${kpi(openIssues, 'Open Issues', openIssues > 0 ? 'ph-stat-box--danger' : '')}
-        ${kpi(wfTotal ? wfCompPct + '%' : '—', 'Workflows Complete')}
-      </div>
-      <div class="ph-mc-grid" style="margin-bottom:28px">
+      <div class="ph-mc-grid ph-mc-grid--3" style="margin-bottom:28px">
         ${workflowDonut}
         ${issueDonut}
+        ${successCriteriaDonut}
       </div>`;
   }
 
   // ----------------------------------------------------------------
   // Donut chart card (title + ring + legend), used by _statsHtml
   // ----------------------------------------------------------------
-  _donutCard(title, total, segments) {
+  _donutCard(title, total, segments, { completed } = {}) {
     const active         = segments.filter(s => s.count > 0);
     const r               = 40;
     const cx = 50, cy = 50;
     const circumference   = 2 * Math.PI * r;
     let acc = 0;
+
+    const showPct    = completed !== undefined;
+    const pct        = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const centerVal  = showPct ? `${pct}%` : total;
+    const centerSub  = showPct ? 'complete' : 'total';
 
     const arcs = total > 0
       ? active.map(s => {
@@ -146,13 +151,16 @@ export class ProjectHomePage {
 
     return `
       <div class="ph-mc-card">
-        <div class="ph-mc-title">${escHtml(title)}</div>
+        <div class="ph-mc-header">
+          <div class="ph-mc-title">${escHtml(title)}</div>
+          <div class="ph-mc-total">${total} total</div>
+        </div>
         <div class="ph-donut-layout">
           <svg class="ph-donut-svg" viewBox="0 0 100 100">
             <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--surface-hover)" stroke-width="14"/>
             <g transform="rotate(-90 ${cx} ${cy})">${arcs}</g>
-            <text x="${cx}" y="47" text-anchor="middle" class="ph-donut-num">${total}</text>
-            <text x="${cx}" y="61" text-anchor="middle" class="ph-donut-sub">total</text>
+            <text x="${cx}" y="47" text-anchor="middle" class="ph-donut-num">${centerVal}</text>
+            <text x="${cx}" y="61" text-anchor="middle" class="ph-donut-sub">${centerSub}</text>
           </svg>
           <div class="ph-donut-legend">${legend}</div>
         </div>
