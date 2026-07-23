@@ -36,6 +36,7 @@ ${layersSection}
 
 Every "layer" field in every workflow object MUST exactly match one of these names.
 Exception: Workflow 1 uses "UI"; every feature workflow ends with "Wire Up" then "Integration Build & Fix".
+Where a layer lists a "Scaffold structure", every "inputs"/"outputs" file path for that layer MUST be placed inside one of those scaffold folders — do not invent new top-level folders when a matching scaffold folder already exists.
 
 ════════════════════════════════════════════════════════════════
 UNIVERSAL RULES  (apply to every layer, every workflow)
@@ -612,7 +613,6 @@ export class GenerateWorkflowsPage {
     if (!screen) return;
 
     const selectedDocs = this._documents.filter(d => this._selectedDocIds.has(d.id));
-    const isCli = this._modelConfig?.type === 'cli';
 
     let screenSection = '';
     let docsSection   = '';
@@ -623,30 +623,16 @@ export class GenerateWorkflowsPage {
     // runner at execution time for the UI Shell layer.
     const screenText = extractTextPreview(screen.html_content || '');
 
-    if (isCli) {
-      // Write stripped text (not raw HTML) to temp file — smaller file, fewer tokens
-      const files = [
-        { name: `screen-${screen.id}.txt`, content: screenText || '(no screen content)' },
-        ...selectedDocs.map(d => ({ name: `doc-${d.id}-${d.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40)}.txt`, content: d.content || '' })),
-      ];
-      const paths = await window.app.writeTempFiles(files);
-      this._tempDir = paths[0].replace(/[\\/][^\\/]+$/, '');
-      screenSection = `## UI/UX Mockup (Screen: "${screen.title}"):\nSee file: ${paths[0]}`;
-      if (selectedDocs.length > 0) {
-        const docLines = selectedDocs.map((d, i) => `### ${d.title}\nSee file: ${paths[i + 1]}`).join('\n\n');
-        docsSection = `## Documents:\n${docLines}`;
-      } else {
-        docsSection = `## Documents:\n(none selected)`;
-      }
+    // Embed stripped text directly rather than writing it to a separate temp file
+    // and pointing at it with "See file: <path>" — CLI configs for this page run
+    // with Read (and other tools) disallowed, so the model has no way to open a
+    // referenced file; the content has to already be inside the one prompt it's given.
+    screenSection = `## UI/UX Mockup (Screen: "${screen.title}"):\n${screenText || '(no screen content)'}`;
+    if (selectedDocs.length > 0) {
+      const docLines = selectedDocs.map(d => `### ${d.title}\n${d.content || '(empty)'}`).join('\n\n');
+      docsSection = `## Documents:\n${docLines}`;
     } else {
-      // Embed stripped text directly — not raw HTML
-      screenSection = `## UI/UX Mockup (Screen: "${screen.title}"):\n${screenText || '(no screen content)'}`;
-      if (selectedDocs.length > 0) {
-        const docLines = selectedDocs.map(d => `### ${d.title}\n${d.content || '(empty)'}`).join('\n\n');
-        docsSection = `## Documents:\n${docLines}`;
-      } else {
-        docsSection = `## Documents:\n(none selected)`;
-      }
+      docsSection = `## Documents:\n(none selected)`;
     }
 
     const layersSection = this._projectLayers.length > 0
@@ -655,7 +641,19 @@ export class GenerateWorkflowsPage {
             const parts = [`- ${pl.name}`];
             if (pl.description) parts.push(pl.description);
             if (pl.folder_path) parts.push(`(${pl.folder_path})`);
-            return parts.join('  |  ');
+            const header = parts.join('  |  ');
+
+            let scaffoldLines = [];
+            if (pl.scaffold_structure) {
+              try {
+                const parsed = JSON.parse(pl.scaffold_structure);
+                if (Array.isArray(parsed)) scaffoldLines = parsed;
+              } catch { /* not JSON — ignore */ }
+            }
+            if (scaffoldLines.length === 0) return header;
+
+            const scaffoldBlock = scaffoldLines.map(p => `    ${p}`).join('\n');
+            return `${header}\n  Scaffold structure:\n${scaffoldBlock}`;
           })
           .join('\n')
       : '(no project layers defined — add layers in Project Layers before generating)';

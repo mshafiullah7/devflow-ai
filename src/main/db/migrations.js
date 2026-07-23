@@ -465,7 +465,10 @@ function runMigrations(db) {
   // mapped by default to Documents, Project Layers, and AI Chat.
   const NEW_DEFAULT_LABEL = 'Claude Haiku General Purpose';
   const NEW_DEFAULT_MODEL_NAME = 'claude-haiku-4-5';
-  const NEW_DEFAULT_FLAGS = `--model {{model}} '@{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`;
+  // A bare '@file' arg with no surrounding text renders as an attachment with
+  // no request — the CLI then just asks what to do with it. Lead-in text keeps
+  // the file as context while making the turn itself an actual instruction.
+  const NEW_DEFAULT_FLAGS = `--model {{model}} 'Follow the instructions in the attached file exactly and respond accordingly. @{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`;
 
   const existing = db.prepare(`
     SELECT id FROM model_configs WHERE label IN (?, 'Claude Haiku General CLI')
@@ -528,7 +531,7 @@ function runMigrations(db) {
   // Haiku config above, mapped to Mockups and Generate Workflows.
   const SONNET_LABEL      = 'Claude Sonnet General Purpose';
   const SONNET_MODEL_NAME = 'claude-sonnet-5';
-  const SONNET_FLAGS      = `--model {{model}} '@{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`;
+  const SONNET_FLAGS      = `--model {{model}} 'Follow the instructions in the attached file exactly and respond accordingly. @{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`;
 
   const sonnetExisting = db.prepare('SELECT id FROM model_configs WHERE label = ?').get(SONNET_LABEL);
   if (sonnetExisting) {

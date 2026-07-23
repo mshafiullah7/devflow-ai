@@ -444,7 +444,7 @@ function seedModelConfigs(db) {
   db.transaction(() => {
     const { lastInsertRowid: id } = insert.run(
       'Claude Haiku General Purpose', 'cli', 'claude', 'claude-haiku-4-5',
-      `--model {{model}} '@{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`,
+      `--model {{model}} 'Follow the instructions in the attached file exactly and respond accordingly. @{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`,
       'pipe', 1, 0, '', ''
     );
 
@@ -459,7 +459,7 @@ function seedModelConfigs(db) {
 
     const { lastInsertRowid: sonnetId } = insert.run(
       'Claude Sonnet General Purpose', 'cli', 'claude', 'claude-sonnet-5',
-      `--model {{model}} '@{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`,
+      `--model {{model}} 'Follow the instructions in the attached file exactly and respond accordingly. @{{prompt}}' --disallowedTools "Read,Glob,Grep,Bash,Write,Edit,WebFetch,WebSearch,Task,NotebookEdit"`,
       'pipe', 0, 1, '', ''
     );
     for (const pageKey of ['mockups', 'generate-workflows']) {
