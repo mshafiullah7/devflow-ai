@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, ipcMain, session, screen } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, session, screen, Notification } = require('electron');
 const path = require('node:path');
 const fs   = require('node:fs');
 const { registerHandlers } = require('./db/ipc');
@@ -26,6 +26,14 @@ if (require('electron-squirrel-startup')) {
 }
 
 const isMac = process.platform === 'darwin';
+
+// Windows toast notifications are attributed to this AppUserModelID rather
+// than the running exe's path — pin it explicitly so notifications keep
+// working after Squirrel auto-updates move the app into a new versioned
+// "app-<version>" folder (whose path would otherwise change each update).
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.devflow.ai-sdlc');
+}
 
 // Default overlay colors match the dark theme (styles/app.css) until the
 // renderer reports the user's actual stored theme via app:set-titlebar-overlay.
@@ -140,6 +148,26 @@ app.whenReady().then(async () => {
       return { ok: false, error: e.message };
     }
   });
+  // Native OS notification — fires even while the app is minimized or
+  // unfocused, since it's shown by the OS, not the renderer window.
+  ipcMain.handle('app:showNotification', (e, { title, body } = {}) => {
+    if (!Notification.isSupported()) return { ok: false, error: 'Notifications not supported on this system' };
+    const notification = new Notification({
+      title: title || 'DevFlow',
+      body:  body  || '',
+      icon:  path.join(__dirname, '..', '..', 'assets', 'icon.png'),
+    });
+    notification.on('click', () => {
+      const win = BrowserWindow.fromWebContents(e.sender);
+      if (!win || win.isDestroyed()) return;
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    });
+    notification.show();
+    return { ok: true };
+  });
+
   ipcMain.handle('app:logs:list', () => {
     const { getDb } = require('./db/database');
     return getDb().prepare(

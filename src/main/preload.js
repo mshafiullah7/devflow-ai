@@ -257,6 +257,7 @@ contextBridge.exposeInMainWorld('app', {
     restore: () => invoke('app:db:restore'),
   },
   backupDefaultPath: () => invoke('app:backup-default-path'),
+  showNotification:  (data) => invoke('app:showNotification', data),
   logs: {
     list: () => invoke('app:logs:list'),
   },

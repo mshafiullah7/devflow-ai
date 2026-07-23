@@ -6,6 +6,13 @@ const os   = require('node:os');
 const fs   = require('node:fs');
 const path = require('node:path');
 
+// $LASTEXITCODE is only set by native executables — if the resolved CLI
+// command runs as a PowerShell script/function shim instead, it can stay
+// $null, which would print a blank exit-code segment ("##WFR_DONE:5:##")
+// that fails the `(\d+)` sentinel regex and hangs the run forever. Fall
+// back to $? (always boolean) so the sentinel always contains a digit.
+const WIN_EXIT_CODE_EXPR = '$(if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 })';
+
 // ---------------------------------------------------------------------------
 // Resolve an executable name to its full path on Windows.
 // ---------------------------------------------------------------------------
@@ -71,6 +78,7 @@ function registerPtyHandlers(prefix) {
   let _shellLineBuf    = '';
   let _claudeActive        = false;
   let _batchSessionActive  = false;
+  let _batchSessionCwd     = null;
   let _currentLayerId      = null;
   let _lastCommandTime     = 0;
   let _flushTimeout        = null;
@@ -152,6 +160,7 @@ function registerPtyHandlers(prefix) {
     _shellLineBuf     = '';
     _claudeActive        = false;
     _batchSessionActive  = false;
+    _batchSessionCwd     = null;
     if (_flushTimeout) {
       clearTimeout(_flushTimeout);
       _flushTimeout = null;
@@ -412,6 +421,26 @@ function registerPtyHandlers(prefix) {
       ? tmpFile.replace(/'/g, "''")
       : tmpFile.replace(/'/g, "'\\''");
 
+    // Layers can point at different project-layer folders — the shell is a
+    // long-lived PTY reused across layers, so its cwd must be explicitly
+    // (re)synced to this layer's folder before every run, not just once at
+    // spawn time. Without this, a layer whose folder differs from wherever
+    // the shell was last left runs its prompt against the wrong directory.
+    const escapedCwd = isWin
+      ? spawnCwd.replace(/'/g, "''")
+      : spawnCwd.replace(/'/g, "'\\''");
+    const cdCmd = isWin
+      ? `Set-Location -LiteralPath '${escapedCwd}'`
+      : `cd '${escapedCwd}'`;
+
+    // `-c` resumes Claude's previous conversation, which stays anchored to the
+    // directory it was started in — if this layer's folder differs from the
+    // last one, continuing would keep operating on the OLD layer's folder
+    // even though the shell itself has cd'd elsewhere. Only allow continuation
+    // when consecutive layers share the same cwd; otherwise force a fresh
+    // cold start scoped to the new directory.
+    const canContinueSession = _batchSessionActive && _batchSessionCwd === spawnCwd;
+
     const skipPermsFlag = (model?.skip_perms_flag != null) ? model.skip_perms_flag : '--dangerously-skip-permissions';
     const permsPart     = (skipPermissions && skipPermsFlag) ? skipPermsFlag + ' ' : '';
 
@@ -429,8 +458,8 @@ function registerPtyHandlers(prefix) {
         coreCmd = `python "${agentPath}" --project "${spawnCwd}" --message "$(cat '${escapedPath}')" --provider ${provider} --model ${modelName}${baseUrlPart} --verbose`;
       }
       const fullCmd = isWin
-        ? `${coreCmd}; Write-Host "##WFR_DONE:${layerId}:$LASTEXITCODE##"`
-        : `${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
+        ? `${cdCmd}; ${coreCmd}; Write-Host "##WFR_DONE:${layerId}:${WIN_EXIT_CODE_EXPR}##"`
+        : `${cdCmd}; ${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
       _pty.write(fullCmd + '\r');
       return { ok: true, command: coreCmd };
     }
@@ -440,9 +469,17 @@ function registerPtyHandlers(prefix) {
         .replace(/\{\{model\}\}/g, modelName)
         .replace(/\{\{prompt\}\}/g, escapedPath);
 
-      const batchPart = (interactive === false && model?.batch_flags)
-        ? model.batch_flags + ' '
-        : '';
+      let batchPart = '';
+      if (interactive === false) {
+        if (model?.batch_flags) {
+          batchPart = model.batch_flags + ' ';
+        } else if (exe === 'claude') {
+          // No batch_flags configured for this Claude CLI config — fall back to
+          // the same auto non-interactive behavior as the flag-less default path,
+          // so Run All still runs headless instead of dropping into the REPL.
+          batchPart = '--print ' + (canContinueSession ? '-c ' : '');
+        }
+      }
 
       coreCmd = `${exe} ${permsPart}${batchPart}${resolved}`;
     } else if (model?.flags) {
@@ -465,18 +502,21 @@ function registerPtyHandlers(prefix) {
         if (model?.batch_flags != null) {
           batchPart = model.batch_flags ? model.batch_flags + ' ' : '';
         } else {
-          batchPart = '--print ' + (_batchSessionActive ? '-c ' : '');
+          batchPart = '--print ' + (canContinueSession ? '-c ' : '');
         }
       }
 
       coreCmd = `${exe} ${permsPart}${batchPart}--model ${modelName} '@${escapedPath}'`;
     }
 
-    if (interactive === false) _batchSessionActive = true;
+    if (interactive === false) {
+      _batchSessionActive = true;
+      _batchSessionCwd    = spawnCwd;
+    }
 
     const fullCmd = isWin
-      ? `${coreCmd}; Write-Host "##WFR_DONE:${layerId}:$LASTEXITCODE##"`
-      : `${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
+      ? `${cdCmd}; ${coreCmd}; Write-Host "##WFR_DONE:${layerId}:${WIN_EXIT_CODE_EXPR}##"`
+      : `${cdCmd}; ${coreCmd}; echo "##WFR_DONE:${layerId}:$?"`;
 
     _pty.write(fullCmd + '\r');
 

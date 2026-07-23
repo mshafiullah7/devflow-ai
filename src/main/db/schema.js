@@ -430,6 +430,16 @@ function applySchema(db) {
     // Manual "mark as success" toggle for a success criterion — shared between
     // the Workflows Criteria tab and the Run Layers Success Criteria section.
     `ALTER TABLE success_criteria ADD COLUMN passed INTEGER NOT NULL DEFAULT 0`,
+    // Fix a seeding typo: the non-sandboxed "High" Gemini config was mistakenly
+    // labeled the same as its sandboxed counterpart instead of "...High Code".
+    `UPDATE model_configs SET label = 'Gemini Flash High Code'
+       WHERE executable = 'agy' AND label = 'Gemini Flash High General Purpose'
+         AND flags NOT LIKE '%--sandbox%'`,
+    // model_name values for agy (e.g. "Gemini 3.5 Flash (Medium)") contain
+    // spaces/parens — quote {{model}} so the shell doesn't split it into
+    // multiple arguments.
+    `UPDATE model_configs SET flags = REPLACE(flags, '--model {{model}}', '--model "{{model}}"')
+       WHERE executable = 'agy' AND flags LIKE '%--model {{model}}%'`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -498,16 +508,14 @@ function seedModelConfigs(db) {
     }
 
     // Gemini (agy CLI) configs — intentionally left unmapped to any page.
-    // Two labels are the same by design ("Gemini Flash High General Purpose" ×2,
-    // one --sandbox, one not), so they're inserted positionally, not by label lookup.
     const geminiInsert = db.prepare(`
       INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag)
       VALUES (?, 'cli', 'agy', ?, ?, 'pipe', 0, ?, NULL, NULL)
     `);
-    geminiInsert.run('Gemini Flash Medium General Purpose', 'Gemini 3.5 Flash (Medium)', `--sandbox -p "{{prompt}}" --model {{model}}`, 4);
-    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `--sandbox -p "{{prompt}}" --model {{model}}`, 5);
-    geminiInsert.run('Gemini Flash Medium Code',            'Gemini 3.5 Flash (Medium)', `-p "{{prompt}}" --model {{model}}`, 6);
-    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `-p "{{prompt}}" --model {{model}}`, 7);
+    geminiInsert.run('Gemini Flash Medium General Purpose', 'Gemini 3.5 Flash (Medium)', `--sandbox -p "{{prompt}}" --model "{{model}}"`, 4);
+    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `--sandbox -p "{{prompt}}" --model "{{model}}"`, 5);
+    geminiInsert.run('Gemini Flash Medium Code',            'Gemini 3.5 Flash (Medium)', `-p "{{prompt}}" --model "{{model}}"`, 6);
+    geminiInsert.run('Gemini Flash High Code',              'Gemini 3.5 Flash (High)',   `-p "{{prompt}}" --model "{{model}}"`, 7);
 
     // Non-CLI reference configs (Ollama / Groq via OpenAI-compatible API / Anthropic API) —
     // intentionally left unmapped to any page; illustrate the range of supported

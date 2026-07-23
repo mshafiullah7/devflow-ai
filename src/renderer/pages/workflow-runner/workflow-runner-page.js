@@ -440,6 +440,13 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   // ── Run all layers ───────────────────────────────────────────────────────
 
   async _runAll() {
+    const ok = await Dialog.confirm(
+      'Run All executes every open layer back-to-back in non-interactive mode (cold start, then continued sessions). ' +
+      'This can consume noticeably more tokens than running layers one at a time — make sure your 5-hour usage window has enough headroom before continuing.',
+      { title: 'Run all layers?', confirmText: 'Run All', cancelText: 'Cancel' }
+    );
+    if (!ok) return;
+
     this._running = true;
     this._runningAll = true;
     this._updateToolbar();
@@ -457,6 +464,22 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     if (this._timerInt) { clearInterval(this._timerInt); this._timerInt = null; }
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; this._screenFilePath = null; }
     await this._evaluateCriteria();
+    this._notifyRunAllDone();
+  }
+
+  // Fires a native OS notification so the user knows Run All finished even
+  // if the app window is minimized or in the background.
+  _notifyRunAllDone() {
+    const failed    = this._layers.filter(l => this._statuses[l.id] === 'failed').length;
+    const executed  = this._layers.filter(l => this._statuses[l.id] === 'executed').length;
+    const wfName    = this._workflow?.feature || 'Workflow';
+    const body      = failed > 0
+      ? `${executed} layer(s) completed, ${failed} failed.`
+      : `All ${executed} layer(s) completed successfully.`;
+    window.app.showNotification({
+      title: `Run All finished — ${wfName}`,
+      body,
+    });
   }
 
   // ── Core layer runner ────────────────────────────────────────────────────
@@ -659,7 +682,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     const runAll      = this.container.querySelector('#wfrBtnRunAll');
     const runSelected = this.container.querySelector('#wfrBtnRunSelected');
     const hasOpen     = this._layers.some(l => this._statuses[l.id] === 'open');
-    if (runAll)      { runAll.hidden = false; runAll.disabled = true; }
+    if (runAll)      { runAll.hidden = false; runAll.disabled = this._running || !hasOpen; }
     if (runSelected) { runSelected.hidden = false; runSelected.disabled = this._running || !this._selectedId; }
   }
 
