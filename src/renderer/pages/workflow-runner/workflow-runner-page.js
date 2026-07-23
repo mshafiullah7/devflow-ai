@@ -559,10 +559,6 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
           return;
         }
 
-        // Show the command being sent to the shell
-        if (result.command) {
-          this._term.write(`${ANSI.dim}▶  ${result.command}${ANSI.reset}\r\n`);
-        }
         return;
       }
 
