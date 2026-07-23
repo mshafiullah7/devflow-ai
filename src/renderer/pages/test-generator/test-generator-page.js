@@ -189,8 +189,9 @@ export class TestGeneratorPage {
     this._stopGitPolling();
     removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
-    removeCss('components/git/git-diff.css');
-    removeCss('components/project-sidebar/project-sidebar.css');
+    // components/git/git-diff.css and project-sidebar.css are shared with
+    // persistent tabs (Workflow Runner, Issue Runner, Terminal) that may still
+    // be alive in the background — removing them here strips their styling too.
     this._picker?.unmount();
   }
 

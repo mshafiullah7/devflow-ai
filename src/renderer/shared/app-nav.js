@@ -14,8 +14,13 @@ export const persistentHost = new PersistentPageHost(hostRoot);
  * router.navigate() for every other route.
  */
 export async function navigateTo(name, params = {}) {
+  // Checked once, up front, for both branches below — a page's nav guard
+  // (e.g. Workflow Runner blocking navigation while a layer is running) must
+  // run before persistentHost.deactivateAll() hides anything, otherwise a
+  // blocked transition would still leave the persistent tab hidden.
+  if (!(await router.canLeave())) return;
+
   if (PERSISTENT_ROUTES.has(name)) {
-    if (!(await router.canLeave())) return;
     router.container.style.display = 'none';
     const loader = router.routes[name];
     if (!loader) throw new Error(`Route "${name}" is not registered.`);
@@ -25,7 +30,7 @@ export async function navigateTo(name, params = {}) {
 
   persistentHost.deactivateAll();
   router.container.style.display = '';
-  await router.navigate(name, params);
+  await router._doNavigate(name, params);
 }
 
 /** True while a persistent page has a live (not-yet-closed) instance. */

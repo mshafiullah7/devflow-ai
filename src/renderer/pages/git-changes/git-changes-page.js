@@ -65,8 +65,9 @@ export class GitChangesPage {
 
   unmount() {
     removeCss('pages/git-changes/git-changes-page.css');
-    removeCss('components/git/git-diff.css');
-    removeCss('components/project-sidebar/project-sidebar.css');
+    // components/git/git-diff.css and project-sidebar.css are shared with
+    // persistent tabs (Workflow Runner, Issue Runner, Terminal) that may still
+    // be alive in the background — removing them here strips their styling too.
     window.db.terminal.removeListeners();
   }
 

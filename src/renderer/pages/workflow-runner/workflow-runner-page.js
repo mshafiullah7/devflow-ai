@@ -2,6 +2,7 @@ import { escHtml, injectCss } from '../../shared/helpers.js';
 import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker } from '../../components/model-picker/model-picker.js';
 import { ProjectSidebar } from '../../components/project-sidebar/project-sidebar.js';
+import { Dialog } from '../../components/dialog/dialog.js';
 
 const STATUS = {
   open:         { label: 'Open',         cls: 'wfr-status--open'    },
@@ -94,6 +95,14 @@ export class WorkflowRunnerPage {
    * needs a terminal refit.
    */
   onResume(params) {
+    // Defensive: re-inject in case another page's unmount() stripped this
+    // shared stylesheet while this tab sat hidden in the background — injectCss
+    // is a no-op if the <link> is already present.
+    injectCss('components/git/git-diff.css');
+    // Reclaim the router's single nav-guard slot — while this tab sat hidden,
+    // whatever page was in the foreground may have set (and cleared) its own
+    // guard there, leaving ours unset even though a layer may still be running.
+    this.router?.setNavigationGuard(() => this._confirmLeaveIfBusy());
     if (params && params.workflowId !== this._workflow?.id) {
       this._init(params);
       return;
@@ -103,7 +112,8 @@ export class WorkflowRunnerPage {
     }
   }
 
-  _handleClose() {
+  async _handleClose() {
+    if (!(await this._confirmLeaveIfBusy())) return;
     if (this._embedded) {
       this.router?.closePersistentRoute?.('workflow-runner');
       this.router?.navigateTo?.(this._returnRoute, { projectId: this._project?.id });
@@ -112,7 +122,25 @@ export class WorkflowRunnerPage {
     }
   }
 
+  // Blocks navigation/close while a layer (or Run All) is in execution.
+  // Confirming kills the running CLI process and lets the transition proceed.
+  async _confirmLeaveIfBusy() {
+    if (!this._running) return true;
+    const ok = await Dialog.confirm(
+      'A layer is still running. Leaving now will stop the current run — it cannot be resumed from where it left off.',
+      { title: 'Layer running', confirmText: 'Leave Anyway', danger: true }
+    );
+    if (ok) {
+      window.app.wfrPty.kill();
+      this._running = false;
+      this._runningAll = false;
+      this._updateToolbar();
+    }
+    return ok;
+  }
+
   unmount() {
+    this.router?.clearNavigationGuard();
     this._picker?.unmount();
     window.app.workflowChat.offAll();
     window.app.wfrPty.offAll();
@@ -172,6 +200,8 @@ export class WorkflowRunnerPage {
     this._initTerminal();
     this._startGitPolling();
     this._initLayoutObserver();
+
+    if (this._embedded) this.router.setNavigationGuard(() => this._confirmLeaveIfBusy());
 
     if (startLayerId) {
       const target = this._layers.find(l => l.id === startLayerId);
@@ -852,6 +882,10 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
               </div>
               <div class="wfr-git-panel__body" id="wfrGitAccordion">
                 <div class="git-diff-empty">No changes yet.</div>
+              </div>
+              <div class="wfr-git-panel__criteria">
+                <div class="wfr-git-panel__criteria-hd">Success Criteria</div>
+                <div class="wfr-criteria-list">${this._criteriaHtml()}</div>
               </div>
             </aside>
           </section>

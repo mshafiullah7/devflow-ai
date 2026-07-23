@@ -36,7 +36,16 @@ export class Router {
 
   async navigate(name, params = {}) {
     if (!(await this.canLeave())) return;
+    await this._doNavigate(name, params);
+  }
 
+  /**
+   * Same as navigate() but skips the canLeave() check — for callers (like
+   * app-nav.js's navigateTo()) that already checked canLeave() themselves
+   * before doing other work (e.g. hiding a persistent tab) that shouldn't
+   * happen if the guard blocks the transition.
+   */
+  async _doNavigate(name, params = {}) {
     if (this.currentPage && typeof this.currentPage.unmount === 'function') {
       this.currentPage.unmount();
     }

@@ -85,6 +85,10 @@ export class IssueRunnerPage {
    * needs a terminal refit.
    */
   onResume(params) {
+    // Defensive: re-inject in case another page's unmount() stripped this
+    // shared stylesheet while this tab sat hidden in the background — injectCss
+    // is a no-op if the <link> is already present.
+    injectCss('components/git/git-diff.css');
     if (params && params.projectId !== this._projectId) {
       this._projectId = params.projectId;
       this._passedModelConfig = params.modelConfig || null;
@@ -171,9 +175,11 @@ export class IssueRunnerPage {
 
   unmount() {
     removeCss('pages/issue-runner/issue-runner-page.css');
-    removeCss('components/git/git-diff.css');
     removeCss('pages/issues/issues-page.css');
-    if (this._embedded) removeCss('components/project-sidebar/project-sidebar.css');
+    // components/git/git-diff.css and project-sidebar.css are shared with other
+    // persistent tabs (Workflow Runner, Terminal, etc.) that may still be alive
+    // in the background — removing them here would strip their styling too.
+    // Treat them as loaded once for the app's lifetime, same as those pages do.
     this._picker?.unmount();
     if (this._isRunning) window.app.irPty.kill();
     window.app.irPty.offAll();
