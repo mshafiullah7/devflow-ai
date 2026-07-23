@@ -115,6 +115,7 @@ contextBridge.exposeInMainWorld('db', {
     update:           (data)       => invoke('db:screen_designs:update', data),
     delete:           (id)         => invoke('db:screen_designs:delete', id),
     setDartFilePath:  (data)       => invoke('db:screen_designs:setDartFilePath', data),
+    setWorkflowOrder: (orderedIds) => invoke('db:screen_designs:setWorkflowOrder', orderedIds),
   },
   promptQueueMessages: {
     list:  (queue_item_id) => invoke('db:pq_messages:list', queue_item_id),

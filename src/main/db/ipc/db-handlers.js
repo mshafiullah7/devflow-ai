@@ -1004,6 +1004,14 @@ function registerDbHandlers() {
     return db.prepare('SELECT * FROM screen_designs WHERE id = ?').get(id);
   });
 
+  safeHandle('db:screen_designs:setWorkflowOrder', (_e, orderedIds) => {
+    const update = db.prepare('UPDATE screen_designs SET workflow_order = ? WHERE id = ?');
+    db.transaction(() => {
+      orderedIds.forEach((id, i) => update.run(i, id));
+    })();
+    return { success: true };
+  });
+
   // ----------------------------------------------------------------
   // draw.io — open in desktop app via temp file
   // ----------------------------------------------------------------

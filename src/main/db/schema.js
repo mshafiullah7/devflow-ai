@@ -152,6 +152,7 @@ function applySchema(db) {
       html_content        TEXT    NOT NULL DEFAULT '',
       queued              INTEGER NOT NULL DEFAULT 0,
       executed            INTEGER NOT NULL DEFAULT 0,
+      workflow_order      INTEGER NOT NULL DEFAULT 0,
       is_active           INTEGER NOT NULL DEFAULT 1,
       created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
       updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -422,6 +423,9 @@ function applySchema(db) {
     `ALTER TABLE projects ADD COLUMN target_platform TEXT NOT NULL DEFAULT 'web'`,
     // Which platform a saved theme's component language was tuned for: 'web' | 'mobile'
     `ALTER TABLE saved_themes ADD COLUMN category TEXT NOT NULL DEFAULT 'web'`,
+    // Page display order in the Workflows list — set via the "Reorder Pages"
+    // modal, independent of the page's own created_at / mockup ordering.
+    `ALTER TABLE screen_designs ADD COLUMN workflow_order INTEGER NOT NULL DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}

@@ -46,7 +46,7 @@ UNIVERSAL RULES  (apply to every layer, every workflow)
   Never include: Dart code, class bodies, method implementations, numbered step-by-step code, or import statements.
 - inputs: exact file paths from prior layers this layer depends on
 - outputs: exact file paths this layer creates or modifies
-- success_criteria must be testable — no vague statements like "works correctly"
+- success_criteria must be testable AND written from a manual UI-verification standpoint — what a person can observe or do in the running app (e.g. "Tapping Sign In with valid credentials navigates to the Dashboard screen", "Entering an invalid email shows an inline error below the field"). No vague statements like "works correctly", and no implementation/technical checks (file exists, compiles, route registered) — those belong in the layer's own "prompt", not success_criteria.
 - Do not generate unit tests or e2e tests
 - Output the complete JSON array in one block — no prose between workflows
 
@@ -107,10 +107,9 @@ Backend & Data layer "prompt" must also:
     "screenId": "{screen id}",
     "description": "Convert the HTML mockup to a complete static Flutter page with placeholder interactions",
     "success_criteria": [
-      "Dart file created at lib/features/{name}/presentation/pages/{name}_page.dart",
-      "Page compiles with no errors",
-      "All UI elements from the mockup are present",
-      "Route is registered in the app router"
+      "Opening the screen shows every element from the mockup (fields, labels, buttons) with placeholder/static data",
+      "Tapping each interactive element does nothing yet but does not crash or error",
+      "Navigating to the screen's route from the app shows this page"
     ],
     "layers": [
       {
@@ -129,7 +128,7 @@ Backend & Data layer "prompt" must also:
     "feature": "Human readable feature name",
     "screenId": "{screen id}",
     "description": "What this feature does end-to-end",
-    "success_criteria": ["testable outcome 1", "testable outcome 2"],
+    "success_criteria": ["what a person sees/can do in the app once this feature works", "another observable, manually-verifiable outcome"],
     "layers": [
       {
         "layer": "exact name from AVAILABLE PROJECT LAYERS above",

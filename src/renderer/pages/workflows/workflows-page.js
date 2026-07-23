@@ -216,6 +216,13 @@ export class WorkflowsPage {
           </div>
           <span class="ph-header-page-chip">Workflows</span>
           <div class="ph-header-actions">
+            <button class="gw-open-btn gw-open-btn--ghost" id="wfBtnReorderPages" title="Reorder pages for bottom-up development sequencing">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+              </svg>
+              Reorder Pages
+            </button>
             <button class="gw-open-btn" id="wfBtnGenerate" title="Generate workflows with AI">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -317,8 +324,17 @@ export class WorkflowsPage {
       expandedGroups.add(g.dataset.groupId);
     });
 
+    // Page groups display in "workflow_order" (set via the Reorder Pages modal) —
+    // this drives bottom-up development sequencing, independent of creation order.
+    const orderedPageIds = Array.from(grouped.keys()).sort((a, b) => {
+      const pa = (this._pages || []).find(p => p.id === a);
+      const pb = (this._pages || []).find(p => p.id === b);
+      return (pa?.workflow_order ?? 0) - (pb?.workflow_order ?? 0);
+    });
+
     const parts = [];
-    for (const [pageId, workflows] of grouped) {
+    for (const pageId of orderedPageIds) {
+      const workflows = grouped.get(pageId);
       const page = (this._pages || []).find(p => p.id === pageId);
       const pageTitle = page?.title || 'Page';
       const allDone = workflows.every(w => (w.status || 'open') === 'completed' || w.status === 'differed');
@@ -1041,6 +1057,94 @@ ${base}`;
     setTimeout(() => overlay.querySelector('#wfModalFeature')?.focus(), 50);
   }
 
+  // ----------------------------------------------------------------
+  // Reorder Pages (page-level display order in the Workflows list —
+  // used to sequence bottom-up feature development)
+  // ----------------------------------------------------------------
+  _openReorderPagesModal() {
+    document.querySelector('.wf-add-modal-overlay')?.remove();
+
+    // Only pages that actually have workflows mapped to them — this is a
+    // list-display order, not a general page-management screen.
+    const pageIds = new Set(this._workflows.filter(w => w.screen_design_id).map(w => w.screen_design_id));
+    const pages = (this._pages || [])
+      .filter(p => pageIds.has(p.id))
+      .slice()
+      .sort((a, b) => (a.workflow_order ?? 0) - (b.workflow_order ?? 0));
+
+    const overlay = document.createElement('div');
+    overlay.className = 'wf-add-modal-overlay';
+    overlay.innerHTML = `
+      <div class="wf-add-modal">
+        <div class="wf-add-modal__header">
+          <span class="wf-add-modal__title">Reorder Pages</span>
+          <button class="wf-add-modal__close" id="wfReorderClose">×</button>
+        </div>
+        <div class="wf-add-modal__body">
+          ${pages.length
+            ? `<p class="wf-reorder-hint">Drag to set the order pages appear in the Workflows list — e.g. bottom-up, dependencies first.</p>
+               <div class="wf-reorder-list" id="wfReorderList">
+                 ${pages.map(p => `
+                   <div class="wf-reorder-row" draggable="true" data-pid="${p.id}">
+                     <span class="wf-drag-handle" title="Drag to reorder">⠿</span>
+                     <span class="wf-reorder-title">${escHtml(p.title || 'Untitled')}</span>
+                   </div>`).join('')}
+               </div>`
+            : `<p class="wf-reorder-hint">No pages have workflows mapped yet.</p>`}
+        </div>
+        <div class="wf-add-modal__footer">
+          <button class="wf-btn-cancel" id="wfReorderCancel">Cancel</button>
+          <button class="wf-btn-save" id="wfReorderSave" ${pages.length ? '' : 'disabled'}>Save Order</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', escFn); };
+    const escFn = e => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', escFn);
+
+    overlay.querySelector('#wfReorderClose').addEventListener('click', close);
+    overlay.querySelector('#wfReorderCancel').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+    let order = pages.map(p => p.id);
+    let dragSrcId = null;
+    const list = overlay.querySelector('#wfReorderList');
+    if (list) {
+      list.querySelectorAll('[draggable="true"]').forEach(row => {
+        row.addEventListener('dragstart', e => {
+          dragSrcId = +row.dataset.pid;
+          e.dataTransfer.effectAllowed = 'move';
+          row.classList.add('wf-layer-row--dragging');
+        });
+        row.addEventListener('dragend', () => row.classList.remove('wf-layer-row--dragging'));
+        row.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+        row.addEventListener('drop', e => {
+          e.preventDefault();
+          const targetId = +row.dataset.pid;
+          if (targetId === dragSrcId) return;
+          const srcIdx = order.indexOf(dragSrcId);
+          const tgtIdx = order.indexOf(targetId);
+          if (srcIdx < 0 || tgtIdx < 0) return;
+          const [moved] = order.splice(srcIdx, 1);
+          order.splice(tgtIdx, 0, moved);
+          const rows = order.map(id => list.querySelector(`[data-pid="${id}"]`));
+          rows.forEach(r => list.appendChild(r));
+        });
+      });
+    }
+
+    overlay.querySelector('#wfReorderSave')?.addEventListener('click', async () => {
+      close();
+      await window.db.screenDesigns.setWorkflowOrder(order);
+      order.forEach((id, i) => {
+        const page = this._pages.find(p => p.id === id);
+        if (page) page.workflow_order = i;
+      });
+      this._renderList();
+    });
+  }
+
   async _saveWorkflow() {
     const wf = this._activeWorkflow;
     if (!wf) return;
@@ -1273,6 +1377,8 @@ ${base}`;
         });
       });
 
+    this.container.querySelector('#wfBtnReorderPages')
+      ?.addEventListener('click', () => this._openReorderPagesModal());
   }
 
   _bindDetailEvents() {
