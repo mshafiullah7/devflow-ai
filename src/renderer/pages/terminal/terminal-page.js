@@ -261,7 +261,7 @@ export class TerminalPage {
       const layer = this._projectLayers.find(l => l.id === id);
       const newPath = layer?.folder_path || this._project?.project_path;
       if (newPath) {
-        window.app.termPty.write(`Set-Location "${newPath}"\r`);
+        window.app.termPty.write(`Set-Location "${newPath}"; [System.IO.Directory]::SetCurrentDirectory($pwd)\r`);
       }
     }
   }

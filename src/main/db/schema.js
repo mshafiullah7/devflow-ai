@@ -442,6 +442,9 @@ function applySchema(db) {
     // multiple arguments.
     `UPDATE model_configs SET flags = REPLACE(flags, '--model {{model}}', '--model "{{model}}"')
        WHERE executable = 'agy' AND flags LIKE '%--model {{model}}%'`,
+    // Automatically inject --add-dir "{{cwd}}" for agy configuration if it's not present
+    `UPDATE model_configs SET flags = REPLACE(flags, '-p "{{prompt}}"', '--add-dir "{{cwd}}" -p "{{prompt}}"')
+       WHERE executable = 'agy' AND flags NOT LIKE '%--add-dir%'`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch {}
@@ -514,10 +517,10 @@ function seedModelConfigs(db) {
       INSERT INTO model_configs (label, type, executable, model_name, flags, input_mode, is_default, sort_order, batch_flags, skip_perms_flag, effort, purpose)
       VALUES (?, 'cli', 'agy', ?, ?, 'pipe', 0, ?, NULL, NULL, ?, ?)
     `);
-    geminiInsert.run('Gemini Flash Medium General Purpose', 'Gemini 3.5 Flash (Medium)', `--sandbox -p "{{prompt}}" --model "{{model}}"`, 4, 'low',    'general');
-    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `--sandbox -p "{{prompt}}" --model "{{model}}"`, 5, 'medium', 'general');
-    geminiInsert.run('Gemini Flash Medium Code',            'Gemini 3.5 Flash (Medium)', `-p "{{prompt}}" --model "{{model}}"`, 6, 'low',    'coding');
-    geminiInsert.run('Gemini Flash High Code',              'Gemini 3.5 Flash (High)',   `-p "{{prompt}}" --model "{{model}}"`, 7, 'medium', 'coding');
+    geminiInsert.run('Gemini Flash Medium General Purpose', 'Gemini 3.5 Flash (Medium)', `--sandbox --add-dir "{{cwd}}" -p "{{prompt}}" --model "{{model}}"`, 4, 'low',    'general');
+    geminiInsert.run('Gemini Flash High General Purpose',   'Gemini 3.5 Flash (High)',   `--sandbox --add-dir "{{cwd}}" -p "{{prompt}}" --model "{{model}}"`, 5, 'medium', 'general');
+    geminiInsert.run('Gemini Flash Medium Code',            'Gemini 3.5 Flash (Medium)', `--add-dir "{{cwd}}" -p "{{prompt}}" --model "{{model}}"`, 6, 'low',    'coding');
+    geminiInsert.run('Gemini Flash High Code',              'Gemini 3.5 Flash (High)',   `--add-dir "{{cwd}}" -p "{{prompt}}" --model "{{model}}"`, 7, 'medium', 'coding');
 
     // Non-CLI reference configs (Ollama / Groq via OpenAI-compatible API / Anthropic API) —
     // intentionally left unmapped to any page; illustrate the range of supported

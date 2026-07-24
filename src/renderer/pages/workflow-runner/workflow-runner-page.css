@@ -229,9 +229,18 @@
 
 .wfr-layer-id {
   font-size: 10px;
+  font-weight: 700;
   color: var(--text-muted);
-  font-weight: 400;
+  background: var(--surface-hover);
+  border-radius: 4px;
+  padding: 1px 5px;
   flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.wfr-layer-row--active .wfr-layer-id {
+  background: var(--accent);
+  color: #fff;
 }
 
 .wfr-layer-purpose {
@@ -258,7 +267,7 @@
 .wfr-layer-seq {
   font-size: 10px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   background: var(--surface-hover);
   border-radius: 10px;
   padding: 1px 6px;

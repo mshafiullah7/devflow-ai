@@ -653,10 +653,10 @@ function runMigrations(db) {
   // every single startup (which is exactly how this table ended up with dozens
   // of duplicate Gemini rows).
   const geminiConfigs = [
-    { label: 'Gemini Flash Medium General Purpose', modelName: 'Gemini 3.5 Flash (Medium)', flags: `--sandbox -p "{{prompt}}" --model "{{model}}"` },
-    { label: 'Gemini Flash High General Purpose',   modelName: 'Gemini 3.5 Flash (High)',   flags: `--sandbox -p "{{prompt}}" --model "{{model}}"` },
-    { label: 'Gemini Flash Medium Code',            modelName: 'Gemini 3.5 Flash (Medium)', flags: `-p "{{prompt}}" --model "{{model}}"` },
-    { label: 'Gemini Flash High Code',              modelName: 'Gemini 3.5 Flash (High)',   flags: `-p "{{prompt}}" --model "{{model}}"` },
+    { label: 'Gemini Flash Medium General Purpose', modelName: 'Gemini 3.5 Flash (Medium)', flags: `--sandbox --add-dir "{{cwd}}" -p "{{prompt}}" --model "{{model}}"` },
+    { label: 'Gemini Flash High General Purpose',   modelName: 'Gemini 3.5 Flash (High)',   flags: `--sandbox --add-dir "{{cwd}}" -p "{{prompt}}" --model "{{model}}"` },
+    { label: 'Gemini Flash Medium Code',            modelName: 'Gemini 3.5 Flash (Medium)', flags: `--add-dir "{{cwd}}" -p "{{prompt}}" --model "{{model}}"` },
+    { label: 'Gemini Flash High Code',              modelName: 'Gemini 3.5 Flash (High)',   flags: `--add-dir "{{cwd}}" -p "{{prompt}}" --model "{{model}}"` },
   ];
 
   db.transaction(() => {
@@ -673,6 +673,14 @@ function runMigrations(db) {
       `).run(label, modelName, flags, nextSort);
     }
   })();
+
+  // Delete any old duplicate/leftover Gemini configurations that do not contain the --add-dir workspace flag.
+  try {
+    db.prepare(`
+      DELETE FROM model_configs
+       WHERE executable = 'agy' AND flags NOT LIKE '%--add-dir%'
+    `).run();
+  } catch (err) {}
 
   // One-time cleanup: an earlier iteration of the block above lacked this exact
   // (label, flags) dedup — and, separately, mislabeled the non-sandboxed "High"

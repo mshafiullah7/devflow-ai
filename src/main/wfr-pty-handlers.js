@@ -201,7 +201,7 @@ function registerPtyHandlers(prefix) {
     if (_pty) {
       const spawnCwd = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
       const cdCmd = isWin
-        ? `Set-Location "${spawnCwd}"; Clear-Host`
+        ? `Set-Location "${spawnCwd}"; [System.IO.Directory]::SetCurrentDirectory($pwd); Clear-Host`
         : `cd "${spawnCwd}" && clear`;
       _pty.write(cdCmd + '\r');
       return { ok: true, reused: true };
@@ -430,7 +430,7 @@ function registerPtyHandlers(prefix) {
       ? spawnCwd.replace(/'/g, "''")
       : spawnCwd.replace(/'/g, "'\\''");
     const cdCmd = isWin
-      ? `Set-Location -LiteralPath '${escapedCwd}'`
+      ? `Set-Location -LiteralPath '${escapedCwd}'; [System.IO.Directory]::SetCurrentDirectory($pwd)`
       : `cd '${escapedCwd}'`;
 
     // `-c` resumes Claude's previous conversation, which stays anchored to the
@@ -464,10 +464,13 @@ function registerPtyHandlers(prefix) {
       return { ok: true, command: coreCmd };
     }
 
+    const escapedSpawnCwd = spawnCwd.replace(/"/g, '\\"');
+
     if (model?.flags && model.flags.includes('{{prompt}}')) {
       const resolved = model.flags
         .replace(/\{\{model\}\}/g, modelName)
-        .replace(/\{\{prompt\}\}/g, escapedPath);
+        .replace(/\{\{prompt\}\}/g, escapedPath)
+        .replace(/\{\{cwd\}\}/g, escapedSpawnCwd);
 
       let batchPart = '';
       if (interactive === false) {
@@ -486,7 +489,9 @@ function registerPtyHandlers(prefix) {
       const echoCmd = isWin
         ? `Write-Host "Prompt file: ${tmpFile}"`
         : `echo "Prompt file: ${tmpFile}"`;
-      const resolvedFlags = model.flags.replace(/\{\{model\}\}/g, modelName);
+      const resolvedFlags = model.flags
+        .replace(/\{\{model\}\}/g, modelName)
+        .replace(/\{\{cwd\}\}/g, escapedSpawnCwd);
       const batchPart = (interactive === false && model?.batch_flags)
         ? model.batch_flags + ' '
         : '';

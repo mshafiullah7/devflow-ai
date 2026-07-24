@@ -730,9 +730,25 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
               </button>
             </span>
           </div>
-          ${l.purpose ? `<div class="wfr-layer-purpose">${escHtml(l.purpose)}</div>` : ''}
+          ${this._layerSecondLine(l)}
         </div>`;
     }).join('');
+  }
+
+  _layerSecondLine(l) {
+    const purpose = (l.purpose || '').trim();
+    const MIN_LEN = 60;
+    let text = purpose;
+    if (purpose.length < MIN_LEN && l.prompt) {
+      const promptText = l.prompt.trim().replace(/\s+/g, ' ');
+      if (promptText) {
+        const budget = Math.max(140 - purpose.length, 40);
+        const snippet = promptText.slice(0, budget);
+        const ellipsis = promptText.length > snippet.length ? '…' : '';
+        text = purpose ? `${purpose} — ${snippet}${ellipsis}` : `${snippet}${ellipsis}`;
+      }
+    }
+    return text ? `<div class="wfr-layer-purpose">${escHtml(text)}</div>` : '';
   }
 
   _criteriaHtml() {
