@@ -26,14 +26,11 @@ if (require('electron-squirrel-startup')) {
 }
 
 const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
 
-// Windows toast notifications are attributed to this AppUserModelID rather
-// than the running exe's path — pin it explicitly so notifications keep
-// working after Squirrel auto-updates move the app into a new versioned
-// "app-<version>" folder (whose path would otherwise change each update).
-if (process.platform === 'win32') {
-  app.setAppUserModelId('com.devflow.ai-sdlc');
-}
+const APP_ICON_PATH = isWin
+  ? path.join(__dirname, '..', '..', 'assets', 'icon.ico')
+  : path.join(__dirname, '..', '..', 'assets', 'icon.png');
 
 // Default overlay colors match the dark theme (styles/app.css) until the
 // renderer reports the user's actual stored theme via app:set-titlebar-overlay.
@@ -46,7 +43,7 @@ const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 960,
     height: 660,
-    icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
+    icon: APP_ICON_PATH,
     frame: false,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     ...(isMac ? {} : { titleBarOverlay: DEFAULT_TITLEBAR_OVERLAY }),
@@ -73,6 +70,9 @@ const createWindow = () => {
 };
 
 app.whenReady().then(async () => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.devflow.ai');
+  }
   await session.defaultSession.clearCache();
   Menu.setApplicationMenu(null);
   registerHandlers();
@@ -115,6 +115,7 @@ app.whenReady().then(async () => {
       width:  Math.max(900, Math.round(sw * 0.65)),
       height: Math.max(600, Math.round(sh * 0.80)),
       title:  title ? `Mockup — ${title}` : 'Mockup Preview',
+      icon:   APP_ICON_PATH,
       webPreferences: { contextIsolation: true },
     });
     win.loadFile(tmpFile);
@@ -155,7 +156,7 @@ app.whenReady().then(async () => {
     const notification = new Notification({
       title: title || 'DevFlow',
       body:  body  || '',
-      icon:  path.join(__dirname, '..', '..', 'assets', 'icon.png'),
+      icon:  APP_ICON_PATH,
     });
     notification.on('click', () => {
       const win = BrowserWindow.fromWebContents(e.sender);

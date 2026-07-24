@@ -3,6 +3,10 @@
 const { BrowserWindow, screen } = require('electron');
 const path                      = require('node:path');
 
+const APP_ICON_PATH = process.platform === 'win32'
+  ? path.join(__dirname, '..', '..', 'assets', 'icon.ico')
+  : path.join(__dirname, '..', '..', 'assets', 'icon.png');
+
 let _win = null;
 
 function openWorkflowWindow(data) {
@@ -17,7 +21,7 @@ function openWorkflowWindow(data) {
     width:  Math.max(900, Math.round(sw * 0.65)),
     height: Math.max(600, Math.round(sh * 0.80)),
     title:  'Workflow Runner',
-    icon:   path.join(__dirname, '..', '..', 'assets', 'icon.png'),
+    icon:   APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
