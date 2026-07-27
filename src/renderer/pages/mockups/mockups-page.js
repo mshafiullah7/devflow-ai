@@ -27,31 +27,10 @@ Rules:
 - Visually polished, modern design with realistic placeholder content
 - Fully responsive
 - No explanation, no markdown — raw HTML only
-- REQUIRED: Include a light/dark theme toggle button fixed in the top-right corner (position:fixed; top:1rem; right:1rem; z-index:9999). The button must toggle a "dark" class on <html> or <body> and switch all colours accordingly using CSS variables or a [data-theme] attribute. Default to light theme. The toggle must work standalone with no external dependencies.${ctx}${design}${reference}${platform}${save}
+- REQUIRED: Define both a light and a dark colour scheme, switched via a "dark" class on <html> or <body> (e.g. \`html.dark { ... }\` or CSS variables read via a [data-theme] attribute). Default to the light scheme when the class/attribute is absent. This is for theme switching driven externally later — do NOT render any visible toggle button, switch, or other UI control on the screen itself; do NOT include any toggle JavaScript.${ctx}${design}${reference}${platform}${save}
 
 Screen to design:
 ${description}`;
-}
-
-function buildExtractPrompt(screenTitle, htmlFilePath, outputFile) {
-  const save = outputFile ? `\nWhen done, write the complete JSON array to: ${outputFile}` : '';
-  return `You are an expert product manager and UI developer. Analyze the ${TECH} UI screen design provided below and extract user stories.
-
-Screen: ${screenTitle}
-Tech stack: ${TECH}
-
-Screen content at: ${htmlFilePath}
-${save}
-Extract every distinct user action, form, state, or interaction visible in this screen as a separate user story.
-
-IMPORTANT: Output ONLY a raw JSON array — no markdown fences, no explanation, no extra text. Start with [ and end with ].
-
-Each object MUST use EXACTLY these five field names — no other field names are accepted:
-- title: short action-oriented title (string)
-- description: As a user, I want to [action] so that [benefit]. (string)
-- acceptance_criteria: all criteria as ONE string, each criterion on its own line starting with -  (string, NOT an array)
-- prompt: detailed implementation prompt referencing exact design details from the UI — colours, typography, spacing, layout, component styles. Do NOT include E2E test generation here. (string)
-- e2e_tests: ONE string containing the prompt to generate the Playwright/Cypress E2E test file for this user story interaction. All test names must be prefixed with US-{{US_ID}}. Empty string "" for non-UI stories. (string)`;
 }
 
 function buildEditPromptInline(instruction, existingHtml, projectDescription) {
@@ -71,12 +50,18 @@ Existing HTML:
 ${existingHtml}`;
 }
 
-function buildExtractPsCommand(instruction, model) {
-  const exe       = model.executable || 'claude';
-  const flags     = model.flags ? ` ${model.flags}` : '';
-  const modelFlag = model.model_name ? ` --model ${model.model_name}` : '';
-  const safeInst  = instruction.replace(/'/g, "''");
-  return `$p = @'\n${safeInst}\n'@\n${exe}${flags}${modelFlag} $p`;
+// If the screen's HTML contains data-screen prototype navigation links, make
+// sure a guidance comment is present so anything reading this HTML later (e.g.
+// Generate Workflows converting the design to Flutter/Android/Web) knows these
+// are DevFlow-only review links, not literal markup to reproduce. Idempotent —
+// safe to call on every save.
+const NAV_NOTE_MARKER = 'DevFlow prototype navigation markers';
+function ensureNavNoteComment(html) {
+  if (!html || html.includes(NAV_NOTE_MARKER) || !/data-screen\s*=\s*["']\d+["']/.test(html)) return html;
+  const comment = `<!-- ${NAV_NOTE_MARKER}: elements with a data-screen="<id>" attribute are internal DevFlow links used to jump between mockup screens while reviewing this design — they are NOT part of the intended product UI. Example: <button data-screen="12">View Dashboard</button> jumps to the screen with id 12 inside DevFlow only. When converting this design to Flutter/Android/Web code, do NOT implement data-screen literally — instead wire up real navigation to whichever screen that id refers to. -->\n`;
+  return html.includes('<head>')
+    ? html.replace('<head>', `<head>\n${comment}`)
+    : comment + html;
 }
 
 // ----------------------------------------------------------------
@@ -99,7 +84,9 @@ export class MockupsPage {
     this._screenTemplates = [];
     this._aiRunning       = false;
     this._exportMenuOpen  = false;
+    this._previewTheme    = 'light';
     this._handleExportMenuOutside = this._handleExportMenuOutside.bind(this);
+    this._handleMockupNavMessage  = this._handleMockupNavMessage.bind(this);
   }
 
   async mount() {
@@ -158,6 +145,7 @@ export class MockupsPage {
     await this._picker.reload();
 
     this.router.setNavigationGuard(() => this._confirmLeaveIfBusy());
+    window.addEventListener('message', this._handleMockupNavMessage);
 
     if (this._activeId) this._selectScreen(this._activeId);
     else                this._showEmptyState();
@@ -166,6 +154,7 @@ export class MockupsPage {
   unmount() {
     this.router.clearNavigationGuard();
     document.removeEventListener('click', this._handleExportMenuOutside, true);
+    window.removeEventListener('message', this._handleMockupNavMessage);
     removeCss('pages/mockups/mockups-page.css');
     removeCss('styles/screens.css');
     removeCss('components/project-sidebar/project-sidebar.css');
@@ -934,6 +923,7 @@ export class MockupsPage {
       const previousHtml = screen.html_content;  // capture before overwrite
 
       if (html && !error) {
+        html = ensureNavNoteComment(html);
         await window.db.screenDesigns.update({ id: screen.id, html_content: html, executed: 1 });
         screen.html_content = html;
         screen.executed = 1;
@@ -1319,6 +1309,7 @@ export class MockupsPage {
 
   _showScreenViewer(screen) {
     const main   = this.container.querySelector('#scrMain');
+    this._previewTheme = 'light';
 
     main.innerHTML = `
       <div class="scr-viewer">
@@ -1379,23 +1370,22 @@ export class MockupsPage {
           <div class="scr-viewer__preview-pane" id="scrPreviewPane">
             <div class="scr-viewer__preview-bar">
               <span class="scr-viewer__preview-label">Preview <span id="scrPreviewPct" class="scr-split-pct"></span></span>
-              <button class="scr-btn scr-btn--sm" id="scrViewportToggle"></button>
+              <button class="scr-btn scr-btn--sm scr-btn--icon" id="scrThemeToggle" title="Preview dark theme"></button>
+              <button class="scr-btn scr-btn--sm scr-btn--icon" id="scrViewportToggle"></button>
               ${screen.html_content ? `
-              <button class="scr-btn scr-btn--sm" id="scrOpenWindowBtn" title="Open preview in a separate window">
+              <button class="scr-btn scr-btn--sm scr-btn--icon" id="scrOpenWindowBtn" title="Open preview in a separate window">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <rect x="1.5" y="3" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
                   <path d="M7 1.5h7.5V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
                   <path d="M7 9l7-7.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                 </svg>
-                Open Window
               </button>
               ` : ''}
-              <button class="scr-btn scr-btn--sm" id="scrRefreshBtn" title="Refresh preview (R)">
+              <button class="scr-btn scr-btn--sm scr-btn--icon" id="scrRefreshBtn" title="Refresh preview (R)">
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                   <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                   <path d="M13.5 2.5v2.7H10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span><u>R</u>efresh</span>
               </button>
             </div>
             <div class="scr-viewer__content" id="scrViewerContent">
@@ -1435,6 +1425,7 @@ export class MockupsPage {
                   <p>Describe what you'd like to build and click <strong>Create Mockup</strong>.</p>
                 </div>
               </div>
+              <p class="scr-form__hint scr-chat-nav-hint">Tip: to link screens together, ask the AI — e.g. "Add data-screen="12" to the View Dashboard button to link it to screen #12" (screen IDs are shown in the sidebar list).</p>
               <div class="scr-chat-composer">
                 <textarea class="scr-chat-input" id="scrDescription"
                   placeholder="Describe the screen… (Alt+Enter for new line)">${!screen.html_content ? escHtml(screen.description || '') : ''}</textarea>
@@ -1459,10 +1450,19 @@ export class MockupsPage {
     if (!frame) return;
     // Inject a guard that prevents any anchor from navigating outside the iframe.
     // onclick handlers on the elements still fire normally — only the default
-    // link-navigation action is cancelled.
+    // link-navigation action is cancelled. Elements marked data-screen="<id>"
+    // are treated as prototype links to another mockup screen: instead of
+    // navigating, they ask the parent app to switch the active screen.
     const guard = `<script>
 (function(){
   document.addEventListener('click', function(e){
+    var nav = e.target.closest('[data-screen]');
+    if (nav) {
+      e.preventDefault();
+      var id = nav.getAttribute('data-screen');
+      if (id) window.parent.postMessage({ source: 'devflow-mockup-nav', screenId: id }, '*');
+      return;
+    }
     var a = e.target.closest('a');
     if (!a) return;
     e.preventDefault();
@@ -1478,6 +1478,27 @@ export class MockupsPage {
       ? html.replace('</head>', guard + '</head>')
       : guard + html;
     frame.srcdoc = guarded;
+    frame.addEventListener('load', () => this._applyPreviewTheme(), { once: true });
+  }
+
+  // Toggles dark-mode preview by flipping a class on the iframe's own document —
+  // the generated HTML only needs to define the `.dark` CSS, no JS toggle of its own.
+  _applyPreviewTheme() {
+    const frame = this.container.querySelector('#scrPreviewFrame');
+    const doc   = frame?.contentDocument;
+    if (!doc) return;
+    doc.documentElement.classList.toggle('dark', this._previewTheme === 'dark');
+  }
+
+  // Handles data-screen prototype-link clicks posted up from the preview iframe's
+  // guard script (see _loadPreview) and jumps to the referenced screen, if it exists.
+  _handleMockupNavMessage(e) {
+    const frame = this.container.querySelector('#scrPreviewFrame');
+    if (!frame || e.source !== frame.contentWindow) return;
+    if (!e.data || e.data.source !== 'devflow-mockup-nav') return;
+    const id = Number(e.data.screenId);
+    if (!id || !this._screens.some(s => s.id === id)) return;
+    this._selectScreen(id);
   }
 
   _bindViewerEvents(screen) {
@@ -1586,9 +1607,26 @@ export class MockupsPage {
       document.addEventListener('mouseup',  onUp);
     });
 
+    const sunIcon  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M8 1v1.5M8 13.5V15M15 8h-1.5M2.5 8H1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1M12.7 12.7l-1.1-1.1M4.4 4.4L3.3 3.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+    const moonIcon = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.7A5.5 5.5 0 016.3 2.5a5.5 5.5 0 107.2 7.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
+    const themeToggleBtn = main.querySelector('#scrThemeToggle');
+
+    const applyThemeBtn = () => {
+      const isDark = this._previewTheme === 'dark';
+      themeToggleBtn.innerHTML = isDark ? sunIcon : moonIcon;
+      themeToggleBtn.title     = isDark ? 'Switch to light preview' : 'Preview dark theme';
+    };
+    applyThemeBtn();
+    this._applyPreviewTheme();
+    themeToggleBtn.addEventListener('click', () => {
+      this._previewTheme = this._previewTheme === 'dark' ? 'light' : 'dark';
+      applyThemeBtn();
+      this._applyPreviewTheme();
+    });
+
     const VIEWPORT_KEY  = 'mockups_preview_mode';
-    const mobileIcon   = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="1" width="7" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="12.5" r=".7" fill="currentColor"/></svg> Desktop`;
-    const desktopIcon  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> <span><u>M</u>obile</span>`;
+    const mobileIcon   = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="1" width="7" height="14" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="12.5" r=".7" fill="currentColor"/></svg>`;
+    const desktopIcon  = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 14h6M8 12v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
     const viewportBtn  = main.querySelector('#scrViewportToggle');
     const previewPane  = main.querySelector('#scrPreviewPane');
 
@@ -1705,9 +1743,10 @@ export class MockupsPage {
       const fileIsOlder = fileStat && fileStat.mtimeMs < dbUpdatedAt;
 
       const doRefresh = () => {
-        window.db.screenDesigns.update({ id: screen.id, html_content: fileContent });
-        screen.html_content = fileContent;
-        this._loadPreview(fileContent);
+        const noted = ensureNavNoteComment(fileContent);
+        window.db.screenDesigns.update({ id: screen.id, html_content: noted });
+        screen.html_content = noted;
+        this._loadPreview(noted);
       };
 
       if (fileIsOlder) {
@@ -1755,16 +1794,15 @@ export class MockupsPage {
       });
       if (!result) return;
 
-      await window.db.screenDesigns.update({ id: screen.id, html_content: result.content });
-      screen.html_content = result.content;
-      this._loadPreview(result.content);
+      const content = ensureNavNoteComment(result.content);
+      await window.db.screenDesigns.update({ id: screen.id, html_content: content });
+      screen.html_content = content;
+      this._loadPreview(content);
     });
 
     main.querySelector('#scrOpenWindowBtn')?.addEventListener('click', () => {
       window.app.openMockupPreview({ title: screen.title, htmlContent: screen.html_content });
     });
-
-    main.querySelector('#scrExtractBtn')?.addEventListener('click', () => this._showExtractDialog(screen));
 
     main.querySelector('#scrDeleteBtn').addEventListener('click', () => {
       this._showDeleteConfirmDialog(screen, async () => {
@@ -1803,74 +1841,5 @@ export class MockupsPage {
     observer.observe(document.body, { childList: true, subtree: true });
 
     this._loadInitialHistory(screen.id, main);
-  }
-
-  // ----------------------------------------------------------------
-  // Edits — open the selected CLI with the screen file as context
-  // ----------------------------------------------------------------
-  // ----------------------------------------------------------------
-  // Extract Stories dialog
-  // ----------------------------------------------------------------
-  async _showExtractDialog(screen) {
-    let m = this._getSelectedModel();
-    if (!m || m.type === 'anthropic' || !m.executable) {
-      m = (this._picker?.models || this._modelConfigs || []).find(c => c.type !== 'anthropic' && c.executable);
-    }
-    if (!m) {
-      await Dialog.alert('No CLI model configured. Add a CLI model in Model Settings first.');
-      return;
-    }
-
-    const project    = this._getProject();
-    const screensDir = await window.app.screensDir(project?.name);
-    const safeTitle  = screen.title.replace(/[^a-z0-9_\-]/gi, '_');
-    const outputFile = `${screensDir}\\${safeTitle}_stories.json`;
-
-    const htmlFilePath = await window.app.prepareScreenRef({
-      screensDir,
-      safeTitle,
-      htmlContent: screen.html_content,
-    });
-
-    const instruction = buildExtractPrompt(screen.title, htmlFilePath, outputFile);
-    const cmd         = buildExtractPsCommand(instruction, m);
-
-    const dlg = document.createElement('div');
-    dlg.className = 'scr-extract-overlay';
-    dlg.innerHTML = `
-      <div class="scr-extract-dialog">
-        <div class="scr-extract-dialog__header">
-          <span>Extract User Stories — ${escHtml(screen.title)}</span>
-          <button class="scr-extract-dialog__close">&times;</button>
-        </div>
-        <div class="scr-extract-dialog__body">
-          <div class="scr-cmd-preview">
-            <div class="scr-cmd-preview__label">Command:</div>
-            <pre class="scr-cmd-preview__code">${escHtml(cmd)}</pre>
-          </div>
-          <div class="scr-form__row" style="margin-top:12px">
-            <button class="scr-btn scr-btn--primary" id="extRunBtn">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <rect x="1" y="2" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M5 6l3 2-3 2V6z" fill="currentColor"/>
-              </svg>
-              Run in Terminal
-            </button>
-            <span class="scr-form__hint">Opens a terminal window. The AI will write the stories JSON to the output path shown above.</span>
-          </div>
-        </div>
-        <div class="scr-extract-dialog__footer">
-          <button class="scr-btn scr-btn--secondary" id="extCancelBtn">Close</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(dlg);
-    dlg.querySelector('.scr-extract-dialog__close').addEventListener('click', () => dlg.remove());
-    dlg.querySelector('#extCancelBtn').addEventListener('click',            () => dlg.remove());
-
-    dlg.querySelector('#extRunBtn').addEventListener('click', async () => {
-      await window.db.terminal.openExternal({ command: cmd, cwd: screensDir });
-    });
   }
 }

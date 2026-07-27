@@ -172,6 +172,15 @@ export class WorkflowRunnerPage {
     this._layers        = (layers || []).slice().sort((a, b) => a.order_num - b.order_num);
     this._criteria      = criteria || [];
 
+    this._missingProjectLayer = new Set(
+      this._layers
+        .filter(l => {
+          const pl = l.project_layer_id ? this._projectLayers.find(p => p.id === l.project_layer_id) : null;
+          return !pl || !pl.folder_path;
+        })
+        .map(l => l.id)
+    );
+
     if (workflow?.screen_design_id) {
       const sd = await window.db.screenDesigns.get(workflow.screen_design_id);
       if (sd?.html_content) {
@@ -388,6 +397,45 @@ export class WorkflowRunnerPage {
     return pl?.folder_path || this._project?.project_path || null;
   }
 
+  async _assignProjectLayer(layerId) {
+    const layer = this._layers.find(l => l.id === layerId);
+    if (!layer) return;
+
+    if (!this._projectLayers.length) {
+      await Dialog.alert(
+        'This project has no Project Layers yet.\n\n' +
+        'Go to Project Home → Layers to create one, then come back and assign it here.'
+      );
+      return;
+    }
+
+    const options = this._projectLayers.map(pl => ({
+      value: pl.id,
+      label: pl.folder_path ? pl.name : `${pl.name} (no folder path set)`,
+    }));
+
+    const selected = await Dialog.select(
+      `Assign a Project Layer to "${layer.layer}" so it knows which directory to run in.`,
+      options,
+      { title: 'Assign Project Layer', confirmText: 'Assign' }
+    );
+    if (!selected) return;
+
+    const projectLayerId = +selected;
+    await window.db.layers.update({ id: layer.id, project_layer_id: projectLayerId });
+    layer.project_layer_id = projectLayerId;
+
+    const pl = this._projectLayers.find(p => p.id === projectLayerId);
+    if (pl?.folder_path) {
+      this._missingProjectLayer.delete(layer.id);
+    } else {
+      this._missingProjectLayer.add(layer.id);
+    }
+
+    this._refreshLayerList();
+    this._updateLayerHeader();
+  }
+
   _buildLayerSystemContext() {
     if (!this._screenDesign) return null;
     const isUiShell = this._workflow?.workflow_type === 'ui_shell';
@@ -533,6 +581,29 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
         return;
       }
 
+      // Fail immediately if this layer isn't linked to a Project Layer with a folder path —
+      // running it would resolve to the wrong cwd (or none at all).
+      const projectLayer = layer.project_layer_id
+        ? this._projectLayers.find(p => p.id === layer.project_layer_id)
+        : null;
+      if (!projectLayer) {
+        await Dialog.alert(
+          `"${layer.layer}" is not linked to a Project Layer.\n\n` +
+          `Go to Project Home → Layers, link this workflow layer to a Project Layer, ` +
+          `and set its Folder Path so the run knows which directory to use.`
+        );
+        await finish('No Project Layer assigned to this item');
+        return;
+      } else if (!projectLayer.folder_path) {
+        await Dialog.alert(
+          `No folder path is set for the "${projectLayer.name}" Project Layer.\n\n` +
+          `Go to Project Home → Layers, select "${projectLayer.name}", ` +
+          `and set the Folder Path so the run knows which directory to use.`
+        );
+        await finish('No folder path set for the linked Project Layer');
+        return;
+      }
+
       // ── CLI path: run command inside the live shell ────────────────────
       if (this._modelConfig?.type === 'cli') {
         if (!this._term) { await finish('Terminal not initialised'); return; }
@@ -663,9 +734,14 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     if (titleEl) titleEl.textContent = this._headerTitleText();
     const cwdEl = this.container.querySelector('#wfrOutputCwd');
     if (cwdEl) {
-      const cwd = layer ? this._getCwd(layer) : null;
-      cwdEl.hidden = !cwd;
-      if (cwd) {
+      const cwd    = layer ? this._getCwd(layer) : null;
+      const missing = layer && this._missingProjectLayer?.has(layer.id);
+      cwdEl.hidden = !cwd && !missing;
+      cwdEl.classList.toggle('wfr-output-cwd--warn', !!missing);
+      if (missing) {
+        cwdEl.title = 'No Project Layer assigned — link one in Project Home → Layers';
+        cwdEl.querySelector('.wfr-output-cwd__path').textContent = '⚠ No Project Layer assigned';
+      } else if (cwd) {
         cwdEl.title = cwd;
         cwdEl.querySelector('.wfr-output-cwd__path').textContent = cwd;
       }
@@ -688,6 +764,12 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     list.innerHTML = this._layerListHtml();
     list.querySelectorAll('.wfr-layer-row').forEach(row => {
       row.addEventListener('click', () => this._selectLayer(+row.dataset.id));
+    });
+    list.querySelectorAll('.wfr-layer-warn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._assignProjectLayer(+btn.dataset.warnId);
+      });
     });
     list.querySelectorAll('.wfr-layer-copy-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -718,6 +800,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
             <span class="wfr-layer-id">#${l.id}</span>
             <span class="wfr-status-chip ${STATUS[st].cls}">${STATUS[st].label}</span>
             <span class="wfr-layer-name">${escHtml(l.layer || 'Layer')}</span>
+            ${this._missingProjectLayer?.has(l.id)
+              ? `<button type="button" class="wfr-layer-warn" data-warn-id="${l.id}" title="No Project Layer assigned — click to assign one">&#9888;</button>`
+              : ''}
             <span class="wfr-layer-right">
               ${elapsed ? `<span class="wfr-layer-time">${elapsed}</span>` : ''}
               <span class="wfr-layer-seq">${idx + 1}</span>
@@ -964,6 +1049,13 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
   _bindEvents() {
     this.container.querySelector('#wfrBtnClose')
       ?.addEventListener('click', () => this._handleClose());
+
+    this.container.querySelector('#wfrOutputCwd')
+      ?.addEventListener('click', (e) => {
+        if (!e.currentTarget.classList.contains('wfr-output-cwd--warn')) return;
+        const layer = this._layers.find(l => l.id === this._selectedId);
+        if (layer) this._assignProjectLayer(layer.id);
+      });
 
     this.container.querySelector('#wfrBtnRunSelected')
       ?.addEventListener('click', () => this._runSelected());

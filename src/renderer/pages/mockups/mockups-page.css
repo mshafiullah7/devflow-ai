@@ -469,6 +469,12 @@
   color: var(--text-muted);
 }
 
+.scr-chat-nav-hint {
+  padding: 6px 10px 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+
 .scr-chat-composer {
   border-top: 1px solid var(--border);
   padding: 10px;

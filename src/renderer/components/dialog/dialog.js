@@ -61,6 +61,37 @@ export class Dialog {
     });
   }
 
+  static select(message, options, { title = 'Select', confirmText = 'Assign', cancelText = 'Cancel', placeholder = '— Select —' } = {}) {
+    Dialog._css();
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'dlg-overlay';
+      const optsHtml = options.map(o => `<option value="${escHtml(String(o.value))}">${escHtml(o.label)}</option>`).join('');
+      overlay.innerHTML = `
+        <div class="dlg-modal" role="dialog" aria-modal="true">
+          <div class="dlg-header"><span class="dlg-title">${escHtml(title)}</span></div>
+          <div class="dlg-body">
+            <p class="dlg-message">${escHtml(message)}</p>
+            <select class="dlg-input dlg-select" data-select>
+              <option value="">${escHtml(placeholder)}</option>
+              ${optsHtml}
+            </select>
+          </div>
+          <div class="dlg-footer">
+            <button class="dlg-btn dlg-btn--ghost" data-cancel>${escHtml(cancelText)}</button>
+            <button class="dlg-btn dlg-btn--primary" data-confirm>${escHtml(confirmText)}</button>
+          </div>
+        </div>`;
+      const select = overlay.querySelector('[data-select]');
+      const close = val => { overlay.remove(); resolve(val); };
+      overlay.querySelector('[data-cancel]').addEventListener('click', () => close(null));
+      overlay.querySelector('[data-confirm]').addEventListener('click', () => close(select.value || null));
+      overlay.addEventListener('keydown', e => { if (e.key === 'Escape') close(null); });
+      document.body.appendChild(overlay);
+      select.focus();
+    });
+  }
+
   static confirm(message, { title = 'Confirm', confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
     Dialog._css();
     return new Promise(resolve => {

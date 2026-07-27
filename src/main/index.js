@@ -70,8 +70,44 @@ const createWindow = () => {
 };
 
 app.whenReady().then(async () => {
+  // Only pin the AppUserModelID when packaged: this ID has no matching
+  // Start Menu shortcut in a dev/unpackaged run, so Windows can't resolve
+  // an icon for it — once a second top-level window appears (e.g. a
+  // Runner opened in "Separate window" mode), the taskbar groups by this
+  // ID and falls back to Electron's default icon instead of the window's
+  // own icon. Windows also caches that bad resolution at the shell level,
+  // so it persists across restarts even after switching back to
+  // "Integrated tab".
   if (process.platform === 'win32') {
-    app.setAppUserModelId('com.devflow.ai');
+    const appId = 'com.devflow.ai';
+    app.setAppUserModelId(appId);
+
+    // In a development/unpackaged run, programmatically create a Start Menu
+    // shortcut for the running electron.exe, mapping it to the custom icon and the appId.
+    // This allows Windows to resolve the icon for the taskbar group when multiple windows are open.
+    if (!app.isPackaged) {
+      const { shell } = require('electron');
+      const shortcutPath = path.join(
+        process.env.APPDATA,
+        'Microsoft',
+        'Windows',
+        'Start Menu',
+        'Programs',
+        'DevFlow AI (Dev Mode).lnk'
+      );
+      try {
+        shell.writeShortcutLink(shortcutPath, 'create', {
+          target: process.execPath,
+          args: `"${app.getAppPath()}"`,
+          icon: APP_ICON_PATH,
+          iconIndex: 0,
+          appUserModelId: appId,
+          description: 'DevFlow AI SDLC (Development Mode)',
+        });
+      } catch (err) {
+        console.error('Failed to create dev shortcut:', err);
+      }
+    }
   }
   await session.defaultSession.clearCache();
   Menu.setApplicationMenu(null);
@@ -195,25 +231,6 @@ app.whenReady().then(async () => {
     return root;
   });
 
-  // Returns a file path for the screen's HTML — the canonical file if it exists
-  // in screensDir, otherwise a fresh temp file. Cleans up previous temp files first.
-  ipcMain.handle('app:prepare-screen-ref', (_e, { screensDir, safeTitle, htmlContent }) => {
-    // Clean up any leftover temp files from previous runs
-    try {
-      fs.readdirSync(screensDir)
-        .filter(f => f.startsWith('_tmp_') && f.endsWith('.html'))
-        .forEach(f => {
-          try { fs.unlinkSync(path.join(screensDir, f)); } catch {}
-        });
-    } catch {}
-
-    const canonical = path.join(screensDir, `${safeTitle}.html`);
-    if (fs.existsSync(canonical)) return canonical;
-
-    const tmpPath = path.join(screensDir, `_tmp_${safeTitle}.html`);
-    fs.writeFileSync(tmpPath, htmlContent, 'utf8');
-    return tmpPath;
-  });
   createWindow();
   setImmediate(() => runBackup());
   if (app.isPackaged) setupAutoUpdater();
