@@ -35,7 +35,9 @@ AVAILABLE PROJECT LAYERS  (use ONLY these exact names in every "layer" field)
 ${layersSection}
 
 Every "layer" field in every workflow object MUST exactly match one of these names.
-Exception: Workflow 1 uses "UI"; every feature workflow ends with "Wire Up" then "Integration Build & Fix".
+Exception: Workflow 1 uses "UI". Feature workflows may end with a "Wire Up" layer (see rules below)
+followed by one or more "Integration Build & Fix" layers — for those, the "layer" field must still
+be set to the exact matching name from AVAILABLE PROJECT LAYERS above (see WORKFLOWS 2+ rules).
 Where a layer lists a "Scaffold structure", every "inputs"/"outputs" file path for that layer MUST be placed inside one of those scaffold folders — do not invent new top-level folders when a matching scaffold folder already exists.
 
 ════════════════════════════════════════════════════════════════
@@ -74,8 +76,18 @@ WORKFLOWS 2+ — Feature Workflows  (workflow_type: "feature")
 - One workflow per discrete feature visible in the mockup
 - No UI generation layer — Dart page is created by Workflow 1
 - Layers ordered by dependency: Data Model → Repository → State Management → Wire Up
-- SECOND-TO-LAST layer MUST be "Wire Up"
-- LAST layer MUST be "Integration Build & Fix"
+- Wire Up applies ONLY if a frontend/UI layer exists for this feature, identified from the System
+  Structure YAML in the Documents section (e.g. Flutter, React, Angular, mobile) — omit it entirely
+  for backend-only or service-to-service workflows.
+- After every other layer, append one "Integration Build & Fix" layer PER DISTINCT PROJECT LAYER
+  touched by this workflow. If the workflow touches 2 Project Layers, generate exactly 2
+  "Integration Build & Fix" layers — both placed at the end of the layers list, never interleaved
+  between the other layers.
+- Set the "layer" field of each "Integration Build & Fix" layer to the EXACT matching name from
+  AVAILABLE PROJECT LAYERS — the same Project Layer name already used earlier in this workflow for
+  that layer's other work. Do NOT invent a combined or suffixed layer name; it must match a real
+  Project Layer exactly so it links correctly.
+- Set "purpose" on each one to identify it, e.g. "Integration Build & Fix pass for {layer name}".
 
 Wire Up layer "prompt" must also:
 - Name the exact Dart page file to modify (the UI Shell output)
@@ -85,9 +97,15 @@ Wire Up layer "prompt" must also:
 - State: do NOT change layout, colors, padding, or widget structure
 
 Integration Build & Fix layer "prompt" must also:
-- Describe running: flutter pub get, build_runner, flutter analyze, flutter build
-- List specific things to verify: missing DI registrations, unresolved imports, env config
-- State: do NOT change feature behaviour
+- Identify the tech stack for this layer's Project Layer (the one in its "layer" field), from the
+  System Structure YAML in the Documents section — do not default to Flutter commands if that
+  layer's tech says otherwise.
+- Describe the build/verify commands appropriate to that tech (e.g. flutter pub get / build_runner
+  / flutter analyze / flutter build for Flutter; npm install / npm run build / npm test for Node;
+  pip install -r requirements.txt / pytest for Python).
+- List specific things to verify for that layer: missing DI/dependency registrations, unresolved
+  imports, env config.
+- State: do NOT change feature behaviour.
 
 Backend & Data layer "prompt" must also:
 - Name exact files to create or modify
