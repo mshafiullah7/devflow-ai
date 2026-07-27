@@ -164,7 +164,6 @@ export class TestGeneratorPage {
   }
 
   async mount() {
-    injectCss('pages/project-home/project-home.css');
     injectCss('pages/test-generator/test-generator-page.css');
     injectCss('components/git/git-diff.css');
     injectCss('components/project-sidebar/project-sidebar.css');
@@ -215,7 +214,6 @@ export class TestGeneratorPage {
     window.db.testRunner.removeListeners();
     window.app.testGenerationWindow.offFileSaved();
     this._stopGitPolling();
-    removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
     // components/git/git-diff.css and project-sidebar.css are shared with
     // persistent tabs (Workflow Runner, Issue Runner, Terminal) that may still
@@ -229,7 +227,7 @@ export class TestGeneratorPage {
     const initial = this._project?.name?.trim()[0]?.toUpperCase() ?? '?';
     this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'test-generator' });
     return `
-      <div class="project-home ph-project-shell">
+      <div class="ph-project-shell">
         <header class="project-home__header">
           <button class="project-home__back" id="tgBtnBack" aria-label="Back">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -425,21 +423,87 @@ export class TestGeneratorPage {
     if (this._execTestFiles === null)       return `<div class="tg-file-list--error">Test folder not accessible.</div>`;
     if (!this._execTestFiles.length)        return `<div class="tg-file-list--empty">No test files found in this folder yet — generate some from the Generate tab.</div>`;
 
-    const capped = this._execTestFiles.slice(0, 200).slice().sort((a, b) => a.localeCompare(b));
-    const rows = capped.map(f => {
-      const checked = this._execTestSelected.has(f);
+    const capped = this._execTestFiles.slice(0, 200);
+
+    // Group files by immediate parent folder (mirrors _unitFilesListHtml)
+    const groups = new Map();
+    for (const filePath of capped) {
+      const rel       = filePath.replace(/\\/g, '/');
+      const lastSlash = rel.lastIndexOf('/');
+      const dir       = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+      if (dir.split('/').some(seg => seg.startsWith('.'))) continue;
+      if (!groups.has(dir)) groups.set(dir, []);
+      groups.get(dir).push(filePath);
+    }
+
+    // Root first, then alphabetical
+    const sorted = [...groups.entries()].sort((a, b) => {
+      if (!a[0]) return -1;
+      if (!b[0]) return 1;
+      return a[0].localeCompare(b[0]);
+    });
+
+    const folderIcon = `<svg class="tg-group-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+
+    const groupsHtml = sorted.map(([dir, files]) => {
+      const allSel  = files.every(f => this._execTestSelected.has(f));
+      const someSel = !allSel && files.some(f => this._execTestSelected.has(f));
+      const label   = dir || '(root)';
+
+      const filesHtml = files
+        .slice().sort((a, b) => a.localeCompare(b))
+        .map(filePath => {
+          const fileName = filePath.replace(/\\/g, '/').split('/').pop();
+          const checked  = this._execTestSelected.has(filePath);
+          return `
+            <label class="tg-flat-row">
+              <input type="checkbox" data-exec-file="${escHtml(filePath)}" ${checked ? 'checked' : ''}/>
+              <span class="tg-flat-name">${escHtml(fileName)}</span>
+            </label>`;
+        }).join('');
+
       return `
-        <label class="tg-flat-row">
-          <input type="checkbox" data-exec-file="${escHtml(f)}" ${checked ? 'checked' : ''}/>
-          <span class="tg-flat-name" title="${escHtml(f)}">${escHtml(f)}</span>
-        </label>`;
+        <div class="tg-group">
+          <div class="tg-group-header">
+            <input type="checkbox" data-exec-folder="${escHtml(dir)}"
+                   ${allSel ? 'checked' : ''} ${someSel ? 'data-indeterminate' : ''}/>
+            ${folderIcon}
+            <span class="tg-group-name" title="${escHtml(dir || '/')}">${escHtml(label)}</span>
+            <span class="tg-group-count">${files.length}</span>
+          </div>
+          <div class="tg-group-files">${filesHtml}</div>
+        </div>`;
     }).join('');
 
     const extra  = this._execTestFiles.length - capped.length;
     const notice = extra > 0
       ? `<div class="tg-file-list--notice">Showing first 200 files.</div>`
       : '';
-    return rows + notice;
+    return groupsHtml + notice;
+  }
+
+  _getExecFilesInDir(dir) {
+    if (!Array.isArray(this._execTestFiles)) return [];
+    return this._execTestFiles.filter(f => {
+      const rel       = f.replace(/\\/g, '/');
+      const lastSlash = rel.lastIndexOf('/');
+      const fileDir   = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+      return fileDir === dir;
+    });
+  }
+
+  _updateExecGroupCheckbox(filePath) {
+    const list = this.container.querySelector('#tgExecTestFileList');
+    if (!list) return;
+    const rel       = filePath.replace(/\\/g, '/');
+    const lastSlash = rel.lastIndexOf('/');
+    const dir       = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+    const cb        = list.querySelector(`input[data-exec-folder="${CSS.escape(dir)}"]`);
+    if (!cb) return;
+    const files = this._getExecFilesInDir(dir);
+    const sel   = files.filter(f => this._execTestSelected.has(f)).length;
+    cb.checked       = files.length > 0 && sel === files.length;
+    cb.indeterminate = sel > 0 && sel < files.length;
   }
 
   async _loadExecTestFiles() {
@@ -457,6 +521,7 @@ export class TestGeneratorPage {
   _rerenderExecTestList() {
     const list = this.container.querySelector('#tgExecTestFileList');
     if (list) list.innerHTML = this._execTestFilesListHtml();
+    list?.querySelectorAll('input[data-indeterminate]').forEach(cb => { cb.indeterminate = true; });
     this._updateExecTestFileCount();
     this._execUpdateSelBtn();
   }
@@ -1085,6 +1150,20 @@ export class TestGeneratorPage {
       if (e.target.dataset.execFile !== undefined) {
         const f = e.target.dataset.execFile;
         e.target.checked ? this._execTestSelected.add(f) : this._execTestSelected.delete(f);
+        this._updateExecGroupCheckbox(f);
+        this._updateExecTestFileCount();
+        this._execUpdateSelBtn();
+        return;
+      }
+      if (e.target.dataset.execFolder !== undefined) {
+        const fp    = e.target.dataset.execFolder;
+        const files = this._getExecFilesInDir(fp);
+        files.forEach(f => e.target.checked ? this._execTestSelected.add(f) : this._execTestSelected.delete(f));
+        const list  = this.container.querySelector('#tgExecTestFileList');
+        if (list) files.forEach(f => {
+          const cb = list.querySelector(`input[data-exec-file="${CSS.escape(f)}"]`);
+          if (cb) cb.checked = e.target.checked;
+        });
         this._updateExecTestFileCount();
         this._execUpdateSelBtn();
         return;
@@ -1421,6 +1500,7 @@ export class TestGeneratorPage {
     }
     this._genCurrentIdx = null;
     this._genClearTimer();
+    this._genUpdateCurFile(null);
     this._setRunningUI(false);
     this._genShowDone();
   }
@@ -1447,6 +1527,7 @@ export class TestGeneratorPage {
     await this._genRunItem(idx);
     this._genCurrentIdx = null;
     this._genClearTimer();
+    this._genUpdateCurFile(null);
     this._setRunningUI(false);
     this._genShowDone();
   }
@@ -1510,8 +1591,9 @@ export class TestGeneratorPage {
       this._genSetStatus(i, ok ? 'saved' : 'error', outPath, ok ? '' : 'Write failed');
     } catch (err) {
       this._genSetStatus(i, this._genAborted ? 'pending' : 'error', '', err.message || 'Failed');
+    } finally {
+      this._genClearTimer();
     }
-    this._genClearTimer();
   }
 
   async _gatherProjectContext() {
@@ -1603,7 +1685,7 @@ export class TestGeneratorPage {
         if (error) reject(new Error(error));
         else resolve(code);
       });
-      window.app.testGenChat.generate({ prompt, model: this._modelCfg });
+      window.app.testGenChat.generate({ prompt, model: this._modelCfg, cwd: this._activeLayer?.folder_path });
     });
   }
 
@@ -1707,10 +1789,12 @@ Output ONLY the test file content. No explanation text. Start directly with impo
   _genStartTimer() {
     this._genClearTimer();
     this._genStartTime = Date.now();
-    this._genTimerInt  = setInterval(() => {
+    const tick = () => {
       const el = this.container.querySelector('#tgGenElapsed');
       if (el && this._genStartTime) el.textContent = this._genFmt(Date.now() - this._genStartTime);
-    }, 500);
+    };
+    tick();
+    this._genTimerInt = setInterval(tick, 500);
   }
 
   _genClearTimer() {

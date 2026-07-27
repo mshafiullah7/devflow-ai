@@ -363,6 +363,17 @@ export class SettingsPage {
     const mapped = {};
     PAGE_KEYS.forEach((k, i) => { mapped[k] = mappings[i]?.model_config_id ?? null; });
 
+    // Default the Unit Test Generator to "Claude Haiku General Purpose" the first time
+    // this page loads with no explicit mapping — a direct Anthropic API call is the
+    // better fit for this feature than routing through a CLI/agent model.
+    if (mapped['test-generator'] == null) {
+      const haikuDefault = configs.find(c => c.label?.trim().toLowerCase() === 'claude haiku general purpose');
+      if (haikuDefault) {
+        mapped['test-generator'] = haikuDefault.id;
+        window.db.modelMapping.set('test-generator', haikuDefault.id);
+      }
+    }
+
     const TYPE_LABEL = { cli: 'CLI', api: 'API', ollama: 'Ollama', anthropic: 'Anthropic' };
     const configById = new Map(configs.map(c => [c.id, c]));
 
@@ -464,7 +475,7 @@ export class SettingsPage {
         label: 'Quality',
         features: [
           { key: 'issues',          icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,                                          name: 'Issues',             note: 'Sonnet Code, Flash High, Groq Code (Llama 70B)', tier: 'heavyCode' },
-          { key: 'test-generator',  icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`, name: 'Unit Test Generator', note: 'Haiku Code, Flash Medium, Groq Code (Llama 70B)', tier: 'mediumCoding' },
+          { key: 'test-generator',  icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`, name: 'Unit Test Generator', note: 'Haiku Code, Flash Medium, Groq Code (Llama 70B)', tier: 'mediumCoding', warning: '(Anthropic API direct call is better)' },
         ],
       },
       {
@@ -489,6 +500,7 @@ export class SettingsPage {
                 <span class="st-mapping-row__namewrap" title="${escHtml(f.name)}${claudePick(f.tier) ? ' — Claude: ' + escHtml(claudePick(f.tier)) : ''}">
                   <span class="st-mapping-row__name">${escHtml(f.name)}</span>
                   ${claudePick(f.tier) ? `<span class="st-mapping-row__note">Claude: ${escHtml(claudePick(f.tier))}</span>` : ''}
+                  ${f.warning ? `<span class="st-mapping-row__note st-mapping-row__note--warn">${escHtml(f.warning)}</span>` : ''}
                 </span>
                 ${infoIcon(f.tier)}
                 ${typeBadge(f.key)}

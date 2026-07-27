@@ -490,7 +490,7 @@ function seedModelConfigs(db) {
       VALUES (?, ?, datetime('now'))
       ON CONFLICT(page_key) DO UPDATE SET model_config_id = excluded.model_config_id, updated_at = excluded.updated_at
     `);
-    for (const pageKey of ['documents', 'project-layers', 'ai-console', 'style-guide']) {
+    for (const pageKey of ['documents', 'project-layers', 'ai-console', 'style-guide', 'test-generator']) {
       upsertMapping.run(pageKey, id);
     }
 
@@ -510,13 +510,10 @@ function seedModelConfigs(db) {
     // when this field is NULL — see wfr-pty-handlers.js).
     const CODE_FLAGS = `--model {{model}} '@{{prompt}}'`;
 
-    const { lastInsertRowid: haikuCodeId } = insert.run(
+    insert.run(
       'Claude Haiku Code', 'cli', 'claude', 'claude-haiku-4-5',
       CODE_FLAGS, 'pipe', 0, 2, null, null, 'low', 'coding'
     );
-    for (const pageKey of ['test-generator']) {
-      upsertMapping.run(pageKey, haikuCodeId);
-    }
 
     const { lastInsertRowid: sonnetCodeId } = insert.run(
       'Claude Sonnet Code', 'cli', 'claude', 'claude-sonnet-5',

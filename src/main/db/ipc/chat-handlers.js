@@ -517,7 +517,14 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
   const permsPrefix    = skipPermsFlag ? skipPermsFlag + ' ' : '';
   const userFlags      = (model.flags || '').trim();
   const flagsTemplate  = `${permsPrefix}${userFlags || `--model ${modelName} '@{{prompt}}'`}`;
-  const resolvedFlags  = flagsTemplate.replace(/\{\{model\}\}/g, modelName);
+  // {{cwd}} — e.g. agy/Gemini configs' `--add-dir "{{cwd}}"` — must resolve to
+  // the actual project folder, not stay as a literal placeholder (which agy
+  // rejects as an invalid path). Escape embedded double quotes since the
+  // template always wraps {{cwd}} in "..." for the PowerShell command line.
+  const escapedCwd     = (cwd || '').replace(/"/g, '\\"');
+  const resolvedFlags  = flagsTemplate
+    .replace(/\{\{model\}\}/g, modelName)
+    .replace(/\{\{cwd\}\}/g, escapedCwd);
   const hasInlinePrompt = resolvedFlags.includes('{{prompt}}');
 
   const ts = Date.now();
@@ -796,10 +803,10 @@ function registerChatHandlers() {
   // --- Test generation window chat (testGenChat:*) — separate subprocess slot ---
   safeHandle('testGenChat:cancel', () => killCtx(_testGenCtx));
 
-  safeHandle('testGenChat:generate', (event, { prompt, model }) => {
+  safeHandle('testGenChat:generate', (event, { prompt, model, cwd }) => {
     if (_testGenCtx.proc || _testGenCtx.req) killCtx(_testGenCtx);
     _testGenCtx.cancelled = false;
-    dispatch(event.sender, prompt, null, model, null, _testGenCtx, 'testGenChat:token', 'testGenChat:done', null, true);
+    dispatch(event.sender, prompt, null, model, null, _testGenCtx, 'testGenChat:token', 'testGenChat:done', cwd || null, true);
     return { started: true };
   });
 

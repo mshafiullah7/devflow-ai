@@ -637,9 +637,21 @@ function runMigrations(db) {
   };
 
   db.transaction(() => {
-    upsertCodeConfig('Claude Haiku Code', 'claude-haiku-4-5', ['test-generator']);
+    upsertCodeConfig('Claude Haiku Code', 'claude-haiku-4-5', []);
     upsertCodeConfig('Claude Sonnet Code', 'claude-sonnet-5', ['workflows', 'workflow-runner', 'issue-runner', 'issues']);
   })();
+
+  // Unit Test Generator — map to the Haiku General Purpose CLI config (not
+  // Haiku Code): a direct Anthropic API call is the better fit here, and this
+  // keeps the seeded default in sync with the "Claude Haiku General Purpose"
+  // label the Settings > Model Mapping page defaults it to.
+  if (haikuGpId) {
+    db.prepare(`
+      INSERT INTO model_mapping (page_key, model_config_id, updated_at)
+      VALUES ('test-generator', ?, datetime('now'))
+      ON CONFLICT(page_key) DO UPDATE SET model_config_id = excluded.model_config_id, updated_at = excluded.updated_at
+    `).run(haikuGpId);
+  }
 
   // Gemini (agy CLI) configs — intentionally left unmapped to any page.
   // Identity here is (label, flags) rather than label alone, since the Medium/High

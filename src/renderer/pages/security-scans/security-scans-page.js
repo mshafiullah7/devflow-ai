@@ -27,7 +27,6 @@ export class SecurityScansPage {
   }
 
   async mount() {
-    injectCss('pages/project-home/project-home.css');
     injectCss('pages/test-generator/test-generator-page.css');
     injectCss('components/project-sidebar/project-sidebar.css');
     injectCss('pages/security-scans/security-scans-page.css');
@@ -52,7 +51,6 @@ export class SecurityScansPage {
   unmount() {
     if (this._scanRunning) window.db.securityScanner.kill();
     window.db.securityScanner.removeListeners();
-    removeCss('pages/project-home/project-home.css');
     removeCss('pages/test-generator/test-generator-page.css');
     removeCss('components/project-sidebar/project-sidebar.css');
     removeCss('pages/security-scans/security-scans-page.css');
@@ -65,7 +63,7 @@ export class SecurityScansPage {
     const initial = this._project?.name?.trim()[0]?.toUpperCase() ?? '?';
     this._sidebar = new ProjectSidebar({ projectId: this._projectId, router: this.router, activeRoute: 'security-scans' });
     return `
-      <div class="project-home ph-project-shell">
+      <div class="ph-project-shell">
         <header class="project-home__header">
           <button class="project-home__back" id="ssBtnBack" aria-label="Back">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

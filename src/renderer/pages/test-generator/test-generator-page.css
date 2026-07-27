@@ -208,6 +208,7 @@
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 2px;
+  -webkit-app-region: no-drag;
 }
 
 .tg-mode-btn {
