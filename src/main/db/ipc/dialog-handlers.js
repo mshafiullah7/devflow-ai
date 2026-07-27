@@ -54,12 +54,14 @@ async function captureHtmlAsPng(html, width) {
 }
 
 function registerDialogHandlers() {
-  safeHandle('dialog:openFolder', async (event) => {
+  safeHandle('dialog:openFolder', async (event, { defaultPath } = {}) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    const result = await dialog.showOpenDialog(win, {
+    const opts = {
       properties: ['openDirectory'],
       title: 'Select Folder',
-    });
+    };
+    if (defaultPath) opts.defaultPath = defaultPath;
+    const result = await dialog.showOpenDialog(win, opts);
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
   });

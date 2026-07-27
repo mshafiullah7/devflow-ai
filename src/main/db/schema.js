@@ -222,6 +222,20 @@ function applySchema(db) {
     );
 
     -- ----------------------------------------------------------------
+    -- TEST GENERATION STATUS (staleness tracking for generated unit tests)
+    -- ----------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS test_generation_status (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id     INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      layer_id       INTEGER NOT NULL REFERENCES project_layers(id) ON DELETE CASCADE,
+      file_path      TEXT    NOT NULL,
+      test_file_path TEXT    NOT NULL,
+      source_hash    TEXT,
+      generated_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(layer_id, file_path)
+    );
+
+    -- ----------------------------------------------------------------
     -- SECURITY SCAN HISTORY
     -- ----------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS security_scan_history (

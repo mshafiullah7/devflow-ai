@@ -835,6 +835,14 @@
   border-color: var(--accent);
 }
 
+.tg-filename-input--readonly {
+  display: block;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tg-save-status {
   font-size: 11.5px;
   white-space: nowrap;
@@ -945,6 +953,19 @@
   height: 6px;
   border-radius: 50%;
   background: #22c55e;
+}
+
+.tg-tree-tested-dot--stale {
+  background: #dc2626;
+  cursor: help;
+}
+
+.tg-tree-logic-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 1;
+  color: #eab308;
+  cursor: help;
 }
 
 /* ── Scrollbar style (match app) ─────────────────────────────── */

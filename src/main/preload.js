@@ -165,6 +165,10 @@ contextBridge.exposeInMainWorld('db', {
     list:   (project_id) => invoke('testRunHistory:list', project_id),
     create: (data)       => invoke('testRunHistory:create', data),
   },
+  testGenStatus: {
+    listByLayer: (layer_id) => invoke('testGenStatus:listByLayer', layer_id),
+    upsert:      (data)     => invoke('testGenStatus:upsert', data),
+  },
   securityScanner: {
     detect:          (projectPath) => invoke('securityScanner:detect', projectPath),
     run:             (data)        => invoke('securityScanner:run', data),
@@ -208,7 +212,7 @@ contextBridge.exposeInMainWorld('db', {
     delete: (id)   => invoke('db:saved_themes:delete', id),
   },
   dialog: {
-    openFolder:   ()     => invoke('dialog:openFolder'),
+    openFolder:   (data) => invoke('dialog:openFolder', data),
     openJsonFile: ()     => invoke('dialog:openJsonFile'),
     openFile:     (opts) => invoke('dialog:openFile', opts),
     saveJsonFile: (data) => invoke('dialog:saveJsonFile', data),

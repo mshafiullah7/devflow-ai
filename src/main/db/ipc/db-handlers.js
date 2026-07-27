@@ -435,6 +435,27 @@ function registerDbHandlers() {
   });
 
   // ----------------------------------------------------------------
+  // test_generation_status — staleness tracking for generated unit tests
+  // ----------------------------------------------------------------
+  safeHandle('testGenStatus:listByLayer', (_e, layer_id) => {
+    return db.prepare(
+      `SELECT * FROM test_generation_status WHERE layer_id = ?`
+    ).all(layer_id);
+  });
+
+  safeHandle('testGenStatus:upsert', (_e, { project_id, layer_id, file_path, test_file_path, source_hash }) => {
+    db.prepare(
+      `INSERT INTO test_generation_status (project_id, layer_id, file_path, test_file_path, source_hash, generated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(layer_id, file_path) DO UPDATE SET
+         test_file_path = excluded.test_file_path,
+         source_hash    = excluded.source_hash,
+         generated_at   = excluded.generated_at`
+    ).run(project_id, layer_id, file_path, test_file_path, source_hash ?? null);
+    return { success: true };
+  });
+
+  // ----------------------------------------------------------------
   // testRunner — framework detection
   // ----------------------------------------------------------------
   safeHandle('testRunner:detect', (_e, projectPath) => {

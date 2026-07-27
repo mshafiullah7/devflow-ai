@@ -16,6 +16,23 @@ const FILE_EXTENSIONS = {
   default: ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'],
 };
 
+// ── Business-logic file heuristic ─────────────────────────────────────────
+// Cheap, language-agnostic signal for "this file is worth writing unit tests
+// for" — no AST parsing, just path conventions + a branching-keyword count.
+// Two passes: (1) exclude folders/files that are conventionally pure data or
+// presentation/generated code across common stacks (backend, Flutter, Android,
+// web frontend); (2) among what's left, flag files with enough branching
+// constructs (if/switch/for/while/catch/etc.) to likely contain real logic.
+const LOGIC_EXCLUDE_DIR_RE = /(^|\/)(models?|dtos?|entities|entity|types|interfaces|constants|generated|gen|__generated__|pages|screens|views|widgets|layouts|resources|assets|migrations|l10n|i18n|mocks?|fixtures?)(\/|$)/i;
+const LOGIC_EXCLUDE_FILE_RE = /(\.g\.dart|\.freezed\.dart|\.pb\.(dart|go)|\.designer\.cs|\.min\.js|\.d\.ts|(^|\/)index\.\w+$|\.config\.\w+$|Binding\.(kt|java)$)$/i;
+const LOGIC_BRANCH_RE = /\b(if|else\s+if|elif|switch|case|when|for|foreach|while|catch|except|try)\b|&&|\|\|/g;
+const LOGIC_MIN_BRANCH_COUNT = 3;
+
+function isLikelyDataOrPresentationFile(relPath) {
+  const p = relPath.replace(/\\/g, '/');
+  return LOGIC_EXCLUDE_DIR_RE.test(p) || LOGIC_EXCLUDE_FILE_RE.test(p);
+}
+
 async function detectProjectExtensions(folderPath) {
   const stat = f => window.shell.statFile(`${folderPath}/${f}`).catch(() => null);
 
@@ -113,6 +130,13 @@ export class TestGeneratorPage {
     this._unitSelected   = new Set();
     this._unitTestFolder = '';
     this._testedFiles    = new Set();
+    this._staleFiles     = new Set();
+    this._logicFiles     = new Set();
+
+    // Execute-tab state — the REAL test files found on disk in the test folder,
+    // not a guess derived from source file names (see _loadExecTestFiles).
+    this._execTestFiles     = [];
+    this._execTestSelected  = new Set();
 
     // Inline generation state
     this._genProgress      = [];
@@ -171,6 +195,10 @@ export class TestGeneratorPage {
     window.app.testGenerationWindow.onFileSaved(async () => {
       await this._checkExistingTests();
       this._rerenderFileList();
+      if (this._mode === 'execute') {
+        await this._loadExecTestFiles();
+        this._rerenderExecTestList();
+      }
     });
 
     const firstLayer = this._layers.find(l => l.folder_path);
@@ -332,10 +360,14 @@ export class TestGeneratorPage {
 
   _genRightHtml() {
     const selectedCount = this._unitSelected.size;
+    const staleCount    = this._staleFiles.size;
     return `
       <div class="tg-gen-header">
         <span class="tg-gen-status" id="tgGenStatus">${selectedCount > 0 ? `${selectedCount} file${selectedCount !== 1 ? 's' : ''} ready` : 'Select files from the tree to begin'}</span>
         <div class="tg-gen-controls">
+          ${staleCount > 0
+            ? `<button class="tg-btn tg-btn--sm tg-btn--outline" id="tgGenRegenStale" title="Select and regenerate tests whose source file changed since last generation">↻ Regenerate outdated (${staleCount})</button>`
+            : ''}
           <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgGenRunAll">▶ Generate Unit Tests</button>
           <button class="tg-btn tg-btn--sm tg-btn--stop"    id="tgGenStop" hidden>■ Stop</button>
         </div>
@@ -353,10 +385,92 @@ export class TestGeneratorPage {
   }
 
   // ─── Execute tab ──────────────────────────────────────────────
+  // The Execute tab shows the REAL test files found on disk in the configured
+  // test folder — not the source-file tree used for generation, and not a
+  // guessed name derived from _computeTestPath(). A generated (or hand-written)
+  // test's actual filename/location can differ from that guess, which would
+  // otherwise point the test runner at a file that doesn't exist.
+  _execSectionHtml() {
+    const total         = Array.isArray(this._execTestFiles) ? this._execTestFiles.length : 0;
+    const selectedCount = this._execTestSelected.size;
+
+    return `
+      <div class="tg-split" id="tgExecSplit">
+
+        <!-- LEFT: real test files on disk -->
+        <div class="tg-split-left">
+          <div class="tg-file-picker-toolbar">
+            <button class="tg-btn tg-btn--sm" id="tgExecTestSelectAll">All</button>
+            <button class="tg-btn tg-btn--sm" id="tgExecTestClear">Clear</button>
+            <button class="tg-btn tg-btn--sm" id="tgExecTestRefresh" title="Re-scan the test folder">⟳</button>
+            <span class="tg-file-count" id="tgExecTestFileCount">${selectedCount} / ${Math.min(total, 200)}</span>
+          </div>
+          <div class="tg-file-list" id="tgExecTestFileList">${this._execTestFilesListHtml()}</div>
+          <div class="tg-folder-strip">
+            <span class="tg-filename-input tg-filename-input--readonly" title="${escHtml(this._unitTestFolder || '')}">
+              ${escHtml(this._unitTestFolder || 'No test folder set — set one in the Generate tab')}
+            </span>
+          </div>
+        </div>
+
+        <!-- RIGHT: run controls -->
+        <div class="tg-split-right" id="tgSplitRight">${this._execRightHtml()}</div>
+
+      </div>`;
+  }
+
+  _execTestFilesListHtml() {
+    if (!this._unitTestFolder)              return `<div class="tg-file-list--empty">Set a test output folder in the Generate tab first.</div>`;
+    if (this._execTestFiles === 'loading')  return `<div class="tg-file-list--loading">Scanning test folder…</div>`;
+    if (this._execTestFiles === null)       return `<div class="tg-file-list--error">Test folder not accessible.</div>`;
+    if (!this._execTestFiles.length)        return `<div class="tg-file-list--empty">No test files found in this folder yet — generate some from the Generate tab.</div>`;
+
+    const capped = this._execTestFiles.slice(0, 200).slice().sort((a, b) => a.localeCompare(b));
+    const rows = capped.map(f => {
+      const checked = this._execTestSelected.has(f);
+      return `
+        <label class="tg-flat-row">
+          <input type="checkbox" data-exec-file="${escHtml(f)}" ${checked ? 'checked' : ''}/>
+          <span class="tg-flat-name" title="${escHtml(f)}">${escHtml(f)}</span>
+        </label>`;
+    }).join('');
+
+    const extra  = this._execTestFiles.length - capped.length;
+    const notice = extra > 0
+      ? `<div class="tg-file-list--notice">Showing first 200 files.</div>`
+      : '';
+    return rows + notice;
+  }
+
+  async _loadExecTestFiles() {
+    this._execTestFiles    = 'loading';
+    this._execTestSelected = new Set();
+    if (!this._unitTestFolder || !this._activeLayer) { this._execTestFiles = []; return; }
+    try {
+      const exts = (await detectProjectExtensions(this._activeLayer.folder_path)) ?? inferExtensions(this._activeLayer.setup_instructions);
+      this._execTestFiles = await window.shell.listFiles(this._unitTestFolder, exts) ?? [];
+    } catch {
+      this._execTestFiles = null;
+    }
+  }
+
+  _rerenderExecTestList() {
+    const list = this.container.querySelector('#tgExecTestFileList');
+    if (list) list.innerHTML = this._execTestFilesListHtml();
+    this._updateExecTestFileCount();
+    this._execUpdateSelBtn();
+  }
+
+  _updateExecTestFileCount() {
+    const el = this.container.querySelector('#tgExecTestFileCount');
+    const total = Array.isArray(this._execTestFiles) ? this._execTestFiles.length : 0;
+    if (el) el.textContent = `${this._execTestSelected.size} / ${Math.min(total, 200)}`;
+  }
+
   _execRightHtml() {
     const hasCmd    = this._execCommands.length > 0;
     const detecting = this._execDetecting;
-    const selCount  = this._unitSelected.size;
+    const selCount  = this._execTestSelected.size;
     const overLimit = selCount > 20;
 
     // Effective command: detected selection OR manual entry
@@ -436,19 +550,24 @@ export class TestGeneratorPage {
       </div>`;
   }
 
-  _switchMode(mode) {
+  async _switchMode(mode) {
     if (this._mode === mode) return;
     this._mode = mode;
     this.container.querySelector('#tgModeGenerate')?.classList.toggle('tg-mode-btn--active', mode === 'generate');
     this.container.querySelector('#tgModeExecute')?.classList.toggle('tg-mode-btn--active',  mode === 'execute');
-    const right = this.container.querySelector('#tgSplitRight');
-    if (!right) return;
-    right.innerHTML = mode === 'execute' ? this._execRightHtml() : this._genRightHtml();
-    if (mode === 'generate') {
-      this._genSyncRight();
-    } else {
+
+    // Execute has its own left panel (real test files on disk, not the source
+    // tree), so the whole main area — not just the right split — needs to swap.
+    const main = this.container.querySelector('#tgMain');
+    if (mode === 'execute') {
+      if (main) main.innerHTML = this._mainHtml();
+      await this._loadExecTestFiles();
+      if (main) main.innerHTML = this._mainHtml();
       this._execRestoreOutput();
       if (this._activeLayer && !this._execCommands.length && !this._execDetecting) this._loadExecCommands();
+    } else {
+      if (main) main.innerHTML = this._mainHtml();
+      this._genSyncRight();
     }
   }
 
@@ -480,17 +599,30 @@ export class TestGeneratorPage {
   async _execStart(selectedOnly = false, overrideCmd = null) {
     if (this._execRunning || !this._activeLayer?.folder_path) return;
     let command;
+    let framework = null;
+    let coverageRequested = false;
     if (overrideCmd) {
       command = overrideCmd;
     } else if (selectedOnly) {
       if (!this._execCmd) return;
       command = this._buildSelectedFilesCmd();
+      framework = this._execCmd.framework ?? null;
     } else {
-      command = this._execCmd?.cmd ?? this._execManualCmd.trim();
+      command   = this._execCmd?.cmd ?? this._execManualCmd.trim();
+      framework = this._execCmd?.framework ?? null;
+      if (framework) {
+        const withCoverage = this._withCoverageFlag(command, framework);
+        coverageRequested = withCoverage !== command;
+        command = withCoverage;
+      }
     }
     if (!command) return;
-    this._execOutput = '';
-    this._execResult = null;
+    this._execOutput          = '';
+    this._execResult          = null;
+    this._execRunFramework    = framework;
+    this._execRunCommand      = command;
+    this._execRunCoverageReq  = coverageRequested;
+    this._execRunStartedAt    = Date.now();
     this._execSetRunning(true);
     const out = this.container.querySelector('#tgExecOutput');
     if (out) out.textContent = '';
@@ -500,11 +632,35 @@ export class TestGeneratorPage {
     await window.db.testRunner.run({ command, cwd: this._activeLayer.folder_path });
   }
 
+  // Appends the coverage flag appropriate to a detected framework, only for
+  // frameworks where the resulting output can actually be parsed back into a
+  // number (see _parseCoverage / _readFlutterLcovCoverage). Frameworks whose
+  // coverage requires project-side config (Angular/Karma reporters, .NET
+  // XPlat/coverlet XML, RSpec's SimpleCov) are left untouched — the flag alone
+  // wouldn't reliably produce something we can read back.
+  _withCoverageFlag(cmd, framework) {
+    if (/--coverage\b|--cov\b|-cover\b/i.test(cmd)) return cmd; // already requests coverage
+    switch (framework) {
+      case 'Flutter':          return `${cmd} --coverage`;
+      case 'pytest':           return `${cmd} --cov --cov-report=term-missing`;
+      case 'Go':               return cmd.replace(/\bgo test\b/, 'go test -cover');
+      case 'Jest':             return `${cmd} --coverage`;
+      case 'Vitest':
+      case 'Nuxt / Vitest':    return `${cmd} --coverage`;
+      default:                 return cmd;
+    }
+  }
+
+  // Uses the REAL test file paths selected from disk (_execTestSelected) —
+  // no naming-convention guessing, since a generated test's actual name/location
+  // can differ from what _computeTestPath() would predict (custom naming, model
+  // deviation, hand-written tests, etc.).
   _buildSelectedFilesCmd() {
-    const testPaths = [...this._unitSelected]
-      .map(f => this._computeTestPath(f))
-      .filter(Boolean)
-      .map(p => `"${p.replace(/\\/g, '/')}"`);
+    if (!this._unitTestFolder) return null;
+    const root      = this._unitTestFolder.replace(/\\/g, '/');
+    const testPaths = [...this._execTestSelected]
+      .map(f => `${root}/${f}`.replace(/\\/g, '/'))
+      .map(p => `"${p}"`);
     if (!testPaths.length) return null;
     const files = testPaths.join(' ');
     const fw    = this._execCmd.framework ?? '';
@@ -530,7 +686,7 @@ export class TestGeneratorPage {
     if (this._mode !== 'execute') return;
     const btn = this.container.querySelector('#tgExecRunSel');
     if (!btn) return;
-    const n        = this._unitSelected.size;
+    const n        = this._execTestSelected.size;
     const over     = n > 20;
     const canRun   = n > 0 && !over && !!this._execCmd && !this._execRunning && !!this._unitTestFolder.trim();
     btn.disabled   = !canRun;
@@ -578,7 +734,7 @@ export class TestGeneratorPage {
     if (wrap) wrap.scrollTop   = wrap.scrollHeight;
   }
 
-  _execDone(exitCode) {
+  async _execDone(exitCode) {
     window.db.testRunner.removeListeners();
     this._execSetRunning(false);
     const parsed      = this._parseTestResult(this._execOutput);
@@ -588,6 +744,29 @@ export class TestGeneratorPage {
       section.querySelector('.tg-exec-banner')?.remove();
       section.insertAdjacentHTML('beforeend', this._execBannerHtml());
     }
+    await this._saveTestRunHistory(exitCode, this._execResult);
+  }
+
+  async _saveTestRunHistory(exitCode, result) {
+    if (!this._activeLayer) return;
+    let coverage = this._parseCoverage(this._execOutput, this._execRunFramework);
+    if (coverage == null && this._execRunFramework === 'Flutter' && this._execRunCoverageReq) {
+      coverage = await this._readFlutterLcovCoverage();
+    }
+    const duration = this._execRunStartedAt ? this._genFmt(Date.now() - this._execRunStartedAt) : null;
+    await window.db.testRunHistory.create({
+      project_id: this._activeLayer.project_id,
+      layer_id:   this._activeLayer.id,
+      framework:  this._execRunFramework,
+      command:    this._execRunCommand,
+      passed:     result?.passed  ?? null,
+      failed:     result?.failed  ?? null,
+      skipped:    null,
+      duration,
+      output:     this._execOutput.length > 20000 ? this._execOutput.slice(-20000) : this._execOutput,
+      exit_code:  exitCode,
+      coverage,
+    }).catch(() => {});
   }
 
   _parseTestResult(output) {
@@ -604,6 +783,50 @@ export class TestGeneratorPage {
     const karma = output.match(/Executed (\d+) of \d+ (SUCCESS|FAILED)/i);
     if (karma) return { failed: karma[2] === 'FAILED' ? 1 : 0, passed: parseInt(karma[1]) };
     return null;
+  }
+
+  // Overall coverage %, parsed from the console summary a framework's
+  // coverage flag prints (see _withCoverageFlag). Frameworks whose coverage
+  // isn't reliably console-parseable (Angular/Karma, .NET, RSpec) return null
+  // here — the command was never modified to request coverage for them.
+  _parseCoverage(output, framework) {
+    if (!framework) return null;
+    if (framework === 'Jest' || framework === 'Vitest' || framework === 'Nuxt / Vitest') {
+      // Jest/Vitest coverage table: "All files |   82.35 |    66.67 | ..."
+      const m = output.match(/All files\s*\|\s*([\d.]+)/i);
+      return m ? parseFloat(m[1]) : null;
+    }
+    if (framework === 'pytest') {
+      // pytest-cov term report: "TOTAL    120   20   83%"
+      const m = output.match(/^TOTAL\s+.*?(\d+)%/im);
+      return m ? parseFloat(m[1]) : null;
+    }
+    if (framework === 'Go') {
+      // "ok  example.com/pkg  0.003s  coverage: 82.4% of statements" — one line per package
+      const matches = [...output.matchAll(/coverage:\s*([\d.]+)%\s+of statements/g)];
+      if (!matches.length) return null;
+      const nums = matches.map(m => parseFloat(m[1]));
+      return nums.reduce((a, b) => a + b, 0) / nums.length;
+    }
+    return null;
+  }
+
+  // Flutter prints no coverage summary to console — `flutter test --coverage`
+  // just writes coverage/lcov.info. Sum the LCOV LH:/LF: markers ourselves.
+  async _readFlutterLcovCoverage() {
+    try {
+      const lcovPath = `${this._activeLayer.folder_path.replace(/\\/g, '/')}/coverage/lcov.info`;
+      const content  = await window.shell.readFile(lcovPath);
+      if (!content) return null;
+      let hit = 0, found = 0;
+      for (const line of content.split('\n')) {
+        if (line.startsWith('LH:')) hit   += parseInt(line.slice(3), 10) || 0;
+        if (line.startsWith('LF:')) found += parseInt(line.slice(3), 10) || 0;
+      }
+      return found > 0 ? (hit / found) * 100 : null;
+    } catch {
+      return null;
+    }
   }
 
   _extractFailureSummary(output) {
@@ -649,6 +872,9 @@ export class TestGeneratorPage {
           <div class="tg-file-picker-toolbar">
             <button class="tg-btn tg-btn--sm" id="tgUnitSelectAll">All</button>
             <button class="tg-btn tg-btn--sm" id="tgUnitClear">Clear</button>
+            ${this._logicFiles.size > 0
+              ? `<button class="tg-btn tg-btn--sm tg-btn--outline" id="tgUnitSelectLogic" title="Select files likely containing business logic">★ Logic (${this._logicFiles.size})</button>`
+              : ''}
             <span class="tg-file-count" id="tgUnitFileCount">${selectedCount} / ${totalCount}</span>
           </div>
           <div class="tg-file-list" id="tgUnitFileList">${this._unitFilesListHtml()}</div>
@@ -733,13 +959,20 @@ export class TestGeneratorPage {
         .map(filePath => {
           const fileName  = filePath.replace(/\\/g, '/').split('/').pop();
           const checked   = this._unitSelected.has(filePath);
+          const isStale   = this._staleFiles.has(filePath);
           const testedDot = this._testedFiles.has(filePath)
-            ? `<span class="tg-tree-tested-dot" title="Test file exists"></span>`
+            ? (isStale
+                ? `<span class="tg-tree-tested-dot tg-tree-tested-dot--stale" title="Source changed since last test generation — regenerate to update"></span>`
+                : `<span class="tg-tree-tested-dot" title="Test file exists"></span>`)
+            : '';
+          const logicBadge = this._logicFiles.has(filePath)
+            ? `<span class="tg-tree-logic-badge" title="Likely contains business logic — good candidate for unit tests">★</span>`
             : '';
           return `
             <label class="tg-flat-row">
               <input type="checkbox" data-file="${escHtml(filePath)}" ${checked ? 'checked' : ''}/>
               <span class="tg-flat-name">${escHtml(fileName)}</span>
+              ${logicBadge}
               ${testedDot}
             </label>`;
         }).join('');
@@ -849,6 +1082,13 @@ export class TestGeneratorPage {
         this._execCmd = this._execCommands.find(c => c.id === e.target.value) ?? null;
         return;
       }
+      if (e.target.dataset.execFile !== undefined) {
+        const f = e.target.dataset.execFile;
+        e.target.checked ? this._execTestSelected.add(f) : this._execTestSelected.delete(f);
+        this._updateExecTestFileCount();
+        this._execUpdateSelBtn();
+        return;
+      }
       if (e.target.dataset.file !== undefined) {
         const f = e.target.dataset.file;
         e.target.checked ? this._unitSelected.add(f) : this._unitSelected.delete(f);
@@ -881,7 +1121,16 @@ export class TestGeneratorPage {
       if (!e.target.closest('#tgMain')) return;
       if (e.target.id === 'tgUnitSelectAll') { this._unitFiles.slice(0, 200).forEach(f => this._unitSelected.add(f)); this._rerenderFileList(); return; }
       if (e.target.id === 'tgUnitClear')     { this._unitSelected.clear(); this._rerenderFileList(); return; }
+      if (e.target.id === 'tgUnitSelectLogic') { this._logicFiles.forEach(f => this._unitSelected.add(f)); this._rerenderFileList(); return; }
+      if (e.target.id === 'tgExecTestSelectAll') {
+        (Array.isArray(this._execTestFiles) ? this._execTestFiles : []).slice(0, 200).forEach(f => this._execTestSelected.add(f));
+        this._rerenderExecTestList();
+        return;
+      }
+      if (e.target.id === 'tgExecTestClear') { this._execTestSelected.clear(); this._rerenderExecTestList(); return; }
+      if (e.target.id === 'tgExecTestRefresh') { this._loadExecTestFiles().then(() => this._rerenderExecTestList()); return; }
       if (e.target.id === 'tgGenRunAll')         { this._genRunAll();              return; }
+      if (e.target.id === 'tgGenRegenStale')     { this._regenerateStale();        return; }
       if (e.target.id === 'tgGenStop')           { this._genStop();                return; }
       if (e.target.id === 'tgExecRun')           { this._execStart(false);                                      return; }
       if (e.target.id === 'tgExecRunSel')        { this._execStart(true);                                       return; }
@@ -953,13 +1202,65 @@ export class TestGeneratorPage {
 
   async _checkExistingTests() {
     this._testedFiles = new Set();
+    this._staleFiles  = new Set();
     if (!this._unitTestFolder || !Array.isArray(this._unitFiles)) return;
+
+    const statusRows = this._activeLayer
+      ? await window.db.testGenStatus.listByLayer(this._activeLayer.id).catch(() => [])
+      : [];
+    const statusByFile = new Map(statusRows.map(r => [r.file_path, r]));
+
+    const filesToHash = [];
     await Promise.all(
       this._unitFiles.slice(0, 200).map(async f => {
         const testPath = this._computeTestPath(f);
         if (!testPath) return;
         const stat = await window.shell.statFile(testPath).catch(() => null);
-        if (stat) this._testedFiles.add(f);
+        if (!stat) return;
+        this._testedFiles.add(f);
+        // Only worth re-hashing files that have a recorded baseline to compare against.
+        if (statusByFile.get(f)?.source_hash) filesToHash.push(f);
+      })
+    );
+
+    if (filesToHash.length) {
+      const hashes = await this._gitHashObjectBatch(filesToHash);
+      filesToHash.forEach((f, idx) => {
+        const currentHash = hashes[idx];
+        const storedHash  = statusByFile.get(f)?.source_hash;
+        if (currentHash && storedHash && currentHash !== storedHash) this._staleFiles.add(f);
+      });
+    }
+  }
+
+  // Runs `git hash-object` once for a batch of files (one process spawn instead of
+  // one per file) — output is one hash per line, in the same order as the input.
+  async _gitHashObjectBatch(relPaths) {
+    if (!relPaths.length || !this._activeLayer?.folder_path) return [];
+    const cwd    = this._activeLayer.folder_path;
+    const quoted = relPaths.map(p => `"${p.replace(/\\/g, '/')}"`).join(' ');
+    try {
+      const r = await window.db.terminal.exec({ command: `git hash-object -- ${quoted}`, cwd });
+      return (r?.stdout || '').split('\n').map(l => l.trim()).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  // Scores each candidate file's content for branching constructs to flag
+  // likely business logic — see LOGIC_* constants near the top of this file.
+  async _detectLogicFiles() {
+    this._logicFiles = new Set();
+    if (!Array.isArray(this._unitFiles) || !this._activeLayer?.folder_path) return;
+
+    const candidates = this._unitFiles.slice(0, 200).filter(f => !isLikelyDataOrPresentationFile(f));
+    await Promise.all(
+      candidates.map(async f => {
+        const absPath = `${this._activeLayer.folder_path}/${f}`;
+        const content = await window.shell.readFile(absPath).catch(() => null);
+        if (!content) return;
+        const matches = content.match(LOGIC_BRANCH_RE);
+        if (matches && matches.length >= LOGIC_MIN_BRANCH_COUNT) this._logicFiles.add(f);
       })
     );
   }
@@ -974,15 +1275,17 @@ export class TestGeneratorPage {
 
   // ─── Layer selection ─────────────────────────────────────────
   async _selectLayer(layer) {
-    this._activeLayer  = layer;
-    this._unitFiles    = 'loading';
-    this._unitSelected = new Set();
-    this._execCommands = [];
+    this._activeLayer      = layer;
+    this._unitFiles        = 'loading';
+    this._unitSelected     = new Set();
+    this._execCommands     = [];
     this._execCmd          = null;
     this._execOutput       = '';
     this._execResult       = null;
     this._execDetecting    = false;
     this._execManualCmd    = localStorage.getItem(`devflow_execcmd_${layer.id}`) || '';
+    this._execTestFiles    = 'loading';
+    this._execTestSelected = new Set();
     this._projectCtxCache  = null;
 
     const savedFolder      = localStorage.getItem(`devflow_testfolder_${layer.id}`);
@@ -993,7 +1296,9 @@ export class TestGeneratorPage {
 
     const exts = (await detectProjectExtensions(layer.folder_path)) ?? inferExtensions(layer.setup_instructions);
     this._unitFiles = await window.shell.listFiles(layer.folder_path, exts);
-    await this._checkExistingTests();
+    const tasks = [this._checkExistingTests(), this._detectLogicFiles()];
+    if (this._mode === 'execute') tasks.push(this._loadExecTestFiles());
+    await Promise.all(tasks);
 
     this.container.querySelector('#tgMain').innerHTML = this._mainHtml();
     this._applyIndeterminateStates();
@@ -1028,6 +1333,7 @@ export class TestGeneratorPage {
   _genSyncRight() {
     this._genRefreshFiles();
     this._genSyncControls();
+    this._syncRegenStaleBtn();
     const statusEl = this.container.querySelector('#tgGenStatus');
     if (statusEl && !this._genRunning && !this._genProgress.length) {
       const n = this._unitSelected.size;
@@ -1049,6 +1355,23 @@ export class TestGeneratorPage {
     else if (runAll) runAll.title = '';
   }
 
+  _syncRegenStaleBtn() {
+    const controls   = this.container.querySelector('.tg-gen-controls');
+    if (!controls) return;
+    let btn          = this.container.querySelector('#tgGenRegenStale');
+    const staleCount = this._staleFiles.size;
+    if (staleCount > 0) {
+      if (!btn) {
+        controls.insertAdjacentHTML('afterbegin',
+          `<button class="tg-btn tg-btn--sm tg-btn--outline" id="tgGenRegenStale" title="Select and regenerate tests whose source file changed since last generation">↻ Regenerate outdated (${staleCount})</button>`);
+      } else {
+        btn.textContent = `↻ Regenerate outdated (${staleCount})`;
+      }
+    } else if (btn) {
+      btn.remove();
+    }
+  }
+
   // kept for model-picker callback compat
   _syncGenerateBtns() { this._genSyncControls(); }
 
@@ -1067,16 +1390,20 @@ export class TestGeneratorPage {
     const runAll = this.container.querySelector('#tgGenRunAll');
     const runSel = this.container.querySelector('#tgGenRunSel');
     const stop   = this.container.querySelector('#tgGenStop');
+    const regen  = this.container.querySelector('#tgGenRegenStale');
     const tree   = this.container.querySelector('#tgUnitFileList');
     if (running) {
       if (runAll) { runAll.hidden = true;  runAll.disabled = true; }
+      if (regen)    regen.disabled = true;
       if (stop)     stop.hidden  = false;
       if (tree)     tree.style.pointerEvents = 'none';
     } else {
       if (runAll) { runAll.hidden = false; }
+      if (regen)    regen.disabled = false;
       if (stop)     stop.hidden  = true;
       if (tree)     tree.style.pointerEvents = '';
       this._genSyncControls();
+      this._syncRegenStaleBtn();
     }
   }
 
@@ -1096,6 +1423,13 @@ export class TestGeneratorPage {
     this._genClearTimer();
     this._setRunningUI(false);
     this._genShowDone();
+  }
+
+  _regenerateStale() {
+    if (this._genRunning || !this._staleFiles.size) return;
+    this._unitSelected = new Set(this._staleFiles);
+    this._rerenderFileList();
+    this._genRunAll();
   }
 
   async _genRunSelected() {
@@ -1160,7 +1494,19 @@ export class TestGeneratorPage {
       if (this._genAborted) { this._genSetStatus(i, 'pending'); return; }
 
       const ok = await window.shell.writeFile(outPath, code);
-      if (ok) window.shell.notifyTestFileSaved();
+      if (ok) {
+        window.shell.notifyTestFileSaved();
+        const [sourceHash] = await this._gitHashObjectBatch([item.relPath]);
+        await window.db.testGenStatus.upsert({
+          project_id:     this._activeLayer.project_id,
+          layer_id:       this._activeLayer.id,
+          file_path:      item.relPath,
+          test_file_path: outPath,
+          source_hash:    sourceHash || null,
+        }).catch(() => {});
+        this._testedFiles.add(item.relPath);
+        this._staleFiles.delete(item.relPath);
+      }
       this._genSetStatus(i, ok ? 'saved' : 'error', outPath, ok ? '' : 'Write failed');
     } catch (err) {
       this._genSetStatus(i, this._genAborted ? 'pending' : 'error', '', err.message || 'Failed');
@@ -1310,6 +1656,9 @@ Generate comprehensive unit tests using the testing framework implied by the tec
 - CRITICAL: Import the source file with exactly this path: \`${relImport}\`
 - CRITICAL: For all other imports, check the tsconfig/vitest config above for path aliases (e.g. \`@/\`, \`~/\`, \`#imports\`). Use aliases where the project uses them rather than long relative paths.
 - CRITICAL: Do NOT invent module paths — if you are unsure of an import, mock it or use the alias from the config.
+- CRITICAL: Every single test must be fully implemented — real setup, a real call into the source code, and real assertions (expect/assert) that check actual values. Never write a test whose body is empty, a comment, a TODO, or a description of what the test "should" do instead of doing it.
+- CRITICAL: Do not use pending/skipped/todo test markers (it.todo, it.skip, xit, @Disabled, pytest.mark.skip, etc.) — every listed test case must be a complete, runnable test.
+- If you are unsure how to exercise a particular branch without more context, still write your best real attempt at it rather than a placeholder — an imperfect concrete assertion is more useful than a stub.
 
 Output ONLY the test file content. No explanation text. Start directly with import or require statements.`;
   }
@@ -1375,7 +1724,7 @@ Output ONLY the test file content. No explanation text. Start directly with impo
   }
 
   async _browseTestFolder() {
-    const chosen = await window.db.dialog.openFolder();
+    const chosen = await window.db.dialog.openFolder({ defaultPath: this._activeLayer?.folder_path });
     if (!chosen) return;
     this._unitTestFolder = chosen;
     if (this._activeLayer) localStorage.setItem(`devflow_testfolder_${this._activeLayer.id}`, chosen);
