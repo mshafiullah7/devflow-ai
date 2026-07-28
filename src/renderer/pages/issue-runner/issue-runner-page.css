@@ -352,10 +352,17 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  position: relative;
+  flex-direction: row;
   overflow: hidden;
   background: var(--bg);
+}
+
+.ir-detail-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ── Term strip ─────────────────────────────────────────────────────── */
@@ -471,21 +478,23 @@
 .ir-terminal-wrap .xterm         { height: 100%; }
 .ir-terminal-wrap .xterm-viewport { background: transparent !important; }
 
-/* ── Git overlay panel ──────────────────────────────────────────────── */
+/* ── Git panel — in-flow, expands from the right ──────────────────────── */
 
 .ir-git-panel {
-  position: absolute;
-  top: 0; right: 0; bottom: 0;
-  width: 50vw;
-  z-index: 10;
+  flex: 0 0 0;
+  min-width: 0;
   background: var(--surface);
-  border-left: 1px solid var(--border);
-  box-shadow: -4px 0 16px rgba(0,0,0,0.25);
+  border-left: 0 solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: flex-basis 0.2s ease, min-width 0.2s ease, border-left-width 0.2s ease;
 }
-.ir-git-panel[hidden] { display: none; }
+.ir-git-panel--open {
+  flex: 0 0 42%;
+  min-width: 320px;
+  border-left-width: 1px;
+}
 
 .ir-git-panel__header {
   display: flex;
@@ -597,22 +606,3 @@
   min-height: 0;
 }
 
-/* ── Wide layout: git panel becomes fixed right sidebar ─────────────── */
-
-.ir-layout--wide .ir-detail-panel {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  grid-template-columns: 60% 40%;
-}
-.ir-layout--wide .ir-term-strip    { grid-column: 1; grid-row: 1; }
-.ir-layout--wide .ir-terminal-wrap { grid-column: 1; grid-row: 2; min-height: 0; }
-.ir-layout--wide .ir-git-panel {
-  display: flex !important;
-  grid-column: 2;
-  grid-row: 1 / -1;
-  position: relative;
-  width: auto;
-  box-shadow: none;
-  top: auto; right: auto; bottom: auto;
-}
-.ir-layout--wide .ir-git-toggle-btn { display: none; }

@@ -67,8 +67,6 @@ export class IssueRunnerPage {
     this._gitPollInterval  = null;
     this._gitExpandedFiles = new Set();
     this._projectLayers    = [];
-    this._layoutObs        = null;
-    this._isWideMode       = false;
   }
 
   async mount() {
@@ -137,7 +135,6 @@ export class IssueRunnerPage {
 
     this._initTerminal();
     this._startGitPolling();
-    this._initLayoutObserver();
     this._bindEvents();
 
     await this._loadIssues();
@@ -196,7 +193,6 @@ export class IssueRunnerPage {
     this._stopGitPolling();
     if (this._resizeObs)   { this._resizeObs.disconnect();   this._resizeObs   = null; }
     if (this._onWinResize) { window.removeEventListener('resize', this._onWinResize); this._onWinResize = null; }
-    if (this._layoutObs)   { this._layoutObs.disconnect();   this._layoutObs   = null; }
     if (this._term)        { this._term.dispose();           this._term        = null; }
     this._doRunAll  = false;
     this._isRunning = false;
@@ -272,14 +268,16 @@ export class IssueRunnerPage {
           </div>
 
           <div class="ir-detail-panel" id="irDetailPanel">
-            <!-- Info strip — shown when item is selected and not running -->
-            <div class="ir-term-strip" id="irTermStrip" hidden></div>
+            <div class="ir-detail-main">
+              <!-- Info strip — shown when item is selected and not running -->
+              <div class="ir-term-strip" id="irTermStrip" hidden></div>
 
-            <!-- xterm.js terminal -->
-            <div class="ir-terminal-wrap" id="irTerminal"></div>
+              <!-- xterm.js terminal -->
+              <div class="ir-terminal-wrap" id="irTerminal"></div>
+            </div>
 
-            <!-- Git diff overlay -->
-            <div class="ir-git-panel" id="irGitPanel" hidden>
+            <!-- Git changes panel — in-flow, expands from the right -->
+            <div class="ir-git-panel" id="irGitPanel">
               <div class="ir-git-panel__header">
                 <span class="ir-git-panel__title">Git Changes</span>
                 <span class="ir-git-panel__badge" id="irGitPanelBadge" hidden></span>
@@ -1120,37 +1118,6 @@ export class IssueRunnerPage {
     }
   }
 
-  // ── Responsive layout ─────────────────────────────────────────────────
-
-  _initLayoutObserver() {
-    const layout = this.container.querySelector('.ir-layout');
-    if (!layout) return;
-    this._layoutObs = new ResizeObserver(entries => {
-      this._applyWidthMode(entries[0].contentRect.width);
-    });
-    this._layoutObs.observe(layout);
-  }
-
-  _applyWidthMode(width) {
-    const layout = this.container.querySelector('.ir-layout');
-    const panel  = this.container.querySelector('#irGitPanel');
-    const toggle = this.container.querySelector('#irBtnGitToggle');
-    if (!layout) return;
-    const isWide = width >= 1100;
-    if (isWide === this._isWideMode) return;
-    this._isWideMode = isWide;
-    layout.classList.toggle('ir-layout--wide', isWide);
-    if (isWide) {
-      panel?.removeAttribute('hidden');
-      this._gitPanelVisible = true;
-      toggle?.classList.add('ir-git-toggle-btn--active');
-      this._refreshGitPanel();
-    } else {
-      if (!this._gitPanelVisible) panel?.setAttribute('hidden', '');
-      toggle?.classList.toggle('ir-git-toggle-btn--active', this._gitPanelVisible);
-    }
-  }
-
   // ── Events ────────────────────────────────────────────────────────────
 
   _bindEvents() {
@@ -1177,7 +1144,7 @@ export class IssueRunnerPage {
       ?.addEventListener('click', () => {
         this._gitPanelVisible = !this._gitPanelVisible;
         const panel = this.container.querySelector('#irGitPanel');
-        panel?.toggleAttribute('hidden', !this._gitPanelVisible);
+        panel?.classList.toggle('ir-git-panel--open', this._gitPanelVisible);
         this.container.querySelector('#irBtnGitToggle')
           ?.classList.toggle('ir-git-toggle-btn--active', this._gitPanelVisible);
         if (this._gitPanelVisible) this._refreshGitPanel();
@@ -1186,7 +1153,7 @@ export class IssueRunnerPage {
     this.container.querySelector('#irBtnGitClose')
       ?.addEventListener('click', () => {
         this._gitPanelVisible = false;
-        this.container.querySelector('#irGitPanel')?.setAttribute('hidden', '');
+        this.container.querySelector('#irGitPanel')?.classList.remove('ir-git-panel--open');
         this.container.querySelector('#irBtnGitToggle')?.classList.remove('ir-git-toggle-btn--active');
       });
 
