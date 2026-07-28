@@ -1336,7 +1336,7 @@ function registerDbHandlers() {
     return { success: true };
   });
 
-  safeHandle('db:screen_templates:seed', (_e, templates) => {
+  safeHandle('db:screen_templates:seed', (_e, templates, deprecatedNames) => {
     // Built-ins are matched by name and kept in sync with the source file on
     // every mount, so editing data/screen-templates.js takes effect on next
     // launch without a manual DB reset. Any row whose name doesn't match a
@@ -1350,10 +1350,14 @@ function registerDbHandlers() {
         sort_order  = excluded.sort_order,
         updated_at  = datetime('now')
     `);
-    const upsertMany = db.transaction((rows) => {
+    // Built-ins retired from the source file (renamed/merged/removed) are
+    // deleted by name so they don't linger as orphaned rows in the picker.
+    const retire = db.prepare('DELETE FROM screen_templates WHERE name = ?');
+    const upsertMany = db.transaction((rows, retired) => {
       rows.forEach((t, i) => upsert.run(t.group, t.name, t.description, i));
+      (retired || []).forEach((name) => retire.run(name));
     });
-    upsertMany(templates);
+    upsertMany(templates, deprecatedNames);
     return db.prepare('SELECT * FROM screen_templates WHERE is_active = 1 ORDER BY group_name, sort_order, name').all();
   });
 

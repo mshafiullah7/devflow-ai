@@ -1198,7 +1198,7 @@ export class SettingsPage {
             <div class="st-form__row">
               <label class="st-form__label">Group *</label>
               <input class="st-form__input" id="stTplGroup" type="text"
-                placeholder="e.g. Authentication, Dashboard &amp; Navigation…"
+                placeholder="e.g. Web, Mobile…"
                 value="${escHtml(template?.group_name || '')}"/>
             </div>
             <div class="st-form__row">

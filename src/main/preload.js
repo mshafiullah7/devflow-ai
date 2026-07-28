@@ -67,7 +67,7 @@ contextBridge.exposeInMainWorld('db', {
     create: (data)     => invoke('db:screen_templates:create', data),
     update: (data)     => invoke('db:screen_templates:update', data),
     delete: (id)       => invoke('db:screen_templates:delete', id),
-    seed:   (templates) => invoke('db:screen_templates:seed', templates),
+    seed:   (templates, deprecatedNames) => invoke('db:screen_templates:seed', templates, deprecatedNames),
   },
   documents: {
     list:   (project_id) => invoke('db:documents:list', project_id),

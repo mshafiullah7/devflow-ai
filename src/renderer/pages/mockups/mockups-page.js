@@ -4,7 +4,7 @@ import { ModelPicker }       from '../../components/model-picker/model-picker.js
 import { Dialog }            from '../../components/dialog/dialog.js';
 import { ProjectSidebar }    from '../../components/project-sidebar/project-sidebar.js';
 import { TECH, PLATFORM_GUIDES } from './data/platform-guides.js';
-import { SCREEN_TEMPLATES }      from './data/screen-templates.js';
+import { SCREEN_TEMPLATES, DEPRECATED_TEMPLATE_NAMES } from './data/screen-templates.js';
 
 
 function buildScreenPrompt(description, projectDescription, outputFile, designTemplate, targetPlatform, referenceScreen) {
@@ -106,7 +106,7 @@ export class MockupsPage {
     // Load templates from DB — seed() is idempotent (INSERT OR IGNORE by unique
     // name), so calling it every mount picks up newly added built-ins without
     // duplicating or overwriting ones the user already has.
-    this._screenTemplates = await window.db.screenTemplates.seed(SCREEN_TEMPLATES);
+    this._screenTemplates = await window.db.screenTemplates.seed(SCREEN_TEMPLATES, DEPRECATED_TEMPLATE_NAMES);
     const _mappedId = _mapping?.model_config_id ?? null;
 
     this._designTemplate = this._project?.design_template || '';
