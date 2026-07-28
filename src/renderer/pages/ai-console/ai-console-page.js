@@ -20,6 +20,18 @@ function escapeHtml(raw) {
     .replace(/>/g, '&gt;');
 }
 
+// Pulls table names out of a SELECT's FROM/JOIN clauses (dedup, order-preserving)
+// so the query log can show "which tables" instead of raw SQL.
+function extractTables(sql) {
+  const tables = [];
+  const re = /\b(?:from|join)\s+([a-zA-Z_][\w]*)/gi;
+  let m;
+  while ((m = re.exec(sql || ''))) {
+    if (!tables.includes(m[1])) tables.push(m[1]);
+  }
+  return tables;
+}
+
 // Curated column allowlist per table — keeps the schema prompt minimal (no
 // internal audit columns). PK/FK annotations are derived at runtime from
 // window.db.aiSchema() so they always match the real DDL.
@@ -39,12 +51,34 @@ const SCHEMA_TABLE_LABELS = {
   screen_designs:    'Mockups page',
 };
 
+// Cap how many prior exchanges get resent as context on each turn — keeps
+// token usage bounded on long sessions. Full history still renders in the
+// thread and stays in this._messages; only what's sent to the model is capped.
+const MAX_HISTORY_TURNS = 10;
+
 const SCHEMA_ENUM_NOTES = {
   projects:       { is_active: '1 = active project, 0 = archived/inactive' },
   issues:         { severity: 'critical | high | medium | low', status: 'open | in_progress | resolved | closed' },
   workflows:      { status: 'open | in_progress | completed | differed' },
   screen_designs: { queued: '0 | 1 (boolean)', executed: '0 | 1 (boolean)' },
 };
+
+// ----------------------------------------------------------------
+// Session-only chat history, keyed by project id — a module-level Map so
+// it survives navigating away and back (the page instance itself is torn
+// down and recreated by the router on every navigation, see router.js).
+// Cleared only by the Clear button or an app restart; never touches disk.
+// ----------------------------------------------------------------
+const _sessionHistory = new Map();
+
+function _getSession(projectId) {
+  let session = _sessionHistory.get(projectId);
+  if (!session) {
+    session = { messages: [], consentedModelId: null };
+    _sessionHistory.set(projectId, session);
+  }
+  return session;
+}
 
 // ----------------------------------------------------------------
 // Page class
@@ -55,14 +89,15 @@ export class AiConsolePage {
     this.router    = router;
     this.projectId = params.projectId;
 
-    this._isGenerating  = false;
-    this._streamingEl   = null;
-    this._streamingText = '';
-    this._messages      = [];
-    this._project       = null;
-    this._loopAborted   = false;
-    this._dbSchema      = null;
-    this._consentedModelId = null;
+    this._isGenerating      = false;
+    this._streamingEl       = null;
+    this._streamingText     = '';
+    this._session           = _getSession(this.projectId);
+    this._messages          = this._session.messages;
+    this._project           = null;
+    this._loopAborted       = false;
+    this._dbSchema          = null;
+    this._consentedModelId  = this._session.consentedModelId;
   }
 
   get _selectedModel() { return this._picker?.selectedModel ?? null; }
@@ -96,7 +131,14 @@ export class AiConsolePage {
     await this._picker.reload();
     this._updatePrivacyWarning();
     this._enableUi();
-    this._renderWelcome();
+
+    if (this._messages.length) {
+      this._renderExistingThread();
+      const { omitted } = this._getTruncatedHistory();
+      this._updateHistoryNotice(omitted);
+    } else {
+      this._renderWelcome();
+    }
   }
 
   unmount() {
@@ -137,6 +179,20 @@ export class AiConsolePage {
     }
   }
 
+  // ----------------------------------------------------------------
+  // History-cap notice — shown once the conversation exceeds what's sent
+  // to the model, so the truncation isn't silent.
+  // ----------------------------------------------------------------
+  _updateHistoryNotice(omitted) {
+    const el = this.container.querySelector('#aicHistoryNotice');
+    if (!el) return;
+    el.hidden = omitted <= 0;
+    if (omitted > 0) {
+      el.querySelector('.aic-history-notice__text').textContent =
+        `Only the last ${MAX_HISTORY_TURNS} exchanges are sent as context — ${omitted} earlier message${omitted === 1 ? '' : 's'} omitted.`;
+    }
+  }
+
   _renderWelcome() {
     const thread = this.container.querySelector('#aicThread');
     if (!thread) return;
@@ -145,6 +201,18 @@ export class AiConsolePage {
       Ready to help with <strong>${escHtml(name)}</strong>.
       Ask anything — I'll search your project data automatically.
     </p>`;
+  }
+
+  // Rebuilds the thread from session-restored history (e.g. after navigating
+  // back to this page) — mirrors the bubbles _appendBubble/_finalizeStream
+  // would have produced live, just replayed in one pass.
+  _renderExistingThread() {
+    const thread = this.container.querySelector('#aicThread');
+    if (!thread) return;
+    thread.innerHTML = this._messages
+      .map(m => this._bubbleHtml({ role: m.role, text: m.content }))
+      .join('');
+    this._scrollThread();
   }
 
   // ----------------------------------------------------------------
@@ -203,6 +271,18 @@ When you need data reply with ONLY a SQL block — no other text:
 SELECT ...
 \`\`\`
 You may query up to 3 times. After receiving data give your final answer in plain text.`;
+  }
+
+  // ----------------------------------------------------------------
+  // Keep only the last MAX_HISTORY_TURNS user/assistant pairs when building
+  // the context sent to the model — this._messages (and the visible thread)
+  // still hold the full conversation, only the outgoing payload is capped.
+  // ----------------------------------------------------------------
+  _getTruncatedHistory() {
+    const maxMessages = MAX_HISTORY_TURNS * 2;
+    const omitted = Math.max(0, this._messages.length - maxMessages);
+    const history = omitted > 0 ? this._messages.slice(omitted) : this._messages;
+    return { history, omitted };
   }
 
   // ----------------------------------------------------------------
@@ -302,10 +382,15 @@ You may query up to 3 times. After receiving data give your final answer in plai
   _appendQueryEntry(sql, rows, error) {
     const log = this.container.querySelector('#aicQueryLog');
     if (!log) return;
+    const tables = extractTables(sql);
+    const tablesHtml = tables.length
+      ? tables.map(t => `<span class="aic-query-entry__table">${escapeHtml(t)}</span>`).join('')
+      : '<span class="aic-query-entry__table aic-query-entry__table--unknown">unknown table</span>';
     const entry = document.createElement('div');
     entry.className = 'aic-query-entry';
+    entry.title = sql;
     entry.innerHTML = `
-      <div class="aic-query-entry__sql"><pre>${escapeHtml(sql)}</pre></div>
+      <div class="aic-query-entry__tables">${tablesHtml}</div>
       <div class="aic-query-entry__meta ${error ? 'aic-query-entry__meta--error' : ''}">
         ${error ? `Error: ${escapeHtml(error)}` : `${rows.length} row${rows.length !== 1 ? 's' : ''} returned`}
       </div>`;
@@ -359,6 +444,14 @@ You may query up to 3 times. After receiving data give your final answer in plai
                 <line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
               <span class="aic-privacy-warning__text"></span>
+            </div>
+
+            <div id="aicHistoryNotice" class="aic-history-notice" hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span class="aic-history-notice__text"></span>
             </div>
 
             <div class="aic-info-card">
@@ -664,6 +757,7 @@ You may query up to 3 times. After receiving data give your final answer in plai
       );
       if (!ok) return;
       this._consentedModelId = this._selectedModel.id;
+      this._session.consentedModelId = this._consentedModelId;
     }
 
     this._loopAborted = false;
@@ -674,13 +768,15 @@ You may query up to 3 times. After receiving data give your final answer in plai
     this._startStreaming();
     this._clearInspectorPanels();
 
-    // Build a per-turn message list: system schema + conversation history + new question
+    // Build a per-turn message list: system schema + capped conversation history + new question
     const schemaPrompt = this._buildSchemaPrompt();
+    const { history, omitted } = this._getTruncatedHistory();
     const loopMessages = [
       { role: 'user', content: schemaPrompt },
-      ...this._messages,
+      ...history,
       { role: 'user', content: userText },
     ];
+    this._updateHistoryNotice(omitted);
 
     // Show the initial request (schema + question) in the inspector
     this._showInspectorPanel('#aicRequestWrap', '#aicRequestText',
@@ -717,10 +813,14 @@ You may query up to 3 times. After receiving data give your final answer in plai
   _handleClear() {
     if (this._isGenerating) return;
     this._messages = [];
+    this._session.messages = this._messages;
+    this._consentedModelId = null;
+    this._session.consentedModelId = null;
     this._setQueryStatus('idle', 'Send a message — queries will appear here.');
     const log = this.container.querySelector('#aicQueryLog');
     if (log) log.innerHTML = '';
     this._clearInspectorPanels();
+    this._updateHistoryNotice(0);
     this._renderWelcome();
   }
 

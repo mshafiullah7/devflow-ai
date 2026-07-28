@@ -22,6 +22,7 @@ export class LauncherPage {
 
   unmount() {
     removeCss('pages/launcher/launcher.css');
+    document.removeEventListener('keydown', this._onKeydown);
   }
 
   // ----------------------------------------------------------------
@@ -190,6 +191,18 @@ export class LauncherPage {
     this._confirmOverlay.addEventListener('click', (e) => {
       if (e.target === this._confirmOverlay) this._closeConfirm();
     });
+
+    // Keyboard shortcut: Ctrl+N / Cmd+N opens the New Project modal
+    this._onKeydown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        if (!this._modalOverlay.hidden) return;
+        this._openModal();
+      } else if (e.key === 'Escape' && !this._modalOverlay.hidden) {
+        this._closeModal();
+      }
+    };
+    document.addEventListener('keydown', this._onKeydown);
   }
 
   // ----------------------------------------------------------------

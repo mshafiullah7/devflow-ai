@@ -443,6 +443,26 @@
   margin-top: 1px;
 }
 
+/* History-cap notice — shown once older turns stop being sent as context */
+.aic-history-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.aic-history-notice svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+}
+
 /* Info card — explains the on-device SQL loop */
 .aic-info-card {
   display: flex;
@@ -701,7 +721,7 @@
 .aic-qs--done      { color: var(--text-secondary); }
 .aic-qs--error     { color: #f87171; border-color: rgba(248,113,113,0.3); }
 
-/* Query log — shows SQL statements executed per turn */
+/* Query log — shows tables queried per turn (hover a row for the full SQL) */
 .aic-query-log {
   display: flex;
   flex-direction: column;
@@ -713,21 +733,32 @@
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   overflow: hidden;
+  cursor: default;
 }
 
-.aic-query-entry__sql {
+.aic-query-entry__tables {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
   background: var(--bg-primary);
   padding: 6px 10px;
 }
 
-.aic-query-entry__sql pre {
-  margin: 0;
+.aic-query-entry__table {
   font-family: var(--font-mono, monospace);
   font-size: 10px;
-  line-height: 1.5;
+  line-height: 1.4;
   color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.aic-query-entry__table--unknown {
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-style: italic;
 }
 
 .aic-query-entry__meta {
