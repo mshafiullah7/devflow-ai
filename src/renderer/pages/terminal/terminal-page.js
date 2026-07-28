@@ -44,25 +44,41 @@ export class TerminalPage {
     if (this._embedded) {
       this._init(this._initParams);
     } else {
-      window.app.terminalWindow.onInit((data) => this._init(data));
+      // The pop-out window is reused (not recreated) when Terminal is opened
+      // again while it's already up — main just re-sends terminal-win:init to
+      // the same window/page instance, so this listener can fire more than
+      // once. Route every firing through _reinit() rather than calling
+      // _init() directly here.
+      window.app.terminalWindow.onInit((data) => this._reinit(data));
     }
   }
 
   /**
-   * Called by the persistent-page host when this route is activated again.
-   * Mirrors the pop-out window's behavior: opening the terminal for a
-   * different project re-inits in place; just re-showing the same tab only
-   * needs a terminal refit.
+   * Shared entry point for both the persistent-tab "activated again" path
+   * (onResume, below) and the pop-out window's repeat terminal-win:init
+   * events. Re-opening Terminal for the project that's already loaded used
+   * to always re-run _init() — which spawns a fresh PTY and re-prints the
+   * cwd banner — without ever killing the previous PTY first, so the old and
+   * new shells both ended up writing into the same visible terminal (hence
+   * the folder path showing up twice). Same project now just refits; a
+   * different project properly tears down the old PTY/terminal before
+   * spawning the new one.
    */
-  onResume(params) {
+  _reinit(params) {
     if (params && params.projectId !== this._project?.id) {
       this._returnRoute = params.returnRoute || this._returnRoute;
+      if (this._project) this._teardownTerminal();
       this._init(params);
       return;
     }
     if (this._fitAddon) {
       try { this._fitAddon.fit(); } catch (_) {}
     }
+  }
+
+  /** Called by the persistent-page host when this route is activated again. */
+  onResume(params) {
+    this._reinit(params);
   }
 
   _handleClose() {
@@ -75,13 +91,17 @@ export class TerminalPage {
     }
   }
 
-  unmount() {
+  _teardownTerminal() {
     window.app.termPty.offAll();
     window.app.termPty.kill();
-    if (this._gitPollInterval) clearInterval(this._gitPollInterval);
-    if (this._resizeObs)      this._resizeObs.disconnect();
-    if (this._onWinResize)    window.removeEventListener('resize', this._onWinResize);
+    if (this._gitPollInterval) { clearInterval(this._gitPollInterval); this._gitPollInterval = null; }
+    if (this._resizeObs)      { this._resizeObs.disconnect(); this._resizeObs = null; }
+    if (this._onWinResize)    { window.removeEventListener('resize', this._onWinResize); this._onWinResize = null; }
     if (this._term)           { this._term.dispose(); this._term = null; }
+  }
+
+  unmount() {
+    this._teardownTerminal();
   }
 
   // ── Init ────────────────────────────────────────────────────────────────
@@ -404,7 +424,7 @@ export class TerminalPage {
 
               <!-- Git panel — sibling of the terminal wrap only, so its width
                    is relative to the terminal area, not the whole page row -->
-              <aside class="term-git-panel${this._gitPanelCollapsed ? ' term-git-panel--collapsed' : ''}" id="termGitPanel" ${this._gitPanelVisible ? '' : 'hidden'}>
+              <aside class="term-git-panel${this._gitPanelCollapsed ? ' term-git-panel--collapsed' : ''}${this._gitPanelVisible ? '' : ' term-git-panel--hidden'}" id="termGitPanel">
                 <div class="term-git-panel__header">
                   <button class="term-git-panel__collapse-btn" id="termBtnGitCollapse" title="${this._gitPanelCollapsed ? 'Expand' : 'Collapse'}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -488,8 +508,9 @@ export class TerminalPage {
     this.container.querySelector('#termBtnGitClose')
       ?.addEventListener('click', () => {
         this._gitPanelVisible = false;
-        this.container.querySelector('#termGitPanel')?.setAttribute('hidden', '');
+        this.container.querySelector('#termGitPanel')?.classList.add('term-git-panel--hidden');
         this.container.querySelector('#termBtnGitToggle')?.classList.remove('term-git-toggle-btn--active');
+        setTimeout(() => this._fitTerminal(), 220);
       });
 
     this.container.querySelector('#termBtnGitRefresh')
@@ -530,13 +551,14 @@ export class TerminalPage {
     this._gitPanelVisible = !this._gitPanelVisible;
     const panel = this.container.querySelector('#termGitPanel');
     const btn   = this.container.querySelector('#termBtnGitToggle');
-    if (panel) panel.toggleAttribute('hidden', !this._gitPanelVisible);
-    if (btn)   btn.classList.toggle('term-git-toggle-btn--active', this._gitPanelVisible);
+    panel?.classList.toggle('term-git-panel--hidden', !this._gitPanelVisible);
+    if (btn) btn.classList.toggle('term-git-toggle-btn--active', this._gitPanelVisible);
     if (this._gitPanelVisible) {
       const wrap = this.container.querySelector('#termGitAccordion');
       if (wrap) wrap.innerHTML = '';
       this._refreshGitPanel();
     }
+    setTimeout(() => this._fitTerminal(), 220);
   }
 
   _getGitCwd() {

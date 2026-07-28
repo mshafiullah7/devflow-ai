@@ -321,12 +321,28 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: flex-basis 0.2s ease;
+  transition: flex-basis 0.2s ease, min-width 0.2s ease, border-left-width 0.2s ease;
 }
-.term-git-panel[hidden] { display: none; }
 
 .term-git-panel--collapsed {
   flex: 0 0 36px;
+}
+
+/* Fully hidden (top "Git" toggle, as opposed to the panel's own collapse
+   arrow) — animates shut instead of disappearing instantly via [hidden]. */
+.term-git-panel--hidden {
+  flex: 0 0 0;
+  min-width: 0;
+  border-left-width: 0;
+}
+.term-git-panel--hidden .term-git-panel__title,
+.term-git-panel--hidden .term-git-panel__badge,
+.term-git-panel--hidden .term-git-panel__actions,
+.term-git-panel--hidden .term-git-panel__collapse-btn,
+.term-git-panel--hidden .term-git-commit-bar,
+.term-git-panel--hidden .term-git-panel__body,
+.term-git-panel--hidden .term-git-panel__header {
+  display: none;
 }
 
 .term-git-panel--collapsed .term-git-panel__title,

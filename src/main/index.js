@@ -9,7 +9,7 @@ const { openWorkflowWindow }          = require('./workflow-window');
 const { openIssueRunnerWindow }       = require('./issue-runner-window');
 const { openTerminalWindow }          = require('./terminal-window');
 const { runBackup, exportDb, restoreDb } = require('./db/backup');
-const { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
+const { getConfigValue, setConfigValue, migrateConfigDefaults, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig } = require('./app-config');
 const { sendMessage: telegramSend } = require('./telegram');
 const { logError } = require('./logger');
 const { setupAutoUpdater } = require('./updater');
@@ -111,6 +111,7 @@ app.whenReady().then(async () => {
   }
   await session.defaultSession.clearCache();
   Menu.setApplicationMenu(null);
+  migrateConfigDefaults();
   registerHandlers();
   ipcMain.handle('app:agent-cli-path', () =>
     path.join(app.getAppPath(), 'agent-cli', 'index.js')

@@ -211,10 +211,12 @@ export class ProjectSidebar {
     container.querySelector('#psnTerminal')
       ?.addEventListener('click', async () => {
         const mode = await window.app.config.get('terminalOpenMode');
-        if (mode === 'window') {
-          window.app.openTerminalWindow(pid);
-        } else {
+        // Defaults to a separate window (matches migrateConfigDefaults() in
+        // app-config.js); only an explicit 'integrated' opens the in-app tab.
+        if (mode === 'integrated') {
           r.navigateTo('terminal', { projectId: pid, returnRoute: this.activeRoute || 'project-home' });
+        } else {
+          window.app.openTerminalWindow(pid);
         }
       });
     container.querySelector('#psnGitChanges')

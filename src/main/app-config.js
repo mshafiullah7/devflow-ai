@@ -30,6 +30,28 @@ function setConfigValue(key, value) {
   writeConfig(cfg);
 }
 
+/**
+ * One-time migration: seeds default values for app-config keys that have
+ * never been explicitly set by the user, so the default is explicit and
+ * stable across upgrades instead of relying on undefined-fallback logic
+ * scattered across the renderer. Idempotent — only writes when a key is
+ * truly absent, so it's safe to call on every startup.
+ */
+function migrateConfigDefaults() {
+  const cfg = readConfig();
+  let changed = false;
+
+  // Terminal now defaults to opening in a separate window rather than an
+  // integrated tab; existing installs that never touched this setting pick
+  // up the new default explicitly here.
+  if (!('terminalOpenMode' in cfg)) {
+    cfg.terminalOpenMode = 'window';
+    changed = true;
+  }
+
+  if (changed) writeConfig(cfg);
+}
+
 function _encrypt(plain) {
   if (safeStorage.isEncryptionAvailable()) {
     return safeStorage.encryptString(plain).toString('base64');
@@ -95,4 +117,4 @@ function setTelegramConfig({ botToken, chatId }) {
   writeConfig(cfg);
 }
 
-module.exports = { getConfigValue, setConfigValue, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig };
+module.exports = { getConfigValue, setConfigValue, migrateConfigDefaults, getCloudSyncConfig, setCloudSyncConfig, getTelegramConfig, setTelegramConfig };

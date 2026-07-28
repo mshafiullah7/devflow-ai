@@ -27,8 +27,9 @@
 }
 
 .aic-context .aic-panel-header {
-  width: 450px;
+  padding-left: 20px;
 }
+
 .aic-page {
   display: flex;
   flex-direction: column;
@@ -398,6 +399,7 @@
   flex-direction: column;
   padding: 0 0 20px;
   overflow-y: auto;
+  overflow-x: hidden;
   gap: 0;
   border-right: 1px solid var(--border);
   /* Reserve space for scrollbar so content never shifts */
@@ -409,7 +411,7 @@
   padding-right: 14px;
 }
 
-.aic-context > .aic-context__desc {
+.aic-context > .aic-panel-header + * {
   margin-top: 14px;
 }
 
@@ -420,13 +422,6 @@
   letter-spacing: 0.07em;
   color: var(--text-tertiary);
   margin-bottom: 5px;
-}
-
-.aic-context__desc {
-  margin: 0 0 12px;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  line-height: 1.5;
 }
 
 /* Data-sharing warning — shown for any non-local (non-Ollama) model */
@@ -446,6 +441,26 @@
 .aic-privacy-warning svg {
   flex-shrink: 0;
   margin-top: 1px;
+}
+
+/* Info card — explains the on-device SQL loop */
+.aic-info-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.aic-info-card__icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--text-tertiary);
 }
 
 /* Context slices list */

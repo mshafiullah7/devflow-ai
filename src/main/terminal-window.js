@@ -1,6 +1,6 @@
 'use strict';
 
-const { BrowserWindow, screen } = require('electron');
+const { BrowserWindow } = require('electron');
 const path                      = require('node:path');
 
 const APP_ICON_PATH = process.platform === 'win32'
@@ -16,10 +16,9 @@ function openTerminalWindow(projectId) {
     return;
   }
 
-  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
   _win = new BrowserWindow({
-    width:  Math.max(900, Math.round(sw * 0.65)),
-    height: Math.max(600, Math.round(sh * 0.80)),
+    width:  1600,
+    height: 1050,
     title:  'Terminal',
     icon:   APP_ICON_PATH,
     webPreferences: {

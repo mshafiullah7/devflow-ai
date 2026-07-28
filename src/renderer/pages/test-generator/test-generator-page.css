@@ -1449,22 +1449,45 @@
 }
 .tg-git-badge[hidden] { display: none; }
 
-/* ── Git overlay panel ───────────────────────────────────────── */
+/* ── Git backdrop — dims and blocks the rest of the page while the panel is open ── */
+.tg-git-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.tg-git-backdrop--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Git panel — modal overlay that slides in from the right ─── */
 .tg-git-panel {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   width: 50%;
-  z-index: 10;
+  min-width: 380px;
+  max-width: 640px;
+  z-index: 1001;
   background: var(--surface-header);
   border-left: 1px solid var(--border);
-  box-shadow: -4px 0 16px rgba(0,0,0,0.25);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  pointer-events: none;
 }
-.tg-git-panel[hidden] { display: none; }
+.tg-git-panel--open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
 
 .tg-git-panel__header {
   display: flex;

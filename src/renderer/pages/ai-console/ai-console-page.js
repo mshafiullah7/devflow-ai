@@ -133,7 +133,7 @@ export class AiConsolePage {
     el.hidden = !model || isLocal;
     if (model && !isLocal) {
       el.querySelector('.aic-privacy-warning__text').textContent =
-        `Project data (schema + query results) will be sent to "${model.label}" to answer this — only local Ollama models keep everything on-device.`;
+        `Your message will be sent to "${model.label}" to answer this — only local Ollama models keep everything on-device.`;
     }
   }
 
@@ -352,8 +352,6 @@ You may query up to 3 times. After receiving data give your final answer in plai
             <div class="aic-panel-header">
               <span class="aic-panel-header__title">Smart Context</span>
             </div>
-            <p class="aic-context__desc">Model writes SELECT queries; data is fetched on-device and returned to the model. Minimal schema only — no internal columns exposed.</p>
-
             <div id="aicPrivacyWarning" class="aic-privacy-warning" hidden>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -361,6 +359,15 @@ You may query up to 3 times. After receiving data give your final answer in plai
                 <line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
               <span class="aic-privacy-warning__text"></span>
+            </div>
+
+            <div class="aic-info-card">
+              <svg class="aic-info-card__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              <span class="aic-info-card__text">Model writes SELECT queries; data is fetched on-device and returned to the model. Minimal schema only — no internal columns exposed.</span>
             </div>
 
             <div id="aicQueryStatus" class="aic-query-status aic-qs--idle">
@@ -652,7 +659,7 @@ You may query up to 3 times. After receiving data give your final answer in plai
 
     if (this._selectedModel.type !== 'ollama' && this._consentedModelId !== this._selectedModel.id) {
       const ok = await Dialog.confirm(
-        `This will send project data (schema + query results) to "${this._selectedModel.label}" to answer your question. Only local Ollama models keep everything on-device.`,
+        `This will send your question to "${this._selectedModel.label}" to answer it. Only local Ollama models keep everything on-device.`,
         { title: 'Send data to external model?', confirmText: 'Continue', cancelText: 'Cancel' }
       );
       if (!ok) return;

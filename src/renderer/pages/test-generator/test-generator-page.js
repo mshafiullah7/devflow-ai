@@ -226,6 +226,10 @@ export class TestGeneratorPage {
     window.db.testRunner.removeListeners();
     window.app.testGenerationWindow.offFileSaved();
     this._stopGitPolling();
+    if (this._onGitPanelKeydown) {
+      document.removeEventListener('keydown', this._onGitPanelKeydown);
+      this._onGitPanelKeydown = null;
+    }
     removeCss('pages/test-generator/test-generator-page.css');
     // components/git/git-diff.css and project-sidebar.css are shared with
     // persistent tabs (Workflow Runner, Issue Runner, Terminal) that may still
@@ -288,7 +292,8 @@ export class TestGeneratorPage {
             <div class="tg-main" id="tgMain">
               ${this._mainHtml()}
             </div>
-            <div class="tg-git-panel" id="tgGitPanel" hidden>
+            <div class="tg-git-backdrop" id="tgGitBackdrop"></div>
+            <div class="tg-git-panel" id="tgGitPanel">
               <div class="tg-git-panel__header">
                 <span class="tg-git-panel__title">Git Changes</span>
                 <span class="tg-git-panel__badge" id="tgGitPanelBadge" hidden></span>
@@ -1116,23 +1121,22 @@ export class TestGeneratorPage {
     this.container.querySelector('#tgBtnBack')
       .addEventListener('click', () => this.router.navigate('project-home', { projectId: this._projectId }));
 
-    // Git panel toggle
+    // Git panel toggle — slides in as a modal overlay with a backdrop that
+    // blocks interaction with the rest of the page, closable via the close
+    // button, clicking the backdrop, or Escape.
     this.container.querySelector('#tgBtnGitToggle')
-      ?.addEventListener('click', () => {
-        this._gitPanelVisible = !this._gitPanelVisible;
-        const panel = this.container.querySelector('#tgGitPanel');
-        panel?.toggleAttribute('hidden', !this._gitPanelVisible);
-        this.container.querySelector('#tgBtnGitToggle')
-          ?.classList.toggle('tg-git-toggle-btn--active', this._gitPanelVisible);
-        if (this._gitPanelVisible) this._refreshGitPanel();
-      });
+      ?.addEventListener('click', () => this._setGitPanelVisible(!this._gitPanelVisible));
 
     this.container.querySelector('#tgBtnGitClose')
-      ?.addEventListener('click', () => {
-        this._gitPanelVisible = false;
-        this.container.querySelector('#tgGitPanel')?.setAttribute('hidden', '');
-        this.container.querySelector('#tgBtnGitToggle')?.classList.remove('tg-git-toggle-btn--active');
-      });
+      ?.addEventListener('click', () => this._setGitPanelVisible(false));
+
+    this.container.querySelector('#tgGitBackdrop')
+      ?.addEventListener('click', () => this._setGitPanelVisible(false));
+
+    this._onGitPanelKeydown = (e) => {
+      if (e.key === 'Escape' && this._gitPanelVisible) this._setGitPanelVisible(false);
+    };
+    document.addEventListener('keydown', this._onGitPanelKeydown);
 
     this.container.querySelector('#tgBtnGitCommit')
       ?.addEventListener('click', () => this._commitChanges());
@@ -1847,6 +1851,17 @@ Output ONLY the fenced code block containing the test file content. Start the bl
   }
 
   // ─── Git panel ────────────────────────────────────────────────
+
+  _setGitPanelVisible(visible) {
+    this._gitPanelVisible = visible;
+    const panel    = this.container.querySelector('#tgGitPanel');
+    const backdrop = this.container.querySelector('#tgGitBackdrop');
+    const toggle   = this.container.querySelector('#tgBtnGitToggle');
+    panel?.classList.toggle('tg-git-panel--open', visible);
+    backdrop?.classList.toggle('tg-git-backdrop--open', visible);
+    toggle?.classList.toggle('tg-git-toggle-btn--active', visible);
+    if (visible) this._refreshGitPanel();
+  }
 
   _getGitCwd() {
     return this._project?.project_path || null;
