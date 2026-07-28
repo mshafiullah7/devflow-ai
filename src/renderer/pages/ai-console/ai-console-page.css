@@ -407,8 +407,8 @@
 }
 
 .aic-context > :not(.aic-panel-header) {
-  padding-left: 14px;
-  padding-right: 14px;
+  margin-left: 14px;
+  margin-right: 14px;
 }
 
 .aic-context > .aic-panel-header + * {

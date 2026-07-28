@@ -226,7 +226,7 @@ You may query up to 3 times. After receiving data give your final answer in plai
         if (p.error && !raw) reject(new Error(p.error));
         else resolve(raw);
       });
-      window.app.chat.generate({ messages, model: this._selectedModel });
+      window.app.chat.generate({ messages, model: this._selectedModel, cwd: this._project?.project_path || undefined });
     });
   }
 
@@ -697,7 +697,7 @@ You may query up to 3 times. After receiving data give your final answer in plai
     window.app.chat.offAll();
     window.app.chat.onToken(p => this._onToken(p));
     window.app.chat.onDone(p  => this._onDone(p));
-    window.app.chat.generate({ messages: loopMessages, model: this._selectedModel });
+    window.app.chat.generate({ messages: loopMessages, model: this._selectedModel, cwd: this._project?.project_path || undefined });
   }
 
   // ----------------------------------------------------------------
