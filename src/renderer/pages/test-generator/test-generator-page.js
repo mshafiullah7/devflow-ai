@@ -82,11 +82,23 @@ function inferExtensions(setupInstructions) {
 
 function stripCodeFences(raw) {
   const trimmed = raw.trim();
-  if (!trimmed.startsWith('```')) return trimmed;
-  const firstNewline = trimmed.indexOf('\n');
-  if (firstNewline === -1) return trimmed;
-  const inner = trimmed.slice(firstNewline + 1);
-  return inner.endsWith('```') ? inner.slice(0, -3).trimEnd() : inner;
+  // Prefer an explicit fenced code block wherever it appears in the output —
+  // agentic CLIs like agy print their own tool-call narration ("I will search
+  // for...", "I will view...") to stdout ahead of the actual file content when
+  // run non-interactively, so the response can't be assumed to start with the
+  // code. Pick the largest fenced block found, in case narration itself echoes
+  // a short inline snippet.
+  const fenceRe = /```[^\n]*\n([\s\S]*?)```/g;
+  let best = null;
+  let match;
+  while ((match = fenceRe.exec(trimmed)) !== null) {
+    if (best === null || match[1].length > best.length) best = match[1];
+  }
+  if (best !== null) return best.trim();
+
+  // No fence anywhere — fall back to the whole response (e.g. Claude, which
+  // reliably follows the "no fences" instruction and returns bare code).
+  return trimmed;
 }
 
 function inferDefaultTestFolder(layer) {
@@ -119,7 +131,7 @@ export class TestGeneratorPage {
     this._picker      = null;
 
     // Sidebar
-    this._sidebarCollapsed = true;
+    this._sidebarCollapsed = false;
     this._projectCtxCache  = null;
 
     // Mode
@@ -263,7 +275,7 @@ export class TestGeneratorPage {
           <div class="tg-body">
           <aside class="tg-sidebar${this._sidebarCollapsed ? ' tg-sidebar--collapsed' : ''}">
             <div class="tg-sidebar__header">
-              <span class="tg-sidebar__header-label">Layers</span>
+              <span class="tg-sidebar__header-label">Project Layers</span>
               <button class="tg-sidebar__toggle" id="tgSidebarToggle" aria-label="${this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M15 18l-6-6 6-6"/>
@@ -579,7 +591,7 @@ export class TestGeneratorPage {
           </select>
           <button class="tg-btn tg-btn--sm tg-btn--primary" id="tgExecRun"
             ${this._execRunning ? 'disabled' : ''}>▶ Run All</button>
-          <button class="tg-btn tg-btn--sm" id="tgExecRunSel"
+          <button class="tg-btn tg-btn--sm tg-btn--highlight" id="tgExecRunSel"
             ${!canRunSel ? 'disabled' : ''}
             title="${overLimit ? `Max 20 files — ${selCount} selected` : selCount === 0 ? 'Select files from the tree' : ''}">
             ▶ Run Selected${selCount > 0 ? ` (${selCount})` : ''}
@@ -966,10 +978,14 @@ export class TestGeneratorPage {
       const CHIP = { pending: 'Pending', generating: 'Generating', saved: 'Saved', error: 'Error' };
       return this._genProgress.map((item, i) => {
         const active = i === this._genSelIdx ? 'tg-gen-item--active' : '';
+        const elapsed = item.status === 'generating'
+          ? `<span class="tg-gen-item-elapsed" id="tgGenItemElapsed"></span>`
+          : '';
         return `
           <div class="tg-gen-item tg-gen-item--${item.status} ${active}" data-gen-idx="${i}">
             <span class="tg-gen-chip tg-gen-chip--${item.status}">${CHIP[item.status] ?? item.status}</span>
             <span class="tg-gen-item-name" title="${escHtml(item.relPath)}">${escHtml(item.label)}</span>
+            ${elapsed}
           </div>`;
       }).join('');
     }
@@ -1546,6 +1562,7 @@ export class TestGeneratorPage {
 
   async _genRunItem(i) {
     this._genCurrentIdx = i;
+    this._genSelIdx = i;
     this._genSetStatus(i, 'generating');
     this._genUpdateCurFile(this._genProgress[i].label);
     this._genUpdateStatus(`Generating ${i + 1} of ${this._genProgress.length}…`);
@@ -1741,8 +1758,9 @@ Generate comprehensive unit tests using the testing framework implied by the tec
 - CRITICAL: Every single test must be fully implemented — real setup, a real call into the source code, and real assertions (expect/assert) that check actual values. Never write a test whose body is empty, a comment, a TODO, or a description of what the test "should" do instead of doing it.
 - CRITICAL: Do not use pending/skipped/todo test markers (it.todo, it.skip, xit, @Disabled, pytest.mark.skip, etc.) — every listed test case must be a complete, runnable test.
 - If you are unsure how to exercise a particular branch without more context, still write your best real attempt at it rather than a placeholder — an imperfect concrete assertion is more useful than a stub.
+- CRITICAL: Wrap the entire test file in a single fenced code block (triple backticks). Put NOTHING else outside that fence — no explanation, no preamble, no summary of what you did. If your tooling prints its own narration or tool-call log, that is fine as long as the complete, final file content is inside exactly one fenced code block somewhere in your output.
 
-Output ONLY the test file content. No explanation text. Start directly with import or require statements.`;
+Output ONLY the fenced code block containing the test file content. Start the block directly with import or require statements.`;
   }
 
   // ─── Generate view DOM helpers ────────────────────────────────
@@ -1754,7 +1772,11 @@ Output ONLY the test file content. No explanation text. Start directly with impo
 
   _genRefreshFiles() {
     const el = this.container.querySelector('#tgGenItems');
-    if (el) el.innerHTML = this._genFilesHtml();
+    if (!el) return;
+    el.innerHTML = this._genFilesHtml();
+    if (this._genRunning) {
+      el.querySelector('.tg-gen-item--active')?.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   _genUpdateCurFile(label) {
@@ -1790,8 +1812,12 @@ Output ONLY the test file content. No explanation text. Start directly with impo
     this._genClearTimer();
     this._genStartTime = Date.now();
     const tick = () => {
+      if (!this._genStartTime) return;
+      const text = this._genFmt(Date.now() - this._genStartTime);
       const el = this.container.querySelector('#tgGenElapsed');
-      if (el && this._genStartTime) el.textContent = this._genFmt(Date.now() - this._genStartTime);
+      if (el) el.textContent = text;
+      const itemEl = this.container.querySelector('#tgGenItemElapsed');
+      if (itemEl) itemEl.textContent = text;
     };
     tick();
     this._genTimerInt = setInterval(tick, 500);

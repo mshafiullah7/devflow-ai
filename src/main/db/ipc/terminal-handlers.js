@@ -148,7 +148,11 @@ function registerTerminalHandlers() {
     if (_activeTestProc) { killTree(_activeTestProc); _activeTestProc = null; }
   });
 
-  // Dedicated security scanner — separate process slot so it never conflicts with the test runner
+  // Dedicated security scanner — separate process slot so it never conflicts with the test runner.
+  // Deliberately NOT run through a pty: a pty makes the CLI think it has a real terminal, so tools
+  // that render animated spinners/progress bars (cursor-reposition + erase-line ANSI codes) switch
+  // that rendering on — and a plain <pre> output pane can't replay those codes, so it comes out as
+  // garbled cursor-control bytes. Plain pipes keep isTTY false, so tools fall back to flat log lines.
   safeHandle('securityScanner:run', (event, { command, cwd }) => {
     if (_activeSecurityProc) { killTree(_activeSecurityProc); _activeSecurityProc = null; }
 
@@ -157,7 +161,7 @@ function registerTerminalHandlers() {
     _activeSecurityProc = spawn(
       'powershell.exe',
       ['-NoLogo', '-NonInteractive', '-Command', utf8Pre + command],
-      { stdio: ['ignore', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: process.env, windowsHide: true }
+      { stdio: ['ignore', 'pipe', 'pipe'], cwd: cwd || os.homedir(), env: { ...process.env, CI: '1', NO_COLOR: '1' }, windowsHide: true }
     );
 
     const send = (ch, payload) => { if (!wc.isDestroyed()) wc.send(ch, payload); };

@@ -199,16 +199,18 @@
 /* ------------------------------------------------------------------ */
 .gc-layer-panel {
   flex: 0 0 36px;
+  min-width: 36px;
   min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--border);
   overflow: hidden;
-  transition: flex-basis 0.2s ease;
+  transition: flex-basis 0.2s ease, min-width 0.2s ease;
 }
 .gc-layer-panel--open {
-  flex: 0 0 300px;
+  flex: 0 0 260px;
+  min-width: 260px;
 }
 
 .git-page__files-panel {
@@ -539,28 +541,22 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Console panel — slides in from the right                             */
+/* Console panel — in-flow, expands from the right                      */
 /* ------------------------------------------------------------------ */
 .git-page__console {
-  position: absolute;
-  top: 48px;
-  right: 0;
-  bottom: 0;
-  width: 42%;
-  min-width: 280px;
-  z-index: 10;
+  flex: 0 0 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--surface, #111827);
-  border-left: 1px solid var(--border);
-  box-shadow: -4px 0 16px rgba(0,0,0,0.25);
+  border-left: 0 solid var(--border);
   overflow: hidden;
-  will-change: transform;
-  transform: translateX(100%);
-  transition: transform 0.25s ease;
+  transition: flex-basis 0.2s ease, min-width 0.2s ease, border-left-width 0.2s ease;
 }
 .git-page__console--open {
-  transform: translateX(0);
+  flex: 0 0 42%;
+  min-width: 280px;
+  border-left-width: 1px;
 }
 
 .git-page__console-header {

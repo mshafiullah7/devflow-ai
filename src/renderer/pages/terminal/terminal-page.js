@@ -26,7 +26,7 @@ export class TerminalPage {
     this._lastRows  = 0;
     this._switchingShell = false;
 
-    this._sidebarCollapsed    = true;
+    this._sidebarCollapsed    = false;
 
     this._gitPanelVisible     = true;
     this._gitPanelCollapsed   = false;
@@ -374,7 +374,7 @@ export class TerminalPage {
           <!-- Left: project layer list -->
           <aside class="term-sidebar${this._sidebarCollapsed ? ' term-sidebar--collapsed' : ''}">
             <div class="term-sidebar__section-hd">
-              <span class="term-sidebar__hd-label">Layers</span>
+              <span class="term-sidebar__hd-label">Project Layers</span>
               <button class="term-sidebar__toggle" id="termSidebarToggle" aria-label="${this._sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M15 18l-6-6 6-6"/>

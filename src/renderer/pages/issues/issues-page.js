@@ -24,6 +24,14 @@ const PRIORITY_META = {
   low:      { label: 'Low',      cls: 'is-severity--low'      },
 };
 
+// Issues is a regular (non-persistent) route — the page is fully destroyed and
+// rebuilt every time it's navigated away from and back to, so a plain instance
+// field can't survive that round-trip. Remember the user's last-picked model
+// per project here (module-level, for the life of the renderer session) so
+// returning to Issues restores it instead of falling back to the DB-configured
+// Model Mapping default.
+const _lastModelIdByProject = new Map();
+
 export class IssuesPage {
   constructor(container, params, router) {
     this.container      = container;
@@ -55,10 +63,15 @@ export class IssuesPage {
     ]);
     this.container.innerHTML = this._template();
 
+    const rememberedModelId = _lastModelIdByProject.get(this._projectId);
+
     this._picker = new ModelPicker({
       anchor:    this.container.querySelector('#isModelPicker'),
-      onSelect:  model => { this._aiModelConfig = model; },
-      initialId: _mapping?.model_config_id ?? null,
+      onSelect:  model => {
+        this._aiModelConfig = model;
+        _lastModelIdByProject.set(this._projectId, model.id);
+      },
+      initialId: rememberedModelId ?? _mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
 
@@ -394,7 +407,7 @@ export class IssuesPage {
     const headerActions = this.container.querySelector('#isDetailHeaderActions');
     if (headerActions) headerActions.innerHTML = `
       <button class="is-form__btn is-form__btn--danger" id="isFormDelete">Delete</button>
-      <button class="is-form__btn" id="isFormSave">Save Changes</button>
+      <button class="is-form__btn" id="isFormSave">Save</button>
     `;
     await this._bindFormEvents(el, issue, type);
   }
@@ -431,6 +444,10 @@ export class IssuesPage {
         <div class="is-form__header">
           <h2 class="is-form__heading">${heading}</h2>
           <select class="is-header-select" id="isFormStatus">${statusOptions}</select>
+          ${isEdit ? `
+          <button class="is-form__play-btn" id="isFormPlayRun" title="Run in Issue Runner" aria-label="Run in Issue Runner">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
+          </button>` : ''}
         </div>
 
         <div class="is-form__body">
@@ -510,6 +527,18 @@ export class IssuesPage {
     }
 
     if (issue) {
+      el.querySelector('#isFormPlayRun')?.addEventListener('click', async () => {
+        await this._autoSave();
+        this._openIssueRunner({
+          projectId:   this._projectId,
+          modelConfig: this._aiModelConfig,
+          itemId:      issue.id,
+          autoRun:     true,
+        });
+      }, { signal });
+    }
+
+    if (issue) {
       statusEl.addEventListener('change', async () => {
         await window.db.issues.update({ id: issue.id, status: statusEl.value });
         this._refreshCardBadges(issue.id, statusEl.value, severityEl.value);
@@ -570,7 +599,7 @@ export class IssuesPage {
         }
       } catch {
         saveBtn.disabled    = false;
-        saveBtn.textContent = issue ? 'Save Changes' : isTask ? 'Add Task' : type === 'feature' ? 'Add Feature' : type === 'change' ? 'Add Change' : 'Add Bug';
+        saveBtn.textContent = issue ? 'Save' : isTask ? 'Add Task' : type === 'feature' ? 'Add Feature' : type === 'change' ? 'Add Change' : 'Add Bug';
       }
     };
 

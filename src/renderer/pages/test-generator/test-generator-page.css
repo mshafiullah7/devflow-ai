@@ -32,8 +32,8 @@
 /* ── Layer selector bar ──────────────────────────────────────── */
 /* ── Layer sidebar ───────────────────────────────────────────── */
 .tg-sidebar {
-  flex: 0 0 320px;
-  width: 320px;
+  flex: 0 0 260px;
+  width: 260px;
   border-right: 1px solid var(--border);
   background: var(--surface);
   display: flex;
@@ -764,6 +764,30 @@
   font-size: 11px;
 }
 
+.tg-btn--highlight {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15), 0 0 6px rgba(34, 197, 94, 0.2);
+}
+.tg-btn--highlight:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: #22c55e;
+  color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25), 0 0 10px rgba(34, 197, 94, 0.3);
+}
+[data-theme="light"] .tg-btn--highlight {
+  background: var(--surface);
+  border-color: var(--border);
+  color: #16a34a;
+  box-shadow: none;
+}
+[data-theme="light"] .tg-btn--highlight:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: #16a34a;
+  box-shadow: var(--form-focus-shadow);
+}
+
 .tg-btn--danger {
   background: color-mix(in srgb, #dc2626 12%, transparent);
   border-color: #dc2626;
@@ -1244,6 +1268,13 @@
 .tg-gen-chip--generating { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); animation: tg-pulse 1s ease-in-out infinite; }
 .tg-gen-chip--saved      { color: #16a34a; background: #16a34a18; }
 .tg-gen-chip--error      { color: #dc2626; background: #dc262618; }
+
+.tg-gen-item-elapsed {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
 
 /* ── Code output panel ───────────────────────────────────────── */
 .tg-gen-output {

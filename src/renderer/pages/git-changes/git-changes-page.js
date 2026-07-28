@@ -20,7 +20,7 @@ export class GitChangesPage {
     this._activeLayerPrefix = null;
     this._consoleRunning   = false;
     this._consoleOpen      = false;
-    this._layersOpen       = false;
+    this._layersOpen       = true;
     this._qcmdModal        = null;
     this._pendingCommits   = 0;
     this._selectedFileIdx  = -1;
@@ -36,13 +36,15 @@ export class GitChangesPage {
     injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
 
-    this._project = await window.db.projects.get(this._projectId);
-    this._activeCwd     = this._project?.project_path || null;
-    this._activeGitRoot = await this._getGitRoot(this._activeCwd);
+    this._project   = await window.db.projects.get(this._projectId);
+    this._activeCwd = this._project?.project_path || null;
 
-    const allLayers = await window.db.projectLayers.list(this._projectId);
-    this._layers = allLayers.filter(l => l.folder_path);
-
+    // Paint the shell immediately — resolving the git root shells out to a
+    // subprocess (`git rev-parse --show-toplevel`) and can take a while.
+    // Blocking the first paint on it left the page blank for a beat before
+    // suddenly appearing fully rendered; render now and fill in the
+    // git-dependent bits once they resolve, same as the file list already
+    // does ("Loading changes…").
     this.container.innerHTML = this._template();
 
     this._qcmdModal = new QuickCommandsModal({ onRunCommand: () => this.router.navigate('user-stories', { projectId: this._projectId }) });
@@ -51,6 +53,13 @@ export class GitChangesPage {
     this._bindEvents();
     this._sidebar.bindEvents(this.container);
     this._sidebar.loadCounts(this.container);
+
+    const [gitRoot, allLayers] = await Promise.all([
+      this._getGitRoot(this._activeCwd),
+      window.db.projectLayers.list(this._projectId),
+    ]);
+    this._activeGitRoot = gitRoot;
+    this._layers         = allLayers.filter(l => l.folder_path);
     this._updateFilesLayerPath();
 
     await this._loadLayerCounts();
@@ -137,7 +146,7 @@ export class GitChangesPage {
                 <rect x="1" y="2" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
                 <rect x="1" y="9" width="14" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
               </svg>
-              <span class="gc-panel-header__label">Layers</span>
+              <span class="gc-panel-header__label">Project Layers</span>
               <button class="gc-layer-collapse-btn" id="gcLayerCollapseBtn" title="${this._layersOpen ? 'Collapse' : 'Expand'}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M15 18l-6-6 6-6"/>
@@ -164,7 +173,6 @@ export class GitChangesPage {
               </div>
             </div>
           </div>
-        </div>
 
         <div class="git-page__console" id="gitConsole">
           <div class="git-page__console-header">
@@ -237,6 +245,7 @@ export class GitChangesPage {
             </button>
           </div>
         </div>
+          </div>
           </div>
         </div>
       </div>
@@ -502,28 +511,36 @@ export class GitChangesPage {
   }
 
   // ----------------------------------------------------------------
-  // Console toggle
+  // Side-panel toggles — Console and Project Layers share the same flex
+  // row and are mutually exclusive so they don't fight for width. Both
+  // panels' DOM state is applied together from one place so there's a
+  // single source of truth instead of two calls stepping on each other.
   // ----------------------------------------------------------------
-  _toggleConsole() {
-    this._consoleOpen = !this._consoleOpen;
-    const panel  = this.container.querySelector('#gitConsole');
-    const toggle = this.container.querySelector('#gitPageConsoleToggle');
-    panel?.classList.toggle('git-page__console--open', this._consoleOpen);
-    toggle?.classList.toggle('git-page__console-toggle--active', this._consoleOpen);
-    if (this._consoleOpen) {
-      this.container.querySelector('#gitConsoleInput')?.focus();
-    }
+  _setSidePanels(layersOpen, consoleOpen) {
+    this._layersOpen  = layersOpen;
+    this._consoleOpen = consoleOpen;
+
+    const layerPanel    = this.container.querySelector('#gcLayerPanel');
+    const collapseBtn   = this.container.querySelector('#gcLayerCollapseBtn');
+    const consolePanel  = this.container.querySelector('#gitConsole');
+    const consoleToggle = this.container.querySelector('#gitPageConsoleToggle');
+
+    if (layerPanel) layerPanel.classList.toggle('gc-layer-panel--open', layersOpen);
+    if (collapseBtn) collapseBtn.title = layersOpen ? 'Collapse' : 'Expand';
+
+    if (consolePanel) consolePanel.classList.toggle('git-page__console--open', consoleOpen);
+    if (consoleToggle) consoleToggle.classList.toggle('git-page__console-toggle--active', consoleOpen);
+    if (consoleOpen) this.container.querySelector('#gitConsoleInput')?.focus();
   }
 
-  // ----------------------------------------------------------------
-  // Layers panel toggle
-  // ----------------------------------------------------------------
+  _toggleConsole() {
+    const next = !this._consoleOpen;
+    this._setSidePanels(next ? false : this._layersOpen, next);
+  }
+
   _toggleLayers() {
-    this._layersOpen = !this._layersOpen;
-    const panel       = this.container.querySelector('#gcLayerPanel');
-    const collapseBtn = this.container.querySelector('#gcLayerCollapseBtn');
-    panel?.classList.toggle('gc-layer-panel--open', this._layersOpen);
-    if (collapseBtn) collapseBtn.title = this._layersOpen ? 'Collapse' : 'Expand';
+    const next = !this._layersOpen;
+    this._setSidePanels(next, next ? false : this._consoleOpen);
   }
 
   _updateConsoleBadge() {

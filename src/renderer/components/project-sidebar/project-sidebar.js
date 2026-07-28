@@ -112,16 +112,6 @@ export class ProjectSidebar {
           <span class="ph-nav-item__label">Unit Tests</span>
         </button>
 
-        <button class="ph-nav-item ph-nav-item--disabled" disabled title="Coming soon">
-          <span class="ph-nav-item__icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-          </span>
-          <span class="ph-nav-item__label">E2E Tests</span>
-          <span class="ph-nav-item__badge--soon">Soon</span>
-        </button>
-
         <button class="ph-nav-item${a('security-scans')}" id="psnSecurityScans">
           <span class="ph-nav-item__icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

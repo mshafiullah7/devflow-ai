@@ -4,8 +4,16 @@ import { ProjectSidebar } from '../../components/project-sidebar/project-sidebar
 
 function stripAnsi(str) {
   return str
-    .replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+    // CSI sequences: ESC [ <params 0x30-0x3F, incl. digits ; ? < = >> <final 0x40-0x7E>
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
     .replace(/\x1B\][^\x07]*\x07/g, '');
+}
+
+function collapseCarriageReturns(str) {
+  return str.split('\n').map(line => {
+    const idx = line.lastIndexOf('\r');
+    return idx === -1 ? line : line.slice(idx + 1);
+  }).join('\n');
 }
 
 export class SecurityScansPage {
@@ -21,9 +29,13 @@ export class SecurityScansPage {
     this._scanCmd       = null;
     this._scanRunning   = false;
     this._scanOutput    = '';
+    this._scanDisplayBuf = '';
     this._scanResult    = null; // { critical, high, medium, low, total } | null
     this._scanDetecting = false;
     this._manualCmd     = '';
+
+    this._scanStartTime = null;
+    this._scanElapsedTimer = null;
   }
 
   async mount() {
@@ -51,6 +63,7 @@ export class SecurityScansPage {
   unmount() {
     if (this._scanRunning) window.db.securityScanner.kill();
     window.db.securityScanner.removeListeners();
+    this._clearElapsedTimer();
     removeCss('pages/test-generator/test-generator-page.css');
     removeCss('components/project-sidebar/project-sidebar.css');
     removeCss('pages/security-scans/security-scans-page.css');
@@ -82,7 +95,7 @@ export class SecurityScansPage {
           <div class="tg-body">
             <aside class="tg-sidebar">
               <div class="tg-sidebar__header">
-                <span class="tg-sidebar__header-label">Layers</span>
+                <span class="tg-sidebar__header-label">Project Layers</span>
               </div>
               <div class="tg-sidebar__list" id="ssSidebar">${this._sidebarHtml()}</div>
             </aside>
@@ -170,6 +183,10 @@ export class SecurityScansPage {
             ${this._scanRunning ? 'disabled' : ''}>▶ Run Scan</button>
           <button class="tg-btn tg-btn--sm tg-btn--stop" id="ssBtnStop"
             ${this._scanRunning ? '' : 'hidden'}>■ Stop</button>
+          ${this._scanRunning ? `
+          <span class="ss-running" id="ssRunning">
+            <span class="tg-exec-detecting-spinner"></span>Running… <span id="ssElapsed">0s</span>
+          </span>` : ''}
           ` : ''}
         </div>`}
         ${manualBlock}
@@ -183,8 +200,27 @@ export class SecurityScansPage {
   _bannerHtml() {
     if (!this._scanResult) return '';
     const { total, critical, high } = this._scanResult;
+
+    if (total === null) {
+      return `
+        <div class="tg-exec-banner tg-exec-banner--fail ss-banner">
+          <span>Scan finished — couldn't recognize this tool's output format, review the log above</span>
+          <div class="tg-exec-banner__actions">
+            <button class="tg-btn tg-btn--sm tg-btn--danger" id="ssBtnCreateIssue">Create Issue</button>
+            <button class="tg-btn tg-btn--sm" id="ssBtnDismiss">Dismiss</button>
+          </div>
+        </div>`;
+    }
+
     if (total === 0) {
-      return `<div class="tg-exec-banner tg-exec-banner--pass ss-banner"><span>✓ No vulnerabilities found</span></div>`;
+      return `
+        <div class="tg-exec-banner tg-exec-banner--pass ss-banner">
+          <span>✓ No vulnerabilities found</span>
+          <div class="tg-exec-banner__actions">
+            <button class="tg-btn tg-btn--sm" id="ssBtnCreateIssue">Create Issue</button>
+            <button class="tg-btn tg-btn--sm" id="ssBtnDismiss">Dismiss</button>
+          </div>
+        </div>`;
     }
     const parts = [];
     if (critical) parts.push(`${critical} critical`);
@@ -242,8 +278,16 @@ export class SecurityScansPage {
     });
     $('#ssBtnStopManual')?.addEventListener('click', () => this._stopScan());
 
-    $('#ssBtnCreateIssue')?.addEventListener('click', () => this._createIssue());
-    $('#ssBtnDismiss')?.addEventListener('click', () => {
+    this._bindBannerEvents(this.container);
+  }
+
+  // Banner (pass/fail/unknown) is inserted piecemeal via insertAdjacentHTML
+  // in _scanDone rather than through a full _rerenderMain(), so its buttons
+  // need their own binding call — _bindScanEvents() alone only covers the
+  // buttons present at initial render.
+  _bindBannerEvents(root) {
+    root.querySelector('#ssBtnCreateIssue')?.addEventListener('click', () => this._createIssue());
+    root.querySelector('#ssBtnDismiss')?.addEventListener('click', () => {
       this._scanResult = null;
       this.container.querySelector('.ss-banner')?.remove();
     });
@@ -257,6 +301,7 @@ export class SecurityScansPage {
     this._scanCommands  = [];
     this._scanCmd       = null;
     this._scanOutput    = '';
+    this._scanDisplayBuf = '';
     this._scanResult    = null;
     this._rerenderSidebar();
     this._rerenderMain();
@@ -284,9 +329,11 @@ export class SecurityScansPage {
 
   _startScan(command) {
     this._scanOutput = '';
+    this._scanDisplayBuf = '';
     this._scanResult = null;
     this._scanRunning = true;
     this._rerenderMain();
+    this._startElapsedTimer();
 
     const out  = this.container.querySelector('#ssOutput');
     const wrap = this.container.querySelector('#ssOutputWrap');
@@ -302,33 +349,59 @@ export class SecurityScansPage {
     window.db.securityScanner.kill();
     window.db.securityScanner.removeListeners();
     this._scanRunning = false;
+    this._clearElapsedTimer();
     this._rerenderMain();
+  }
+
+  _startElapsedTimer() {
+    this._clearElapsedTimer();
+    this._scanStartTime = Date.now();
+    this._scanElapsedTimer = setInterval(() => {
+      const el = this.container.querySelector('#ssElapsed');
+      if (!el) return;
+      const secs = Math.floor((Date.now() - this._scanStartTime) / 1000);
+      el.textContent = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+    }, 1000);
+  }
+
+  _clearElapsedTimer() {
+    if (this._scanElapsedTimer) { clearInterval(this._scanElapsedTimer); this._scanElapsedTimer = null; }
+    this._scanStartTime = null;
   }
 
   _appendOutput(text) {
     const clean = stripAnsi(text);
     this._scanOutput += clean;
+    this._scanDisplayBuf = (this._scanDisplayBuf || '') + clean;
+
     const out  = this.container.querySelector('#ssOutput');
     const wrap = this.container.querySelector('#ssOutputWrap');
-    if (out)  out.textContent += clean;
-    if (wrap) wrap.scrollTop   = wrap.scrollHeight;
+    // Defensive: some tools still emit \r-based line redraws (progress ticks)
+    // even when non-interactive — collapse those to their final frame instead
+    // of dumping every intermediate one into the pane.
+    if (out)  out.textContent = collapseCarriageReturns(this._scanDisplayBuf);
+    if (wrap) wrap.scrollTop  = wrap.scrollHeight;
   }
 
   _scanDone(exitCode) {
     window.db.securityScanner.removeListeners();
     this._scanRunning = false;
-    this._scanResult  = this._parseResult(this._scanOutput, exitCode);
+    this._clearElapsedTimer();
+    this._scanResult  = this._parseResult(this._scanOutput, exitCode)
+      ?? { total: null, critical: 0, high: 0, medium: 0, low: 0 };
 
     const section = this.container.querySelector('#ssScanSection');
     if (section) {
       section.querySelector('.ss-banner')?.remove();
       section.insertAdjacentHTML('beforeend', this._bannerHtml());
+      this._bindBannerEvents(section);
     }
 
     const runBtn  = this.container.querySelector('#ssBtnRun');
     const stopBtn = this.container.querySelector('#ssBtnStop');
     if (runBtn)  runBtn.disabled = false;
     if (stopBtn) stopBtn.hidden  = true;
+    this.container.querySelector('#ssRunning')?.remove();
 
     window.db.securityScanHistory?.create({
       project_id: this._projectId,
@@ -401,7 +474,10 @@ export class SecurityScansPage {
   async _createIssue() {
     const r = this._scanResult;
     if (!r) return;
-    const title = `Security scan: ${r.total} vulnerabilit${r.total !== 1 ? 'ies' : 'y'} found`;
+    const unknown = r.total === null;
+    const title = unknown
+      ? 'Security scan: needs review (unrecognized output format)'
+      : `Security scan: ${r.total} vulnerabilit${r.total !== 1 ? 'ies' : 'y'} found`;
     const parts = [];
     if (r.critical) parts.push(`${r.critical} critical`);
     if (r.high)     parts.push(`${r.high} high`);
@@ -423,7 +499,7 @@ export class SecurityScansPage {
         layer_id:    this._activeLayer?.id ?? null,
         title,
         description: desc,
-        severity:    r.critical > 0 ? 'critical' : r.high > 0 ? 'high' : 'medium',
+        severity:    unknown ? 'medium' : (r.critical > 0 ? 'critical' : r.high > 0 ? 'high' : 'medium'),
         type:        'security',
       });
       window.showToast?.('Issue created.');

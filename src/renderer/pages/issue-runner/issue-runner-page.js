@@ -34,6 +34,8 @@ export class IssueRunnerPage {
     this._returnRoute = 'issues';
     this._projectId = params.projectId;
     this._passedModelConfig = params.modelConfig || null;
+    this._deepItemId = params.itemId ?? null;
+    this._autoRun     = !!params.autoRun;
     this._project   = null;
     this._issues    = [];
     this._selectedId    = null;
@@ -92,8 +94,15 @@ export class IssueRunnerPage {
     if (params && params.projectId !== this._projectId) {
       this._projectId = params.projectId;
       this._passedModelConfig = params.modelConfig || null;
+      this._deepItemId = params.itemId ?? null;
+      this._autoRun     = !!params.autoRun;
       this._loadAndRender();
       return;
+    }
+    if (params && params.itemId != null) {
+      this._deepItemId = params.itemId;
+      this._autoRun     = !!params.autoRun;
+      this._consumeDeepLink();
     }
     if (this._fitAddon) {
       try { this._fitAddon.fit(); } catch (_) {}
@@ -245,7 +254,7 @@ export class IssueRunnerPage {
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>
               Run Selected
             </button>
-            <button class="ir-toolbar__btn ir-toolbar__btn--primary" id="irBtnRunAll" disabled title="Run all open issues">
+            <button class="ir-toolbar__btn ir-toolbar__btn--primary" id="irBtnRunAll" disabled hidden title="Run all open issues">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 3l5 5-5 5V3zM9 3l5 5-5 5V3z" fill="currentColor"/></svg>
               Run All
             </button>
@@ -326,6 +335,35 @@ export class IssueRunnerPage {
       const sel = this._issues.find(i => i.id === this._selectedId) ?? this._issues[0];
       this._selectIssue(sel);
     }
+
+    await this._consumeDeepLink();
+  }
+
+  /** Consumes a pending deep-link request (open a specific issue, optionally auto-run it). */
+  async _consumeDeepLink() {
+    if (this._deepItemId == null) return;
+    const id      = this._deepItemId;
+    const autoRun = this._autoRun;
+
+    let issue = this._issues.find(i => i.id === id);
+    if (!issue && this._filterStatus) {
+      // The item may not match the current status filter (e.g. it's Resolved) —
+      // switch to "All" and reload so it's actually reachable.
+      this._deepItemId  = id;
+      this._autoRun      = autoRun;
+      this._filterStatus = '';
+      const filterSel = this.container.querySelector('#irStatusFilter');
+      if (filterSel) filterSel.value = '';
+      await this._loadIssues();
+      return;
+    }
+
+    this._deepItemId = null;
+    this._autoRun     = false;
+    if (!issue) return;
+
+    this._selectIssue(issue);
+    if (autoRun && !this._isRunning) this._runIssue(issue);
   }
 
   _renderList() {
@@ -539,6 +577,16 @@ export class IssueRunnerPage {
     if (cwdError) {
       if (this._term) { this._term.reset(); this._term.writeln(`${ANSI.red}CWD Error: ${cwdError}${ANSI.reset}`); }
       return;
+    }
+
+    // The shared PTY shell is normally spawned lazily a couple of animation
+    // frames after mount (see _initTerminal's doFit). That can race with a run
+    // requested immediately on mount (e.g. the "Play" deep-link from the Issues
+    // page) and lose — runInShell requires an already-spawned PTY and fails
+    // silently with "No shell running" otherwise. spawnShell is idempotent
+    // (just re-cd's into an existing shell), so it's safe to call every time.
+    if (this._term) {
+      await window.app.irPty.spawnShell({ cwd, cols: this._term.cols, rows: this._term.rows });
     }
 
     const effectiveSkipPerms = skipPermissions ?? this._skipPermissions;
