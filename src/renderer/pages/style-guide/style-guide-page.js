@@ -5,50 +5,52 @@ import { ProjectSidebar }    from '../../components/project-sidebar/project-side
 import { Dialog }            from '../../components/dialog/dialog.js';
 
 /* ------------------------------------------------------------------ */
-/* Built-in preset examples (shipped with the app)                     */
+/* Default web template — backs the "Default Template" dropdown entry  */
+/* when Target platform is Web. Not seeded into saved_themes as its    */
+/* own library entry (would just duplicate "Default Template").        */
 /* ------------------------------------------------------------------ */
+const DEFAULT_WEB_TEMPLATE = {
+  light:
+`Color Palette:
+- Primary: #4f46e5
+- Background: #fafafa
+- Surface: #ffffff
+- Text primary: #18181b
+- Text secondary: #71717a
+- Border: #e4e4e7
+- Danger: #dc2626
+
+Typography:
+- Font family: 'Inter', system-ui, sans-serif
+- Heading: font-weight 700, font-size 26px, letter-spacing -0.02em
+- Body: font-weight 400, font-size 14px, line-height 1.6
+
+Components:
+- Buttons: border-radius 10px, padding 10px 20px, font-weight 600, no border, soft shadow on primary
+- Cards: border-radius 16px, no border, soft ambient shadow (0 4px 16px rgba(0,0,0,0.06)), background #ffffff
+- Inputs: border-radius 10px, background #ffffff, border 1px solid #e4e4e7, primary-coloured focus ring`,
+  dark:
+`Color Palette:
+- Primary: #818cf8
+- Background: #0a0a0b
+- Surface: #18181b
+- Text primary: #fafafa
+- Text secondary: #a1a1aa
+- Border: #27272a
+- Danger: #f87171
+
+Typography:
+- Font family: 'Inter', system-ui, sans-serif
+- Heading: font-weight 700, font-size 26px, letter-spacing -0.02em
+- Body: font-weight 400, font-size 14px, line-height 1.6
+
+Components:
+- Buttons: border-radius 10px, padding 10px 20px, font-weight 600, no border, soft shadow on primary
+- Cards: border-radius 16px, no border, soft ambient shadow (0 4px 16px rgba(0,0,0,0.5)), background #18181b
+- Inputs: border-radius 10px, background #18181b, border 1px solid #27272a, primary-coloured focus ring`,
+};
+
 const BUILTIN_PRESETS = [
-  {
-    label: 'DevFlow Default',
-    light:
-`Color Palette:
-- Primary: #1e3a5f
-- Background: #fdf8f0
-- Surface: #fffdf7
-- Text primary: #0a0804
-- Text secondary: #2a2218
-- Border: #4a3f2f
-- Danger: #ef4444
-
-Typography:
-- Font family: 'Segoe UI', system-ui, sans-serif
-- Heading: font-weight 600, font-size 24px
-- Body: font-weight 400, font-size 14px, line-height 1.5
-
-Components:
-- Buttons: border-radius 8px, padding 8px 18px, font-weight 500
-- Cards: border-radius 12px, border 1px solid #4a3f2f, background #fffdf7
-- Inputs: border-radius 8px, background #fdf8f0, border 1px solid #4a3f2f`,
-    dark:
-`Color Palette:
-- Primary: #6366f1
-- Background: #0f1117
-- Surface: #1a1d27
-- Text primary: #f1f5f9
-- Text secondary: #94a3b8
-- Border: #2a2d3e
-- Danger: #ef4444
-
-Typography:
-- Font family: 'Segoe UI', system-ui, sans-serif
-- Heading: font-weight 600, font-size 24px
-- Body: font-weight 400, font-size 14px, line-height 1.5
-
-Components:
-- Buttons: border-radius 8px, padding 8px 18px, font-weight 500
-- Cards: border-radius 12px, border 1px solid #2a2d3e, background #1a1d27
-- Inputs: border-radius 8px, background #1a1d27, border 1px solid #2a2d3e`,
-  },
   {
     label: 'Ocean Blue',
     light:
@@ -179,10 +181,11 @@ Components:
 /* for Flutter/Android targets so there's no contradiction between the */
 /* preset's own Components block and the appended Platform: guidance.  */
 /* ------------------------------------------------------------------ */
-const MATERIAL_PRESETS = [
-  {
-    label: 'Material Indigo',
-    light:
+/* Default mobile template — backs the "Default Template" dropdown     */
+/* entry when Target platform is Flutter/Android. Not seeded into       */
+/* saved_themes as its own library entry.                               */
+const DEFAULT_MOBILE_TEMPLATE = {
+  light:
 `Color Palette:
 - Primary: #6750a4
 - Background: #fffbfe
@@ -201,7 +204,7 @@ Components:
 - Buttons: fully rounded (pill shape), padding 10px 24px, font-weight 500, tonal elevation shadow instead of a border
 - Cards: border-radius 16px, elevation shadow instead of a border, background #f3edf7
 - Inputs: filled Material style, border-radius 12px 12px 0 0, bottom-border 2px solid #6750a4, background #f3edf7`,
-    dark:
+  dark:
 `Color Palette:
 - Primary: #d0bcff
 - Background: #1c1b1f
@@ -220,141 +223,56 @@ Components:
 - Buttons: fully rounded (pill shape), padding 10px 24px, font-weight 500, tonal elevation shadow instead of a border
 - Cards: border-radius 16px, elevation shadow instead of a border, background #2b2930
 - Inputs: filled Material style, border-radius 12px 12px 0 0, bottom-border 2px solid #d0bcff, background #2b2930`,
-  },
+};
+
+const MATERIAL_PRESETS = [
   {
-    label: 'Material Teal',
+    label: 'Neo Graphite',
     light:
 `Color Palette:
-- Primary: #00897b
-- Background: #f5fffd
-- Surface: #e0f2f1
-- Text primary: #062019
-- Text secondary: #33564e
-- Border: #7ba79e
-- Danger: #ba1a1a
-
-Typography:
-- Font family: 'Roboto', 'Segoe UI', sans-serif
-- Heading: font-weight 500, font-size 22px
-- Body: font-weight 400, font-size 14px, line-height 1.5
-
-Components:
-- Buttons: fully rounded (pill shape), padding 10px 24px, font-weight 500, tonal elevation shadow instead of a border
-- Cards: border-radius 16px, elevation shadow instead of a border, background #e0f2f1
-- Inputs: filled Material style, border-radius 12px 12px 0 0, bottom-border 2px solid #00897b, background #e0f2f1`,
-    dark:
-`Color Palette:
-- Primary: #4db6ac
-- Background: #0a1f1b
-- Surface: #123832
-- Text primary: #d2f1ec
-- Text secondary: #8fc6bd
-- Border: #2e6259
-- Danger: #ffb4ab
-
-Typography:
-- Font family: 'Roboto', 'Segoe UI', sans-serif
-- Heading: font-weight 500, font-size 22px
-- Body: font-weight 400, font-size 14px, line-height 1.5
-
-Components:
-- Buttons: fully rounded (pill shape), padding 10px 24px, font-weight 500, tonal elevation shadow instead of a border
-- Cards: border-radius 16px, elevation shadow instead of a border, background #123832
-- Inputs: filled Material style, border-radius 12px 12px 0 0, bottom-border 2px solid #4db6ac, background #123832`,
-  },
-  {
-    label: 'Material Coral',
-    light:
-`Color Palette:
-- Primary: #e64a45
-- Background: #fffbff
-- Surface: #ffedea
-- Text primary: #2c1512
-- Text secondary: #5e4038
-- Border: #c0a099
-- Danger: #ba1a1a
-
-Typography:
-- Font family: 'Roboto', 'Segoe UI', sans-serif
-- Heading: font-weight 500, font-size 22px
-- Body: font-weight 400, font-size 14px, line-height 1.5
-
-Components:
-- Buttons: fully rounded (pill shape), padding 10px 24px, font-weight 500, tonal elevation shadow instead of a border
-- Cards: border-radius 16px, elevation shadow instead of a border, background #ffedea
-- Inputs: filled Material style, border-radius 12px 12px 0 0, bottom-border 2px solid #e64a45, background #ffedea`,
-    dark:
-`Color Palette:
-- Primary: #ffb4a9
-- Background: #201a18
-- Surface: #3b2b27
-- Text primary: #ffede9
-- Text secondary: #e8beb4
-- Border: #8a6c64
-- Danger: #ffb4ab
-
-Typography:
-- Font family: 'Roboto', 'Segoe UI', sans-serif
-- Heading: font-weight 500, font-size 22px
-- Body: font-weight 400, font-size 14px, line-height 1.5
-
-Components:
-- Buttons: fully rounded (pill shape), padding 10px 24px, font-weight 500, tonal elevation shadow instead of a border
-- Cards: border-radius 16px, elevation shadow instead of a border, background #3b2b27
-- Inputs: filled Material style, border-radius 12px 12px 0 0, bottom-border 2px solid #ffb4a9, background #3b2b27`,
-  },
-  {
-    label: 'DebtLogic Green',
-    light:
-`Color Palette:
-- Primary: #13ec5b
-- Background: #ffffff
-- Surface: #f8faf8
-- Text primary: #0f172a
-- Text secondary: #64748b
-- Border: #e2e8f0
-- Danger: #ef4444
+- Primary: #ff5a3c
+- Background: #f6f6f8
+- Surface: #ffffff
+- Text primary: #14141a
+- Text secondary: #6b6b76
+- Border: #e4e4ea
+- Danger: #d92d20
 
 Typography:
 - Font family: 'Manrope', 'Segoe UI', sans-serif
-- Heading: font-weight 800, font-size 24px
+- Heading: font-weight 700, font-size 22px
 - Body: font-weight 400, font-size 14px, line-height 1.5
 
 Components:
-- Buttons: fully rounded (pill shape), padding 10px 20px, font-weight 700, elevation shadow instead of a border
-- Cards: border-radius 12px, elevation shadow (soft, low-elevation) instead of a border, background #f8faf8
-- Inputs: filled Material style, border-radius 12px, background #f1f5f9, no visible border, primary-coloured focus ring
-
-Notes:
-- Hero/AppBar gradient (brand accent, layer over Primary on header surfaces only): linear-gradient(160deg, #1b6b40, #236e47, #2d8a57)
-- Icons: Material Symbols Outlined, variable FILL axis — FILL 0 (outline) default/inactive, FILL 1 (filled) active/selected
-- Status colour keying: danger/red = overdue, #f59e0b (amber) = due-soon/warning, #8b5cf6 (violet) = AI insight, #3b82f6 (blue) = informational, primary = positive/progress`,
+- Buttons: border-radius 20px, padding 12px 22px, font-weight 600, flat fill (no shadow, no border)
+- Cards: border-radius 20px, no border, soft ambient shadow (0 8px 24px rgba(20,20,26,0.06)), background #ffffff
+- Inputs: border-radius 14px, background #f6f6f8, no visible border, primary-coloured focus ring, floating label`,
     dark:
 `Color Palette:
-- Primary: #13ec5b
-- Background: #102216
-- Surface: #1a2e22
-- Text primary: #ffffff
-- Text secondary: #94a3b8
-- Border: #1e293b
-- Danger: #ef4444
+- Primary: #ff7a5c
+- Background: #111114
+- Surface: #1b1b20
+- Text primary: #f4f4f6
+- Text secondary: #9c9ca6
+- Border: #2b2b32
+- Danger: #f2705f
 
 Typography:
 - Font family: 'Manrope', 'Segoe UI', sans-serif
-- Heading: font-weight 800, font-size 24px
+- Heading: font-weight 700, font-size 22px
 - Body: font-weight 400, font-size 14px, line-height 1.5
 
 Components:
-- Buttons: fully rounded (pill shape), padding 10px 20px, font-weight 700, elevation shadow instead of a border
-- Cards: border-radius 12px, elevation shadow (soft, low-elevation) instead of a border, background #1a2e22
-- Inputs: filled Material style, border-radius 12px, background rgba(255,255,255,0.05), no visible border, primary-coloured focus ring
-
-Notes:
-- Hero/AppBar gradient (brand accent, layer over Primary on header surfaces only): linear-gradient(160deg, #1b6b40, #236e47, #2d8a57)
-- Icons: Material Symbols Outlined, variable FILL axis — FILL 0 (outline) default/inactive, FILL 1 (filled) active/selected
-- Status colour keying: danger/red = overdue, #f59e0b (amber) = due-soon/warning, #8b5cf6 (violet) = AI insight, #3b82f6 (blue) = informational, primary = positive/progress`,
+- Buttons: border-radius 20px, padding 12px 22px, font-weight 600, flat fill (no shadow, no border)
+- Cards: border-radius 20px, no border, soft ambient shadow (0 8px 24px rgba(0,0,0,0.35)), background #1b1b20
+- Inputs: border-radius 14px, background #111114, no visible border, primary-coloured focus ring, floating label`,
   },
 ];
+
+/* Presets retired from the built-in set (still cleaned up from              */
+/* previously-seeded user databases by _seedBuiltinThemes below).            */
+const RETIRED_MATERIAL_PRESET_NAMES = ['Material Teal', 'Material Coral', 'DebtLogic Green', 'Material Indigo'];
+const RETIRED_BUILTIN_PRESET_NAMES = ['DevFlow Default', 'Modern Slate'];
 
 /* ------------------------------------------------------------------ */
 /* Platform sections — appended to Light/Dark theme text when a       */
@@ -492,7 +410,6 @@ export class StyleGuidePage {
               Both are injected into every screen generation prompt.
             </p>
             <label class="sg-page__platform" for="sgPlatformSelect" style="display:flex;align-items:center;gap:6px;font-size:12px;opacity:.75;">
-              Target platform
               <select class="scr-form__select" id="sgPlatformSelect" style="width:auto;">
                 <option value="web"${(this._project?.target_platform || 'web') === 'web' ? ' selected' : ''}>Web</option>
                 <option value="flutter"${this._project?.target_platform === 'flutter' ? ' selected' : ''}>Flutter (Material)</option>
@@ -538,11 +455,12 @@ export class StyleGuidePage {
                   <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-preview-theme="light">Light</button>
                   <button class="scr-ds-theme-btn" data-preview-theme="dark">Dark</button>
                 </div>
-                <div class="scr-ds-theme-btns" id="sgLayoutBtns" style="${(this._project?.target_platform || 'web') !== 'web' ? 'display:none' : ''}">
-                  <button class="scr-ds-theme-btn" data-layout="dashboard">Dashboard</button>
-                  <button class="scr-ds-theme-btn scr-ds-theme-btn--active" data-layout="landing">Landing</button>
-                </div>
                 <div class="sg-preview-actions">
+                  <select class="scr-form__select" id="sgLayoutSelect"
+                          style="width:auto;padding:3px 8px;font-size:12px;${(this._project?.target_platform || 'web') !== 'web' ? 'display:none' : ''}">
+                    <option value="landing" selected>Landing</option>
+                    <option value="dashboard">Dashboard</option>
+                  </select>
                   <button class="scr-btn scr-btn--sm" id="sgRefreshBtn" title="Refresh preview">
                     <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                       <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -679,14 +597,10 @@ export class StyleGuidePage {
       });
     });
 
-    /* ---- Layout toggle buttons (web only) ---- */
-    this.container.querySelectorAll('#sgLayoutBtns .scr-ds-theme-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        activeLayout = btn.dataset.layout;
-        this.container.querySelectorAll('#sgLayoutBtns .scr-ds-theme-btn').forEach(b =>
-          b.classList.toggle('scr-ds-theme-btn--active', b.dataset.layout === activeLayout));
-        renderPreview();
-      });
+    /* ---- Layout dropdown (web only) ---- */
+    this.container.querySelector('#sgLayoutSelect').addEventListener('change', e => {
+      activeLayout = e.target.value;
+      renderPreview();
     });
 
     /* ---- Expand / focus toggle ---- */
@@ -752,27 +666,34 @@ export class StyleGuidePage {
 
     this._bindAiPane();
 
-    /* ---- Target platform — bake platform component language into the theme text ---- */
+    /* ---- Target platform — switches to that platform's default theme ---- */
     this.container.querySelector('#sgPlatformSelect').addEventListener('change', async (e) => {
       const target_platform = e.target.value;
-      const block = PLATFORM_TEXT_BLOCKS[target_platform] || '';
+      const previousPlatform = this._project?.target_platform || 'web';
 
-      // The platform block is always appended last, so strip-to-end + re-append keeps this idempotent
-      const applyBlock = ta => {
-        const stripped = ta.value.replace(/\n{1,2}Platform:[\s\S]*$/, '').trimEnd();
-        ta.value = block ? `${stripped}\n\n${block}` : stripped;
-      };
-      applyBlock(this.container.querySelector('#sgTplLight'));
-      applyBlock(this.container.querySelector('#sgTplDark'));
+      const currentLight = this.container.querySelector('#sgTplLight').value.trim();
+      const currentDark  = this.container.querySelector('#sgTplDark').value.trim();
+      const baseline     = this._getTemplateParts();
+      const isDirty      = currentLight !== (baseline.light || '').trim() || currentDark !== (baseline.dark || '').trim();
 
-      const layoutBtns = this.container.querySelector('#sgLayoutBtns');
-      if (layoutBtns) layoutBtns.style.display = target_platform === 'web' ? '' : 'none';
+      if (isDirty) {
+        const proceed = await Dialog.confirm(
+          'You have unsaved Light/Dark theme changes. Switching Target Platform loads that platform\'s default theme, and these changes will be lost. Click "Apply" first if you want to keep them.',
+          { title: 'Unsaved Changes', confirmText: 'Switch Anyway', danger: true }
+        );
+        if (!proceed) {
+          e.target.value = previousPlatform;
+          return;
+        }
+      }
 
-      renderPreview();
-      this._renderThemePicker();
+      const layoutSelect = this.container.querySelector('#sgLayoutSelect');
+      if (layoutSelect) layoutSelect.style.display = target_platform === 'web' ? '' : 'none';
 
       await window.db.projects.update({ id: this._projectId, target_platform });
       if (this._project) this._project.target_platform = target_platform;
+
+      this._pickTheme('__empty__');
     });
 
     /* ---- Initial render ---- */
@@ -1039,6 +960,12 @@ Rules:
       if (existingNames.has(preset.label)) continue;
       await window.db.savedThemes.create({ name: preset.label, light: preset.light, dark: preset.dark, category: 'mobile' });
     }
+
+    // Remove presets that used to be seeded but are no longer built-in.
+    const retiredNames = [...RETIRED_MATERIAL_PRESET_NAMES, ...RETIRED_BUILTIN_PRESET_NAMES];
+    for (const retired of existing.filter(t => retiredNames.includes(t.name))) {
+      await window.db.savedThemes.delete(retired.id);
+    }
   }
 
   async _exportMarkdown() {
@@ -1086,7 +1013,7 @@ Rules:
 
     const open = this._themeMenuOpen;
     const selected = this._selectedThemeId === '__empty__'
-      ? 'Empty Template'
+      ? 'Default Template'
       : this._libraryThemes.find(t => String(t.id) === String(this._selectedThemeId))?.name;
 
     const platform     = this.container.querySelector('#sgPlatformSelect')?.value || 'web';
@@ -1107,7 +1034,7 @@ Rules:
         ${open ? `
           <div class="sg-theme-picker__menu" role="listbox">
             <button class="sg-theme-picker__item${this._selectedThemeId === '__empty__' ? ' sg-theme-picker__item--active' : ''}"
-                    data-id="__empty__" role="option" type="button">Empty Template</button>
+                    data-id="__empty__" role="option" type="button">Default Template</button>
             ${visibleThemes.map(t => `
               <button class="sg-theme-picker__item${String(this._selectedThemeId) === String(t.id) ? ' sg-theme-picker__item--active' : ''}"
                       data-id="${t.id}" role="option" type="button">${escHtml(t.name)}</button>
@@ -1140,9 +1067,14 @@ Rules:
     this._themeMenuOpen   = false;
     document.removeEventListener('click', this._handleThemeMenuOutside, true);
 
+    const platform = this.container.querySelector('#sgPlatformSelect')?.value || 'web';
+
     if (id === '__empty__') {
-      this.container.querySelector('#sgTplLight').value = '';
-      this.container.querySelector('#sgTplDark').value  = '';
+      // "Default Template" loads the built-in default look for the current platform.
+      const isMobile = platform === 'flutter' || platform === 'android';
+      const def = isMobile ? DEFAULT_MOBILE_TEMPLATE : DEFAULT_WEB_TEMPLATE;
+      this.container.querySelector('#sgTplLight').value = def?.light || '';
+      this.container.querySelector('#sgTplDark').value  = def?.dark  || '';
     } else {
       const theme = this._libraryThemes.find(t => String(t.id) === String(id));
       if (theme) {
@@ -1152,7 +1084,6 @@ Rules:
     }
 
     // Re-apply the current target platform's component language, since the theme swap above just replaced the raw text
-    const platform = this.container.querySelector('#sgPlatformSelect')?.value;
     const block = PLATFORM_TEXT_BLOCKS[platform] || '';
     if (block) {
       [this.container.querySelector('#sgTplLight'), this.container.querySelector('#sgTplDark')].forEach(ta => {
