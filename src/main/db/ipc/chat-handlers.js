@@ -414,7 +414,16 @@ function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneC
     const content = buildDiffPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
     msgs = [OLLAMA_SYSTEM_DIFF, { role: 'user', content }];
   } else if (messages && messages.length > 0) {
-    msgs = messages[0]?.role === 'system' ? messages : [OLLAMA_SYSTEM_HTML, ...messages];
+    if (messages[0]?.role === 'system') {
+      msgs = messages;
+    } else if (systemPrompt) {
+      // Caller supplied both a history array and its own system context
+      // (e.g. a workflow-runner follow-up) — use it instead of forcing the
+      // HTML-only system prompt.
+      msgs = [{ role: 'system', content: systemPrompt }, ...messages];
+    } else {
+      msgs = [OLLAMA_SYSTEM_HTML, ...messages];
+    }
   } else if (systemPrompt) {
     // Caller supplied its own system context (e.g. a workflow layer's
     // purpose/instructions) — use it as-is instead of forcing the
@@ -682,7 +691,9 @@ function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
     const content = buildDiffPromptInline(editPayload.instruction, editPayload.htmlContent, editPayload.projectDescription);
     msgs = [{ role: 'user', content }];
   } else if (messages && messages.length > 0) {
-    msgs = messages;
+    msgs = (systemPrompt && messages[0]?.role !== 'system')
+      ? [{ role: 'system', content: systemPrompt }, ...messages]
+      : messages;
   } else if (systemPrompt) {
     msgs = [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }];
   } else {
@@ -778,9 +789,26 @@ function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
 // the app routes Ollama devflow-agent runs through this dedicated script
 // instead — it's simpler and avoids that shim's provider-specific quirks.)
 // ----------------------------------------------------------------
-function runDevflowAgent(wc, prompt, model, ctx, tokenCh, doneCh, cwd, systemPrompt) {
-  const spawnCwd    = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
-  const fullPrompt  = systemPrompt ? `${systemPrompt}\n\n---\n\n${prompt}` : (prompt || '');
+function runDevflowAgent(wc, prompt, model, messages, ctx, tokenCh, doneCh, cwd, systemPrompt) {
+  const spawnCwd = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
+
+  // devflow_agent.py has no native multi-turn/session concept — a follow-up
+  // message is threaded through by flattening prior turns into the text
+  // prompt, mirroring runCli's existing multi-turn pattern below.
+  let userPart;
+  if (messages && messages.length > 1) {
+    const lines = messages.slice(0, -1).map(m =>
+      `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
+    ).join('\n\n');
+    const last = messages[messages.length - 1];
+    userPart = `[Conversation so far]\n${lines}\n\n[Current message]\nUser: ${last.content}`;
+  } else if (messages && messages.length === 1) {
+    userPart = messages[0].content;
+  } else {
+    userPart = prompt || '';
+  }
+
+  const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPart}` : userPart;
 
   _logAiCall('devflow-agent', model.model_name || '(no model)', 'python devflow_agent.py', fullPrompt);
 
@@ -834,7 +862,7 @@ function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh
     // Screen-design edit/diff flows still need the plain proxy's JSON-patch
     // output format — only route plain generate calls through the agent.
     if (model.use_devflow_agent && !editPayload) {
-      runDevflowAgent(wc, prompt, model, ctx, tokenCh, doneCh, cwd, systemPrompt);
+      runDevflowAgent(wc, prompt, model, messages, ctx, tokenCh, doneCh, cwd, systemPrompt);
     } else {
       runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode, systemPrompt);
     }
@@ -862,10 +890,10 @@ function registerChatHandlers() {
   // --- Workflow runner window chat (workflowChat:*) — separate subprocess slot ---
   safeHandle('workflowChat:cancel', () => killCtx(_workflowCtx));
 
-  safeHandle('workflowChat:generate', (event, { prompt, model, cwd, systemPrompt }) => {
+  safeHandle('workflowChat:generate', (event, { prompt, model, cwd, systemPrompt, messages }) => {
     if (_workflowCtx.proc || _workflowCtx.req) killCtx(_workflowCtx);
     _workflowCtx.cancelled = false;
-    dispatch(event.sender, prompt, null, model, null, _workflowCtx, 'workflowChat:token', 'workflowChat:done', cwd, true, systemPrompt);
+    dispatch(event.sender, prompt, null, model, messages || null, _workflowCtx, 'workflowChat:token', 'workflowChat:done', cwd, true, systemPrompt);
     return { started: true };
   });
 

@@ -473,6 +473,64 @@
   overflow-y: auto !important;
 }
 
+/* ── Follow-up chat box (non-CLI models only) ──────────────────────────── */
+.wfr-chat-bar {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px 10px;
+}
+.wfr-chat-bar[hidden] { display: none; }
+.wfr-chat-bar__inner {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.wfr-chat-bar__textarea {
+  flex: 1 1 auto;
+  min-height: 36px;
+  max-height: 160px;
+  resize: none;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 5px);
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans, system-ui);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.wfr-chat-bar__textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.wfr-chat-bar__textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.wfr-chat-send {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 5px);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.wfr-chat-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+.wfr-chat-send--stop {
+  background: #dc2626;
+}
+
 /* Token stats in output header */
 .wfr-token-stats {
   display: flex;
@@ -530,7 +588,7 @@
 
 .wfr-body--wide .wfr-output-panel {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   grid-template-columns: 1fr;
 }
 .wfr-body--wide .wfr-output-panel:has(#wfrGitPanel:not([hidden])) {
@@ -538,9 +596,10 @@
 }
 .wfr-body--wide .wfr-output-header { grid-column: 1 / -1; grid-row: 1; }
 .wfr-body--wide .wfr-terminal-wrap { grid-column: 1; grid-row: 2; min-height: 0; }
+.wfr-body--wide .wfr-chat-bar     { grid-column: 1; grid-row: 3; }
 .wfr-body--wide .wfr-git-panel {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 2 / span 2;
   position: relative;
   width: auto;
   box-shadow: none;

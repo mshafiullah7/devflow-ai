@@ -52,6 +52,8 @@ export class WorkflowRunnerPage {
     this._selectedId    = null;
     this._running          = false;
     this._activeFinish     = null; // resolver for the layer run currently in flight — lets Esc cancel it immediately without waiting on the backend
+    this._chatHistory       = new Map(); // layer.id -> [{role:'user'|'assistant', content}] follow-up thread, never 'system'
+    this._layerSystemPrompts = new Map(); // layer.id -> systemPrompt string captured from the initial run
     this._skipPermissions  = true;
     this._startTimes       = {};
     this._timerInt      = null;
@@ -171,6 +173,8 @@ export class WorkflowRunnerPage {
     if (this._layoutObs)   { this._layoutObs.disconnect(); this._layoutObs = null; }
     if (this._term) { this._term.dispose(); this._term = null; }
     if (this._tempDir) { window.app.deleteTempDir(this._tempDir); this._tempDir = null; }
+    this._chatHistory.clear();
+    this._layerSystemPrompts.clear();
   }
 
   // ── Init ────────────────────────────────────────────────────────────────
@@ -220,7 +224,7 @@ export class WorkflowRunnerPage {
 
     this._picker = new ModelPicker({
       anchor:    this.container.querySelector('#wfrModelPicker'),
-      onSelect:  model => { this._modelConfig = model; },
+      onSelect:  model => { this._modelConfig = model; this._refreshChatBox(); },
       initialId: modelConfig?.id ?? mapping?.model_config_id ?? null,
     });
     await this._picker.reload();
@@ -421,6 +425,15 @@ export class WorkflowRunnerPage {
       ? this._projectLayers.find(p => p.id === layer.project_layer_id)
       : null;
     return pl?.folder_path || this._project?.project_path || null;
+  }
+
+  // Follow-up chat history is scoped per layer — never contains a 'system' entry
+  // (system context is always sent separately as `systemPrompt`, since Anthropic's
+  // API rejects role:'system' inside `messages`).
+  _getLayerHistory(layerId) {
+    let h = this._chatHistory.get(layerId);
+    if (!h) { h = []; this._chatHistory.set(layerId, h); }
+    return h;
   }
 
   async _assignProjectLayer(layerId) {
@@ -679,15 +692,29 @@ Rules:
         return;
       }
 
+      const systemPrompt = this._buildLayerSystemContext() || undefined;
+      const userPrompt   = this._buildLayerUserPrompt(layer);
+
       window.app.workflowChat.onToken(({ text }) => {
         if (this._term) this._term.write(text.replace(/\n/g, '\r\n'));
       });
 
-      window.app.workflowChat.onDone(({ error }) => finish(error || null));
+      window.app.workflowChat.onDone(({ error, raw }) => {
+        if (!error) {
+          // A fresh run replaces any stale follow-up thread for this layer.
+          const history = this._getLayerHistory(layer.id);
+          history.length = 0;
+          history.push({ role: 'user', content: userPrompt });
+          history.push({ role: 'assistant', content: (raw || '').trim() });
+          this._layerSystemPrompts.set(layer.id, systemPrompt);
+          this._refreshChatBox();
+        }
+        finish(error || null);
+      });
 
       window.app.workflowChat.generate({
-        prompt:       this._buildLayerUserPrompt(layer),
-        systemPrompt: this._buildLayerSystemContext() || undefined,
+        prompt:       userPrompt,
+        systemPrompt: systemPrompt,
         model:        this._modelConfig,
         cwd:          this._getCwd(layer),
       });
@@ -714,6 +741,93 @@ Rules:
     }
 
     await finishFn('Cancelled by user (Esc)');
+  }
+
+  // ── Follow-up chat (non-CLI models only) ─────────────────────────────────
+
+  // CLI configs already have an equivalent — a live shell the user can type
+  // follow-up commands into directly — so the chat box only applies here.
+  _chatBoxAllowed() {
+    return this._modelConfig?.type !== 'cli';
+  }
+
+  _refreshChatBox() {
+    const bar = this.container.querySelector('#wfrChatBar');
+    if (!bar) return;
+    const allowed = this._chatBoxAllowed();
+    bar.hidden = !allowed;
+    if (!allowed) return;
+
+    const layer   = this._layers.find(l => l.id === this._selectedId);
+    const history = layer ? this._getLayerHistory(layer.id) : [];
+    const ta      = this.container.querySelector('#wfrChatInput');
+    const btn     = this.container.querySelector('#wfrChatSend');
+    const hasRun  = history.length > 0;
+    const busy    = !!this._activeFinish;
+
+    if (ta) {
+      ta.disabled = !hasRun || busy;
+      ta.placeholder = hasRun
+        ? 'Send a follow-up… (Enter to send, Shift+Enter for new line)'
+        : 'Run this layer first to start a follow-up conversation';
+    }
+    if (btn) {
+      btn.disabled = !hasRun || (busy ? false : !(ta?.value || '').trim());
+      btn.classList.toggle('wfr-chat-send--stop', busy);
+      btn.title = busy ? 'Stop' : 'Send (Enter)';
+    }
+  }
+
+  _setChatGenerating(on) {
+    const ta = this.container.querySelector('#wfrChatInput');
+    if (ta) ta.disabled = on;
+    this._refreshChatBox();
+  }
+
+  async _sendFollowUp(layer, text) {
+    if (!layer || !text?.trim()) return;
+    if (this._modelConfig?.type === 'cli') return; // CLI path uses the live terminal instead
+    if (this._activeFinish) return; // a run (initial or follow-up) is already in flight
+
+    const history = this._getLayerHistory(layer.id);
+    if (history.length === 0) return; // no initial run yet — nothing to follow up on
+    const systemPrompt = this._layerSystemPrompts.get(layer.id);
+
+    history.push({ role: 'user', content: text.trim() });
+
+    this._setChatGenerating(true);
+    if (this._term) {
+      this._term.write(`\r\n${ANSI.bold}${ANSI.cyan}── Follow-up ──${ANSI.reset}\r\n`);
+      this._term.write(text.trim().replace(/\n/g, '\r\n') + '\r\n\r\n');
+    }
+
+    let finished = false;
+    const finish = (error, raw) => {
+      if (finished) return;
+      finished = true;
+      if (this._activeFinish === finish) this._activeFinish = null;
+      window.app.workflowChat.offAll();
+
+      if (!error) {
+        history.push({ role: 'assistant', content: (raw || '').trim() });
+      } else if (this._term) {
+        this._term.write(`\r\n${ANSI.red}Error: ${error}${ANSI.reset}\r\n`);
+      }
+      this._setChatGenerating(false);
+    };
+    this._activeFinish = finish; // reuses the existing Esc-cancel mechanism
+
+    window.app.workflowChat.onToken(({ text }) => {
+      if (this._term) this._term.write(text.replace(/\n/g, '\r\n'));
+    });
+    window.app.workflowChat.onDone(({ error, raw }) => finish(error || null, raw));
+
+    window.app.workflowChat.generate({
+      messages:     history,
+      systemPrompt: systemPrompt,
+      model:        this._modelConfig,
+      cwd:          this._getCwd(layer),
+    });
   }
 
   // ── Timer ────────────────────────────────────────────────────────────────
@@ -776,6 +890,7 @@ Rules:
     this._updateLayerHeader();
     this._updateToolbar();
     this._refreshGitPanel();
+    this._refreshChatBox();
 
     if (oldId !== id && !this._running && this._modelConfig?.type === 'cli') {
       this._spawnShell();
@@ -1045,6 +1160,24 @@ Rules:
             </div>
             <div class="wfr-terminal-wrap" id="wfrTerminal"></div>
 
+            <!-- Follow-up chat box — non-CLI model configs only -->
+            <div class="wfr-chat-bar" id="wfrChatBar"${this._chatBoxAllowed() ? '' : ' hidden'}>
+              <div class="wfr-chat-bar__inner">
+                <textarea
+                  class="wfr-chat-bar__textarea"
+                  id="wfrChatInput"
+                  rows="1"
+                  disabled
+                  placeholder="Run this layer first to start a follow-up conversation"
+                ></textarea>
+                <button class="wfr-chat-send" id="wfrChatSend" disabled title="Send (Enter)">
+                  <svg id="wfrChatIconSend" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M3 2l11 6-11 6V9.5l8-1.5-8-1.5V2z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
             <!-- Git diff overlay — absolute, slides in from the right -->
             <aside class="wfr-git-panel" id="wfrGitPanel"${this._gitPanelVisible ? '' : ' hidden'}>
               <div class="wfr-git-panel__header">
@@ -1105,6 +1238,7 @@ Rules:
     }
 
     this._bindEvents();
+    this._refreshChatBox();
   }
 
   _bindEvents() {
@@ -1163,6 +1297,32 @@ this.container.querySelector('#wfrBtnSkipPerms')
       ?.addEventListener('click', () => this._expandCollapseAll(false));
     this.container.querySelector('#wfrBtnGitCommit')
       ?.addEventListener('click', () => this._commitChanges());
+
+    // ── Follow-up chat box ──────────────────────────────────────────────
+    const chatTa  = this.container.querySelector('#wfrChatInput');
+    const chatBtn = this.container.querySelector('#wfrChatSend');
+    const sendFollowUp = () => {
+      const layer = this._layers.find(l => l.id === this._selectedId);
+      const text  = (chatTa?.value || '').trim();
+      if (!text || !layer) return;
+      if (chatTa) { chatTa.value = ''; chatTa.style.height = ''; }
+      this._sendFollowUp(layer, text);
+    };
+    chatBtn?.addEventListener('click', () => {
+      if (this._activeFinish) this._cancelCurrentRun();
+      else sendFollowUp();
+    });
+    chatTa?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!this._activeFinish) sendFollowUp();
+      }
+    });
+    chatTa?.addEventListener('input', () => {
+      chatTa.style.height = 'auto';
+      chatTa.style.height = Math.min(chatTa.scrollHeight, 160) + 'px';
+      this._refreshChatBox();
+    });
 
     this._bindCriteriaEvents();
   }
