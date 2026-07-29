@@ -310,11 +310,11 @@ Different pages can be mapped to different models via **Settings → Model Mappi
 
 ---
 
-## Python Agent (`agent/`)
+## Python Agent (`devflow-cli/`)
 
-The `agent/` folder is a Python layer that the Electron app spawns as subprocesses. It is **actively used** at runtime — not optional infrastructure.
+The `devflow-cli/` folder is a Python layer that the Electron app spawns as subprocesses. It is **actively used** at runtime — not optional infrastructure.
 
-### What's in `agent/`
+### What's in `devflow-cli/`
 
 | File | Role | Called from |
 |---|---|---|
@@ -374,7 +374,7 @@ Enabled in Settings → AI Config by ticking **"Use DevFlow Agent"** on an Ollam
 ### Agent Prerequisites
 
 ```bash
-cd agent
+cd devflow-cli
 pip install -r requirements.txt
 ```
 
@@ -402,7 +402,7 @@ ollama pull qwen2.5-coder:32b  # multi-file, complex changes
 
 ```bash
 # Run the agent directly (without Electron)
-python agent/devflow_agent.py \
+python devflow-cli/devflow_agent.py \
   --project /path/to/project \
   --message "Add input validation to the login form" \
   --model qwen2.5-coder:32b \
@@ -410,7 +410,7 @@ python agent/devflow_agent.py \
   --verbose
 
 # Plan only — inspect before running
-python agent/devflow_agent.py \
+python devflow-cli/devflow_agent.py \
   --project /path/to/project \
   --message "Refactor auth module to use JWT" \
   --model qwen2.5-coder:32b \
@@ -502,8 +502,8 @@ Packaged installers are self-contained — end users do not need Node.js install
 | Styling | Vanilla CSS with CSS variables (Light / Dark / Midnight themes) |
 | Build tooling | Electron Forge v7 |
 | AI backends | Ollama HTTP, Claude CLI, Gemini CLI, Aider, OpenAI-compatible API |
-| Python agent | `agent/devflow_agent.py` — agentic coding agent with plan+approve+execute loop |
-| Streaming proxies | `agent/ollama_proxy.py`, `agent/openai_proxy.py` — subprocess streaming bridges |
+| Python agent | `devflow-cli/devflow_agent.py` — agentic coding agent with plan+approve+execute loop |
+| Streaming proxies | `devflow-cli/ollama_proxy.py`, `devflow-cli/openai_proxy.py` — subprocess streaming bridges |
 | RAG (optional) | ChromaDB + sentence-transformers — semantic code search for agent context |
 | Node.js agent | `agent-cli/index.js` — lightweight Ollama agent (alternative to Python agent) |
 | E2E tests | Playwright |
@@ -567,7 +567,7 @@ src/
   issue-runner.html        # Batch AI issue fixing
   terminal.html             # Embedded shell + git panel
 
-agent/                       # Python agent layer (spawned as subprocesses by Electron)
+devflow-cli/                 # Python agent layer (spawned as subprocesses by Electron)
   devflow_agent.py         # Full agentic coding agent (plan + execute loop)
   agent.py                 # Provider-agnostic agent (Ollama, Anthropic, OpenAI, Groq)
   ollama_proxy.py          # Streaming proxy for Ollama models → used by all pages

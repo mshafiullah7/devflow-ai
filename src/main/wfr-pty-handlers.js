@@ -447,7 +447,7 @@ function registerPtyHandlers(prefix) {
     let coreCmd;
 
     if (model?.use_devflow_agent && (model?.type === 'api' || model?.type === 'anthropic')) {
-      const agentPath = path.join(__dirname, '../../agent/agent.py');
+      const agentPath = path.join(__dirname, '../../devflow-cli/agent.py');
       const provider  = model.type === 'anthropic' ? 'anthropic' : 'custom';
       const baseUrlPart = (provider === 'custom' && model?.base_url)
         ? ` --base-url "${model.base_url}"`

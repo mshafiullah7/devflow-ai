@@ -3,6 +3,7 @@ import { applyStoredTheme } from '../../shared/theme-manager.js';
 import { ModelPicker } from '../../components/model-picker/model-picker.js';
 import { ProjectSidebar } from '../../components/project-sidebar/project-sidebar.js';
 import { Dialog } from '../../components/dialog/dialog.js';
+import { notifyRunComplete } from '../../shared/run-notifications.js';
 
 const STATUS = {
   open:         { label: 'Open',         cls: 'wfr-status--open'    },
@@ -437,13 +438,13 @@ export class WorkflowRunnerPage {
   }
 
   _buildLayerSystemContext() {
-    if (!this._screenDesign) return null;
     const isUiShell = this._workflow?.workflow_type === 'ui_shell';
 
-    if (!isUiShell) {
-      const dartFilePath = this._screenDesign.dart_file_path;
-      if (!dartFilePath) return null;
-      return `## Existing Dart UI File: "${this._screenDesign.title || 'Screen'}"
+    if (this._screenDesign) {
+      if (!isUiShell) {
+        const dartFilePath = this._screenDesign.dart_file_path;
+        if (dartFilePath) {
+          return `## Existing Dart UI File: "${this._screenDesign.title || 'Screen'}"
 Path: ${dartFilePath}
 
 ---
@@ -451,12 +452,12 @@ Rule: The Flutter page for this screen already exists at the path above.
 Do NOT recreate or replace its layout, colors, padding, or widget structure.
 Wire Up layers: import the state class and replace // TODO: wire-{action} comments with real state calls.
 All other layers: derive data field names and contracts from what the Dart file displays.`;
-    }
-
-    const screenRef = this._screenFilePath
-      ? `See file: ${this._screenFilePath}`
-      : this._screenDesign.html_content;
-    return `## Linked HTML Screen Design: "${this._screenDesign.title || 'Screen'}"
+        }
+      } else {
+        const screenRef = this._screenFilePath
+          ? `See file: ${this._screenFilePath}`
+          : this._screenDesign.html_content;
+        return `## Linked HTML Screen Design: "${this._screenDesign.title || 'Screen'}"
 ${screenRef}
 
 ---
@@ -465,6 +466,19 @@ Use the HTML above as the source of truth for all colors, spacing, typography,
 widget structure, and layout. Do not invent or change anything not shown in the HTML.
 Every interactive element must have onPressed: () {} with a // TODO: wire-{action-name} comment.
 Do not reference the HTML file path at runtime — embed nothing; just read it here and build from it.`;
+      }
+    }
+
+    // No linked screen design (e.g. a backend/script layer, like a plain
+    // Python module) — fall back to a generic coding system prompt instead
+    // of returning null, so non-Ollama-CLI backends (which otherwise force
+    // an HTML-only system prompt) get a sensible default too.
+    return `You are an expert software developer executing one layer of a larger workflow.
+Rules:
+- Follow the layer's Purpose and Instructions exactly — do not invent requirements beyond what is described.
+- Match the language/framework implied by the Purpose and Instructions. Do not default to HTML or any other format unless it is explicitly requested.
+- If you have file-writing tools available, use them to create/modify the actual files — do not just print code as chat text.
+- Do not ask for confirmation or clarification; implement directly.`;
   }
 
   _buildLayerUserPrompt(layer) {
@@ -515,8 +529,9 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     this._notifyRunAllDone();
   }
 
-  // Fires a native OS notification so the user knows Run All finished even
-  // if the app window is minimized or in the background.
+  // Fires a native OS notification, plus a Telegram push if configured, so
+  // the user knows Run All finished even if the app window is minimized,
+  // in the background, or they're away from the desktop entirely.
   _notifyRunAllDone() {
     const failed    = this._layers.filter(l => this._statuses[l.id] === 'failed').length;
     const executed  = this._layers.filter(l => this._statuses[l.id] === 'executed').length;
@@ -524,10 +539,7 @@ Do not reference the HTML file path at runtime — embed nothing; just read it h
     const body      = failed > 0
       ? `${executed} layer(s) completed, ${failed} failed.`
       : `All ${executed} layer(s) completed successfully.`;
-    window.app.showNotification({
-      title: `Run All finished — ${wfName}`,
-      body,
-    });
+    notifyRunComplete({ title: `Run All finished — ${wfName}`, body });
   }
 
   // ── Core layer runner ────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ designs/
 draw.io/
 
 # Python bytecode
-agent/__pycache__/
+devflow-cli/__pycache__/
 
 # Throwaway mockup
 mockup-login.html

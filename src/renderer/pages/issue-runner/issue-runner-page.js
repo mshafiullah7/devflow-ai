@@ -2,6 +2,7 @@ import { escHtml, injectCss, removeCss } from '../../shared/helpers.js';
 import { applyStoredTheme }              from '../../shared/theme-manager.js';
 import { ModelPicker }                   from '../../components/model-picker/model-picker.js';
 import { ProjectSidebar }                from '../../components/project-sidebar/project-sidebar.js';
+import { notifyRunComplete }             from '../../shared/run-notifications.js';
 
 const STATUS_META = {
   open:        { label: 'Open'        },
@@ -649,10 +650,12 @@ export class IssueRunnerPage {
         } else {
           this._doRunAll = false;
           this._updateToolbarRunAllState(false);
+          this._notifyRunAllDone();
         }
       } else if (this._doRunAll) {
         this._doRunAll = false;
         this._updateToolbarRunAllState(false);
+        this._notifyRunAllDone();
       }
     });
 
@@ -718,6 +721,19 @@ export class IssueRunnerPage {
     if (failed > 0) parts.push(`${failed} failed`);
     el.textContent = parts.join(' · ');
     this._syncButtonStates();
+  }
+
+  // Fires a native OS notification, plus a Telegram push if configured, so
+  // the user knows Run All finished even if the app window is minimized,
+  // in the background, or they're away from the desktop entirely.
+  _notifyRunAllDone() {
+    const done   = Object.values(this._runState).filter(s => s === 'done').length;
+    const failed = Object.values(this._runState).filter(s => s === 'failed').length;
+    const projName = this._project?.name || 'Project';
+    const body = failed > 0
+      ? `${done} issue(s) completed, ${failed} failed.`
+      : `All ${done} issue(s) completed successfully.`;
+    notifyRunComplete({ title: `Run All finished — ${projName}`, body });
   }
 
   _syncButtonStates() {

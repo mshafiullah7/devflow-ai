@@ -404,7 +404,7 @@ const OLLAMA_SYSTEM_DIFF = {
   content: 'You are an expert UI/UX developer. You MUST output ONLY a raw JSON array of search-replace patches. Never explain, never output HTML, never use markdown. The output must start with [ and end with ].',
 };
 
-function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode) {
+function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode, systemPrompt) {
   _logAiCall('ollama', model.model_name || '(no model)', null, messages || prompt);
   let msgs;
   let isDiffMode = false;
@@ -415,6 +415,12 @@ function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneC
     msgs = [OLLAMA_SYSTEM_DIFF, { role: 'user', content }];
   } else if (messages && messages.length > 0) {
     msgs = messages[0]?.role === 'system' ? messages : [OLLAMA_SYSTEM_HTML, ...messages];
+  } else if (systemPrompt) {
+    // Caller supplied its own system context (e.g. a workflow layer's
+    // purpose/instructions) — use it as-is instead of forcing the
+    // HTML-only system prompt, which only applies to the screen-design
+    // generator's callers (those never pass systemPrompt).
+    msgs = [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }];
   } else {
     msgs = [OLLAMA_SYSTEM_HTML, { role: 'user', content: prompt }];
   }
@@ -428,7 +434,7 @@ function runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneC
     return;
   }
 
-  const agentPath = path.join(__dirname, '../../../../agent/ollama_proxy.py');
+  const agentPath = path.join(__dirname, '../../../../devflow-cli/ollama_proxy.py');
   const baseUrl   = (model.base_url || 'http://localhost:11434').replace(/\/$/, '');
   const cleanup   = () => { try { fs.unlinkSync(tmpFile); } catch (_) {} };
   let accumulated = '';
@@ -664,7 +670,7 @@ function runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
 // ----------------------------------------------------------------
 // OpenAI-compatible streaming proxy (OpenAI, Groq, Ollama /v1, etc.)
 // ----------------------------------------------------------------
-function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode) {
+function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, _cwd, rawMode, systemPrompt) {
   _logAiCall('api', model.model_name || '(no model)', 'python openai_proxy.py', messages || prompt);
   const ts = Date.now();
 
@@ -677,6 +683,8 @@ function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
     msgs = [{ role: 'user', content }];
   } else if (messages && messages.length > 0) {
     msgs = messages;
+  } else if (systemPrompt) {
+    msgs = [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }];
   } else {
     msgs = [{ role: 'user', content: prompt }];
   }
@@ -689,7 +697,7 @@ function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
     return;
   }
 
-  const agentPath = path.join(__dirname, '../../../../agent/openai_proxy.py');
+  const agentPath = path.join(__dirname, '../../../../devflow-cli/openai_proxy.py');
   const spawnArgs = [
     agentPath,
     '--messages-file', tmpFile,
@@ -752,15 +760,86 @@ function runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, 
 }
 
 // ----------------------------------------------------------------
+// Ollama via devflow_agent.py — dedicated, native Ollama agentic loop
+// with real file-write tools.
+//
+// Used instead of the plain ollama_proxy.py streaming proxy when the
+// model config has "Use Devflow Agent loop" enabled. ollama_proxy.py is a
+// bare chat completion — it can only return text, never touch the
+// filesystem. devflow_agent.py talks to Ollama directly via the native
+// `ollama` package (ollama.Client(...).chat(..., tools=TOOLS)) — no
+// OpenAI-compatibility shim, no base-url/`/v1` guessing — and runs the
+// same tool-calling loop (read_file/write_file/run_command/etc.) scoped
+// to `cwd`, so an Ollama-backed workflow layer can actually create or
+// modify files in its linked Project Layer folder.
+//
+// (agent.py's generic --provider ollama path, which goes through the
+// shared OpenAI-compatible shim, is left as-is for direct CLI use, but
+// the app routes Ollama devflow-agent runs through this dedicated script
+// instead — it's simpler and avoids that shim's provider-specific quirks.)
+// ----------------------------------------------------------------
+function runDevflowAgent(wc, prompt, model, ctx, tokenCh, doneCh, cwd, systemPrompt) {
+  const spawnCwd    = (cwd && fs.existsSync(cwd)) ? cwd : os.homedir();
+  const fullPrompt  = systemPrompt ? `${systemPrompt}\n\n---\n\n${prompt}` : (prompt || '');
+
+  _logAiCall('devflow-agent', model.model_name || '(no model)', 'python devflow_agent.py', fullPrompt);
+
+  const agentPath = path.join(__dirname, '../../../../devflow-cli/devflow_agent.py');
+  const spawnArgs = [
+    agentPath,
+    '--project',   spawnCwd,
+    '--message',   fullPrompt,
+    '--model',     model.model_name || 'qwen2.5-coder:7b',
+    '--base-url',  model.base_url   || 'http://localhost:11434',
+    '--max-turns', String(model.max_tokens || 15),
+    '--verbose',
+  ];
+
+  console.log(`[devflow-agent] cwd (--project) = ${spawnCwd}`);
+  console.log(`[devflow-agent] spawn: python ${JSON.stringify(spawnArgs)}`);
+
+  ctx.proc = spawn('python', spawnArgs, { cwd: spawnCwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env } });
+
+  let accumulated = '';
+
+  ctx.proc.stdout.on('data', (chunk) => {
+    const text = chunk.toString('utf8');
+    accumulated += text;
+    send(wc, tokenCh, { text });
+  });
+  ctx.proc.stderr.on('data', (chunk) => {
+    const text = chunk.toString('utf8');
+    accumulated += text;
+    send(wc, tokenCh, { text });
+  });
+
+  ctx.proc.on('close', (code) => {
+    if (ctx.cancelled) return;
+    send(wc, doneCh, { html: null, raw: accumulated, error: code !== 0 ? `Process exited with code ${code}` : null });
+    ctx.proc = null;
+  });
+  ctx.proc.on('error', (err) => {
+    send(wc, doneCh, { html: null, raw: accumulated, error: err.message });
+    ctx.proc = null;
+  });
+}
+
+// ----------------------------------------------------------------
 // Dispatch helper — picks the right backend
 // ----------------------------------------------------------------
 function dispatch(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode, systemPrompt) {
   if (model.type === 'anthropic') {
     runAnthropic(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode, systemPrompt);
   } else if (model.type === 'ollama') {
-    runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
+    // Screen-design edit/diff flows still need the plain proxy's JSON-patch
+    // output format — only route plain generate calls through the agent.
+    if (model.use_devflow_agent && !editPayload) {
+      runDevflowAgent(wc, prompt, model, ctx, tokenCh, doneCh, cwd, systemPrompt);
+    } else {
+      runOllama(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode, systemPrompt);
+    }
   } else if (model.type === 'api') {
-    runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
+    runApi(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode, systemPrompt);
   } else {
     runCli(wc, prompt, editPayload, model, messages, ctx, tokenCh, doneCh, cwd, rawMode);
   }

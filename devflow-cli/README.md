@@ -11,7 +11,7 @@ file read/write, code search, shell execution, and full project context injectio
 ## Setup
 
 ```bash
-cd agent
+cd devflow-cli
 pip install -r requirements.txt
 ```
 

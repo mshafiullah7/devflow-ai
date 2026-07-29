@@ -2,7 +2,7 @@
 Tools registry — aggregates all tool schemas and executors.
 
 To add a new tool module:
-  1. Create agent/tools/your_module.py with SCHEMAS and TOOL_MAP
+  1. Create devflow-cli/tools/your_module.py with SCHEMAS and TOOL_MAP
   2. Import it here and add to _MODULES
 
 The TOOLS list and execute_tool() function are what agent.py consumes.

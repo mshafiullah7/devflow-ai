@@ -184,7 +184,7 @@ function registerQueueHandlers() {
 // ----------------------------------------------------------------
 function _runDevflowAgent(send, messages, modelConfig, cwd, options = {}) {
   _logAiCall('devflow-agent', modelConfig?.model_name || 'qwen2.5-coder:7b', 'python devflow_agent.py', messages, cwd);
-  const agentPath = path.join(__dirname, '../../../../agent/devflow_agent.py');
+  const agentPath = path.join(__dirname, '../../../../devflow-cli/devflow_agent.py');
   const task      = messages.map(m => (typeof m === 'string' ? m : m.content || '')).join('\n');
 
   const spawnArgs = [
@@ -355,7 +355,7 @@ function _runAgentPy(send, messages, modelConfig, cwd, options = {}) {
 
   _logAiCall('agent.py', model, `python agent.py --provider ${provider}`, messages, cwd);
 
-  const agentPath = path.join(__dirname, '../../../../agent/agent.py');
+  const agentPath = path.join(__dirname, '../../../../devflow-cli/agent.py');
   const task      = messages.map(m => (typeof m === 'string' ? m : m.content || '')).join('\n');
 
   const spawnArgs = [
