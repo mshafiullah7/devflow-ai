@@ -190,6 +190,20 @@ function registerPtyHandlers(prefix) {
   // Kill any running PTY
   safeHandle(`${prefix}:kill`, () => { killPty(); });
 
+  // Interrupt whatever's currently running in the shell (Ctrl+C) without
+  // killing the whole PTY/session — used for a user-initiated "Esc to
+  // cancel" on a layer run. Also clears _sentinelCallback: the run's
+  // completion marker (##WFR_DONE:...) was chained onto the same submitted
+  // command line via ';' and will never print once that line is
+  // interrupted, so the caller resolves its own UI state immediately
+  // instead of waiting on the (now unreachable) sentinel.
+  safeHandle(`${prefix}:cancelCurrent`, () => {
+    if (!_pty) return { ok: false, error: 'No shell running' };
+    _sentinelCallback = null;
+    try { _pty.write('\x03'); } catch (_) {}
+    return { ok: true };
+  });
+
   // Returns true if a Claude/agent run is currently in progress
   safeHandle(`${prefix}:isBusy`, () => _claudeActive);
 

@@ -51,6 +51,7 @@ export class WorkflowRunnerPage {
     this._statuses      = {};
     this._selectedId    = null;
     this._running          = false;
+    this._activeFinish     = null; // resolver for the layer run currently in flight — lets Esc cancel it immediately without waiting on the backend
     this._skipPermissions  = true;
     this._startTimes       = {};
     this._timerInt      = null;
@@ -63,6 +64,7 @@ export class WorkflowRunnerPage {
     this._fitAddon = null;
     this._resizeObs = null;
     this._onWinResize = null;
+    this._onGlobalKeyDown = null;
 
     // git diff panel
     this._gitPanelVisible  = true;
@@ -82,6 +84,21 @@ export class WorkflowRunnerPage {
     if (this._embedded) injectCss('components/project-sidebar/project-sidebar.css');
     applyStoredTheme();
     this._renderLoading();
+
+    // Document-level fallback for Esc-to-cancel: the xterm custom key handler
+    // (see terminal init) only sees the key when the terminal itself has
+    // focus, which isn't guaranteed during the API/Ollama path (no explicit
+    // .focus() call there, unlike the CLI path). Skip while typing in an
+    // input/textarea so this doesn't hijack Esc from other UI (dialogs, etc).
+    this._onGlobalKeyDown = (e) => {
+      if (e.key !== 'Escape' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (!this._activeFinish) return;
+      this._cancelCurrentRun();
+    };
+    document.addEventListener('keydown', this._onGlobalKeyDown);
+
     if (this._embedded) {
       this._init(this._initParams);
     } else {
@@ -146,6 +163,7 @@ export class WorkflowRunnerPage {
     window.app.workflowChat.offAll();
     window.app.wfrPty.offAll();
     window.app.wfrPty.kill();
+    if (this._onGlobalKeyDown) document.removeEventListener('keydown', this._onGlobalKeyDown);
     if (this._timerInt)       clearInterval(this._timerInt);
     if (this._gitPollInterval) clearInterval(this._gitPollInterval);
     if (this._resizeObs)   this._resizeObs.disconnect();
@@ -315,6 +333,13 @@ export class WorkflowRunnerPage {
       }
       // Ctrl+V is handled by the capture-phase paste listener; suppress the raw \x16 keydown
       if ((ev.ctrlKey || ev.metaKey) && ev.key === 'v' && !ev.shiftKey) return false;
+      // Esc cancels the current layer run instead of being forwarded to the
+      // CLI as a literal ESC keystroke (which some CLIs bind to their own
+      // in-app actions).
+      if (ev.key === 'Escape' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        this._cancelCurrentRun();
+        return false;
+      }
       return true;
     });
 
@@ -562,6 +587,7 @@ Rules:
       const finish = async (error) => {
         if (finished) return;
         finished = true;
+        if (this._activeFinish === finish) this._activeFinish = null;
         window.app.workflowChat.offAll();
         window.app.wfrPty.offAll();
         // Re-attach PTY listeners (offAll removes them; re-add for next layer)
@@ -586,6 +612,7 @@ Rules:
 
         resolve();
       };
+      this._activeFinish = finish;
 
       // Fail immediately if no prompt is defined
       if (!layer.prompt?.trim()) {
@@ -665,6 +692,28 @@ Rules:
         cwd:          this._getCwd(layer),
       });
     });
+  }
+
+  // Cancels whatever layer run is currently in flight (Esc key). Resolves the
+  // run's own UI state immediately via the stored `finish` closure rather than
+  // waiting on a backend completion event — for the CLI path in particular,
+  // interrupting the shell mid-command means the ##WFR_DONE sentinel chained
+  // after it (via ';') never gets a chance to print, so nothing would ever
+  // signal completion otherwise. Killing the backend process is best-effort;
+  // it may already be gone by the time this resolves, which is fine.
+  async _cancelCurrentRun() {
+    if (!this._activeFinish) return;
+    const finishFn = this._activeFinish;
+
+    if (this._term) this._term.write(`\r\n${ANSI.yellow}⚠ Cancelling (Esc)...${ANSI.reset}\r\n`);
+
+    if (this._modelConfig?.type === 'cli') {
+      try { await window.app.wfrPty.cancelCurrent(); } catch (_) {}
+    } else {
+      try { await window.app.workflowChat.cancel(); } catch (_) {}
+    }
+
+    await finishFn('Cancelled by user (Esc)');
   }
 
   // ── Timer ────────────────────────────────────────────────────────────────

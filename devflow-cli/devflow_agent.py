@@ -310,6 +310,10 @@ def parse_args() -> argparse.Namespace:
                         'Use a larger model here for better plans, e.g. qwen2.5-coder:32b')
     p.add_argument('--max-tool-errors', default=3, type=int, dest='max_tool_errors',
                    help='Max consecutive tool errors before aborting the loop (default: 3)')
+    p.add_argument('--max-repeat-calls', default=3, type=int, dest='max_repeat_calls',
+                   help='Max identical consecutive tool calls (same name+args) before '
+                        'aborting the loop — catches small models stuck re-emitting the '
+                        'same no-progress call, e.g. write_file with empty content (default: 3)')
     return p.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -332,6 +336,19 @@ def _fmt_tool_call(name: str, args: dict) -> str:
             v_str = v_str[:77] + '...'
         parts.append(f'{k}={v_str}')
     return f'► {name}({", ".join(parts)})'
+
+
+def _call_signature(name: str, args: dict) -> str:
+    """
+    Identity for a tool call used to detect no-progress loops (small models
+    stuck re-emitting the exact same call, e.g. write_file with empty content
+    after being told to retry with real content). Not an error by itself —
+    _is_tool_error() won't catch this since the tool call itself succeeds.
+    """
+    try:
+        return f'{name}:{json.dumps(args, sort_keys=True, default=str)}'
+    except TypeError:
+        return f'{name}:{args!r}'
 
 
 def _build_tool_result_message(tool_call, result: str) -> dict:
@@ -744,6 +761,15 @@ def run(args: argparse.Namespace) -> int:
     client = ollama.Client(host=args.base_url)
     turns              = 0
     consecutive_errors = 0   # reset to 0 on any successful tool call
+    # Per-tool-name call history — {tool_name: (last_args_signature, repeat_count)}.
+    # Keyed by tool name (not "the single previous call overall") because a
+    # no-progress loop is usually an alternating pattern, e.g.
+    # write_file(main.py, X) -> run_command(Y) -> write_file(main.py, X) -> run_command(Y) -> ...
+    # Each call differs from the one immediately before it, so a single
+    # "did this match the last call" check never trips — but write_file's
+    # own argument history is identical turn after turn. Tracking one
+    # signature per tool name catches that.
+    call_history       = {}
     total_prompt_tok   = 0
     total_eval_tok     = 0
     total_tool_calls   = 0
@@ -831,6 +857,40 @@ def run(args: argparse.Namespace) -> int:
                     fn_args = json.loads(fn_args)
                 except json.JSONDecodeError:
                     fn_args = {}
+
+            # ── No-progress loop detection ────────────────────────────────────
+            # A tool call can "succeed" (e.g. write_file with empty content, or
+            # run_command against a nonexistent binary) while making zero
+            # progress — _is_tool_error() won't catch that, so a weak model can
+            # re-emit the same call every turn until max-turns is hit. Tracked
+            # per tool name so an alternating no-progress pattern (e.g.
+            # write_file(X) -> run_command(Y) -> write_file(X) -> ...) is still
+            # caught even though no two *consecutive* calls are identical.
+            call_sig             = _call_signature(fn, fn_args)
+            prev_sig, prev_count = call_history.get(fn, (None, 0))
+            repeat_count         = prev_count + 1 if call_sig == prev_sig else 1
+            call_history[fn]     = (call_sig, repeat_count)
+
+            if repeat_count >= args.max_repeat_calls:
+                _log(
+                    f'\n⚠  Same {fn} call repeated {repeat_count}x '
+                    f'— {_fmt_tool_call(fn, fn_args)} — injecting abort signal.',
+                    args.verbose,
+                )
+                messages.append({
+                    'role':    'user',
+                    'content': (
+                        f'[LOOP DETECTED] You have called {fn} with identical arguments '
+                        f'{repeat_count} times without making progress.\n'
+                        'Stop repeating this exact call. Provide complete, different '
+                        'arguments (e.g. real file content, not empty; or fix the '
+                        'command instead of rerunning the same broken one), try a '
+                        'different approach, or if you cannot complete this, stop '
+                        'calling tools and summarise what remains to be done manually.'
+                    ),
+                })
+                call_history.clear()
+                break   # exit tool loop → next while turn → model corrects or summarises
 
             _log(_fmt_tool_call(fn, fn_args), args.verbose)
 
@@ -987,6 +1047,33 @@ def run(args: argparse.Namespace) -> int:
                         fn_args = json.loads(fn_args)
                     except json.JSONDecodeError:
                         fn_args = {}
+
+                call_sig             = _call_signature(fn, fn_args)
+                prev_sig, prev_count = call_history.get(fn, (None, 0))
+                repeat_count         = prev_count + 1 if call_sig == prev_sig else 1
+                call_history[fn]     = (call_sig, repeat_count)
+
+                if repeat_count >= args.max_repeat_calls:
+                    _log(
+                        f'\n⚠  Same {fn} call repeated {repeat_count}x '
+                        f'— {_fmt_tool_call(fn, fn_args)} — injecting abort signal.',
+                        args.verbose,
+                    )
+                    messages.append({
+                        'role':    'user',
+                        'content': (
+                            f'[LOOP DETECTED] You have called {fn} with identical arguments '
+                            f'{repeat_count} times without making progress.\n'
+                            'Stop repeating this exact call. Provide complete, different '
+                            'arguments (e.g. real file content, not empty; or fix the '
+                            'command instead of rerunning the same broken one), try a '
+                            'different approach, or if you cannot complete this, stop '
+                            'calling tools and summarise what remains to be fixed manually.'
+                        ),
+                    })
+                    call_history.clear()
+                    break
+
                 _log(_fmt_tool_call(fn, fn_args), args.verbose)
                 result  = execute_tool(fn, fn_args, args.project)
                 total_tool_calls += 1

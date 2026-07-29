@@ -307,6 +307,7 @@ contextBridge.exposeInMainWorld('app', {
     spawnShell:     (data) => ipcRenderer.invoke('wfrPty:spawnShell', data),
     resize:         (data) => ipcRenderer.invoke('wfrPty:resize', data),
     kill:           ()     => ipcRenderer.invoke('wfrPty:kill'),
+    cancelCurrent:  ()     => ipcRenderer.invoke('wfrPty:cancelCurrent'),
     isBusy:         ()     => ipcRenderer.invoke('wfrPty:isBusy'),
     runLayer:       (data) => ipcRenderer.invoke('wfrPty:runLayer', data),
     runInShell:     (data) => ipcRenderer.invoke('wfrPty:runInShell', data),
